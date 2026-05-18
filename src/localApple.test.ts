@@ -73,6 +73,24 @@ describe("local Apple mapping", () => {
     });
   });
 
+  it("preserves Apple Reminder due times for calendar placement", () => {
+    expect(
+      reminderToTask(
+        {
+          id: "reminder-1",
+          name: "Buy milk",
+          list: "Personal",
+          completed: false,
+          dueDate: "2026-05-20T09:30:00"
+        },
+        0
+      )
+    ).toMatchObject({
+      dueDate: "2026-05-20",
+      scheduledDate: "2026-05-20T09:30"
+    });
+  });
+
   it("preserves Apple Reminder local due date keys without UTC shifting", () => {
     expect(
       reminderToTask(
@@ -212,6 +230,20 @@ describe("local Apple mapping", () => {
     expect(execFile.mock.calls.at(-1)?.[1]).toEqual(["set-reminder-due", "--id", "reminder-1", "--due", "2026-05-20"]);
   });
 
+  it("writes Apple Reminder due times through the helper", async () => {
+    await withPlatform("darwin", () => setAppleReminderDueDate("reminder-1", "2026-05-20", 570));
+
+    expect(execFile.mock.calls.at(-1)?.[1]).toEqual([
+      "set-reminder-due",
+      "--id",
+      "reminder-1",
+      "--due",
+      "2026-05-20",
+      "--start-minutes",
+      "570"
+    ]);
+  });
+
   it("writes Apple Calendar event dates through the helper", async () => {
     await withPlatform("darwin", () =>
       setAppleCalendarEventDate({
@@ -238,6 +270,38 @@ describe("local Apple mapping", () => {
     ]);
   });
 
+  it("writes Apple Calendar event times through the helper", async () => {
+    await withPlatform("darwin", () =>
+      setAppleCalendarEventDate({
+        id: "event-1",
+        targetDate: "2026-05-20",
+        startMinutes: 570,
+        durationMinutes: 90,
+        start: "2026-05-06T09:30:00.000Z",
+        end: "2026-05-06T10:30:00.000Z",
+        allDay: false
+      })
+    );
+
+    expect(execFile.mock.calls.at(-1)?.[1]).toEqual([
+      "set-calendar-event-date",
+      "--id",
+      "event-1",
+      "--date",
+      "2026-05-20",
+      "--start",
+      "2026-05-06T09:30:00.000Z",
+      "--end",
+      "2026-05-06T10:30:00.000Z",
+      "--start-minutes",
+      "570",
+      "--duration-minutes",
+      "90",
+      "--all-day",
+      "false"
+    ]);
+  });
+
   it("creates an Apple Calendar event through the helper", async () => {
     execFile.mockImplementationOnce((_file: string, _args: string[], _options: unknown, callback: ExecFileCallback) => {
       callback(null, "{\"ok\":true}", "");
@@ -259,6 +323,36 @@ describe("local Apple mapping", () => {
       "2026-05-20",
       "--notes",
       "From Task Hub\nFinance.md:3"
+    ]);
+  });
+
+  it("creates a timed Apple Calendar event through the helper", async () => {
+    execFile.mockImplementationOnce((_file: string, _args: string[], _options: unknown, callback: ExecFileCallback) => {
+      callback(null, "{\"ok\":true}", "");
+    });
+
+    await withPlatform("darwin", () =>
+      createAppleCalendarEvent({
+        title: "Pay invoice",
+        date: "2026-05-20",
+        notes: "From Task Hub\nFinance.md:3",
+        startMinutes: 570,
+        durationMinutes: 90
+      })
+    );
+
+    expect(execFile.mock.calls.at(-1)?.[1]).toEqual([
+      "create-calendar-event",
+      "--title",
+      "Pay invoice",
+      "--date",
+      "2026-05-20",
+      "--notes",
+      "From Task Hub\nFinance.md:3",
+      "--start-minutes",
+      "570",
+      "--duration-minutes",
+      "90"
     ]);
   });
 

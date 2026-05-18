@@ -81,6 +81,16 @@ func dateKey(from components: DateComponents?) -> String? {
     return String(format: "%04d-%02d-%02d", year, month, day)
 }
 
+func reminderDueString(from components: DateComponents?) -> String? {
+    guard let date = dateKey(from: components) else {
+        return nil
+    }
+    guard let hour = components?.hour, let minute = components?.minute else {
+        return date
+    }
+    return String(format: "%@T%02d:%02d:00", date, hour, minute)
+}
+
 func hexColor(from calendar: EKCalendar) -> String? {
     #if os(macOS)
     guard let cgColor = calendar.cgColor else {
@@ -260,6 +270,25 @@ func moveDate(_ date: Date, toDateKey targetDate: String, calendar: Calendar) ->
     return calendar.date(from: nextComponents)
 }
 
+func integerArgument(_ name: String) -> Int? {
+    guard let text = argumentValue(name) else {
+        return nil
+    }
+    return Int(text)
+}
+
+func dateTime(on date: Date, minutesFromMidnight: Int, calendar: Calendar) -> Date? {
+    let safeMinutes = max(0, min(23 * 60 + 59, minutesFromMidnight))
+    var components = calendar.dateComponents([.year, .month, .day], from: date)
+    components.calendar = calendar
+    components.timeZone = calendar.timeZone
+    components.hour = safeMinutes / 60
+    components.minute = safeMinutes % 60
+    components.second = 0
+    components.nanosecond = 0
+    return calendar.date(from: components)
+}
+
 func readReminders(store: EKEventStore) {
     requireAccess(.reminder)
 
@@ -277,7 +306,7 @@ func readReminders(store: EKEventStore) {
                 listId: reminder.calendar.calendarIdentifier,
                 list: reminder.calendar.title,
                 completed: reminder.isCompleted,
-                dueDate: dateKey(from: reminder.dueDateComponents),
+                dueDate: reminderDueString(from: reminder.dueDateComponents),
                 notes: reminder.notes,
                 priority: reminder.priority,
                 url: reminder.url?.absoluteString
@@ -450,7 +479,7 @@ func setReminderDue(store: EKEventStore) {
         fail("not_found", "Apple Reminder no longer exists. Sync Task Hub and try again.", exitCode: 9)
     }
 
-    reminder.dueDateComponents = dueDateComponents(from: argumentValue("--due"))
+    reminder.dueDateComponents = dueDateComponents(from: argumentValue("--due"), startMinutes: integerArgument("--start-minutes"))
 
     do {
         try store.save(reminder, commit: true)
@@ -547,10 +576,20 @@ func setCalendarEventDate(store: EKEventStore) {
         fail("invalid_arguments", "set-calendar-event-date requires a real --date value.", exitCode: 2)
     }
 
-    let duration = max(originalEnd.timeIntervalSince(originalStart), 60)
-    event.isAllDay = allDayText == "true"
-    event.startDate = nextStart
-    event.endDate = nextStart.addingTimeInterval(duration)
+    if let startMinutes = integerArgument("--start-minutes") {
+        let durationMinutes = max(integerArgument("--duration-minutes") ?? Int(max(originalEnd.timeIntervalSince(originalStart), 60) / 60), 1)
+        guard let timedStart = dateTime(on: nextStart, minutesFromMidnight: startMinutes, calendar: calendar) else {
+            fail("invalid_arguments", "set-calendar-event-date requires valid --start-minutes.", exitCode: 2)
+        }
+        event.isAllDay = false
+        event.startDate = timedStart
+        event.endDate = timedStart.addingTimeInterval(TimeInterval(durationMinutes * 60))
+    } else {
+        let duration = max(originalEnd.timeIntervalSince(originalStart), 60)
+        event.isAllDay = allDayText == "true"
+        event.startDate = nextStart
+        event.endDate = nextStart.addingTimeInterval(duration)
+    }
 
     do {
         try store.save(event, span: .thisEvent, commit: true)
@@ -575,7 +614,7 @@ func setCalendarEventDate(store: EKEventStore) {
     )
 }
 
-func dueDateComponents(from text: String?) -> DateComponents? {
+func dueDateComponents(from text: String?, startMinutes: Int? = nil) -> DateComponents? {
     guard let text, !text.isEmpty else {
         return nil
     }
@@ -590,6 +629,11 @@ func dueDateComponents(from text: String?) -> DateComponents? {
     components.year = parts[0]
     components.month = parts[1]
     components.day = parts[2]
+    if let startMinutes {
+        let safeMinutes = max(0, min(23 * 60 + 59, startMinutes))
+        components.hour = safeMinutes / 60
+        components.minute = safeMinutes % 60
+    }
     guard components.calendar?.date(from: components) != nil else {
         fail("invalid_arguments", "create-reminder --due must be a real calendar date.", exitCode: 2)
     }
@@ -614,7 +658,7 @@ func createReminder(store: EKEventStore) {
         reminder.calendar = store.defaultCalendarForNewReminders() ?? store.calendars(for: .reminder).first
     }
     reminder.notes = argumentValue("--notes")
-    reminder.dueDateComponents = dueDateComponents(from: argumentValue("--due"))
+    reminder.dueDateComponents = dueDateComponents(from: argumentValue("--due"), startMinutes: integerArgument("--start-minutes"))
 
     guard reminder.calendar != nil else {
         fail("eventkit_error", "No writable Apple Reminders list is available.", exitCode: 7)
@@ -663,9 +707,19 @@ func createCalendarEvent(store: EKEventStore) {
     event.title = title
     event.notes = argumentValue("--notes")
     event.calendar = calendar
-    event.isAllDay = true
-    event.startDate = startDate
-    event.endDate = Calendar.current.date(byAdding: .day, value: 1, to: startDate) ?? startDate.addingTimeInterval(24 * 60 * 60)
+    if let startMinutes = integerArgument("--start-minutes") {
+        let durationMinutes = max(integerArgument("--duration-minutes") ?? 60, 1)
+        guard let timedStart = dateTime(on: startDate, minutesFromMidnight: startMinutes, calendar: Calendar.current) else {
+            fail("invalid_arguments", "create-calendar-event requires valid --start-minutes.", exitCode: 2)
+        }
+        event.isAllDay = false
+        event.startDate = timedStart
+        event.endDate = timedStart.addingTimeInterval(TimeInterval(durationMinutes * 60))
+    } else {
+        event.isAllDay = true
+        event.startDate = startDate
+        event.endDate = Calendar.current.date(byAdding: .day, value: 1, to: startDate) ?? startDate.addingTimeInterval(24 * 60 * 60)
+    }
 
     do {
         try store.save(event, span: .thisEvent, commit: true)

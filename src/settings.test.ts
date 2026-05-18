@@ -18,6 +18,8 @@ describe("normalizeTaskHubSettings", () => {
     expect(settings.calendarTaskCreationEnabled).toBe(true);
     expect(settings.showLunarCalendar).toBe(false);
     expect(settings.localApple.calendarTaskSendEnabled).toBe(false);
+    expect(settings.localApple.calendarDefaultTimedTaskDurationMinutes).toBe(60);
+    expect(settings.localApple.reminderDurationOverrides).toEqual({});
     expect(settings.calendarTaskCreationDefaultTarget).toEqual({ type: "vault" });
     expect(settings.taskCreationFilePath).toBe("Task Hub.md");
     expect(settings.ignoredPaths).toEqual(["Archive/"]);

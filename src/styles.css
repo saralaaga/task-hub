@@ -1307,6 +1307,67 @@
   right: 6px;
 }
 
+.task-hub-calendar-resize-feedback {
+  background: color-mix(in srgb, var(--background-primary) 86%, var(--task-hub-item-color));
+  border: 1px solid color-mix(in srgb, var(--task-hub-item-color) 55%, var(--background-modifier-border));
+  border-radius: 999px;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 12%);
+  color: var(--text-normal);
+  font-size: var(--font-ui-smaller);
+  font-weight: 700;
+  left: 50%;
+  line-height: 1;
+  opacity: 0;
+  padding: 4px 8px;
+  pointer-events: none;
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 3;
+}
+
+.task-hub-calendar-timed-item.has-resize-feedback .task-hub-calendar-resize-feedback {
+  opacity: 1;
+}
+
+.task-hub-calendar-resize-handle {
+  cursor: ns-resize;
+  height: 9px;
+  left: 0;
+  position: absolute;
+  right: 0;
+  z-index: 2;
+}
+
+.task-hub-calendar-resize-handle.is-start {
+  top: 0;
+}
+
+.task-hub-calendar-resize-handle.is-end {
+  bottom: 0;
+}
+
+.task-hub-calendar-resize-handle::after {
+  background: color-mix(in srgb, var(--task-hub-item-color) 70%, transparent);
+  border-radius: 999px;
+  content: "";
+  display: block;
+  height: 2px;
+  margin: 3px auto;
+  opacity: 0;
+  width: 36px;
+}
+
+.task-hub-calendar-resize-handle:hover::after,
+.task-hub-calendar-timed-item.is-resizing .task-hub-calendar-resize-handle::after {
+  opacity: 1;
+}
+
+.task-hub-calendar-timed-item.is-resizing {
+  outline: 2px solid color-mix(in srgb, var(--task-hub-item-color) 70%, transparent);
+  outline-offset: 1px;
+}
+
 @media (max-width: 720px) {
   .task-hub-header,
   .task-hub-toolbar,

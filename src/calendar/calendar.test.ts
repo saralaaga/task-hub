@@ -75,6 +75,56 @@ describe("buildCalendarItems", () => {
     expect(items.map((item) => item.id)).toEqual(["task:open", "task:done"]);
   });
 
+  it("keeps Apple Reminder tasks with due times on the time grid", () => {
+    const items = buildCalendarItems({
+      tasks: [
+        task({
+          id: "reminder",
+          text: "Timed reminder",
+          dueDate: "2026-05-06",
+          source: "apple-reminders",
+          scheduledDate: "2026-05-06T09:30:00"
+        })
+      ],
+      events: [],
+      visibleSourceIds: new Set(["apple-reminders"]),
+      includeCompletedTasks: false
+    });
+
+    expect(items[0]).toMatchObject({
+      date: "2026-05-06",
+      allDay: false,
+      startMinutes: 570,
+      endMinutes: 630
+    });
+  });
+
+  it("uses local Apple Reminder duration overrides for timed reminders", () => {
+    const items = buildCalendarItems({
+      tasks: [
+        task({
+          id: "reminder",
+          externalId: "reminder-1",
+          text: "Timed reminder",
+          dueDate: "2026-05-06",
+          source: "apple-reminders",
+          scheduledDate: "2026-05-06T09:30:00"
+        })
+      ],
+      events: [],
+      visibleSourceIds: new Set(["apple-reminders"]),
+      includeCompletedTasks: false,
+      taskDurationOverrides: {
+        "reminder-1": 90
+      }
+    });
+
+    expect(items[0]).toMatchObject({
+      startMinutes: 570,
+      endMinutes: 660
+    });
+  });
+
   it("filters hidden external sources", () => {
     const items = buildCalendarItems({
       tasks: TASKS,
@@ -278,6 +328,8 @@ function task(overrides: Partial<TaskItem>): TaskItem {
     completed: overrides.completed ?? false,
     tags: [],
     dueDate: overrides.dueDate,
-    source: "vault"
+    scheduledDate: overrides.scheduledDate,
+    externalId: overrides.externalId,
+    source: overrides.source ?? "vault"
   };
 }

@@ -28,6 +28,7 @@ export type BuildCalendarItemsInput = {
   includeCompletedTasks: boolean;
   sourceColors?: Record<string, string>;
   eventColors?: Record<string, string>;
+  taskDurationOverrides?: Record<string, number>;
 };
 
 export type CalendarRange = {
@@ -54,11 +55,15 @@ export function buildCalendarItems(input: BuildCalendarItemsInput): CalendarItem
     if (!input.visibleSourceIds.has(sourceId)) continue;
     if (!task.dueDate) continue;
     if (task.completed && !input.includeCompletedTasks) continue;
+    const taskStartMinutes = task.scheduledDate ? parseCalendarDateTime(task.scheduledDate)?.minutes : undefined;
+    const taskDurationMinutes = taskDuration(input.taskDurationOverrides, task);
     items.push({
       id: `task:${task.id}`,
       title: task.text,
       date: task.dueDate,
-      allDay: true,
+      startMinutes: taskStartMinutes,
+      endMinutes: taskStartMinutes === undefined ? undefined : taskStartMinutes + taskDurationMinutes,
+      allDay: taskStartMinutes === undefined,
       sourceId,
       kind: "task",
       color: input.sourceColors?.[sourceId],
@@ -101,6 +106,12 @@ export function buildCalendarItems(input: BuildCalendarItemsInput): CalendarItem
       calendarCompletionRank(left) - calendarCompletionRank(right) ||
       left.title.localeCompare(right.title)
   );
+}
+
+function taskDuration(overrides: Record<string, number> | undefined, task: TaskItem): number {
+  const override = task.externalId ? overrides?.[task.externalId] : undefined;
+  if (override === undefined || !Number.isFinite(override)) return 60;
+  return Math.max(15, Math.min(24 * 60, Math.round(override)));
 }
 
 function eventColor(event: CalendarEvent, eventColors?: Record<string, string>, sourceColors?: Record<string, string>): string | undefined {

@@ -38,7 +38,18 @@ import {
   TaskHubSettingTab
 } from "./settings";
 import type { AppleCalendarInfo, CalendarEvent, CalendarSourceStatus, CalendarTaskCreationTarget, LocalAppleSyncStatus, TaskHubSettings, TaskItem } from "./types";
+import type { CalendarDropTarget } from "./views/renderCalendarView";
 import { TaskHubView } from "./views/TaskHubView";
+
+type TimedCalendarTarget = {
+  dateKey: string;
+  startMinutes?: number;
+  durationMinutes?: number;
+};
+
+function calendarDropTargetParts(target: CalendarDropTarget): TimedCalendarTarget {
+  return typeof target === "string" ? { dateKey: target } : target;
+}
 
 export default class TaskHubPlugin extends Plugin {
   settings: TaskHubSettings = DEFAULT_SETTINGS;
@@ -226,8 +237,13 @@ export default class TaskHubPlugin extends Plugin {
     return completionResult;
   }
 
-  async rescheduleTask(task: TaskItem, targetDate: string): Promise<CompletionResult> {
+  async rescheduleTask(task: TaskItem, target: CalendarDropTarget): Promise<CompletionResult> {
     const t = createTranslator(this.settings.language);
+    const timedTarget = calendarDropTargetParts(target);
+
+    if (timedTarget.startMinutes !== undefined && task.source === "vault") {
+      return this.sendTaskToAppleCalendar(task, timedTarget);
+    }
 
     if (task.source === "apple-reminders") {
       if (!this.isLocalAppleSupported()) {
@@ -242,13 +258,16 @@ export default class TaskHubPlugin extends Plugin {
         return result;
       }
 
-      if (task.dueDate === targetDate) {
+      if (timedTarget.startMinutes === undefined && task.dueDate === timedTarget.dateKey) {
         new Notice(t("taskDateAlreadySet"));
         return { status: "already_in_state" };
       }
 
       try {
-        await setAppleReminderDueDate(task.externalId, targetDate);
+        await setAppleReminderDueDate(task.externalId, timedTarget.dateKey, timedTarget.startMinutes);
+        if (timedTarget.startMinutes !== undefined) {
+          await this.setAppleReminderDurationOverride(task.externalId, timedTarget.durationMinutes);
+        }
         await this.syncLocalApple({ silent: true });
         new Notice(t("taskDateUpdated"));
         this.refreshOpenViews();
@@ -284,7 +303,7 @@ export default class TaskHubPlugin extends Plugin {
     };
 
     await this.app.vault.process(file, (content) => {
-      update.result = rescheduleTaskInContent(content, task, targetDate, {
+      update.result = rescheduleTaskInContent(content, task, timedTarget.dateKey, {
         lineChangedConflict: t("lineChangedConflict"),
         lineMismatchConflict: t("lineMismatchConflict"),
         lineNoLongerOpen: t("lineNoLongerOpen"),
@@ -308,8 +327,19 @@ export default class TaskHubPlugin extends Plugin {
     return updateResult;
   }
 
-  async rescheduleCalendarEvent(event: CalendarEvent, targetDate: string): Promise<CompletionResult> {
+  private async setAppleReminderDurationOverride(reminderId: string, durationMinutes: number | undefined): Promise<void> {
+    if (durationMinutes === undefined) return;
+    const normalizedDuration = Math.max(15, Math.min(24 * 60, Math.round(durationMinutes)));
+    this.settings.localApple.reminderDurationOverrides = {
+      ...this.settings.localApple.reminderDurationOverrides,
+      [reminderId]: normalizedDuration
+    };
+    await this.saveSettings();
+  }
+
+  async rescheduleCalendarEvent(event: CalendarEvent, target: CalendarDropTarget): Promise<CompletionResult> {
     const t = createTranslator(this.settings.language);
+    const timedTarget = calendarDropTargetParts(target);
 
     if (
       event.sourceId !== "apple-calendar" ||
@@ -326,7 +356,7 @@ export default class TaskHubPlugin extends Plugin {
       return result;
     }
 
-    if (event.start.slice(0, 10) === targetDate) {
+    if (event.start.slice(0, 10) === timedTarget.dateKey && timedTarget.startMinutes === undefined) {
       new Notice(t("taskDateAlreadySet"));
       return { status: "already_in_state" };
     }
@@ -334,10 +364,12 @@ export default class TaskHubPlugin extends Plugin {
     try {
       await setAppleCalendarEventDate({
         id: event.id,
-        targetDate,
+        targetDate: timedTarget.dateKey,
+        startMinutes: timedTarget.startMinutes,
         start: event.start,
         end: event.end,
-        allDay: event.allDay
+        allDay: event.allDay,
+        durationMinutes: timedTarget.durationMinutes
       });
       await this.syncLocalApple({ silent: true });
       new Notice(t("taskDateUpdated"));
@@ -482,7 +514,7 @@ export default class TaskHubPlugin extends Plugin {
     }
   }
 
-  async sendTaskToAppleCalendar(task: TaskItem): Promise<CompletionResult> {
+  async sendTaskToAppleCalendar(task: TaskItem, timedTarget?: TimedCalendarTarget): Promise<CompletionResult> {
     const t = createTranslator(this.settings.language);
 
     if (!this.canSendTasksToAppleCalendar()) {
@@ -521,8 +553,10 @@ export default class TaskHubPlugin extends Plugin {
     try {
       await createAppleCalendarEvent({
         title: currentTask.text,
-        date: currentTask.dueDate,
-        notes: this.appleCalendarEventNotes(currentTask)
+        date: timedTarget?.dateKey ?? currentTask.dueDate,
+        notes: this.appleCalendarEventNotes(currentTask),
+        startMinutes: timedTarget?.startMinutes,
+        durationMinutes: timedTarget?.durationMinutes
       });
     } catch (error) {
       const result: CompletionResult = {

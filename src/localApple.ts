@@ -217,18 +217,22 @@ export async function setAppleReminderCompleted(id: string, completed: boolean):
   );
 }
 
-export async function setAppleReminderDueDate(id: string, dueDate: string): Promise<void> {
+export async function setAppleReminderDueDate(id: string, dueDate: string, startMinutes?: number): Promise<void> {
+  const args = ["set-reminder-due", "--id", id, "--due", dueDate];
+  if (startMinutes !== undefined) args.push("--start-minutes", String(startMinutes));
   parseHelperJson<{ ok: boolean }>(
-    await runAppleHelper(["set-reminder-due", "--id", id, "--due", dueDate])
+    await runAppleHelper(args)
   );
 }
 
 export async function setAppleCalendarEventDate(input: {
   id: string;
   targetDate: string;
+  startMinutes?: number;
   start: string;
   end?: string;
   allDay: boolean;
+  durationMinutes?: number;
 }): Promise<void> {
   const args = [
     "set-calendar-event-date",
@@ -242,12 +246,22 @@ export async function setAppleCalendarEventDate(input: {
     input.allDay ? "true" : "false"
   ];
   if (input.end) args.splice(args.length - 2, 0, "--end", input.end);
+  if (input.startMinutes !== undefined) args.splice(args.length - 2, 0, "--start-minutes", String(input.startMinutes));
+  if (input.durationMinutes !== undefined) args.splice(args.length - 2, 0, "--duration-minutes", String(input.durationMinutes));
   parseHelperJson<{ ok: boolean }>(await runAppleHelper(args));
 }
 
-export async function createAppleCalendarEvent(input: { title: string; date: string; notes?: string }): Promise<void> {
+export async function createAppleCalendarEvent(input: {
+  title: string;
+  date: string;
+  notes?: string;
+  startMinutes?: number;
+  durationMinutes?: number;
+}): Promise<void> {
   const args = ["create-calendar-event", "--title", input.title, "--date", input.date];
   if (input.notes) args.push("--notes", input.notes);
+  if (input.startMinutes !== undefined) args.push("--start-minutes", String(input.startMinutes));
+  if (input.durationMinutes !== undefined) args.push("--duration-minutes", String(input.durationMinutes));
   parseHelperJson<{ ok: boolean }>(await runAppleHelper(args));
 }
 
@@ -384,6 +398,7 @@ type AppleCalendarRecord = {
 
 export function reminderToTask(record: AppleReminderRecord, index: number): TaskItem {
   const dueDate = toDateKey(record.dueDate);
+  const scheduledDate = toLocalDateTime(record.dueDate);
   return {
     id: `apple-reminders:${record.id ?? index}`,
     externalId: record.id,
@@ -396,6 +411,7 @@ export function reminderToTask(record: AppleReminderRecord, index: number): Task
     completed: Boolean(record.completed),
     tags: [],
     dueDate,
+    scheduledDate,
     contextPreview: record.notes,
     source: APPLE_REMINDERS_SOURCE_ID,
     externalUrl: record.url
@@ -442,9 +458,27 @@ export function appleCalendarsFromEvents(events: CalendarEvent[]): AppleCalendar
 
 function toDateKey(value: string | undefined): string | undefined {
   if (!value) return undefined;
+  const dateOnly = value.match(/^(\d{4}-\d{2}-\d{2})$/);
+  if (dateOnly) return dateOnly[1];
+  const localDateTime = value.match(/^(\d{4}-\d{2}-\d{2})T/);
+  if (localDateTime && !/(?:Z|[+-]\d{2}:?\d{2})$/.test(value)) return localDateTime[1];
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return undefined;
   return date.toISOString().slice(0, 10);
+}
+
+function toLocalDateTime(value: string | undefined): string | undefined {
+  if (!value || !/T\d{2}:\d{2}/.test(value)) return undefined;
+  const floating = value.match(/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2})(?::\d{2})?/);
+  if (floating && !/(?:Z|[+-]\d{2}:?\d{2})$/.test(value)) return floating[1];
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return undefined;
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  const hour = String(date.getHours()).padStart(2, "0");
+  const minute = String(date.getMinutes()).padStart(2, "0");
+  return `${year}-${month}-${day}T${hour}:${minute}`;
 }
 
 function normalizeHexColor(value: string | undefined): string | undefined {

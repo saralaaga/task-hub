@@ -17,6 +17,29 @@ describe("Apple helper source", () => {
     expect(source).toContain("store.defaultCalendarForNewEvents");
   });
 
+  it("can create and reschedule timed Apple Calendar events", () => {
+    const source = readFileSync(path.join(__dirname, "..", "apple-helper", "TaskHubAppleHelper.swift"), "utf8");
+
+    expect(source).toContain("integerArgument(\"--start-minutes\")");
+    expect(source).toContain("integerArgument(\"--duration-minutes\")");
+    expect(source).toContain("event.isAllDay = false");
+    expect(source).toContain("dateTime(on: nextStart");
+    expect(source).toContain("dateTime(on: startDate");
+  });
+
+  it("can set Apple Reminder due times to a specific minute", () => {
+    const source = readFileSync(path.join(__dirname, "..", "apple-helper", "TaskHubAppleHelper.swift"), "utf8");
+    const start = source.indexOf("func setReminderDue(store: EKEventStore)");
+    const end = source.indexOf("func setReminderList(store: EKEventStore)", start);
+    const setReminderDueSource = source.slice(start, end);
+
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(end).toBeGreaterThan(start);
+    expect(setReminderDueSource).toContain(
+      "reminder.dueDateComponents = dueDateComponents(from: argumentValue(\"--due\"), startMinutes: integerArgument(\"--start-minutes\"))"
+    );
+  });
+
   it("can list Apple calendars with identifiers and colors", () => {
     const source = readFileSync(path.join(__dirname, "..", "apple-helper", "TaskHubAppleHelper.swift"), "utf8");
 

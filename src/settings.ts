@@ -24,6 +24,7 @@ export const DEFAULT_SETTINGS: TaskHubSettings = {
     remindersWritebackEnabled: false,
     remindersCreateEnabled: false,
     remindersDefaultListId: undefined,
+    reminderDurationOverrides: {},
     remindersLists: [],
     calendarEnabled: false,
     calendarColor: "#6f94b8",
@@ -31,6 +32,7 @@ export const DEFAULT_SETTINGS: TaskHubSettings = {
     calendars: [],
     calendarWritebackEnabled: false,
     calendarTaskSendEnabled: false,
+    calendarDefaultTimedTaskDurationMinutes: 60,
     calendarLookbackDays: 30,
     calendarLookaheadDays: 90
   }
@@ -54,10 +56,15 @@ export function normalizeTaskHubSettings(loaded: Partial<TaskHubSettings> | null
       ...(loadedLocalApple ?? {}),
       enabled: localAppleEnabled,
       remindersColor: loadedLocalApple?.remindersColor ?? DEFAULT_SETTINGS.localApple.remindersColor,
+      reminderDurationOverrides:
+        loadedLocalApple?.reminderDurationOverrides ?? DEFAULT_SETTINGS.localApple.reminderDurationOverrides,
       remindersLists: loadedLocalApple?.remindersLists ?? DEFAULT_SETTINGS.localApple.remindersLists,
       calendarColor: loadedLocalApple?.calendarColor ?? DEFAULT_SETTINGS.localApple.calendarColor,
       calendarColorOverrides: loadedLocalApple?.calendarColorOverrides ?? DEFAULT_SETTINGS.localApple.calendarColorOverrides,
-      calendars: loadedLocalApple?.calendars ?? DEFAULT_SETTINGS.localApple.calendars
+      calendars: loadedLocalApple?.calendars ?? DEFAULT_SETTINGS.localApple.calendars,
+      calendarDefaultTimedTaskDurationMinutes:
+        loadedLocalApple?.calendarDefaultTimedTaskDurationMinutes ??
+        DEFAULT_SETTINGS.localApple.calendarDefaultTimedTaskDurationMinutes
     },
     appleReminderLinks: loaded?.appleReminderLinks ?? {}
   };
@@ -408,6 +415,19 @@ export class TaskHubSettingTab extends PluginSettingTab {
           this.plugin.settings.localApple.calendarTaskSendEnabled = value;
           await this.plugin.saveSettings();
           this.display();
+        });
+      });
+
+    new Setting(panel)
+      .setName(t("localAppleCalendarDefaultTimedTaskDuration"))
+      .setDesc(t("localAppleCalendarDefaultTimedTaskDurationDesc"))
+      .addText((text) => {
+        text.setValue(String(this.plugin.settings.localApple.calendarDefaultTimedTaskDurationMinutes)).onChange(async (value) => {
+          const minutes = Number.parseInt(value, 10);
+          if (Number.isFinite(minutes) && minutes >= 15 && minutes <= 1440) {
+            this.plugin.settings.localApple.calendarDefaultTimedTaskDurationMinutes = minutes;
+            await this.plugin.saveSettings();
+          }
         });
       });
 

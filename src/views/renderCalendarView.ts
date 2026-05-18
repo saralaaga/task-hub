@@ -18,9 +18,19 @@ export type CalendarViewState = {
   allowTaskCreation: boolean;
   showLunarCalendar?: boolean;
   today?: Date;
+  defaultTimedTaskDurationMinutes?: number;
+  taskDurationOverrides?: Record<string, number>;
   sources: CalendarSource[];
   t: Translator;
 };
+
+export type CalendarDropTarget =
+  | string
+  | {
+      dateKey: string;
+      startMinutes: number;
+      durationMinutes: number;
+    };
 
 export type CalendarViewHandlers = {
   onModeChange: (mode: CalendarViewMode) => void;
@@ -31,10 +41,10 @@ export type CalendarViewHandlers = {
   onTaskComplete: (task: TaskItem) => void;
   onTaskJump: (task: TaskItem) => void;
   onTaskSelect: (task: TaskItem) => void;
-  onTaskReschedule: (task: TaskItem, dateKey: string) => void;
+  onTaskReschedule: (task: TaskItem, target: CalendarDropTarget) => void;
   onTaskSendToAppleReminders?: (task: TaskItem) => void;
   onTaskSendToAppleCalendar?: (task: TaskItem) => void;
-  onEventReschedule?: (event: CalendarEvent, dateKey: string) => void;
+  onEventReschedule?: (event: CalendarEvent, target: CalendarDropTarget) => void;
 };
 
 const MODE_LABEL_KEYS: Record<CalendarViewMode, TranslationKey> = {
@@ -45,6 +55,8 @@ const MODE_LABEL_KEYS: Record<CalendarViewMode, TranslationKey> = {
 const HOUR_HEIGHT = 56;
 const DEFAULT_START_HOUR = 6;
 const DEFAULT_END_HOUR = 22;
+const DEFAULT_TIMED_TASK_DURATION_MINUTES = 60;
+const MIN_TIMED_ITEM_DURATION_MINUTES = 15;
 const CALENDAR_ITEM_DRAG_MIME = "application/x-task-hub-calendar-item-id";
 const TASK_DRAG_MIME = "application/x-task-hub-task-id";
 const WEEK_START_DAY_INDEX: Record<WeekStart, number> = {
@@ -108,7 +120,8 @@ export function renderCalendarView(
     visibleSourceIds: state.visibleSourceIds,
     includeCompletedTasks: state.includeCompletedTasks,
     sourceColors: Object.fromEntries(state.sources.map((source) => [source.id, source.color])),
-    eventColors: Object.fromEntries(events.filter((event) => event.sourceId === "apple-calendar" && event.calendarId).map((event) => [event.calendarId as string, appleCalendarEventColor(event, state)]))
+    eventColors: Object.fromEntries(events.filter((event) => event.sourceId === "apple-calendar" && event.calendarId).map((event) => [event.calendarId as string, appleCalendarEventColor(event, state)])),
+    taskDurationOverrides: state.taskDurationOverrides
   });
   const visibleItems = items.filter((item) => item.date >= range.start && item.date <= range.end);
 
@@ -235,7 +248,7 @@ function renderAgendaGrid(
   for (const day of days) {
     const column = columns.createDiv({ cls: `task-hub-agenda-column ${day === today ? "is-today" : ""}` });
     bindTaskCreation(column, day, state, handlers);
-    bindCalendarDropTarget(column, day, visibleItems, handlers, state);
+    bindCalendarTimedDropTarget(column, day, startHour, visibleItems, handlers, state);
     const dayTimedItems = timedItems.filter((item) => item.date === day);
     for (const item of dayTimedItems) {
       renderTimedCalendarItem(column, item, startHour, handlers, state);
@@ -280,6 +293,7 @@ function renderTimedCalendarItem(
   row.style.top = `${((startMinutes - startHour * 60) / 60) * HOUR_HEIGHT}px`;
   row.style.height = `${Math.max(30, ((endMinutes - startMinutes) / 60) * HOUR_HEIGHT - 4)}px`;
   renderCalendarItemContent(row, item, handlers, state, formatTimeRange(startMinutes, endMinutes));
+  bindCalendarItemResize(row, container, item, startHour, handlers, state);
   const task = item.task;
   if (task) {
     row.addEventListener("click", (event) => {
@@ -291,6 +305,109 @@ function renderTimedCalendarItem(
       event.stopPropagation();
     });
   }
+}
+
+function bindCalendarItemResize(
+  row: HTMLElement,
+  column: HTMLElement,
+  item: CalendarItem,
+  startHour: number,
+  handlers: CalendarViewHandlers,
+  state: CalendarViewState
+): void {
+  if (!canResizeCalendarItem(item, state) || item.startMinutes === undefined) return;
+
+  const feedback = row.createDiv({ cls: "task-hub-calendar-resize-feedback" });
+  for (const edge of ["start", "end"] as const) {
+    let lastTarget: CalendarDropTarget | undefined;
+    const handle = row.createDiv({ cls: `task-hub-calendar-resize-handle is-${edge}` });
+    handle.draggable = true;
+    handle.setAttr("draggable", "true");
+    handle.setAttr("aria-hidden", "true");
+    handle.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+    });
+    handle.addEventListener("dragstart", (event) => {
+      event.stopPropagation();
+      lastTarget = undefined;
+      row.addClass("is-resizing");
+      updateResizeFeedback(feedback, row, 0);
+    });
+    handle.addEventListener("drag", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const target = resizeDropTarget(column, event, item, startHour, edge);
+      if (!target) return;
+      lastTarget = target;
+      updateResizeFeedback(feedback, row, resizeDeltaMinutes(item, target, edge));
+    });
+    handle.addEventListener("dragend", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      row.removeClass("is-resizing");
+      clearResizeFeedback(feedback, row);
+      const target = lastTarget ?? resizeDropTarget(column, event, item, startHour, edge);
+      lastTarget = undefined;
+      if (!target) return;
+      if (item.task) {
+        handlers.onTaskReschedule(item.task, target);
+        return;
+      }
+      if (item.event) {
+        handlers.onEventReschedule?.(item.event, target);
+      }
+    });
+  }
+}
+
+function updateResizeFeedback(feedback: HTMLElement, row: HTMLElement, deltaMinutes: number): void {
+  feedback.textContent = formatMinuteDelta(deltaMinutes);
+  row.addClass("has-resize-feedback");
+}
+
+function clearResizeFeedback(feedback: HTMLElement, row: HTMLElement): void {
+  feedback.textContent = "";
+  row.removeClass("has-resize-feedback");
+}
+
+function resizeDeltaMinutes(item: CalendarItem, target: CalendarDropTarget, edge: "start" | "end"): number {
+  if (typeof target === "string" || item.startMinutes === undefined) return 0;
+  const currentEnd = Math.max(item.endMinutes ?? item.startMinutes + DEFAULT_TIMED_TASK_DURATION_MINUTES, item.startMinutes + MIN_TIMED_ITEM_DURATION_MINUTES);
+  if (edge === "start") return target.startMinutes - item.startMinutes;
+  return target.startMinutes + target.durationMinutes - currentEnd;
+}
+
+function formatMinuteDelta(deltaMinutes: number): string {
+  if (deltaMinutes > 0) return `+${deltaMinutes}m`;
+  if (deltaMinutes < 0) return `${deltaMinutes}m`;
+  return "0m";
+}
+
+function resizeDropTarget(
+  column: HTMLElement,
+  event: DragEvent,
+  item: CalendarItem,
+  startHour: number,
+  edge: "start" | "end"
+): CalendarDropTarget | undefined {
+  if (item.startMinutes === undefined) return undefined;
+  const currentStart = item.startMinutes;
+  const currentEnd = Math.max(item.endMinutes ?? currentStart + DEFAULT_TIMED_TASK_DURATION_MINUTES, currentStart + MIN_TIMED_ITEM_DURATION_MINUTES);
+  const draggedMinutes = minutesFromColumnEvent(column, event, startHour);
+  const startMinutes =
+    edge === "start"
+      ? Math.min(draggedMinutes, currentEnd - MIN_TIMED_ITEM_DURATION_MINUTES)
+      : currentStart;
+  const endMinutes =
+    edge === "end"
+      ? Math.max(draggedMinutes, currentStart + MIN_TIMED_ITEM_DURATION_MINUTES)
+      : currentEnd;
+  return {
+    dateKey: item.date,
+    startMinutes: clampDayMinutes(startMinutes),
+    durationMinutes: Math.max(MIN_TIMED_ITEM_DURATION_MINUTES, clampDayMinutes(endMinutes) - clampDayMinutes(startMinutes))
+  };
 }
 
 function bindTaskCreation(
@@ -460,6 +577,82 @@ function bindCalendarDropTarget(
   });
 }
 
+function bindCalendarTimedDropTarget(
+  element: HTMLElement,
+  dateKey: string,
+  startHour: number,
+  visibleItems: CalendarItem[],
+  handlers: CalendarViewHandlers,
+  state: CalendarViewState
+): void {
+  element.addEventListener("dragover", (event) => {
+    if (!isTaskHubDrag(event)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    element.addClass("is-drop-hover");
+    if (event.dataTransfer) {
+      event.dataTransfer.dropEffect = "move";
+    }
+  });
+  element.addEventListener("dragleave", () => {
+    element.removeClass("is-drop-hover");
+  });
+  element.addEventListener("drop", (event) => {
+    const item = calendarItemFromDragEvent(event, visibleItems, state);
+    if (!item) return;
+    event.preventDefault();
+    event.stopPropagation();
+    element.removeClass("is-drop-hover");
+    const target = timedDropTarget(element, event, item, dateKey, startHour, state);
+    if (item.task) {
+      handlers.onTaskReschedule(item.task, target);
+      return;
+    }
+    if (item.event) {
+      handlers.onEventReschedule?.(item.event, target);
+    }
+  });
+}
+
+function timedDropTarget(
+  element: HTMLElement,
+  event: DragEvent,
+  item: CalendarItem,
+  dateKey: string,
+  startHour: number,
+  state: CalendarViewState
+): CalendarDropTarget {
+  const startMinutes = minutesFromColumnEvent(element, event, startHour);
+  return {
+    dateKey,
+    startMinutes,
+    durationMinutes: itemDurationMinutes(item, state)
+  };
+}
+
+function validDurationMinutes(value: number | undefined): number {
+  if (!Number.isFinite(value) || value === undefined) return DEFAULT_TIMED_TASK_DURATION_MINUTES;
+  return Math.max(MIN_TIMED_ITEM_DURATION_MINUTES, Math.min(24 * 60, Math.round(value)));
+}
+
+function itemDurationMinutes(item: CalendarItem, state: CalendarViewState): number {
+  if (item.startMinutes !== undefined && item.endMinutes !== undefined) {
+    return validDurationMinutes(item.endMinutes - item.startMinutes);
+  }
+  return validDurationMinutes(state.defaultTimedTaskDurationMinutes);
+}
+
+function minutesFromColumnEvent(element: HTMLElement, event: DragEvent, startHour: number): number {
+  const rect = element.getBoundingClientRect();
+  const offset = Math.max(0, event.clientY - rect.top);
+  const rawMinutes = startHour * 60 + (offset / HOUR_HEIGHT) * 60;
+  return Math.max(0, Math.min(23 * 60 + 45, Math.round(rawMinutes / 15) * 15));
+}
+
+function clampDayMinutes(value: number): number {
+  return Math.max(0, Math.min(24 * 60, Math.round(value)));
+}
+
 function calendarItemFromDragEvent(event: DragEvent, visibleItems: CalendarItem[], state: CalendarViewState): CalendarItem | undefined {
   const draggedId = event.dataTransfer?.getData(CALENDAR_ITEM_DRAG_MIME) || event.dataTransfer?.getData(TASK_DRAG_MIME);
   if (!draggedId) return undefined;
@@ -476,6 +669,14 @@ function canDragCalendarItem(item: CalendarItem, state: CalendarViewState): bool
     return item.event?.sourceId === "apple-calendar" && Boolean(state.allowAppleCalendarWriteback) && Boolean(item.event.id);
   }
   if (item.task?.source === "vault") return true;
+  return item.task?.source === "apple-reminders" && state.allowAppleReminderWriteback && Boolean(item.task.externalId);
+}
+
+function canResizeCalendarItem(item: CalendarItem, state: CalendarViewState): boolean {
+  if (item.allDay || item.startMinutes === undefined) return false;
+  if (item.kind === "event") {
+    return item.event?.sourceId === "apple-calendar" && Boolean(state.allowAppleCalendarWriteback) && Boolean(item.event.id);
+  }
   return item.task?.source === "apple-reminders" && state.allowAppleReminderWriteback && Boolean(item.task.externalId);
 }
 

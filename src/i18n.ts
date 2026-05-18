@@ -73,6 +73,8 @@ export type TranslationKey =
   | "localAppleCalendarDesc"
   | "localAppleCalendarTaskSend"
   | "localAppleCalendarTaskSendDesc"
+  | "localAppleCalendarDefaultTimedTaskDuration"
+  | "localAppleCalendarDefaultTimedTaskDurationDesc"
   | "localAppleCalendarWriteback"
   | "localAppleCalendarWritebackDesc"
   | "localAppleDesc"
@@ -262,6 +264,9 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     localAppleCalendarTaskSend: "Send tasks to Apple Calendar",
     localAppleCalendarTaskSendDesc:
       "Allow right-clicking dated vault tasks in the calendar to create all-day Apple Calendar events, then remove the source Markdown task after creation succeeds.",
+    localAppleCalendarDefaultTimedTaskDuration: "Default timed task duration",
+    localAppleCalendarDefaultTimedTaskDurationDesc:
+      "Minutes to use when dragging a vault task onto the day or week time grid. Default is 60.",
     localAppleCalendarWriteback: "Reschedule Apple Calendar events",
     localAppleCalendarWritebackDesc:
       "Allow drag-and-drop date changes for local Apple Calendar events. Task Hub preserves each event's time, duration, and all-day status.",
@@ -456,6 +461,8 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     localAppleCalendarTaskSend: "发送任务到 Apple 日历",
     localAppleCalendarTaskSendDesc:
       "允许在日历中右键带日期的 vault 任务，创建全天 Apple 日历事件；创建成功后再删除源 Markdown 任务。",
+    localAppleCalendarDefaultTimedTaskDuration: "日/周视图默认拖动任务时长",
+    localAppleCalendarDefaultTimedTaskDurationDesc: "拖动 vault 任务到日视图或周视图时间网格时使用的分钟数，默认 60。",
     localAppleCalendarWriteback: "拖拽改期 Apple 日历事件",
     localAppleCalendarWritebackDesc: "允许通过拖拽修改本机 Apple 日历事件日期；Task Hub 会保留事件原来的时间、时长和全天状态。",
     localAppleCheckStatus: "检查状态",

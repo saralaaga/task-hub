@@ -92,6 +92,7 @@ export type LocalAppleIntegrationSettings = {
   remindersWritebackEnabled: boolean;
   remindersCreateEnabled: boolean;
   remindersDefaultListId?: string;
+  reminderDurationOverrides: Record<string, number>;
   remindersLists: AppleReminderList[];
   calendarEnabled: boolean;
   calendarColor: string;
@@ -99,6 +100,7 @@ export type LocalAppleIntegrationSettings = {
   calendars: AppleCalendarInfo[];
   calendarWritebackEnabled: boolean;
   calendarTaskSendEnabled: boolean;
+  calendarDefaultTimedTaskDurationMinutes: number;
   calendarLookbackDays: number;
   calendarLookaheadDays: number;
 };
