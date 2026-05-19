@@ -34,4 +34,17 @@ describe("task creation helpers", () => {
   it("folds multiline user input into one task line", () => {
     expect(createTaskLine("Buy\nmilk\tsoon", "2026-05-08")).toBe("- [ ] Buy milk soon 📅 2026-05-08");
   });
+
+  it("creates timed task lines that the parser can place on the time grid", () => {
+    const content = appendTaskToContent("", createTaskLine("Buy milk", "2026-05-08", 570));
+
+    expect(content).toBe("- [ ] Buy milk 📅 2026-05-08 ⏰ 09:30\n");
+    expect(parseTasksFromMarkdown({ filePath: "Task Hub.md", content })).toMatchObject([
+      {
+        text: "Buy milk",
+        dueDate: "2026-05-08",
+        scheduledDate: "2026-05-08T09:30"
+      }
+    ]);
+  });
 });

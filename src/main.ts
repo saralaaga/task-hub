@@ -51,6 +51,26 @@ function calendarDropTargetParts(target: CalendarDropTarget): TimedCalendarTarge
   return typeof target === "string" ? { dateKey: target } : target;
 }
 
+function validCalendarTargetDuration(value: number | undefined): number {
+  if (!Number.isFinite(value) || value === undefined) return 60;
+  return Math.max(15, Math.min(24 * 60, Math.round(value)));
+}
+
+function timeInputValue(startMinutes: number | undefined): string {
+  if (startMinutes === undefined) return "";
+  const safeMinutes = Math.max(0, Math.min(23 * 60 + 45, Math.round(startMinutes / 15) * 15));
+  return `${String(Math.floor(safeMinutes / 60)).padStart(2, "0")}:${String(safeMinutes % 60).padStart(2, "0")}`;
+}
+
+function parseTimeInputValue(value: string): number | undefined {
+  const match = value.match(/^(\d{2}):(\d{2})$/);
+  if (!match) return undefined;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (hours > 23 || minutes > 59) return undefined;
+  return Math.max(0, Math.min(23 * 60 + 45, Math.round((hours * 60 + minutes) / 15) * 15));
+}
+
 export default class TaskHubPlugin extends Plugin {
   settings: TaskHubSettings = DEFAULT_SETTINGS;
   taskIndex: TaskIndex = this.createTaskIndex();
@@ -594,12 +614,13 @@ export default class TaskHubPlugin extends Plugin {
     return deletion.result;
   }
 
-  openCreateTaskModal(dateKey: string): void {
-    new CreateTaskModal(this, dateKey).open();
+  openCreateTaskModal(target: CalendarDropTarget): void {
+    new CreateTaskModal(this, target).open();
   }
 
-  async createTaskForDate(dateKey: string, text: string, target: CalendarTaskCreationTarget = this.settings.calendarTaskCreationDefaultTarget): Promise<void> {
+  async createTaskForDate(calendarTarget: CalendarDropTarget, text: string, target: CalendarTaskCreationTarget = this.settings.calendarTaskCreationDefaultTarget): Promise<void> {
     const t = createTranslator(this.settings.language);
+    const timedTarget = calendarDropTargetParts(calendarTarget);
     const taskText = text.replace(/\s+/g, " ").trim();
     if (!taskText) return;
 
@@ -610,9 +631,11 @@ export default class TaskHubPlugin extends Plugin {
       }
       const reminderId = await createAppleReminder({
         title: taskText,
-        dueDate: dateKey,
+        dueDate: timedTarget.dateKey,
+        startMinutes: timedTarget.startMinutes,
         listId: target.listId ?? this.settings.localApple.remindersDefaultListId
       });
+      await this.setAppleReminderDurationOverride(reminderId, timedTarget.durationMinutes);
       await this.syncLocalApple({ silent: true });
       new Notice(`${t("appleReminderCreated")}: ${reminderId}`);
       return;
@@ -620,7 +643,7 @@ export default class TaskHubPlugin extends Plugin {
 
     const path = normalizeTaskCreationFilePath(this.settings.taskCreationFilePath);
     await this.ensureParentFolders(path);
-    const taskLine = createTaskLine(taskText, dateKey);
+    const taskLine = createTaskLine(taskText, timedTarget.dateKey, timedTarget.startMinutes);
     let file = this.app.vault.getFileByPath(path);
     if (!file) {
       file = await this.app.vault.create(path, appendTaskToContent("", taskLine));
@@ -1088,19 +1111,22 @@ export default class TaskHubPlugin extends Plugin {
 
 class CreateTaskModal extends Modal {
   private taskText = "";
+  private calendarTarget: CalendarDropTarget;
   private target: CalendarTaskCreationTarget;
 
   constructor(
     private readonly plugin: TaskHubPlugin,
-    private readonly dateKey: string
+    calendarTarget: CalendarDropTarget
   ) {
     super(plugin.app);
+    this.calendarTarget = calendarTarget;
     this.target = plugin.settings.calendarTaskCreationDefaultTarget;
   }
 
   onOpen(): void {
     const t = createTranslator(this.plugin.settings.language);
-    this.titleEl.setText(`${t("taskCreationTitle")} · ${this.dateKey}`);
+    const targetParts = calendarDropTargetParts(this.calendarTarget);
+    this.titleEl.setText(`${t("taskCreationTitle")} · ${targetParts.dateKey}`);
     this.contentEl.empty();
 
     let submitButton: ButtonComponent | undefined;
@@ -1109,7 +1135,7 @@ class CreateTaskModal extends Modal {
       if (!text) return;
       submitButton?.setDisabled(true);
       try {
-        await this.plugin.createTaskForDate(this.dateKey, text, this.target);
+        await this.plugin.createTaskForDate(this.calendarTarget, text, this.target);
         this.close();
       } catch (error) {
         submitButton?.setDisabled(false);
@@ -1130,6 +1156,25 @@ class CreateTaskModal extends Modal {
           }
         });
         window.setTimeout(() => text.inputEl.focus(), 0);
+      });
+
+    new Setting(this.contentEl)
+      .setName(t("taskCreationTime"))
+      .addText((text) => {
+        text.inputEl.type = "time";
+        text.inputEl.step = "900";
+        text.setValue(timeInputValue(calendarDropTargetParts(this.calendarTarget).startMinutes)).onChange((value) => {
+          const startMinutes = parseTimeInputValue(value);
+          const current = calendarDropTargetParts(this.calendarTarget);
+          this.calendarTarget =
+            startMinutes === undefined
+              ? current.dateKey
+              : {
+                  dateKey: current.dateKey,
+                  startMinutes,
+                  durationMinutes: current.durationMinutes ?? validCalendarTargetDuration(this.plugin.settings.localApple.calendarDefaultTimedTaskDurationMinutes)
+                };
+        });
       });
 
     new Setting(this.contentEl)

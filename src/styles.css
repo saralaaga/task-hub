@@ -1311,8 +1311,8 @@
   background: color-mix(in srgb, var(--background-primary) 86%, var(--task-hub-item-color));
   border: 1px solid color-mix(in srgb, var(--task-hub-item-color) 55%, var(--background-modifier-border));
   border-radius: 999px;
-  box-shadow: 0 2px 8px rgb(0 0 0 / 12%);
-  color: var(--text-normal);
+  box-shadow: 0 3px 10px rgb(0 0 0 / 18%);
+  color: color-mix(in srgb, var(--text-normal) 86%, black);
   font-size: var(--font-ui-smaller);
   font-weight: 700;
   left: 50%;
@@ -1328,6 +1328,24 @@
 
 .task-hub-calendar-timed-item.has-resize-feedback .task-hub-calendar-resize-feedback {
   opacity: 1;
+}
+
+.task-hub-calendar-drag-feedback {
+  background: color-mix(in srgb, var(--background-primary) 86%, var(--task-hub-item-color));
+  border: 1px solid color-mix(in srgb, var(--task-hub-item-color) 55%, var(--background-modifier-border));
+  border-radius: 999px;
+  box-shadow: 0 3px 10px rgb(0 0 0 / 18%);
+  color: color-mix(in srgb, var(--text-normal) 86%, black);
+  font-size: var(--font-ui-smaller);
+  font-weight: 700;
+  left: clamp(36px, 16%, 56px);
+  line-height: 1;
+  padding: 4px 8px;
+  pointer-events: none;
+  position: fixed;
+  text-shadow: 0 1px 1px rgb(0 0 0 / 18%);
+  top: clamp(28px, 38%, 44px);
+  z-index: 1000;
 }
 
 .task-hub-calendar-resize-handle {

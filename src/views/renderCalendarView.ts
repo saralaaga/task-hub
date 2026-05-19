@@ -37,7 +37,7 @@ export type CalendarViewHandlers = {
   onMove: (direction: -1 | 1) => void;
   onToday: () => void;
   onLayerToggle: (sourceId: string) => void;
-  onDateCreateTask: (dateKey: string) => void;
+  onDateCreateTask: (target: CalendarDropTarget) => void;
   onTaskComplete: (task: TaskItem) => void;
   onTaskJump: (task: TaskItem) => void;
   onTaskSelect: (task: TaskItem) => void;
@@ -59,6 +59,11 @@ const DEFAULT_TIMED_TASK_DURATION_MINUTES = 60;
 const MIN_TIMED_ITEM_DURATION_MINUTES = 15;
 const CALENDAR_ITEM_DRAG_MIME = "application/x-task-hub-calendar-item-id";
 const TASK_DRAG_MIME = "application/x-task-hub-task-id";
+let activeDraggedCalendarItemId: string | undefined;
+let activeDragGrabOffsetMinutes = 0;
+let activeDragGrabOffsetXPixels = 0;
+let activeDragGrabOffsetYPixels = 0;
+let activeDragFeedbackElement: HTMLElement | undefined;
 const WEEK_START_DAY_INDEX: Record<WeekStart, number> = {
   sunday: 0,
   monday: 1,
@@ -67,6 +72,11 @@ const WEEK_START_DAY_INDEX: Record<WeekStart, number> = {
   thursday: 4,
   friday: 5,
   saturday: 6
+};
+
+type TimedItemLayout = {
+  columnIndex: number;
+  columnCount: number;
 };
 
 export function renderCalendarView(
@@ -247,11 +257,12 @@ function renderAgendaGrid(
   const columns = agenda.createDiv({ cls: "task-hub-agenda-columns" });
   for (const day of days) {
     const column = columns.createDiv({ cls: `task-hub-agenda-column ${day === today ? "is-today" : ""}` });
-    bindTaskCreation(column, day, state, handlers);
+    bindTimedTaskCreation(column, day, startHour, state, handlers);
     bindCalendarTimedDropTarget(column, day, startHour, visibleItems, handlers, state);
     const dayTimedItems = timedItems.filter((item) => item.date === day);
+    const itemLayouts = layoutTimedItems(dayTimedItems);
     for (const item of dayTimedItems) {
-      renderTimedCalendarItem(column, item, startHour, handlers, state);
+      renderTimedCalendarItem(column, item, startHour, handlers, state, itemLayouts.get(item.id));
     }
   }
 }
@@ -277,12 +288,68 @@ function renderAgendaDayHeader(
   }
 }
 
+function layoutTimedItems(items: CalendarItem[]): Map<string, TimedItemLayout> {
+  const layouts = new Map<string, TimedItemLayout>();
+  const sortedItems = [...items].sort((left, right) => (left.startMinutes ?? 0) - (right.startMinutes ?? 0) || itemEndMinutes(left) - itemEndMinutes(right) || left.title.localeCompare(right.title));
+  let group: CalendarItem[] = [];
+  let groupEnd = -1;
+
+  const flushGroup = () => {
+    if (group.length === 0) return;
+    for (const [item, layout] of layoutOverlapGroup(group)) {
+      layouts.set(item.id, layout);
+    }
+    group = [];
+    groupEnd = -1;
+  };
+
+  for (const item of sortedItems) {
+    const start = item.startMinutes ?? 0;
+    if (group.length > 0 && start >= groupEnd) {
+      flushGroup();
+    }
+    group.push(item);
+    groupEnd = Math.max(groupEnd, itemEndMinutes(item));
+  }
+  flushGroup();
+
+  return layouts;
+}
+
+function layoutOverlapGroup(items: CalendarItem[]): Map<CalendarItem, TimedItemLayout> {
+  const layouts = new Map<CalendarItem, TimedItemLayout>();
+  const columnEnds: number[] = [];
+
+  for (const item of items) {
+    const start = item.startMinutes ?? 0;
+    let columnIndex = columnEnds.findIndex((end) => end <= start);
+    if (columnIndex === -1) {
+      columnIndex = columnEnds.length;
+      columnEnds.push(0);
+    }
+    columnEnds[columnIndex] = itemEndMinutes(item);
+    layouts.set(item, { columnIndex, columnCount: 1 });
+  }
+
+  const columnCount = Math.max(1, columnEnds.length);
+  for (const [item, layout] of layouts) {
+    layouts.set(item, { ...layout, columnCount });
+  }
+  return layouts;
+}
+
+function itemEndMinutes(item: CalendarItem): number {
+  const start = item.startMinutes ?? 0;
+  return Math.max(item.endMinutes ?? start + DEFAULT_TIMED_TASK_DURATION_MINUTES, start + MIN_TIMED_ITEM_DURATION_MINUTES);
+}
+
 function renderTimedCalendarItem(
   container: HTMLElement,
   item: CalendarItem,
   startHour: number,
   handlers: CalendarViewHandlers,
-  state: CalendarViewState
+  state: CalendarViewState,
+  layout?: TimedItemLayout
 ): void {
   const row = container.createDiv({ cls: calendarItemClass(item, "task-hub-calendar-timed-item") });
   bindCalendarItemDrag(row, item, state);
@@ -292,6 +359,10 @@ function renderTimedCalendarItem(
   const endMinutes = Math.max(item.endMinutes ?? startMinutes + 60, startMinutes + 30);
   row.style.top = `${((startMinutes - startHour * 60) / 60) * HOUR_HEIGHT}px`;
   row.style.height = `${Math.max(30, ((endMinutes - startMinutes) / 60) * HOUR_HEIGHT - 4)}px`;
+  if (layout && layout.columnCount > 1) {
+    row.style.left = `calc(${(100 * layout.columnIndex) / layout.columnCount}% + 6px)`;
+    row.style.right = `calc(${100 - (100 * (layout.columnIndex + 1)) / layout.columnCount}% + 6px)`;
+  }
   renderCalendarItemContent(row, item, handlers, state, formatTimeRange(startMinutes, endMinutes));
   bindCalendarItemResize(row, container, item, startHour, handlers, state);
   const task = item.task;
@@ -321,42 +392,56 @@ function bindCalendarItemResize(
   for (const edge of ["start", "end"] as const) {
     let lastTarget: CalendarDropTarget | undefined;
     const handle = row.createDiv({ cls: `task-hub-calendar-resize-handle is-${edge}` });
-    handle.draggable = true;
-    handle.setAttr("draggable", "true");
     handle.setAttr("aria-hidden", "true");
     handle.addEventListener("click", (event) => {
       event.preventDefault();
       event.stopPropagation();
     });
-    handle.addEventListener("dragstart", (event) => {
-      event.stopPropagation();
-      lastTarget = undefined;
-      row.addClass("is-resizing");
-      updateResizeFeedback(feedback, row, 0);
-    });
-    handle.addEventListener("drag", (event) => {
+    handle.addEventListener("pointerdown", (event) => {
       event.preventDefault();
       event.stopPropagation();
-      const target = resizeDropTarget(column, event, item, startHour, edge);
-      if (!target) return;
-      lastTarget = target;
-      updateResizeFeedback(feedback, row, resizeDeltaMinutes(item, target, edge));
-    });
-    handle.addEventListener("dragend", (event) => {
-      event.preventDefault();
-      event.stopPropagation();
+      const ownerDocument = handle.ownerDocument;
+      lastTarget = resizeDropTarget(column, event, item, startHour, edge);
       row.removeClass("is-resizing");
-      clearResizeFeedback(feedback, row);
-      const target = lastTarget ?? resizeDropTarget(column, event, item, startHour, edge);
-      lastTarget = undefined;
-      if (!target) return;
-      if (item.task) {
-        handlers.onTaskReschedule(item.task, target);
-        return;
-      }
-      if (item.event) {
-        handlers.onEventReschedule?.(item.event, target);
-      }
+      row.addClass("is-resizing");
+      updateResizeFeedback(feedback, row, lastTarget ? resizeDeltaMinutes(item, lastTarget, edge) : 0);
+
+      const onPointerMove = (moveEvent: PointerEvent) => {
+        moveEvent.preventDefault();
+        const target = resizeDropTarget(column, moveEvent, item, startHour, edge);
+        if (!target) return;
+        lastTarget = target;
+        updateResizeFeedback(feedback, row, resizeDeltaMinutes(item, target, edge));
+      };
+      const finishResize = () => {
+        ownerDocument.removeEventListener("pointermove", onPointerMove);
+        ownerDocument.removeEventListener("pointerup", onPointerUp);
+        ownerDocument.removeEventListener("pointercancel", onPointerCancel);
+        row.removeClass("is-resizing");
+        clearResizeFeedback(feedback, row);
+      };
+      const onPointerUp = (upEvent: PointerEvent) => {
+        upEvent.preventDefault();
+        upEvent.stopPropagation();
+        const target = lastTarget ?? resizeDropTarget(column, upEvent, item, startHour, edge);
+        lastTarget = undefined;
+        finishResize();
+        if (!target) return;
+        if (item.task) {
+          handlers.onTaskReschedule(item.task, target);
+          return;
+        }
+        if (item.event) {
+          handlers.onEventReschedule?.(item.event, target);
+        }
+      };
+      const onPointerCancel = () => {
+        lastTarget = undefined;
+        finishResize();
+      };
+      ownerDocument.addEventListener("pointermove", onPointerMove);
+      ownerDocument.addEventListener("pointerup", onPointerUp);
+      ownerDocument.addEventListener("pointercancel", onPointerCancel);
     });
   }
 }
@@ -386,7 +471,7 @@ function formatMinuteDelta(deltaMinutes: number): string {
 
 function resizeDropTarget(
   column: HTMLElement,
-  event: DragEvent,
+  event: { clientY: number },
   item: CalendarItem,
   startHour: number,
   edge: "start" | "end"
@@ -412,12 +497,39 @@ function resizeDropTarget(
 
 function bindTaskCreation(
   element: HTMLElement,
-  dateKey: string,
+  target: CalendarDropTarget,
   state: CalendarViewState,
   handlers: CalendarViewHandlers
 ): void {
   if (!state.allowTaskCreation) return;
-  element.addEventListener("click", () => handlers.onDateCreateTask(dateKey));
+  element.addEventListener("click", () => handlers.onDateCreateTask(target));
+}
+
+function bindTimedTaskCreation(
+  element: HTMLElement,
+  dateKey: string,
+  startHour: number,
+  state: CalendarViewState,
+  handlers: CalendarViewHandlers
+): void {
+  if (!state.allowTaskCreation) return;
+  element.addEventListener("click", (event) => {
+    handlers.onDateCreateTask(timedCreationTarget(element, event, dateKey, startHour, state));
+  });
+}
+
+function timedCreationTarget(
+  element: HTMLElement,
+  event: MouseEvent,
+  dateKey: string,
+  startHour: number,
+  state: CalendarViewState
+): CalendarDropTarget {
+  return {
+    dateKey,
+    startMinutes: minutesFromColumnEvent(element, event, startHour),
+    durationMinutes: validDurationMinutes(state.defaultTimedTaskDurationMinutes)
+  };
 }
 
 function sourceStatusLabel(source: CalendarSource, t: Translator): string {
@@ -524,8 +636,19 @@ function bindCalendarItemDrag(element: HTMLElement, item: CalendarItem, state: C
   element.draggable = true;
   element.setAttr("draggable", "true");
   element.setAttr("aria-grabbed", "false");
+  element.addEventListener("pointerdown", (event) => {
+    const grabOffset = dragGrabOffset(element, event, item);
+    activeDragGrabOffsetMinutes = grabOffset?.minutes ?? 0;
+    activeDragGrabOffsetXPixels = grabOffset?.xPixels ?? 0;
+    activeDragGrabOffsetYPixels = grabOffset?.yPixels ?? 0;
+  });
   element.addEventListener("dragstart", (event) => {
     event.stopPropagation();
+    activeDraggedCalendarItemId = item.id;
+    const grabOffset = dragGrabOffset(element, event, item);
+    activeDragGrabOffsetMinutes = grabOffset?.minutes ?? activeDragGrabOffsetMinutes;
+    activeDragGrabOffsetXPixels = grabOffset?.xPixels ?? activeDragGrabOffsetXPixels;
+    activeDragGrabOffsetYPixels = grabOffset?.yPixels ?? activeDragGrabOffsetYPixels;
     element.addClass("is-dragging");
     element.setAttr("aria-grabbed", "true");
     if (event.dataTransfer) {
@@ -538,6 +661,11 @@ function bindCalendarItemDrag(element: HTMLElement, item: CalendarItem, state: C
   });
   element.addEventListener("dragend", () => {
     element.removeClass("is-dragging");
+    clearDragMoveFeedback();
+    activeDraggedCalendarItemId = undefined;
+    activeDragGrabOffsetMinutes = 0;
+    activeDragGrabOffsetXPixels = 0;
+    activeDragGrabOffsetYPixels = 0;
     element.setAttr("aria-grabbed", "false");
   });
 }
@@ -590,12 +718,18 @@ function bindCalendarTimedDropTarget(
     event.preventDefault();
     event.stopPropagation();
     element.addClass("is-drop-hover");
+    const item = calendarItemFromDragEvent(event, visibleItems, state);
+    if (item) {
+      const target = timedDropTarget(element, event, item, dateKey, startHour, state);
+      updateDragMoveFeedback(item, target, event);
+    }
     if (event.dataTransfer) {
       event.dataTransfer.dropEffect = "move";
     }
   });
   element.addEventListener("dragleave", () => {
     element.removeClass("is-drop-hover");
+    clearDragMoveFeedback();
   });
   element.addEventListener("drop", (event) => {
     const item = calendarItemFromDragEvent(event, visibleItems, state);
@@ -604,6 +738,7 @@ function bindCalendarTimedDropTarget(
     event.stopPropagation();
     element.removeClass("is-drop-hover");
     const target = timedDropTarget(element, event, item, dateKey, startHour, state);
+    clearDragMoveFeedback();
     if (item.task) {
       handlers.onTaskReschedule(item.task, target);
       return;
@@ -622,12 +757,61 @@ function timedDropTarget(
   startHour: number,
   state: CalendarViewState
 ): CalendarDropTarget {
-  const startMinutes = minutesFromColumnEvent(element, event, startHour);
+  const startMinutes = adjustedDraggedStartMinutes(element, event, item, startHour);
   return {
     dateKey,
     startMinutes,
     durationMinutes: itemDurationMinutes(item, state)
   };
+}
+
+function adjustedDraggedStartMinutes(element: HTMLElement, event: DragEvent, item: CalendarItem, startHour: number): number {
+  const pointerMinutes = minutesFromColumnEvent(element, event, startHour);
+  const offsetMinutes = item.startMinutes === undefined ? 0 : activeDragGrabOffsetMinutes;
+  return snapDayQuarterHour(pointerMinutes - offsetMinutes);
+}
+
+function updateDragMoveFeedback(item: CalendarItem, target: CalendarDropTarget, event: DragEvent): void {
+  if (typeof target === "string" || item.startMinutes === undefined || target.dateKey !== item.date) {
+    clearDragMoveFeedback();
+    return;
+  }
+  const feedback = dragFeedbackElement();
+  if (!feedback) return;
+  feedback.textContent = formatMinuteDelta(target.startMinutes - item.startMinutes);
+  positionDragMoveFeedback(feedback, event);
+  const draggedElement = activeDraggedElement();
+  draggedElement?.addClass("has-drag-feedback");
+}
+
+function clearDragMoveFeedback(): void {
+  const draggedElement = activeDraggedElement();
+  draggedElement?.removeClass("has-drag-feedback");
+  activeDragFeedbackElement?.remove();
+  activeDragFeedbackElement = undefined;
+}
+
+function activeDraggedElement(): HTMLElement | undefined {
+  return document.querySelector(".task-hub-calendar-timed-item.is-dragging") as HTMLElement | null ?? undefined;
+}
+
+function dragFeedbackElement(): HTMLElement | undefined {
+  if (activeDragFeedbackElement) return activeDragFeedbackElement;
+  const ownerDocument = activeDraggedElement()?.ownerDocument ?? document;
+  const body = ownerDocument.body;
+  if (!body) return undefined;
+  const feedback = ownerDocument.createElement("div");
+  feedback.addClass("task-hub-calendar-drag-feedback");
+  body.appendChild(feedback);
+  activeDragFeedbackElement = feedback;
+  return feedback;
+}
+
+function positionDragMoveFeedback(feedback: HTMLElement, event: DragEvent): void {
+  const x = event.clientX - activeDragGrabOffsetXPixels + 48;
+  const y = event.clientY - activeDragGrabOffsetYPixels + 44;
+  feedback.style.left = `${Math.max(8, x)}px`;
+  feedback.style.top = `${Math.max(8, y)}px`;
 }
 
 function validDurationMinutes(value: number | undefined): number {
@@ -642,11 +826,29 @@ function itemDurationMinutes(item: CalendarItem, state: CalendarViewState): numb
   return validDurationMinutes(state.defaultTimedTaskDurationMinutes);
 }
 
-function minutesFromColumnEvent(element: HTMLElement, event: DragEvent, startHour: number): number {
+function minutesFromColumnEvent(element: HTMLElement, event: { clientY: number }, startHour: number): number {
   const rect = element.getBoundingClientRect();
   const offset = Math.max(0, event.clientY - rect.top);
   const rawMinutes = startHour * 60 + (offset / HOUR_HEIGHT) * 60;
-  return Math.max(0, Math.min(23 * 60 + 45, Math.round(rawMinutes / 15) * 15));
+  return snapDayQuarterHour(rawMinutes);
+}
+
+function dragGrabOffset(element: HTMLElement, event: { clientX: number; clientY: number }, item: CalendarItem): { minutes: number; xPixels: number; yPixels: number } | undefined {
+  if (item.startMinutes === undefined) return { minutes: 0, xPixels: 0, yPixels: 0 };
+  const rect = element.getBoundingClientRect();
+  const offsetYPixels = event.clientY - rect.top;
+  const offsetXPixels = event.clientX - rect.left;
+  if (!Number.isFinite(offsetYPixels) || offsetYPixels < 0) return undefined;
+  const durationMinutes = Math.max(MIN_TIMED_ITEM_DURATION_MINUTES, itemEndMinutes(item) - item.startMinutes);
+  return {
+    minutes: Math.max(0, Math.min(durationMinutes, Math.round((offsetYPixels / HOUR_HEIGHT) * 60 / 15) * 15)),
+    xPixels: Number.isFinite(offsetXPixels) && offsetXPixels > 0 ? offsetXPixels : 0,
+    yPixels: offsetYPixels
+  };
+}
+
+function snapDayQuarterHour(value: number): number {
+  return Math.max(0, Math.min(23 * 60 + 45, Math.round(value / 15) * 15));
 }
 
 function clampDayMinutes(value: number): number {
@@ -654,7 +856,7 @@ function clampDayMinutes(value: number): number {
 }
 
 function calendarItemFromDragEvent(event: DragEvent, visibleItems: CalendarItem[], state: CalendarViewState): CalendarItem | undefined {
-  const draggedId = event.dataTransfer?.getData(CALENDAR_ITEM_DRAG_MIME) || event.dataTransfer?.getData(TASK_DRAG_MIME);
+  const draggedId = activeDraggedCalendarItemId ?? event.dataTransfer?.getData(CALENDAR_ITEM_DRAG_MIME) ?? event.dataTransfer?.getData(TASK_DRAG_MIME);
   if (!draggedId) return undefined;
   return visibleItems.find((item) => item.id === draggedId && canDragCalendarItem(item, state));
 }

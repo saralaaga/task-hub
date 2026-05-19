@@ -40,8 +40,48 @@ import type { CalendarEvent, CalendarSource, TaskItem } from "../types";
 
 const mockMenus: Array<{ items: Array<{ title: string; icon: string; click?: () => void }>; shownAt: unknown }> = [];
 
+class FakeDocument {
+  listeners = new Map<string, Array<(event: FakeEvent) => void>>();
+  body!: FakeElement;
+
+  addEventListener(name: string, listener: (event: FakeEvent) => void): void {
+    this.listeners.set(name, [...(this.listeners.get(name) ?? []), listener]);
+  }
+
+  removeEventListener(name: string, listener: (event: FakeEvent) => void): void {
+    this.listeners.set(name, (this.listeners.get(name) ?? []).filter((candidate) => candidate !== listener));
+  }
+
+  dispatch(name: string, event: Partial<FakeEvent> = {}): FakeEvent {
+    const fakeEvent: FakeEvent = {
+      dataTransfer: event.dataTransfer ?? new FakeDataTransfer(),
+      clientX: event.clientX ?? 0,
+      clientY: event.clientY ?? 0,
+      preventDefault: event.preventDefault ?? jest.fn(),
+      stopPropagation: event.stopPropagation ?? jest.fn()
+    };
+    for (const listener of this.listeners.get(name) ?? []) {
+      listener(fakeEvent);
+    }
+    return fakeEvent;
+  }
+
+  clear(): void {
+    this.listeners.clear();
+    this.body.children = [];
+  }
+
+  createElement(): FakeElement {
+    return new FakeElement(this as unknown as Document);
+  }
+}
+
+const fakeDocument = new FakeDocument();
+let currentTestRoot: FakeElement | undefined;
+
 class FakeElement {
   parent?: FakeElement;
+  ownerDocument: Document;
   children: FakeElement[] = [];
   checked = false;
   disabled = false;
@@ -50,9 +90,21 @@ class FakeElement {
   type = "";
   attributes = new Map<string, string>();
   classes = new Set<string>();
-  style = { setProperty: jest.fn() };
+  style = new Proxy({ setProperty: jest.fn() }, {
+    set(target, property, value) {
+      (target as Record<string, unknown>)[String(property)] = value;
+      return true;
+    },
+    get(target, property) {
+      return (target as Record<string, unknown>)[String(property)];
+    }
+  });
   listeners = new Map<string, Array<(event: FakeEvent) => void>>();
   boundingRect: Partial<DOMRect> = {};
+
+  constructor(ownerDocument: Document = fakeDocument as unknown as Document) {
+    this.ownerDocument = ownerDocument;
+  }
 
   empty(): void {
     this.children = [];
@@ -72,6 +124,12 @@ class FakeElement {
     return this.append(options);
   }
 
+  querySelector(selector: string): FakeElement | null {
+    if (!selector.startsWith(".")) return null;
+    const classes = selector.split(".").filter(Boolean);
+    return collect(this).find((element) => classes.every((cls) => element.classes.has(cls))) ?? null;
+  }
+
   addClass(cls: string): void {
     this.classes.add(cls);
   }
@@ -82,6 +140,18 @@ class FakeElement {
 
   setAttr(name: string, value: string): void {
     this.attributes.set(name, value);
+  }
+
+  remove(): void {
+    if (!this.parent) return;
+    this.parent.children = this.parent.children.filter((child) => child !== this);
+    this.parent = undefined;
+  }
+
+  appendChild(child: FakeElement): FakeElement {
+    child.parent = this;
+    this.children.push(child);
+    return child;
   }
 
   getBoundingClientRect(): DOMRect {
@@ -106,6 +176,7 @@ class FakeElement {
     let stopped = false;
     const event = {
       dataTransfer: new FakeDataTransfer(),
+      clientX: 0,
       clientY: 0,
       preventDefault: jest.fn(),
       stopPropagation: jest.fn(() => { stopped = true; })
@@ -119,8 +190,9 @@ class FakeElement {
   }
 
   dispatch(name: string, event: Partial<FakeEvent> = {}): FakeEvent {
-  const fakeEvent: FakeEvent = {
+    const fakeEvent: FakeEvent = {
       dataTransfer: event.dataTransfer ?? new FakeDataTransfer(),
+      clientX: event.clientX ?? 0,
       clientY: event.clientY ?? 0,
       preventDefault: event.preventDefault ?? jest.fn(),
       stopPropagation: event.stopPropagation ?? jest.fn()
@@ -132,7 +204,7 @@ class FakeElement {
   }
 
   private append(options: { cls?: string; text?: string } = {}): FakeElement {
-    const child = new FakeElement();
+    const child = new FakeElement(this.ownerDocument);
     child.parent = this;
     child.text = options.text ?? "";
     for (const cls of (options.cls ?? "").split(" ").filter(Boolean)) {
@@ -143,8 +215,11 @@ class FakeElement {
   }
 }
 
+fakeDocument.body = new FakeElement(fakeDocument as unknown as Document);
+
 type FakeEvent = {
   dataTransfer: FakeDataTransfer;
+  clientX: number;
   clientY: number;
   preventDefault(): void;
   stopPropagation(): void;
@@ -241,6 +316,13 @@ function collect(element: FakeElement): FakeElement[] {
 describe("renderCalendarView", () => {
   beforeEach(() => {
     mockMenus.length = 0;
+    fakeDocument.clear();
+    currentTestRoot = undefined;
+    (globalThis as unknown as { document: { querySelector(selector: string): FakeElement | null } }).document = {
+      querySelector(selector: string): FakeElement | null {
+        return currentTestRoot?.querySelector(selector) ?? null;
+      }
+    };
   });
 
   it("renders Chinese lunar month and day labels in month view when enabled", () => {
@@ -930,6 +1012,50 @@ describe("renderCalendarView", () => {
     expect(onDateCreateTask).toHaveBeenCalledWith("2026-05-04");
   });
 
+  it("creates a timed task from a day time-grid click using the clicked time", () => {
+    const container = new FakeElement();
+    const onDateCreateTask = jest.fn();
+
+    renderCalendarView(
+      container as unknown as HTMLElement,
+      {
+        mode: "day",
+        focusDate: new Date("2026-05-08T12:00:00Z"),
+        weekStart: "monday",
+        visibleSourceIds: new Set(["vault"]),
+        includeCompletedTasks: false,
+        allowAppleReminderWriteback: false,
+        allowTaskCreation: true,
+        defaultTimedTaskDurationMinutes: 60,
+        sources: [],
+        t: (key) => key
+      },
+      [],
+      [],
+      {
+        onLayerToggle: jest.fn(),
+        onModeChange: jest.fn(),
+        onMove: jest.fn(),
+        onDateCreateTask,
+        onTaskComplete: jest.fn(),
+        onTaskJump: jest.fn(),
+        onTaskSelect: jest.fn(),
+        onTaskReschedule: jest.fn(),
+        onToday: jest.fn()
+      }
+    );
+
+    const column = collect(container).find((element) => element.classes.has("task-hub-agenda-column"));
+    column!.boundingRect = { top: 0 };
+    column?.dispatch("click", { clientY: 196 });
+
+    expect(onDateCreateTask).toHaveBeenCalledWith({
+      dateKey: "2026-05-08",
+      startMinutes: 570,
+      durationMinutes: 60
+    });
+  });
+
   it("does not create a task when clicking an existing timed calendar event", () => {
     const container = new FakeElement();
     const onDateCreateTask = jest.fn();
@@ -1262,6 +1388,7 @@ describe("renderCalendarView", () => {
 
   it("reschedules a dragged Apple Reminder to a specific time in day view", () => {
     const container = new FakeElement();
+    currentTestRoot = container;
     const onTaskReschedule = jest.fn();
     const reminderTask = { ...task, source: "apple-reminders" as const, externalId: "reminder-1" };
 
@@ -1304,6 +1431,184 @@ describe("renderCalendarView", () => {
     expect(onTaskReschedule).toHaveBeenCalledWith(reminderTask, {
       dateKey: "2026-05-08",
       startMinutes: 570,
+      durationMinutes: 60
+    });
+  });
+
+  it("shows the snapped time delta while dragging a timed item within the same day", () => {
+    const container = new FakeElement();
+    currentTestRoot = container;
+    const onTaskReschedule = jest.fn();
+    const reminderTask = {
+      ...task,
+      source: "apple-reminders" as const,
+      externalId: "reminder-1",
+      scheduledDate: "2026-05-08T09:30"
+    };
+
+    renderCalendarView(
+      container as unknown as HTMLElement,
+      {
+        mode: "day",
+        focusDate: new Date("2026-05-08T12:00:00Z"),
+        weekStart: "monday",
+        visibleSourceIds: new Set(["apple-reminders"]),
+        includeCompletedTasks: false,
+        allowAppleReminderWriteback: true,
+        allowTaskCreation: false,
+        defaultTimedTaskDurationMinutes: 60,
+        sources: [remindersSource],
+        t: (key) => key
+      },
+      [reminderTask],
+      [],
+      {
+        onLayerToggle: jest.fn(),
+        onModeChange: jest.fn(),
+        onMove: jest.fn(),
+        onDateCreateTask: jest.fn(),
+        onTaskComplete: jest.fn(),
+        onTaskJump: jest.fn(),
+        onTaskSelect: jest.fn(),
+        onTaskReschedule,
+        onToday: jest.fn()
+      }
+    );
+
+    const item = collect(container).find((element) => element.classes.has("task-hub-calendar-item"));
+    const column = collect(container).find((element) => element.classes.has("task-hub-agenda-column"));
+    column!.boundingRect = { top: 0 };
+    item!.boundingRect = { top: 196 };
+    const dataTransfer = new FakeDataTransfer();
+    item?.dispatch("pointerdown", { dataTransfer, clientX: 40, clientY: 224 });
+    item?.dispatch("dragstart", { dataTransfer, clientX: 40, clientY: 224 });
+    column?.dispatch("dragover", { dataTransfer, clientX: 54, clientY: 210 });
+
+    const feedback = collect(fakeDocument.body).find((element) => element.classes.has("task-hub-calendar-drag-feedback"));
+    expect(item?.classes.has("has-drag-feedback")).toBe(true);
+    expect((feedback as unknown as { textContent: string }).textContent).toBe("-15m");
+    expect((feedback?.style as unknown as { left: string; top: string })).toEqual(expect.objectContaining({
+      left: "62px",
+      top: "226px"
+    }));
+
+    column?.dispatch("drop", { dataTransfer, clientX: 54, clientY: 210 });
+
+    expect(onTaskReschedule).toHaveBeenCalledWith(reminderTask, {
+      dateKey: "2026-05-08",
+      startMinutes: 555,
+      durationMinutes: 60
+    });
+    expect(item?.classes.has("has-drag-feedback")).toBe(false);
+    expect(collect(fakeDocument.body).some((element) => element.classes.has("task-hub-calendar-drag-feedback"))).toBe(false);
+  });
+
+  it("shows drag time feedback when dragover cannot read transfer data yet", () => {
+    const container = new FakeElement();
+    currentTestRoot = container;
+    const reminderTask = {
+      ...task,
+      source: "apple-reminders" as const,
+      externalId: "reminder-1",
+      scheduledDate: "2026-05-08T09:30"
+    };
+
+    renderCalendarView(
+      container as unknown as HTMLElement,
+      {
+        mode: "day",
+        focusDate: new Date("2026-05-08T12:00:00Z"),
+        weekStart: "monday",
+        visibleSourceIds: new Set(["apple-reminders"]),
+        includeCompletedTasks: false,
+        allowAppleReminderWriteback: true,
+        allowTaskCreation: false,
+        defaultTimedTaskDurationMinutes: 60,
+        sources: [remindersSource],
+        t: (key) => key
+      },
+      [reminderTask],
+      [],
+      {
+        onLayerToggle: jest.fn(),
+        onModeChange: jest.fn(),
+        onMove: jest.fn(),
+        onDateCreateTask: jest.fn(),
+        onTaskComplete: jest.fn(),
+        onTaskJump: jest.fn(),
+        onTaskSelect: jest.fn(),
+        onTaskReschedule: jest.fn(),
+        onToday: jest.fn()
+      }
+    );
+
+    const item = collect(container).find((element) => element.classes.has("task-hub-calendar-item"));
+    const column = collect(container).find((element) => element.classes.has("task-hub-agenda-column"));
+    column!.boundingRect = { top: 0 };
+    item!.boundingRect = { top: 196 };
+    const dataTransfer = new FakeDataTransfer();
+    item?.dispatch("pointerdown", { dataTransfer, clientX: 40, clientY: 224 });
+    item?.dispatch("dragstart", { dataTransfer, clientX: 40, clientY: 224 });
+    dataTransfer.hideData = true;
+    column?.dispatch("dragover", { dataTransfer, clientX: 54, clientY: 210 });
+
+    const feedback = collect(fakeDocument.body).find((element) => element.classes.has("task-hub-calendar-drag-feedback"));
+    expect(item?.classes.has("has-drag-feedback")).toBe(true);
+    expect((feedback as unknown as { textContent: string }).textContent).toBe("-15m");
+  });
+
+  it("keeps the pointer grab offset when dragstart reports an unusable y position", () => {
+    const container = new FakeElement();
+    currentTestRoot = container;
+    const onTaskReschedule = jest.fn();
+    const reminderTask = {
+      ...task,
+      source: "apple-reminders" as const,
+      externalId: "reminder-1",
+      scheduledDate: "2026-05-08T09:30"
+    };
+
+    renderCalendarView(
+      container as unknown as HTMLElement,
+      {
+        mode: "day",
+        focusDate: new Date("2026-05-08T12:00:00Z"),
+        weekStart: "monday",
+        visibleSourceIds: new Set(["apple-reminders"]),
+        includeCompletedTasks: false,
+        allowAppleReminderWriteback: true,
+        allowTaskCreation: false,
+        defaultTimedTaskDurationMinutes: 60,
+        sources: [remindersSource],
+        t: (key) => key
+      },
+      [reminderTask],
+      [],
+      {
+        onLayerToggle: jest.fn(),
+        onModeChange: jest.fn(),
+        onMove: jest.fn(),
+        onDateCreateTask: jest.fn(),
+        onTaskComplete: jest.fn(),
+        onTaskJump: jest.fn(),
+        onTaskSelect: jest.fn(),
+        onTaskReschedule,
+        onToday: jest.fn()
+      }
+    );
+
+    const item = collect(container).find((element) => element.classes.has("task-hub-calendar-item"));
+    const column = collect(container).find((element) => element.classes.has("task-hub-agenda-column"));
+    column!.boundingRect = { top: 0 };
+    item!.boundingRect = { top: 196 };
+    const dataTransfer = new FakeDataTransfer();
+    item?.dispatch("pointerdown", { dataTransfer, clientY: 224 });
+    item?.dispatch("dragstart", { dataTransfer, clientY: 0 });
+    column?.dispatch("drop", { dataTransfer, clientY: 210 });
+
+    expect(onTaskReschedule).toHaveBeenCalledWith(reminderTask, {
+      dateKey: "2026-05-08",
+      startMinutes: 555,
       durationMinutes: 60
     });
   });
@@ -1405,6 +1710,59 @@ describe("renderCalendarView", () => {
     });
   });
 
+  it("splits overlapping timed items into side-by-side columns", () => {
+    const container = new FakeElement();
+    const firstTask = {
+      ...task,
+      id: "task-overlap-1",
+      text: "First",
+      scheduledDate: "2026-05-08T09:30"
+    };
+    const secondTask = {
+      ...task,
+      id: "task-overlap-2",
+      text: "Second",
+      scheduledDate: "2026-05-08T09:45"
+    };
+
+    renderCalendarView(
+      container as unknown as HTMLElement,
+      {
+        mode: "day",
+        focusDate: new Date("2026-05-08T12:00:00Z"),
+        weekStart: "monday",
+        visibleSourceIds: new Set(["vault"]),
+        includeCompletedTasks: false,
+        allowAppleReminderWriteback: false,
+        allowTaskCreation: false,
+        sources: [],
+        t: (key) => key
+      },
+      [firstTask, secondTask],
+      [],
+      {
+        onLayerToggle: jest.fn(),
+        onModeChange: jest.fn(),
+        onMove: jest.fn(),
+        onDateCreateTask: jest.fn(),
+        onTaskComplete: jest.fn(),
+        onTaskJump: jest.fn(),
+        onTaskSelect: jest.fn(),
+        onTaskReschedule: jest.fn(),
+        onToday: jest.fn()
+      }
+    );
+
+    const rows = collect(container).filter((element) => element.classes.has("task-hub-calendar-timed-item"));
+    const rowStyles = rows.map((row) => row.style as unknown as { left: string; right: string });
+
+    expect(rows).toHaveLength(2);
+    expect(rowStyles).toEqual([
+      expect.objectContaining({ left: "calc(0% + 6px)", right: "calc(50% + 6px)" }),
+      expect.objectContaining({ left: "calc(50% + 6px)", right: "calc(0% + 6px)" })
+    ]);
+  });
+
   it("resizes an Apple Reminder start time from the top edge", () => {
     const container = new FakeElement();
     const onTaskReschedule = jest.fn();
@@ -1446,13 +1804,66 @@ describe("renderCalendarView", () => {
     const column = collect(container).find((element) => element.classes.has("task-hub-agenda-column"));
     const topHandle = collect(container).find((element) => element.classes.has("task-hub-calendar-resize-handle") && element.classes.has("is-start"));
     column!.boundingRect = { top: 0 };
-    topHandle?.dispatch("dragstart");
-    topHandle?.dispatch("dragend", { clientY: 196 });
+    topHandle?.dispatch("pointerdown", { clientY: 224 });
+    fakeDocument.dispatch("pointermove", { clientY: 196 });
+    fakeDocument.dispatch("pointerup", { clientY: 196 });
 
     expect(onTaskReschedule).toHaveBeenCalledWith(reminderTask, {
       dateKey: "2026-05-08",
       startMinutes: 570,
       durationMinutes: 90
+    });
+  });
+
+  it("resizes an Apple Reminder start later when the top edge moves downward", () => {
+    const container = new FakeElement();
+    const onTaskReschedule = jest.fn();
+    const reminderTask = {
+      ...task,
+      source: "apple-reminders" as const,
+      externalId: "reminder-1",
+      scheduledDate: "2026-05-08T10:00:00"
+    };
+
+    renderCalendarView(
+      container as unknown as HTMLElement,
+      {
+        mode: "day",
+        focusDate: new Date("2026-05-08T12:00:00Z"),
+        weekStart: "monday",
+        visibleSourceIds: new Set(["apple-reminders"]),
+        includeCompletedTasks: false,
+        allowAppleReminderWriteback: true,
+        allowTaskCreation: false,
+        sources: [remindersSource],
+        t: (key) => key
+      },
+      [reminderTask],
+      [],
+      {
+        onLayerToggle: jest.fn(),
+        onModeChange: jest.fn(),
+        onMove: jest.fn(),
+        onDateCreateTask: jest.fn(),
+        onTaskComplete: jest.fn(),
+        onTaskJump: jest.fn(),
+        onTaskSelect: jest.fn(),
+        onTaskReschedule,
+        onToday: jest.fn()
+      }
+    );
+
+    const column = collect(container).find((element) => element.classes.has("task-hub-agenda-column"));
+    const topHandle = collect(container).find((element) => element.classes.has("task-hub-calendar-resize-handle") && element.classes.has("is-start"));
+    column!.boundingRect = { top: 0 };
+    topHandle?.dispatch("pointerdown", { clientY: 224 });
+    fakeDocument.dispatch("pointermove", { clientY: 252 });
+    fakeDocument.dispatch("pointerup", { clientY: 252 });
+
+    expect(onTaskReschedule).toHaveBeenCalledWith(reminderTask, {
+      dateKey: "2026-05-08",
+      startMinutes: 630,
+      durationMinutes: 30
     });
   });
 
@@ -1499,19 +1910,19 @@ describe("renderCalendarView", () => {
     const feedback = collect(container).find((element) => element.classes.has("task-hub-calendar-resize-feedback"));
     column!.boundingRect = { top: 0 };
 
-    topHandle?.dispatch("dragstart");
-    topHandle?.dispatch("drag", { clientY: 196 });
+    topHandle?.dispatch("pointerdown", { clientY: 224 });
+    fakeDocument.dispatch("pointermove", { clientY: 196 });
 
     expect(row?.classes.has("has-resize-feedback")).toBe(true);
     expect((feedback as unknown as { textContent: string }).textContent).toBe("-30m");
 
-    topHandle?.dispatch("dragend", { clientY: 196 });
+    fakeDocument.dispatch("pointerup", { clientY: 196 });
 
     expect(row?.classes.has("has-resize-feedback")).toBe(false);
     expect((feedback as unknown as { textContent: string }).textContent).toBe("");
   });
 
-  it("commits the last snapped resize target when dragend reports a stale pointer position", () => {
+  it("commits the last snapped resize target when pointerup reports a stale pointer position", () => {
     const container = new FakeElement();
     const onTaskReschedule = jest.fn();
     const reminderTask = {
@@ -1553,9 +1964,9 @@ describe("renderCalendarView", () => {
     const topHandle = collect(container).find((element) => element.classes.has("task-hub-calendar-resize-handle") && element.classes.has("is-start"));
     column!.boundingRect = { top: 0 };
 
-    topHandle?.dispatch("dragstart");
-    topHandle?.dispatch("drag", { clientY: 196 });
-    topHandle?.dispatch("dragend", { clientY: 0 });
+    topHandle?.dispatch("pointerdown", { clientY: 224 });
+    fakeDocument.dispatch("pointermove", { clientY: 196 });
+    fakeDocument.dispatch("pointerup", { clientY: 0 });
 
     expect(onTaskReschedule).toHaveBeenCalledWith(reminderTask, {
       dateKey: "2026-05-08",
@@ -1607,8 +2018,9 @@ describe("renderCalendarView", () => {
     const column = collect(container).find((element) => element.classes.has("task-hub-agenda-column"));
     const bottomHandle = collect(container).find((element) => element.classes.has("task-hub-calendar-resize-handle") && element.classes.has("is-end"));
     column!.boundingRect = { top: 0 };
-    bottomHandle?.dispatch("dragstart");
-    bottomHandle?.dispatch("dragend", { clientY: 308 });
+    bottomHandle?.dispatch("pointerdown", { clientY: 280 });
+    fakeDocument.dispatch("pointermove", { clientY: 308 });
+    fakeDocument.dispatch("pointerup", { clientY: 308 });
 
     expect(onEventReschedule).toHaveBeenCalledWith(timedEvent, {
       dateKey: "2026-05-08",

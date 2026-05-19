@@ -265,10 +265,11 @@ export async function createAppleCalendarEvent(input: {
   parseHelperJson<{ ok: boolean }>(await runAppleHelper(args));
 }
 
-export async function createAppleReminder(input: { title: string; notes?: string; dueDate?: string; listId?: string }): Promise<string> {
+export async function createAppleReminder(input: { title: string; notes?: string; dueDate?: string; listId?: string; startMinutes?: number }): Promise<string> {
   const args = ["create-reminder", "--title", input.title];
   if (input.notes) args.push("--notes", input.notes);
   if (input.dueDate) args.push("--due", input.dueDate);
+  if (input.startMinutes !== undefined) args.push("--start-minutes", String(input.startMinutes));
   if (input.listId) args.push("--list-id", input.listId);
   const parsed = parseHelperJson<AppleHelperCreateReminderResponse>(await runAppleHelper(args));
   if (!parsed.reminderId) {

@@ -170,6 +170,7 @@ export type TranslationKey =
   | "taskCreationDefaultTargetDesc"
   | "taskCreationTitle"
   | "taskCreationPlaceholder"
+  | "taskCreationTime"
   | "taskCreationTarget"
   | "taskDetails"
   | "taskHub"
@@ -213,7 +214,7 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     calendar: "Calendar",
     calendarEmpty: "No tasks or events in this calendar range.",
     calendarTaskCreation: "Create tasks from calendar",
-    calendarTaskCreationDesc: "Click empty calendar space to create dated vault tasks.",
+    calendarTaskCreationDesc: "Click empty calendar space to create dated or timed vault tasks.",
     changed: "changed",
     clearFilters: "Clear",
     cancel: "Cancel",
@@ -368,6 +369,7 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     taskCreationFileDesc: "New calendar tasks are appended to this Markdown file.",
     taskCreationTitle: "Create task",
     taskCreationPlaceholder: "Task content",
+    taskCreationTime: "Time",
     taskCreationTarget: "Create in",
     taskDetails: "Task details",
     taskHub: "Task Hub",
@@ -410,7 +412,7 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     calendar: "日历",
     calendarEmpty: "当前日历范围内没有任务或事件。",
     calendarTaskCreation: "允许从日历创建任务",
-    calendarTaskCreationDesc: "点击日历空白区域创建带日期的 vault 任务。",
+    calendarTaskCreationDesc: "点击日历空白区域创建带日期或具体时间的 vault 任务。",
     changed: "已变化",
     clearFilters: "清空",
     cancel: "取消",
@@ -559,6 +561,7 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     taskCreationFileDesc: "从日历新建的任务会追加到这个 Markdown 文件。",
     taskCreationTitle: "创建任务",
     taskCreationPlaceholder: "任务内容",
+    taskCreationTime: "时间",
     taskCreationTarget: "创建到",
     taskDetails: "任务详情",
     taskHub: "Task Hub",

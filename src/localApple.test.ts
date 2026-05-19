@@ -366,6 +366,7 @@ describe("local Apple mapping", () => {
         title: "Send proposal",
         notes: "From Task Hub\nProjects/Acme.md:3",
         dueDate: "2026-05-20",
+        startMinutes: 570,
         listId: "list-1"
       })
     );
@@ -379,6 +380,8 @@ describe("local Apple mapping", () => {
       "From Task Hub\nProjects/Acme.md:3",
       "--due",
       "2026-05-20",
+      "--start-minutes",
+      "570",
       "--list-id",
       "list-1"
     ]);
