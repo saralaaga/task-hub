@@ -14,7 +14,6 @@ export type CalendarViewState = {
   allowAppleReminderWriteback: boolean;
   allowAppleReminderCreate?: boolean;
   allowAppleCalendarWriteback?: boolean;
-  allowAppleCalendarTaskSend?: boolean;
   allowTaskCreation: boolean;
   showLunarCalendar?: boolean;
   today?: Date;
@@ -28,8 +27,8 @@ export type CalendarDropTarget =
   | string
   | {
       dateKey: string;
-      startMinutes: number;
-      durationMinutes: number;
+      startMinutes?: number;
+      durationMinutes?: number;
     };
 
 export type CalendarViewHandlers = {
@@ -42,9 +41,10 @@ export type CalendarViewHandlers = {
   onTaskJump: (task: TaskItem) => void;
   onTaskSelect: (task: TaskItem) => void;
   onTaskReschedule: (task: TaskItem, target: CalendarDropTarget) => void;
+  onTaskDelete?: (task: TaskItem) => void;
   onTaskSendToAppleReminders?: (task: TaskItem) => void;
-  onTaskSendToAppleCalendar?: (task: TaskItem) => void;
   onEventReschedule?: (event: CalendarEvent, target: CalendarDropTarget) => void;
+  onEventDelete?: (event: CalendarEvent) => void;
 };
 
 const MODE_LABEL_KEYS: Record<CalendarViewMode, TranslationKey> = {
@@ -56,6 +56,9 @@ const HOUR_HEIGHT = 56;
 const DEFAULT_START_HOUR = 6;
 const DEFAULT_END_HOUR = 22;
 const DEFAULT_TIMED_TASK_DURATION_MINUTES = 60;
+const DEFAULT_MONTH_CREATION_START_MINUTES = 9 * 60;
+const TASK_TIME_POINT_HEIGHT = 28;
+const TASK_TIME_POINT_GAP = 4;
 const MIN_TIMED_ITEM_DURATION_MINUTES = 15;
 const CALENDAR_ITEM_DRAG_MIME = "application/x-task-hub-calendar-item-id";
 const TASK_DRAG_MIME = "application/x-task-hub-task-id";
@@ -77,6 +80,7 @@ const WEEK_START_DAY_INDEX: Record<WeekStart, number> = {
 type TimedItemLayout = {
   columnIndex: number;
   columnCount: number;
+  stackIndex?: number;
 };
 
 export function renderCalendarView(
@@ -173,7 +177,7 @@ function renderMonthGrid(
       dayItems.length === 0 ? "is-empty" : "has-items"
     ].filter(Boolean).join(" ");
     const cell = grid.createDiv({ cls: classes });
-    bindTaskCreation(cell, day, state, handlers);
+    bindTaskCreation(cell, monthCreationTarget(day), state, handlers);
     bindCalendarDropTarget(cell, day, visibleItems, handlers, state);
     const header = cell.createDiv({ cls: "task-hub-calendar-date" });
     header.createSpan({ cls: "task-hub-calendar-weekday", text: shortWeekday(dayDate) });
@@ -290,7 +294,13 @@ function renderAgendaDayHeader(
 
 function layoutTimedItems(items: CalendarItem[]): Map<string, TimedItemLayout> {
   const layouts = new Map<string, TimedItemLayout>();
-  const sortedItems = [...items].sort((left, right) => (left.startMinutes ?? 0) - (right.startMinutes ?? 0) || itemEndMinutes(left) - itemEndMinutes(right) || left.title.localeCompare(right.title));
+  for (const [item, layout] of layoutTimedTaskPoints(items.filter((item) => item.kind === "task"))) {
+    layouts.set(item.id, layout);
+  }
+
+  const sortedItems = [...items]
+    .filter((item) => item.kind === "event")
+    .sort((left, right) => (left.startMinutes ?? 0) - (right.startMinutes ?? 0) || itemEndMinutes(left) - itemEndMinutes(right) || left.title.localeCompare(right.title));
   let group: CalendarItem[] = [];
   let groupEnd = -1;
 
@@ -313,6 +323,24 @@ function layoutTimedItems(items: CalendarItem[]): Map<string, TimedItemLayout> {
   }
   flushGroup();
 
+  return layouts;
+}
+
+function layoutTimedTaskPoints(items: CalendarItem[]): Map<CalendarItem, TimedItemLayout> {
+  const layouts = new Map<CalendarItem, TimedItemLayout>();
+  const laneEnds: number[] = [];
+  const sortedItems = [...items].sort((left, right) => (left.startMinutes ?? 0) - (right.startMinutes ?? 0) || (right.createdSortKey ?? "").localeCompare(left.createdSortKey ?? "") || left.title.localeCompare(right.title));
+
+  for (const item of sortedItems) {
+    const top = taskPointTopPixels(item.startMinutes ?? 0);
+    let stackIndex = laneEnds.findIndex((end) => end <= top);
+    if (stackIndex === -1) {
+      stackIndex = laneEnds.length;
+      laneEnds.push(0);
+    }
+    laneEnds[stackIndex] = top + TASK_TIME_POINT_HEIGHT + TASK_TIME_POINT_GAP;
+    layouts.set(item, { columnIndex: 0, columnCount: 1, stackIndex });
+  }
   return layouts;
 }
 
@@ -356,14 +384,18 @@ function renderTimedCalendarItem(
   bindCalendarItemContextMenu(row, item, state, handlers);
   if (item.color) row.style.setProperty("--task-hub-item-color", item.color);
   const startMinutes = item.startMinutes ?? startHour * 60;
-  const endMinutes = Math.max(item.endMinutes ?? startMinutes + 60, startMinutes + 30);
-  row.style.top = `${((startMinutes - startHour * 60) / 60) * HOUR_HEIGHT}px`;
-  row.style.height = `${Math.max(30, ((endMinutes - startMinutes) / 60) * HOUR_HEIGHT - 4)}px`;
+  const endMinutes = itemEndMinutes(item);
+  const isTaskPoint = item.kind === "task";
+  if (isTaskPoint) row.addClass("is-time-point");
+  const baseTop = ((startMinutes - startHour * 60) / 60) * HOUR_HEIGHT;
+  const stackOffset = isTaskPoint ? (layout?.stackIndex ?? 0) * (TASK_TIME_POINT_HEIGHT + TASK_TIME_POINT_GAP) : 0;
+  row.style.top = `${baseTop + stackOffset}px`;
+  row.style.height = isTaskPoint ? `${TASK_TIME_POINT_HEIGHT}px` : `${Math.max(30, ((endMinutes - startMinutes) / 60) * HOUR_HEIGHT - 4)}px`;
   if (layout && layout.columnCount > 1) {
     row.style.left = `calc(${(100 * layout.columnIndex) / layout.columnCount}% + 6px)`;
     row.style.right = `calc(${100 - (100 * (layout.columnIndex + 1)) / layout.columnCount}% + 6px)`;
   }
-  renderCalendarItemContent(row, item, handlers, state, formatTimeRange(startMinutes, endMinutes));
+  renderCalendarItemContent(row, item, handlers, state, isTaskPoint ? formatMinutes(startMinutes) : formatTimeRange(startMinutes, endMinutes));
   bindCalendarItemResize(row, container, item, startHour, handlers, state);
   const task = item.task;
   if (task) {
@@ -457,10 +489,10 @@ function clearResizeFeedback(feedback: HTMLElement, row: HTMLElement): void {
 }
 
 function resizeDeltaMinutes(item: CalendarItem, target: CalendarDropTarget, edge: "start" | "end"): number {
-  if (typeof target === "string" || item.startMinutes === undefined) return 0;
+  if (typeof target === "string" || item.startMinutes === undefined || target.startMinutes === undefined) return 0;
   const currentEnd = Math.max(item.endMinutes ?? item.startMinutes + DEFAULT_TIMED_TASK_DURATION_MINUTES, item.startMinutes + MIN_TIMED_ITEM_DURATION_MINUTES);
   if (edge === "start") return target.startMinutes - item.startMinutes;
-  return target.startMinutes + target.durationMinutes - currentEnd;
+  return target.startMinutes + validDurationMinutes(target.durationMinutes) - currentEnd;
 }
 
 function formatMinuteDelta(deltaMinutes: number): string {
@@ -503,6 +535,13 @@ function bindTaskCreation(
 ): void {
   if (!state.allowTaskCreation) return;
   element.addEventListener("click", () => handlers.onDateCreateTask(target));
+}
+
+function monthCreationTarget(dateKey: string): CalendarDropTarget {
+  return {
+    dateKey,
+    startMinutes: DEFAULT_MONTH_CREATION_START_MINUTES
+  };
 }
 
 function bindTimedTaskCreation(
@@ -590,25 +629,49 @@ function bindCalendarItemContextMenu(
   state: CalendarViewState,
   handlers: CalendarViewHandlers
 ): void {
-  if (item.task?.source !== "vault") return;
+  if (!item.task && !item.event) return;
 
   element.addEventListener("contextmenu", (event) => {
     event.preventDefault();
     event.stopPropagation();
     const menu = new Menu();
-    if (canSendTaskToAppleCalendar(item, state)) {
+    let itemCount = 0;
+    if (item.task) {
       menu.addItem((menuItem) => {
+        itemCount += 1;
         menuItem
-          .setTitle(state.t("sendToAppleCalendar"))
-          .setIcon("calendar-plus")
+          .setTitle(state.t("openSource"))
+          .setIcon("external-link")
           .onClick(() => {
-            const task = item.task;
-            if (task) handlers.onTaskSendToAppleCalendar?.(task);
+            if (item.task) handlers.onTaskJump(item.task);
           });
       });
     }
-    if (canSendTaskToAppleReminders(item, state)) {
+    if (item.task && canDeleteTask(item, state)) {
       menu.addItem((menuItem) => {
+        itemCount += 1;
+        menuItem
+          .setTitle(state.t("deleteCalendarItem"))
+          .setIcon("trash")
+          .onClick(() => {
+            if (item.task) handlers.onTaskDelete?.(item.task);
+          });
+      });
+    }
+    if (item.event && canDeleteEvent(item, state)) {
+      menu.addItem((menuItem) => {
+        itemCount += 1;
+        menuItem
+          .setTitle(state.t("deleteCalendarItem"))
+          .setIcon("trash")
+          .onClick(() => {
+            if (item.event) handlers.onEventDelete?.(item.event);
+          });
+      });
+    }
+    if (item.task && canSendTaskToAppleReminders(item, state)) {
+      menu.addItem((menuItem) => {
+        itemCount += 1;
         menuItem
           .setTitle(state.t("sendToAppleReminders"))
           .setIcon("bell-plus")
@@ -618,11 +681,11 @@ function bindCalendarItemContextMenu(
           });
       });
     }
-    if (!canSendTaskToAppleCalendar(item, state) && !canSendTaskToAppleReminders(item, state)) {
+    if (itemCount === 0) {
       menu.addItem((menuItem) => {
         menuItem
-          .setTitle(state.t("sendToAppleCalendarDisabled"))
-          .setIcon("calendar-x")
+          .setTitle(state.t("sendToAppleRemindersDisabled"))
+          .setIcon("bell-off")
           .onClick(() => undefined);
       });
     }
@@ -758,6 +821,12 @@ function timedDropTarget(
   state: CalendarViewState
 ): CalendarDropTarget {
   const startMinutes = adjustedDraggedStartMinutes(element, event, item, startHour);
+  if (item.kind === "task") {
+    return {
+      dateKey,
+      startMinutes
+    };
+  }
   return {
     dateKey,
     startMinutes,
@@ -772,7 +841,7 @@ function adjustedDraggedStartMinutes(element: HTMLElement, event: DragEvent, ite
 }
 
 function updateDragMoveFeedback(item: CalendarItem, target: CalendarDropTarget, event: DragEvent): void {
-  if (typeof target === "string" || item.startMinutes === undefined || target.dateKey !== item.date) {
+  if (typeof target === "string" || item.startMinutes === undefined || target.startMinutes === undefined || target.dateKey !== item.date) {
     clearDragMoveFeedback();
     return;
   }
@@ -820,6 +889,7 @@ function validDurationMinutes(value: number | undefined): number {
 }
 
 function itemDurationMinutes(item: CalendarItem, state: CalendarViewState): number {
+  if (item.kind === "task") return MIN_TIMED_ITEM_DURATION_MINUTES;
   if (item.startMinutes !== undefined && item.endMinutes !== undefined) {
     return validDurationMinutes(item.endMinutes - item.startMinutes);
   }
@@ -876,18 +946,28 @@ function canDragCalendarItem(item: CalendarItem, state: CalendarViewState): bool
 
 function canResizeCalendarItem(item: CalendarItem, state: CalendarViewState): boolean {
   if (item.allDay || item.startMinutes === undefined) return false;
+  if (item.kind === "task") return false;
   if (item.kind === "event") {
     return item.event?.sourceId === "apple-calendar" && Boolean(state.allowAppleCalendarWriteback) && Boolean(item.event.id);
   }
   return item.task?.source === "apple-reminders" && state.allowAppleReminderWriteback && Boolean(item.task.externalId);
 }
 
-function canSendTaskToAppleCalendar(item: CalendarItem, state: CalendarViewState): boolean {
-  return Boolean(state.allowAppleCalendarTaskSend && item.task?.source === "vault" && item.task.dueDate);
+function canDeleteTask(item: CalendarItem, state: CalendarViewState): boolean {
+  if (item.task?.source === "vault") return true;
+  return item.task?.source === "apple-reminders" && state.allowAppleReminderWriteback && Boolean(item.task.externalId);
+}
+
+function canDeleteEvent(item: CalendarItem, state: CalendarViewState): boolean {
+  return item.event?.sourceId === "apple-calendar" && Boolean(state.allowAppleCalendarWriteback) && Boolean(item.event.id);
 }
 
 function canSendTaskToAppleReminders(item: CalendarItem, state: CalendarViewState): boolean {
   return Boolean(state.allowAppleReminderCreate && item.task?.source === "vault");
+}
+
+function taskPointTopPixels(startMinutes: number): number {
+  return (startMinutes / 60) * HOUR_HEIGHT;
 }
 
 function calendarItemClass(item: CalendarItem, extraClass = ""): string {

@@ -11,8 +11,7 @@ export type TranslationKey =
   | "applyFilters"
   | "appleReminderAlreadySent"
   | "appleCalendarCreateDisabled"
-  | "appleCalendarCreateVaultOnly"
-  | "appleCalendarCreatedAndTaskRemoved"
+  | "appleCalendarEventCreated"
   | "appleReminderCreateDisabled"
   | "appleReminderCreateVaultOnly"
   | "appleReminderCreated"
@@ -22,6 +21,10 @@ export type TranslationKey =
   | "appleReminderNoTaskAtCursor"
   | "calendar"
   | "calendarEmpty"
+  | "calendarItemDeleted"
+  | "calendarCreationDefaultKind"
+  | "calendarCreationDefaultKindDesc"
+  | "calendarCreationKind"
   | "calendarTaskCreation"
   | "calendarTaskCreationDesc"
   | "changed"
@@ -36,7 +39,17 @@ export type TranslationKey =
   | "day"
   | "defaultView"
   | "defaultViewDesc"
+  | "deleteCalendarItem"
   | "event"
+  | "eventCreationDefaultTarget"
+  | "eventCreationDefaultTargetDesc"
+  | "eventCreationDuration"
+  | "eventCreationDurationDays"
+  | "eventCreationDurationDesc"
+  | "eventCreationDurationHours"
+  | "eventCreationDurationMinutes"
+  | "eventCreationPlaceholder"
+  | "eventCreationTitle"
   | "events"
   | "externalTaskReadOnly"
   | "externalSourceOpenUnavailable"
@@ -140,9 +153,8 @@ export type TranslationKey =
   | "settingsTitle"
   | "friday"
   | "sendCurrentTaskToAppleReminders"
-  | "sendToAppleCalendar"
-  | "sendToAppleCalendarDisabled"
   | "sendToAppleReminders"
+  | "sendToAppleRemindersDisabled"
   | "showCompletedByDefault"
   | "showCompletedByDefaultDesc"
   | "showCompletedInView"
@@ -162,12 +174,12 @@ export type TranslationKey =
   | "taskCreated"
   | "taskDateAlreadySet"
   | "taskDateTokenMissing"
-  | "taskDateRequiredForCalendarSend"
   | "taskDateUpdated"
   | "taskCreationFile"
   | "taskCreationFileDesc"
   | "taskCreationDefaultTarget"
   | "taskCreationDefaultTargetDesc"
+  | "taskCreationBody"
   | "taskCreationTitle"
   | "taskCreationPlaceholder"
   | "taskCreationTime"
@@ -202,8 +214,7 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     applyFilters: "Filter",
     appleReminderAlreadySent: "This task was already sent to Apple Reminders",
     appleCalendarCreateDisabled: "Turn on Local Apple, Apple Calendar, and task sending in Task Hub settings first.",
-    appleCalendarCreateVaultOnly: "Only dated vault Markdown tasks can be sent to Apple Calendar.",
-    appleCalendarCreatedAndTaskRemoved: "Apple Calendar event created and source task removed.",
+    appleCalendarEventCreated: "Apple Calendar event created.",
     appleReminderCreateDisabled: "Turn on Local Apple, Apple Reminders, and reminder creation in Task Hub settings first.",
     appleReminderCreateVaultOnly: "Only vault Markdown tasks can be sent to Apple Reminders.",
     appleReminderCreated: "Apple Reminder created.",
@@ -213,8 +224,12 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     appleReminderNoTaskAtCursor: "Place the cursor on a Markdown task first.",
     calendar: "Calendar",
     calendarEmpty: "No tasks or events in this calendar range.",
-    calendarTaskCreation: "Create tasks from calendar",
-    calendarTaskCreationDesc: "Click empty calendar space to create dated or timed vault tasks.",
+    calendarItemDeleted: "Calendar item deleted.",
+    calendarCreationDefaultKind: "Default creation type",
+    calendarCreationDefaultKindDesc: "Default type selected when you create from the calendar.",
+    calendarCreationKind: "Create",
+    calendarTaskCreation: "Create from calendar",
+    calendarTaskCreationDesc: "Click empty calendar space to create a task or an Apple Calendar event.",
     changed: "changed",
     clearFilters: "Clear",
     cancel: "Cancel",
@@ -227,7 +242,17 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     day: "Day",
     defaultView: "Default view",
     defaultViewDesc: "View shown when Task Hub opens.",
+    deleteCalendarItem: "Delete from calendar",
     event: "Event",
+    eventCreationDefaultTarget: "Default event destination",
+    eventCreationDefaultTargetDesc: "Default Apple Calendar selected when you create an event from the calendar.",
+    eventCreationDuration: "Duration",
+    eventCreationDurationDays: "Days",
+    eventCreationDurationDesc: "Event length. All-day events use days; timed events use hours and minutes.",
+    eventCreationDurationHours: "Hours",
+    eventCreationDurationMinutes: "Minutes",
+    eventCreationPlaceholder: "Event title",
+    eventCreationTitle: "Create event",
     events: "events",
     externalTaskReadOnly: "External items are read-only unless the matching Apple writeback option is enabled.",
     externalSourceOpenUnavailable: "Task Hub could not open this external source.",
@@ -339,9 +364,8 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     settingsTitle: "Task Hub Settings",
     friday: "Friday",
     sendCurrentTaskToAppleReminders: "Send current task to Apple Reminders",
-    sendToAppleCalendar: "Send to Apple Calendar",
-    sendToAppleCalendarDisabled: "Enable Apple Calendar task sending in settings first",
     sendToAppleReminders: "Send to Apple Reminders",
+    sendToAppleRemindersDisabled: "Enable Apple Reminders creation in settings first",
     showCompletedByDefault: "Show completed tasks by default",
     showCompletedByDefaultDesc: "Completed tasks remain indexed but hidden unless this is enabled.",
     showCompletedInView: "Show completed",
@@ -361,10 +385,10 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     taskCreated: "Task created.",
     taskDateAlreadySet: "Task is already on that date.",
     taskDateTokenMissing: "The task line does not contain a supported due date.",
-    taskDateRequiredForCalendarSend: "Only dated vault tasks can be sent to Apple Calendar from the calendar.",
     taskDateUpdated: "Task date updated.",
-    taskCreationDefaultTarget: "Default creation destination",
-    taskCreationDefaultTargetDesc: "Default destination selected when you create a task from the calendar.",
+    taskCreationDefaultTarget: "Default task destination",
+    taskCreationDefaultTargetDesc: "Default task destination selected when you create a task from the calendar.",
+    taskCreationBody: "Body",
     taskCreationFile: "Task creation file",
     taskCreationFileDesc: "New calendar tasks are appended to this Markdown file.",
     taskCreationTitle: "Create task",
@@ -400,8 +424,7 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     applyFilters: "筛选",
     appleReminderAlreadySent: "这条任务已经发送到 Apple 提醒事项",
     appleCalendarCreateDisabled: "请先在 Task Hub 设置中开启本地 Apple、Apple 日历和发送任务到 Apple 日历。",
-    appleCalendarCreateVaultOnly: "只有带日期的 vault Markdown 任务可以发送到 Apple 日历。",
-    appleCalendarCreatedAndTaskRemoved: "已创建 Apple 日历事件，并删除源任务。",
+    appleCalendarEventCreated: "已创建 Apple 日历事件。",
     appleReminderCreateDisabled: "请先在 Task Hub 设置中开启本地 Apple、Apple 提醒事项和创建提醒事项。",
     appleReminderCreateVaultOnly: "只有 vault 中的 Markdown 任务可以发送到 Apple 提醒事项。",
     appleReminderCreated: "已创建 Apple 提醒事项。",
@@ -411,8 +434,12 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     appleReminderNoTaskAtCursor: "请先把光标放在一条 Markdown 任务上。",
     calendar: "日历",
     calendarEmpty: "当前日历范围内没有任务或事件。",
-    calendarTaskCreation: "允许从日历创建任务",
-    calendarTaskCreationDesc: "点击日历空白区域创建带日期或具体时间的 vault 任务。",
+    calendarItemDeleted: "日历项目已删除。",
+    calendarCreationDefaultKind: "默认创建类型",
+    calendarCreationDefaultKindDesc: "从日历新建时默认选中的类型。",
+    calendarCreationKind: "创建",
+    calendarTaskCreation: "允许从日历创建",
+    calendarTaskCreationDesc: "点击日历空白区域创建任务或 Apple 日历事件。",
     changed: "已变化",
     clearFilters: "清空",
     cancel: "取消",
@@ -425,7 +452,17 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     day: "日",
     defaultView: "默认视图",
     defaultViewDesc: "打开 Task Hub 时默认显示的视图。",
+    deleteCalendarItem: "从日历删除",
     event: "事件",
+    eventCreationDefaultTarget: "默认事件创建位置",
+    eventCreationDefaultTargetDesc: "从日历新建事件时默认选中的 Apple 日历。",
+    eventCreationDuration: "时长",
+    eventCreationDurationDays: "天",
+    eventCreationDurationDesc: "事件长度。全天事件使用天；定时事件使用小时和分钟。",
+    eventCreationDurationHours: "小时",
+    eventCreationDurationMinutes: "分钟",
+    eventCreationPlaceholder: "事件标题",
+    eventCreationTitle: "创建事件",
     events: "个事件",
     externalTaskReadOnly: "外部项目默认只读；Apple 提醒事项和 Apple 日历的部分写入能力需要在设置中显式开启。",
     externalSourceOpenUnavailable: "Task Hub 无法打开这个外部来源。",
@@ -531,9 +568,8 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     settingsTitle: "Task Hub 设置",
     friday: "周五",
     sendCurrentTaskToAppleReminders: "将当前任务发送到 Apple 提醒事项",
-    sendToAppleCalendar: "发送到 Apple 日历",
-    sendToAppleCalendarDisabled: "请先在设置中开启发送到 Apple 日历",
     sendToAppleReminders: "发送到 Apple 提醒事项",
+    sendToAppleRemindersDisabled: "请先在设置中开启创建 Apple 提醒事项",
     showCompletedByDefault: "默认显示已完成任务",
     showCompletedByDefaultDesc: "已完成任务仍会被索引；关闭时默认隐藏。",
     showCompletedInView: "显示已完成",
@@ -553,10 +589,10 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     taskCreated: "任务已创建。",
     taskDateAlreadySet: "任务已经在这个日期。",
     taskDateTokenMissing: "任务行中没有可支持的日期标记。",
-    taskDateRequiredForCalendarSend: "只有带日期的 vault 任务可以从日历发送到 Apple 日历。",
     taskDateUpdated: "任务日期已更新。",
-    taskCreationDefaultTarget: "默认创建位置",
-    taskCreationDefaultTargetDesc: "从日历新建任务时默认选中的创建位置。",
+    taskCreationDefaultTarget: "默认任务创建位置",
+    taskCreationDefaultTargetDesc: "从日历新建任务时默认选中的任务创建位置。",
+    taskCreationBody: "正文",
     taskCreationFile: "任务创建文件",
     taskCreationFileDesc: "从日历新建的任务会追加到这个 Markdown 文件。",
     taskCreationTitle: "创建任务",

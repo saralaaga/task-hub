@@ -69,6 +69,28 @@ describe("rescheduleTaskInContent", () => {
     });
   });
 
+  it("adds a scheduled time when rescheduling to a timed target", () => {
+    const task = taskItem({ line: 0, rawLine: "- [ ] Pay invoice 📅 2026-05-08 #finance", dueDate: "2026-05-08" });
+    const result = rescheduleTaskInContent("- [ ] Pay invoice 📅 2026-05-08 #finance", task, "2026-05-12", undefined, 570);
+
+    expect(result).toEqual({
+      status: "updated",
+      content: "- [ ] Pay invoice 📅 2026-05-12 ⏰ 09:30 #finance",
+      line: 0
+    });
+  });
+
+  it("updates an existing scheduled time when rescheduling to a timed target", () => {
+    const task = taskItem({ line: 0, rawLine: "- [ ] Pay invoice 📅 2026-05-08 ⏰ 08:15 #finance", dueDate: "2026-05-08" });
+    const result = rescheduleTaskInContent("- [ ] Pay invoice 📅 2026-05-08 ⏰ 08:15 #finance", task, "2026-05-12", undefined, 570);
+
+    expect(result).toEqual({
+      status: "updated",
+      content: "- [ ] Pay invoice 📅 2026-05-12 ⏰ 09:30 #finance",
+      line: 0
+    });
+  });
+
   it("updates an inline due date while preserving completed state and text", () => {
     const task = taskItem({ line: 0, rawLine: "- [x] Pay invoice due:: 2026-05-08 #finance", completed: true, dueDate: "2026-05-08" });
     const result = rescheduleTaskInContent("- [x] Pay invoice due:: 2026-05-08 #finance", task, "2026-05-12");

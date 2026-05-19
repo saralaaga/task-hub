@@ -43,6 +43,7 @@ struct CalendarListRecord: Encodable {
     let id: String
     let name: String
     let color: String?
+    let writable: Bool
 }
 
 struct CalendarRecord: Encodable {
@@ -408,7 +409,12 @@ func readCalendarLists(store: EKEventStore) {
     requireAccess(.event)
 
     let output = store.calendars(for: .event).map { calendar in
-        CalendarListRecord(id: calendar.calendarIdentifier, name: calendar.title, color: hexColor(from: calendar))
+        CalendarListRecord(
+            id: calendar.calendarIdentifier,
+            name: calendar.title,
+            color: hexColor(from: calendar),
+            writable: calendar.allowsContentModifications
+        )
     }
 
     writeJson(
@@ -699,7 +705,14 @@ func createCalendarEvent(store: EKEventStore) {
         fail("invalid_arguments", "create-calendar-event requires --date YYYY-MM-DD.", exitCode: 2)
     }
 
-    guard let calendar = store.defaultCalendarForNewEvents ?? store.calendars(for: .event).first(where: { $0.allowsContentModifications }) else {
+    let selectedCalendar: EKCalendar?
+    if let calendarId = argumentValue("--calendar-id"), !calendarId.isEmpty {
+        selectedCalendar = store.calendar(withIdentifier: calendarId)
+    } else {
+        selectedCalendar = store.defaultCalendarForNewEvents ?? store.calendars(for: .event).first(where: { $0.allowsContentModifications })
+    }
+
+    guard let calendar = selectedCalendar, calendar.allowsContentModifications else {
         fail("eventkit_error", "No writable Apple Calendar is available.", exitCode: 7)
     }
 
@@ -716,13 +729,80 @@ func createCalendarEvent(store: EKEventStore) {
         event.startDate = timedStart
         event.endDate = timedStart.addingTimeInterval(TimeInterval(durationMinutes * 60))
     } else {
+        let durationMinutes = max(integerArgument("--duration-minutes") ?? 24 * 60, 1)
         event.isAllDay = true
         event.startDate = startDate
-        event.endDate = Calendar.current.date(byAdding: .day, value: 1, to: startDate) ?? startDate.addingTimeInterval(24 * 60 * 60)
+        event.endDate = startDate.addingTimeInterval(TimeInterval(durationMinutes * 60))
     }
 
     do {
         try store.save(event, span: .thisEvent, commit: true)
+    } catch {
+        fail("eventkit_error", error.localizedDescription, exitCode: 7)
+    }
+
+    writeJson(
+        HelperOutput(
+            ok: true,
+            platform: nil,
+            reminders: nil,
+            lists: nil,
+            calendars: nil,
+            events: nil,
+            reminderId: nil,
+            remindersStatus: nil,
+            calendarStatus: nil,
+            code: nil,
+            message: nil
+        )
+    )
+}
+
+func deleteReminder(store: EKEventStore) {
+    requireAccess(.reminder)
+
+    guard let id = argumentValue("--id"), !id.isEmpty else {
+        fail("invalid_arguments", "delete-reminder requires --id.", exitCode: 2)
+    }
+    guard let reminder = store.calendarItem(withIdentifier: id) as? EKReminder else {
+        fail("not_found", "Apple Reminder no longer exists.", exitCode: 9)
+    }
+
+    do {
+        try store.remove(reminder, commit: true)
+    } catch {
+        fail("eventkit_error", error.localizedDescription, exitCode: 7)
+    }
+
+    writeJson(
+        HelperOutput(
+            ok: true,
+            platform: nil,
+            reminders: nil,
+            lists: nil,
+            calendars: nil,
+            events: nil,
+            reminderId: nil,
+            remindersStatus: nil,
+            calendarStatus: nil,
+            code: nil,
+            message: nil
+        )
+    )
+}
+
+func deleteCalendarEvent(store: EKEventStore) {
+    requireAccess(.event)
+
+    guard let id = argumentValue("--id"), !id.isEmpty else {
+        fail("invalid_arguments", "delete-calendar-event requires --id.", exitCode: 2)
+    }
+    guard let event = store.event(withIdentifier: id) ?? store.calendarItem(withIdentifier: id) as? EKEvent else {
+        fail("not_found", "Apple Calendar event no longer exists.", exitCode: 9)
+    }
+
+    do {
+        try store.remove(event, span: .thisEvent, commit: true)
     } catch {
         fail("eventkit_error", error.localizedDescription, exitCode: 7)
     }
@@ -813,6 +893,10 @@ struct TaskHubAppleHelper {
             createReminder(store: store)
         case "create-calendar-event":
             createCalendarEvent(store: store)
+        case "delete-reminder":
+            deleteReminder(store: store)
+        case "delete-calendar-event":
+            deleteCalendarEvent(store: store)
         default:
             fail("invalid_arguments", "Unknown command: \(command)", exitCode: 2)
         }

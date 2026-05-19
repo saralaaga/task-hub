@@ -1,7 +1,7 @@
 import { App, PluginSettingTab, Setting } from "obsidian";
 import { createTranslator, type Translator } from "./i18n";
 import type TaskHubPlugin from "./main";
-import type { AppleCalendarInfo, CalendarSource, CalendarSourceStatus, CalendarTaskCreationTarget, LocalAppleSyncStatus, TaskHubSettings } from "./types";
+import type { AppleCalendarInfo, CalendarCreationKind, CalendarCreationTarget, CalendarEventCreationTarget, CalendarSource, CalendarSourceStatus, CalendarTaskCreationTarget, LocalAppleSyncStatus, TaskHubSettings } from "./types";
 
 export const DEFAULT_SETTINGS: TaskHubSettings = {
   language: "en",
@@ -11,7 +11,9 @@ export const DEFAULT_SETTINGS: TaskHubSettings = {
   showLunarCalendar: false,
   indexOnStartup: true,
   calendarTaskCreationEnabled: true,
+  calendarCreationDefaultKind: "task",
   calendarTaskCreationDefaultTarget: { type: "vault" },
+  calendarEventCreationDefaultTarget: { type: "apple-calendar" },
   taskCreationFilePath: "Task Hub.md",
   ignoredPaths: ["Templates/", "Archive/"],
   tagViewOrder: [],
@@ -47,9 +49,12 @@ export function normalizeTaskHubSettings(loaded: Partial<TaskHubSettings> | null
     ...DEFAULT_SETTINGS,
     ...(loaded ?? {}),
     calendarTaskCreationEnabled: loaded?.calendarTaskCreationEnabled ?? DEFAULT_SETTINGS.calendarTaskCreationEnabled,
+    calendarCreationDefaultKind: loaded?.calendarCreationDefaultKind ?? DEFAULT_SETTINGS.calendarCreationDefaultKind,
     showLunarCalendar: loaded?.showLunarCalendar ?? DEFAULT_SETTINGS.showLunarCalendar,
     calendarTaskCreationDefaultTarget:
       loaded?.calendarTaskCreationDefaultTarget ?? DEFAULT_SETTINGS.calendarTaskCreationDefaultTarget,
+    calendarEventCreationDefaultTarget:
+      loaded?.calendarEventCreationDefaultTarget ?? DEFAULT_SETTINGS.calendarEventCreationDefaultTarget,
     taskCreationFilePath: loaded?.taskCreationFilePath ?? DEFAULT_SETTINGS.taskCreationFilePath,
     localApple: {
       ...DEFAULT_SETTINGS.localApple,
@@ -181,12 +186,34 @@ export class TaskHubSettingTab extends PluginSettingTab {
 
     if (this.plugin.settings.calendarTaskCreationEnabled) {
       new Setting(basicSettingsGrid)
+        .setName(t("calendarCreationDefaultKind"))
+        .setDesc(t("calendarCreationDefaultKindDesc"))
+        .addDropdown((dropdown) => {
+          populateCreationKindDropdown(dropdown.selectEl, t);
+          dropdown.setValue(this.plugin.settings.calendarCreationDefaultKind).onChange(async (value) => {
+            this.plugin.settings.calendarCreationDefaultKind = parseCreationKind(value);
+            await this.plugin.saveSettings();
+          });
+        });
+
+      new Setting(basicSettingsGrid)
         .setName(t("taskCreationDefaultTarget"))
         .setDesc(t("taskCreationDefaultTargetDesc"))
         .addDropdown((dropdown) => {
           populateTaskCreationTargetDropdown(dropdown.selectEl, this.plugin, t);
           dropdown.setValue(serializeTaskCreationTarget(this.plugin.settings.calendarTaskCreationDefaultTarget)).onChange(async (value) => {
             this.plugin.settings.calendarTaskCreationDefaultTarget = parseTaskCreationTarget(value);
+            await this.plugin.saveSettings();
+          });
+        });
+
+      new Setting(basicSettingsGrid)
+        .setName(t("eventCreationDefaultTarget"))
+        .setDesc(t("eventCreationDefaultTargetDesc"))
+        .addDropdown((dropdown) => {
+          populateEventCreationTargetDropdown(dropdown.selectEl, this.plugin, t);
+          dropdown.setValue(serializeEventCreationTarget(this.plugin.settings.calendarEventCreationDefaultTarget)).onChange(async (value) => {
+            this.plugin.settings.calendarEventCreationDefaultTarget = parseEventCreationTarget(value);
             await this.plugin.saveSettings();
           });
         });
@@ -800,10 +827,19 @@ function mergeAppleCalendarsFromSettings(
     merged.set(event.calendarId, {
       id: event.calendarId,
       name: existing?.name ?? event.calendarName,
-      color: existing?.color ?? event.calendarColor
+      color: existing?.color ?? event.calendarColor,
+      writable: existing?.writable
     });
   }
   return [...merged.values()].sort((left, right) => left.name.localeCompare(right.name));
+}
+
+export function serializeCreationKind(kind: CalendarCreationKind): string {
+  return kind;
+}
+
+export function parseCreationKind(value: string): CalendarCreationKind {
+  return value === "event" ? "event" : "task";
 }
 
 export function serializeTaskCreationTarget(target: CalendarTaskCreationTarget): string {
@@ -821,6 +857,26 @@ export function parseTaskCreationTarget(value: string): CalendarTaskCreationTarg
   return { type: "vault" };
 }
 
+export function serializeEventCreationTarget(target: CalendarEventCreationTarget): string {
+  return `apple-calendar:${target.calendarId ?? ""}`;
+}
+
+export function parseEventCreationTarget(value: string): CalendarEventCreationTarget {
+  if (value.startsWith("apple-calendar:")) {
+    const calendarId = value.slice("apple-calendar:".length);
+    return { type: "apple-calendar", calendarId: calendarId || undefined };
+  }
+  return { type: "apple-calendar" };
+}
+
+export function serializeCreationTarget(target: CalendarCreationTarget): string {
+  return target.type === "apple-calendar" ? serializeEventCreationTarget(target) : serializeTaskCreationTarget(target);
+}
+
+export function parseCreationTarget(value: string, kind: CalendarCreationKind): CalendarCreationTarget {
+  return kind === "event" ? parseEventCreationTarget(value) : parseTaskCreationTarget(value);
+}
+
 export function taskCreationTargetLabel(target: CalendarTaskCreationTarget, plugin: TaskHubPlugin, t: Translator): string {
   if (target.type === "vault") {
     return t("vaultTasks");
@@ -828,24 +884,56 @@ export function taskCreationTargetLabel(target: CalendarTaskCreationTarget, plug
   return appleReminderListName(target.listId, plugin) ?? t("localAppleRemindersDefaultListInbox");
 }
 
+export function eventCreationTargetLabel(target: CalendarEventCreationTarget, plugin: TaskHubPlugin, t: Translator): string {
+  return appleCalendarName(target.calendarId, plugin) ?? t("localAppleCalendar");
+}
+
+export function creationTargetLabel(target: CalendarCreationTarget, plugin: TaskHubPlugin, t: Translator): string {
+  return target.type === "apple-calendar" ? eventCreationTargetLabel(target, plugin, t) : taskCreationTargetLabel(target, plugin, t);
+}
+
+export function populateCreationKindDropdown(selectEl: HTMLSelectElement, t: Translator): void {
+  selectEl.empty();
+  selectEl.createEl("option", { value: "task", text: t("task") });
+  selectEl.createEl("option", { value: "event", text: t("event") });
+}
+
 export function populateTaskCreationTargetDropdown(selectEl: HTMLSelectElement, plugin: TaskHubPlugin, t: Translator): void {
   selectEl.empty();
   selectEl.createEl("option", { value: "vault", text: t("vaultTasks") });
-  if (!plugin.canCreateAppleReminders()) return;
+  if (plugin.canCreateAppleReminders()) {
+    const lists = plugin.getAppleReminderLists();
+    if (lists.length === 0) {
+      selectEl.createEl("option", {
+        value: "apple-reminders:",
+        text: `${t("localAppleReminders")}: ${t("localAppleRemindersDefaultListInbox")}`
+      });
+    }
+    for (const list of lists) {
+      selectEl.createEl("option", {
+        value: serializeTaskCreationTarget({ type: "apple-reminders", listId: list.id }),
+        text: `${t("localAppleReminders")}: ${list.name}`
+      });
+    }
+  }
 
-  const lists = plugin.getAppleReminderLists();
-  if (lists.length === 0) {
+}
+
+export function populateEventCreationTargetDropdown(selectEl: HTMLSelectElement, plugin: TaskHubPlugin, t: Translator): void {
+  selectEl.empty();
+  if (!plugin.canSendTasksToAppleCalendar()) return;
+  const calendars = plugin.getAppleCalendars().filter((calendar) => calendar.writable !== false);
+  if (calendars.length === 0) {
     selectEl.createEl("option", {
-      value: "apple-reminders:",
-      text: `${t("localAppleReminders")}: ${t("localAppleRemindersDefaultListInbox")}`
+      value: "apple-calendar:",
+      text: t("localAppleCalendar")
     });
     return;
   }
-
-  for (const list of lists) {
+  for (const calendar of calendars) {
     selectEl.createEl("option", {
-      value: serializeTaskCreationTarget({ type: "apple-reminders", listId: list.id }),
-      text: `${t("localAppleReminders")}: ${list.name}`
+      value: serializeEventCreationTarget({ type: "apple-calendar", calendarId: calendar.id }),
+      text: `${t("localAppleCalendar")}: ${calendar.name}`
     });
   }
 }
@@ -861,4 +949,9 @@ function populateAppleReminderListDropdown(selectEl: HTMLSelectElement, plugin: 
 function appleReminderListName(listId: string | undefined, plugin: TaskHubPlugin): string | undefined {
   if (!listId) return undefined;
   return plugin.getAppleReminderLists().find((list) => list.id === listId)?.name;
+}
+
+function appleCalendarName(calendarId: string | undefined, plugin: TaskHubPlugin): string | undefined {
+  if (!calendarId) return undefined;
+  return plugin.getAppleCalendars().find((calendar) => calendar.id === calendarId)?.name;
 }

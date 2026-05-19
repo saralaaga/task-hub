@@ -6,6 +6,8 @@ import {
   normalizeAppleScriptError,
   createAppleReminder,
   createAppleCalendarEvent,
+  deleteAppleCalendarEvent,
+  deleteAppleReminder,
   readAppleCalendarLists,
   readAppleReminderLists,
   reminderToTask,
@@ -311,7 +313,8 @@ describe("local Apple mapping", () => {
       createAppleCalendarEvent({
         title: "Pay invoice",
         date: "2026-05-20",
-        notes: "From Task Hub\nFinance.md:3"
+        notes: "From Task Hub\nFinance.md:3",
+        durationMinutes: 1440
       })
     );
 
@@ -322,7 +325,9 @@ describe("local Apple mapping", () => {
       "--date",
       "2026-05-20",
       "--notes",
-      "From Task Hub\nFinance.md:3"
+      "From Task Hub\nFinance.md:3",
+      "--duration-minutes",
+      "1440"
     ]);
   });
 
@@ -337,7 +342,8 @@ describe("local Apple mapping", () => {
         date: "2026-05-20",
         notes: "From Task Hub\nFinance.md:3",
         startMinutes: 570,
-        durationMinutes: 90
+        durationMinutes: 90,
+        calendarId: "calendar-1"
       })
     );
 
@@ -352,8 +358,22 @@ describe("local Apple mapping", () => {
       "--start-minutes",
       "570",
       "--duration-minutes",
-      "90"
+      "90",
+      "--calendar-id",
+      "calendar-1"
     ]);
+  });
+
+  it("deletes Apple Reminders through the helper", async () => {
+    await withPlatform("darwin", () => deleteAppleReminder("reminder-1"));
+
+    expect(execFile.mock.calls.at(-1)?.[1]).toEqual(["delete-reminder", "--id", "reminder-1"]);
+  });
+
+  it("deletes Apple Calendar events through the helper", async () => {
+    await withPlatform("darwin", () => deleteAppleCalendarEvent("event-1"));
+
+    expect(execFile.mock.calls.at(-1)?.[1]).toEqual(["delete-calendar-event", "--id", "event-1"]);
   });
 
   it("creates an Apple Reminder through the helper with task metadata", async () => {
@@ -398,11 +418,11 @@ describe("local Apple mapping", () => {
 
   it("reads Apple Calendar lists through the helper", async () => {
     execFile.mockImplementationOnce((_file: string, _args: string[], _options: unknown, callback: ExecFileCallback) => {
-      callback(null, "{\"ok\":true,\"calendars\":[{\"id\":\"calendar-1\",\"name\":\"Work\",\"color\":\"#FF9500\"}]}", "");
+      callback(null, "{\"ok\":true,\"calendars\":[{\"id\":\"calendar-1\",\"name\":\"Work\",\"color\":\"#FF9500\",\"writable\":true}]}", "");
     });
 
     await expect(withPlatform("darwin", () => readAppleCalendarLists())).resolves.toEqual([
-      { id: "calendar-1", name: "Work", color: "#FF9500" }
+      { id: "calendar-1", name: "Work", color: "#FF9500", writable: true }
     ]);
     expect(execFile.mock.calls.at(-1)?.[1]).toEqual(["calendar-lists"]);
   });

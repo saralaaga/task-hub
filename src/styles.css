@@ -44,6 +44,13 @@
   padding: 8px;
 }
 
+.task-hub-duration-unit {
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  margin-left: -4px;
+  margin-right: 4px;
+}
+
 .task-hub-filter-strip {
   align-items: center;
   display: flex;

@@ -17,6 +17,7 @@ export type CalendarItem = {
   isMultiDay?: boolean;
   isMultiDayStart?: boolean;
   isMultiDayEnd?: boolean;
+  createdSortKey?: string;
   task?: TaskItem;
   event?: CalendarEvent;
 };
@@ -56,17 +57,17 @@ export function buildCalendarItems(input: BuildCalendarItemsInput): CalendarItem
     if (!task.dueDate) continue;
     if (task.completed && !input.includeCompletedTasks) continue;
     const taskStartMinutes = task.scheduledDate ? parseCalendarDateTime(task.scheduledDate)?.minutes : undefined;
-    const taskDurationMinutes = taskDuration(input.taskDurationOverrides, task);
     items.push({
       id: `task:${task.id}`,
       title: task.text,
       date: task.dueDate,
       startMinutes: taskStartMinutes,
-      endMinutes: taskStartMinutes === undefined ? undefined : taskStartMinutes + taskDurationMinutes,
+      endMinutes: undefined,
       allDay: taskStartMinutes === undefined,
       sourceId,
       kind: "task",
       color: input.sourceColors?.[sourceId],
+      createdSortKey: task.createdDate ?? task.startDate ?? "",
       task
     });
   }
@@ -104,14 +105,15 @@ export function buildCalendarItems(input: BuildCalendarItemsInput): CalendarItem
       Number(right.allDay) - Number(left.allDay) ||
       (left.startMinutes ?? -1) - (right.startMinutes ?? -1) ||
       calendarCompletionRank(left) - calendarCompletionRank(right) ||
+      taskCreatedSortRank(left, right) ||
       left.title.localeCompare(right.title)
   );
 }
 
-function taskDuration(overrides: Record<string, number> | undefined, task: TaskItem): number {
-  const override = task.externalId ? overrides?.[task.externalId] : undefined;
-  if (override === undefined || !Number.isFinite(override)) return 60;
-  return Math.max(15, Math.min(24 * 60, Math.round(override)));
+function taskCreatedSortRank(left: CalendarItem, right: CalendarItem): number {
+  if (left.kind !== "task" || right.kind !== "task") return 0;
+  if (left.startMinutes !== right.startMinutes) return 0;
+  return (right.createdSortKey ?? "").localeCompare(left.createdSortKey ?? "");
 }
 
 function eventColor(event: CalendarEvent, eventColors?: Record<string, string>, sourceColors?: Record<string, string>): string | undefined {
@@ -147,7 +149,6 @@ function normalizedEventEndDate(
 ): string | undefined {
   if (!end) return undefined;
   if (!event.allDay) return end.date;
-  if (event.sourceId === "apple-calendar" && rawEnd && !isDateOnlyValue(rawEnd)) return end.date;
 
   const exclusiveEnd = parseDateKey(end.date);
   if (!exclusiveEnd) return end.date;

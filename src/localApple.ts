@@ -188,7 +188,8 @@ export async function readAppleCalendarLists(): Promise<AppleCalendarInfo[]> {
   return (parsed.calendars ?? []).map((calendar) => ({
     id: calendar.id,
     name: calendar.name,
-    color: normalizeHexColor(calendar.color)
+    color: normalizeHexColor(calendar.color),
+    writable: calendar.writable
   }));
 }
 
@@ -257,12 +258,22 @@ export async function createAppleCalendarEvent(input: {
   notes?: string;
   startMinutes?: number;
   durationMinutes?: number;
+  calendarId?: string;
 }): Promise<void> {
   const args = ["create-calendar-event", "--title", input.title, "--date", input.date];
   if (input.notes) args.push("--notes", input.notes);
   if (input.startMinutes !== undefined) args.push("--start-minutes", String(input.startMinutes));
   if (input.durationMinutes !== undefined) args.push("--duration-minutes", String(input.durationMinutes));
+  if (input.calendarId) args.push("--calendar-id", input.calendarId);
   parseHelperJson<{ ok: boolean }>(await runAppleHelper(args));
+}
+
+export async function deleteAppleReminder(id: string): Promise<void> {
+  parseHelperJson<{ ok: boolean }>(await runAppleHelper(["delete-reminder", "--id", id]));
+}
+
+export async function deleteAppleCalendarEvent(id: string): Promise<void> {
+  parseHelperJson<{ ok: boolean }>(await runAppleHelper(["delete-calendar-event", "--id", id]));
 }
 
 export async function createAppleReminder(input: { title: string; notes?: string; dueDate?: string; listId?: string; startMinutes?: number }): Promise<string> {

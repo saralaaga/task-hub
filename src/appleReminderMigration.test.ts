@@ -55,6 +55,8 @@ jest.mock("./localApple", () => ({
   configureLocalAppleHelperPath: jest.fn(),
   createAppleReminder: jest.fn(async () => "reminder-created-1"),
   createAppleCalendarEvent: jest.fn(),
+  deleteAppleCalendarEvent: jest.fn(),
+  deleteAppleReminder: jest.fn(),
   getLocalAppleHelperStatus: jest.fn(),
   installBundledAppleHelper: jest.fn(),
   readAppleCalendarEventsData: jest.fn(),
@@ -67,7 +69,7 @@ jest.mock("./localApple", () => ({
   setAppleReminderList: jest.fn()
 }));
 
-const { createAppleCalendarEvent, createAppleReminder, setAppleReminderDueDate } = jest.requireMock("./localApple");
+const { createAppleCalendarEvent, createAppleReminder, deleteAppleCalendarEvent, deleteAppleReminder, setAppleReminderDueDate } = jest.requireMock("./localApple");
 
 describe("Apple Reminders migration", () => {
   beforeEach(() => {
@@ -119,7 +121,7 @@ describe("Apple Reminders migration", () => {
     expect(notices).toContain("Apple Reminder created and source task removed.");
   });
 
-  it("creates a timed Apple Calendar event and then removes the source Markdown task", async () => {
+  it("reschedules a timed Markdown task in place instead of sending it to Apple Calendar", async () => {
     const file = { path: "Inbox.md", extension: "md", stat: { ctime: 1, mtime: 2, size: 3 } };
     const plugin = new TaskHubPlugin({} as never, {} as never);
     const process = jest.fn(async (_file, update) => update("- [ ] Pay invoice 📅 2026-05-20\nNext"));
@@ -155,15 +157,10 @@ describe("Apple Reminders migration", () => {
       durationMinutes: 90
     });
 
-    expect(createAppleCalendarEvent).toHaveBeenCalledWith({
-      title: "Pay invoice",
-      date: "2026-05-21",
-      notes: expect.stringContaining("Source: Inbox.md:1"),
-      startMinutes: 570,
-      durationMinutes: 90
-    });
-    await expect(process.mock.results[0].value).resolves.toBe("Next");
-    expect(notices).toContain("Apple Calendar event created and source task removed.");
+    expect(createAppleCalendarEvent).not.toHaveBeenCalled();
+    await expect(process.mock.results[0].value).resolves.toBe("- [ ] Pay invoice 📅 2026-05-21 ⏰ 09:30\nNext");
+    expect(notices).toContain("Task date updated.");
+    expect(notices).not.toContain("Apple Calendar event created and source task removed.");
   });
 
   it("updates an Apple Reminder time when dragged within the same day", async () => {
@@ -186,20 +183,158 @@ describe("Apple Reminders migration", () => {
 
     await plugin.rescheduleTask(appleReminderTask(), {
       dateKey: "2026-05-20",
-      startMinutes: 570,
-      durationMinutes: 60
+      startMinutes: 570
     });
 
     expect(setAppleReminderDueDate).toHaveBeenCalledWith("reminder-1", "2026-05-20", 570);
-    expect(savedData.at(-1)).toMatchObject({
-      localApple: {
-        reminderDurationOverrides: {
-          "reminder-1": 60
-        }
-      }
-    });
+    expect(savedData).toHaveLength(0);
     expect(notices).toContain("Task date updated.");
     expect(notices).not.toContain("Task is already on this date.");
+  });
+
+  it("creates an Apple Calendar event in the selected calendar", async () => {
+    const plugin = new TaskHubPlugin({} as never, {} as never);
+    plugin.app = {
+      workspace: {
+        getLeavesOfType: jest.fn(() => [])
+      }
+    } as never;
+    plugin.settings = {
+      ...DEFAULT_SETTINGS,
+      localApple: {
+        ...DEFAULT_SETTINGS.localApple,
+        enabled: true,
+        calendarEnabled: true,
+        calendarTaskSendEnabled: true,
+        calendarDefaultTimedTaskDurationMinutes: 75
+      }
+    };
+    plugin.syncLocalApple = jest.fn(async () => undefined) as never;
+
+    await plugin.createTaskForDate({ dateKey: "2026-05-20", startMinutes: 570 }, "Design review", {
+      type: "apple-calendar",
+      calendarId: "work"
+    });
+
+    expect(createAppleCalendarEvent).toHaveBeenCalledWith({
+      title: "Design review",
+      date: "2026-05-20",
+      startMinutes: 570,
+      durationMinutes: 60,
+      calendarId: "work"
+    });
+    expect(notices).toContain("Apple Calendar event created.");
+  });
+
+  it("creates an Apple Calendar event with a one-hour default duration", async () => {
+    const plugin = new TaskHubPlugin({} as never, {} as never);
+    plugin.app = {
+      workspace: {
+        getLeavesOfType: jest.fn(() => [])
+      }
+    } as never;
+    plugin.settings = {
+      ...DEFAULT_SETTINGS,
+      localApple: {
+        ...DEFAULT_SETTINGS.localApple,
+        enabled: true,
+        calendarEnabled: true,
+        calendarTaskSendEnabled: true
+      }
+    };
+    plugin.syncLocalApple = jest.fn(async () => undefined) as never;
+
+    await plugin.createTaskForDate("2026-05-20", "Design review", {
+      type: "apple-calendar",
+      calendarId: "work"
+    });
+
+    expect(createAppleCalendarEvent).toHaveBeenCalledWith({
+      title: "Design review",
+      date: "2026-05-20",
+      startMinutes: 0,
+      durationMinutes: 60,
+      calendarId: "work"
+    });
+  });
+
+  it("deletes a Markdown task from the calendar context action", async () => {
+    const file = { path: "Inbox.md", extension: "md", stat: { ctime: 1, mtime: 2, size: 3 } };
+    const plugin = new TaskHubPlugin({} as never, {} as never);
+    const process = jest.fn(async (_file, update) => update("- [ ] Pay invoice 📅 2026-05-20\nNext"));
+    plugin.app = {
+      vault: {
+        getFileByPath: jest.fn(() => file),
+        process
+      },
+      workspace: {
+        getLeavesOfType: jest.fn(() => [])
+      }
+    } as never;
+    plugin.settings = DEFAULT_SETTINGS;
+    plugin.taskIndex = {
+      reindexFile: jest.fn(async () => undefined)
+    } as never;
+
+    await plugin.deleteCalendarTask(task());
+
+    await expect(process.mock.results[0].value).resolves.toBe("Next");
+    expect(notices).toContain("Calendar item deleted.");
+  });
+
+  it("deletes an Apple Reminder only when writeback is enabled", async () => {
+    const plugin = new TaskHubPlugin({} as never, {} as never);
+    plugin.app = {
+      workspace: {
+        getLeavesOfType: jest.fn(() => [])
+      }
+    } as never;
+    plugin.settings = {
+      ...DEFAULT_SETTINGS,
+      localApple: {
+        ...DEFAULT_SETTINGS.localApple,
+        enabled: true,
+        remindersEnabled: true,
+        remindersWritebackEnabled: true
+      }
+    };
+    plugin.syncLocalApple = jest.fn(async () => undefined) as never;
+
+    await plugin.deleteCalendarTask(appleReminderTask());
+
+    expect(deleteAppleReminder).toHaveBeenCalledWith("reminder-1");
+    expect(notices).toContain("Calendar item deleted.");
+  });
+
+  it("deletes an Apple Calendar event only when writeback is enabled", async () => {
+    const plugin = new TaskHubPlugin({} as never, {} as never);
+    plugin.app = {
+      workspace: {
+        getLeavesOfType: jest.fn(() => [])
+      }
+    } as never;
+    plugin.settings = {
+      ...DEFAULT_SETTINGS,
+      localApple: {
+        ...DEFAULT_SETTINGS.localApple,
+        enabled: true,
+        calendarEnabled: true,
+        calendarWritebackEnabled: true
+      }
+    };
+    plugin.syncLocalApple = jest.fn(async () => undefined) as never;
+
+    await plugin.deleteCalendarEvent({
+      id: "event-1",
+      sourceId: "apple-calendar",
+      title: "Design review",
+      start: "2026-05-20T09:30:00",
+      end: "2026-05-20T10:30:00",
+      allDay: false
+    });
+
+    expect(deleteAppleCalendarEvent).toHaveBeenCalledWith("event-1");
+    expect(notices).toContain("Calendar item deleted.");
   });
 });
 

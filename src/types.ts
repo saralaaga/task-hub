@@ -79,11 +79,19 @@ export type AppleCalendarInfo = {
   id: string;
   name: string;
   color?: string;
+  writable?: boolean;
 };
+
+export type CalendarCreationKind = "task" | "event";
 
 export type CalendarTaskCreationTarget =
   | { type: "vault" }
   | { type: "apple-reminders"; listId?: string };
+
+export type CalendarEventCreationTarget =
+  | { type: "apple-calendar"; calendarId?: string };
+
+export type CalendarCreationTarget = CalendarTaskCreationTarget | CalendarEventCreationTarget;
 
 export type LocalAppleIntegrationSettings = {
   enabled: boolean;
@@ -128,7 +136,9 @@ export type TaskHubSettings = {
   showLunarCalendar: boolean;
   indexOnStartup: boolean;
   calendarTaskCreationEnabled: boolean;
+  calendarCreationDefaultKind: CalendarCreationKind;
   calendarTaskCreationDefaultTarget: CalendarTaskCreationTarget;
+  calendarEventCreationDefaultTarget: CalendarEventCreationTarget;
   taskCreationFilePath: string;
   ignoredPaths: string[];
   tagViewOrder: string[];

@@ -689,7 +689,10 @@ describe("renderCalendarView", () => {
     const day = collect(container).find((element) => element.classes.has("task-hub-calendar-day") && element.text === "");
     day?.click();
 
-    expect(onDateCreateTask).toHaveBeenCalledWith("2026-05-01");
+    expect(onDateCreateTask).toHaveBeenCalledWith({
+      dateKey: "2026-05-01",
+      startMinutes: 540
+    });
   });
 
   it("aligns month days to the configured week start without rendering previous month days", () => {
@@ -1430,8 +1433,7 @@ describe("renderCalendarView", () => {
 
     expect(onTaskReschedule).toHaveBeenCalledWith(reminderTask, {
       dateKey: "2026-05-08",
-      startMinutes: 570,
-      durationMinutes: 60
+      startMinutes: 570
     });
   });
 
@@ -1496,8 +1498,7 @@ describe("renderCalendarView", () => {
 
     expect(onTaskReschedule).toHaveBeenCalledWith(reminderTask, {
       dateKey: "2026-05-08",
-      startMinutes: 555,
-      durationMinutes: 60
+      startMinutes: 555
     });
     expect(item?.classes.has("has-drag-feedback")).toBe(false);
     expect(collect(fakeDocument.body).some((element) => element.classes.has("task-hub-calendar-drag-feedback"))).toBe(false);
@@ -1608,8 +1609,7 @@ describe("renderCalendarView", () => {
 
     expect(onTaskReschedule).toHaveBeenCalledWith(reminderTask, {
       dateKey: "2026-05-08",
-      startMinutes: 555,
-      durationMinutes: 60
+      startMinutes: 555
     });
   });
 
@@ -1626,7 +1626,6 @@ describe("renderCalendarView", () => {
         visibleSourceIds: new Set(["vault"]),
         includeCompletedTasks: false,
         allowAppleReminderWriteback: false,
-        allowAppleCalendarTaskSend: true,
         allowTaskCreation: false,
         defaultTimedTaskDurationMinutes: 90,
         sources: [],
@@ -1656,8 +1655,7 @@ describe("renderCalendarView", () => {
 
     expect(onTaskReschedule).toHaveBeenCalledWith(task, {
       dateKey: "2026-05-08",
-      startMinutes: 570,
-      durationMinutes: 90
+      startMinutes: 570
     });
   });
 
@@ -1710,7 +1708,7 @@ describe("renderCalendarView", () => {
     });
   });
 
-  it("splits overlapping timed items into side-by-side columns", () => {
+  it("keeps timed task points full width even when their visual rows overlap", () => {
     const container = new FakeElement();
     const firstTask = {
       ...task,
@@ -1757,13 +1755,106 @@ describe("renderCalendarView", () => {
     const rowStyles = rows.map((row) => row.style as unknown as { left: string; right: string });
 
     expect(rows).toHaveLength(2);
-    expect(rowStyles).toEqual([
-      expect.objectContaining({ left: "calc(0% + 6px)", right: "calc(50% + 6px)" }),
-      expect.objectContaining({ left: "calc(50% + 6px)", right: "calc(0% + 6px)" })
-    ]);
+    expect(rowStyles.map((style) => style.left)).toEqual([undefined, undefined]);
+    expect(rowStyles.map((style) => style.right)).toEqual([undefined, undefined]);
   });
 
-  it("resizes an Apple Reminder start time from the top edge", () => {
+  it("renders timed Apple Reminders as point rows without a duration range", () => {
+    const container = new FakeElement();
+    const reminderTask = {
+      ...task,
+      source: "apple-reminders" as const,
+      externalId: "reminder-1",
+      scheduledDate: "2026-05-08T15:00"
+    };
+
+    renderCalendarView(
+      container as unknown as HTMLElement,
+      {
+        mode: "day",
+        focusDate: new Date("2026-05-08T12:00:00Z"),
+        weekStart: "monday",
+        visibleSourceIds: new Set(["apple-reminders"]),
+        includeCompletedTasks: false,
+        allowAppleReminderWriteback: true,
+        allowTaskCreation: false,
+        sources: [remindersSource],
+        t: (key) => key
+      },
+      [reminderTask],
+      [],
+      {
+        onLayerToggle: jest.fn(),
+        onModeChange: jest.fn(),
+        onMove: jest.fn(),
+        onDateCreateTask: jest.fn(),
+        onTaskComplete: jest.fn(),
+        onTaskJump: jest.fn(),
+        onTaskSelect: jest.fn(),
+        onTaskReschedule: jest.fn(),
+        onToday: jest.fn()
+      }
+    );
+
+    const row = collect(container).find((element) => element.classes.has("task-hub-calendar-timed-item"));
+    const timeLabel = collect(container).find((element) => element.classes.has("task-hub-calendar-item-time"));
+
+    expect(row?.classes.has("is-time-point")).toBe(true);
+    expect((row?.style as unknown as { height: string }).height).toBe("28px");
+    expect(timeLabel?.text).toBe("15:00");
+  });
+
+  it("stacks nearby timed task points so they do not cover each other", () => {
+    const container = new FakeElement();
+    const firstTask = {
+      ...task,
+      id: "task-point-1",
+      text: "First",
+      scheduledDate: "2026-05-08T15:00"
+    };
+    const secondTask = {
+      ...task,
+      id: "task-point-2",
+      text: "Second",
+      scheduledDate: "2026-05-08T15:00"
+    };
+
+    renderCalendarView(
+      container as unknown as HTMLElement,
+      {
+        mode: "day",
+        focusDate: new Date("2026-05-08T12:00:00Z"),
+        weekStart: "monday",
+        visibleSourceIds: new Set(["vault"]),
+        includeCompletedTasks: false,
+        allowAppleReminderWriteback: false,
+        allowTaskCreation: false,
+        sources: [],
+        t: (key) => key
+      },
+      [firstTask, secondTask],
+      [],
+      {
+        onLayerToggle: jest.fn(),
+        onModeChange: jest.fn(),
+        onMove: jest.fn(),
+        onDateCreateTask: jest.fn(),
+        onTaskComplete: jest.fn(),
+        onTaskJump: jest.fn(),
+        onTaskSelect: jest.fn(),
+        onTaskReschedule: jest.fn(),
+        onToday: jest.fn()
+      }
+    );
+
+    const rowTops = collect(container)
+      .filter((element) => element.classes.has("task-hub-calendar-timed-item"))
+      .map((row) => (row.style as unknown as { top: string }).top);
+
+    expect(rowTops).toEqual(["504px", "536px"]);
+  });
+
+  it("does not show resize handles for timed Apple Reminders", () => {
     const container = new FakeElement();
     const onTaskReschedule = jest.fn();
     const reminderTask = {
@@ -1801,21 +1892,13 @@ describe("renderCalendarView", () => {
       }
     );
 
-    const column = collect(container).find((element) => element.classes.has("task-hub-agenda-column"));
-    const topHandle = collect(container).find((element) => element.classes.has("task-hub-calendar-resize-handle") && element.classes.has("is-start"));
-    column!.boundingRect = { top: 0 };
-    topHandle?.dispatch("pointerdown", { clientY: 224 });
-    fakeDocument.dispatch("pointermove", { clientY: 196 });
-    fakeDocument.dispatch("pointerup", { clientY: 196 });
+    const handles = collect(container).filter((element) => element.classes.has("task-hub-calendar-resize-handle"));
 
-    expect(onTaskReschedule).toHaveBeenCalledWith(reminderTask, {
-      dateKey: "2026-05-08",
-      startMinutes: 570,
-      durationMinutes: 90
-    });
+    expect(handles).toHaveLength(0);
+    expect(onTaskReschedule).not.toHaveBeenCalled();
   });
 
-  it("resizes an Apple Reminder start later when the top edge moves downward", () => {
+  it("does not resize Apple Reminders from the top edge", () => {
     const container = new FakeElement();
     const onTaskReschedule = jest.fn();
     const reminderTask = {
@@ -1853,27 +1936,22 @@ describe("renderCalendarView", () => {
       }
     );
 
-    const column = collect(container).find((element) => element.classes.has("task-hub-agenda-column"));
     const topHandle = collect(container).find((element) => element.classes.has("task-hub-calendar-resize-handle") && element.classes.has("is-start"));
-    column!.boundingRect = { top: 0 };
     topHandle?.dispatch("pointerdown", { clientY: 224 });
     fakeDocument.dispatch("pointermove", { clientY: 252 });
     fakeDocument.dispatch("pointerup", { clientY: 252 });
 
-    expect(onTaskReschedule).toHaveBeenCalledWith(reminderTask, {
-      dateKey: "2026-05-08",
-      startMinutes: 630,
-      durationMinutes: 30
-    });
+    expect(topHandle).toBeUndefined();
+    expect(onTaskReschedule).not.toHaveBeenCalled();
   });
 
-  it("shows the snapped minute delta while resizing a timed item", () => {
+  it("shows the snapped minute delta while resizing an Apple Calendar event", () => {
     const container = new FakeElement();
-    const reminderTask = {
-      ...task,
-      source: "apple-reminders" as const,
-      externalId: "reminder-1",
-      scheduledDate: "2026-05-08T10:00:00"
+    const timedEvent = {
+      ...event,
+      start: "2026-05-08T10:00:00",
+      end: "2026-05-08T11:00:00",
+      allDay: false
     };
 
     renderCalendarView(
@@ -1882,15 +1960,16 @@ describe("renderCalendarView", () => {
         mode: "day",
         focusDate: new Date("2026-05-08T12:00:00Z"),
         weekStart: "monday",
-        visibleSourceIds: new Set(["apple-reminders"]),
+        visibleSourceIds: new Set(["apple-calendar"]),
         includeCompletedTasks: false,
         allowAppleReminderWriteback: true,
+        allowAppleCalendarWriteback: true,
         allowTaskCreation: false,
-        sources: [remindersSource],
+        sources: [source],
         t: (key) => key
       },
-      [reminderTask],
       [],
+      [timedEvent],
       {
         onLayerToggle: jest.fn(),
         onModeChange: jest.fn(),
@@ -1924,12 +2003,12 @@ describe("renderCalendarView", () => {
 
   it("commits the last snapped resize target when pointerup reports a stale pointer position", () => {
     const container = new FakeElement();
-    const onTaskReschedule = jest.fn();
-    const reminderTask = {
-      ...task,
-      source: "apple-reminders" as const,
-      externalId: "reminder-1",
-      scheduledDate: "2026-05-08T10:00:00"
+    const onEventReschedule = jest.fn();
+    const timedEvent = {
+      ...event,
+      start: "2026-05-08T10:00:00",
+      end: "2026-05-08T11:00:00",
+      allDay: false
     };
 
     renderCalendarView(
@@ -1938,15 +2017,16 @@ describe("renderCalendarView", () => {
         mode: "day",
         focusDate: new Date("2026-05-08T12:00:00Z"),
         weekStart: "monday",
-        visibleSourceIds: new Set(["apple-reminders"]),
+        visibleSourceIds: new Set(["apple-calendar"]),
         includeCompletedTasks: false,
         allowAppleReminderWriteback: true,
+        allowAppleCalendarWriteback: true,
         allowTaskCreation: false,
-        sources: [remindersSource],
+        sources: [source],
         t: (key) => key
       },
-      [reminderTask],
       [],
+      [timedEvent],
       {
         onLayerToggle: jest.fn(),
         onModeChange: jest.fn(),
@@ -1955,7 +2035,8 @@ describe("renderCalendarView", () => {
         onTaskComplete: jest.fn(),
         onTaskJump: jest.fn(),
         onTaskSelect: jest.fn(),
-        onTaskReschedule,
+        onTaskReschedule: jest.fn(),
+        onEventReschedule,
         onToday: jest.fn()
       }
     );
@@ -1968,7 +2049,7 @@ describe("renderCalendarView", () => {
     fakeDocument.dispatch("pointermove", { clientY: 196 });
     fakeDocument.dispatch("pointerup", { clientY: 0 });
 
-    expect(onTaskReschedule).toHaveBeenCalledWith(reminderTask, {
+    expect(onEventReschedule).toHaveBeenCalledWith(timedEvent, {
       dateKey: "2026-05-08",
       startMinutes: 570,
       durationMinutes: 90
@@ -2199,9 +2280,10 @@ describe("renderCalendarView", () => {
     expect(onEventReschedule).toHaveBeenCalledWith(event, "2026-05-08");
   });
 
-  it("shows right-click send actions for each enabled Apple destination", () => {
+  it("shows right-click delete and Apple Reminders send actions for vault tasks", () => {
     const container = new FakeElement();
-    const onTaskSendToAppleCalendar = jest.fn();
+    const onTaskJump = jest.fn();
+    const onTaskDelete = jest.fn();
     const onTaskSendToAppleReminders = jest.fn();
 
     renderCalendarView(
@@ -2214,7 +2296,6 @@ describe("renderCalendarView", () => {
         includeCompletedTasks: false,
         allowAppleReminderWriteback: false,
         allowAppleReminderCreate: true,
-        allowAppleCalendarTaskSend: true,
         allowTaskCreation: false,
         sources: [],
         t: (key) => key
@@ -2227,11 +2308,11 @@ describe("renderCalendarView", () => {
         onMove: jest.fn(),
         onDateCreateTask: jest.fn(),
         onTaskComplete: jest.fn(),
-        onTaskJump: jest.fn(),
+        onTaskJump,
         onTaskSelect: jest.fn(),
         onTaskReschedule: jest.fn(),
+        onTaskDelete,
         onTaskSendToAppleReminders,
-        onTaskSendToAppleCalendar,
         onToday: jest.fn()
       }
     );
@@ -2240,14 +2321,18 @@ describe("renderCalendarView", () => {
     const contextEvent = item!.dispatch("contextmenu");
     mockMenus[0].items[0].click?.();
     mockMenus[0].items[1].click?.();
+    mockMenus[0].items[2].click?.();
 
     expect(contextEvent.preventDefault).toHaveBeenCalled();
     expect(contextEvent.stopPropagation).toHaveBeenCalled();
-    expect(mockMenus[0].items[0].title).toBe("sendToAppleCalendar");
-    expect(mockMenus[0].items[0].icon).toBe("calendar-plus");
-    expect(mockMenus[0].items[1].title).toBe("sendToAppleReminders");
-    expect(mockMenus[0].items[1].icon).toBe("bell-plus");
-    expect(onTaskSendToAppleCalendar).toHaveBeenCalledWith(task);
+    expect(mockMenus[0].items[0].title).toBe("openSource");
+    expect(mockMenus[0].items[0].icon).toBe("external-link");
+    expect(mockMenus[0].items[1].title).toBe("deleteCalendarItem");
+    expect(mockMenus[0].items[1].icon).toBe("trash");
+    expect(mockMenus[0].items[2].title).toBe("sendToAppleReminders");
+    expect(mockMenus[0].items[2].icon).toBe("bell-plus");
+    expect(onTaskJump).toHaveBeenCalledWith(task);
+    expect(onTaskDelete).toHaveBeenCalledWith(task);
     expect(onTaskSendToAppleReminders).toHaveBeenCalledWith(task);
   });
 
@@ -2263,7 +2348,6 @@ describe("renderCalendarView", () => {
         includeCompletedTasks: false,
         allowAppleReminderWriteback: false,
         allowAppleReminderCreate: true,
-        allowAppleCalendarTaskSend: false,
         allowTaskCreation: false,
         sources: [],
         t: (key) => key
@@ -2280,16 +2364,15 @@ describe("renderCalendarView", () => {
         onTaskSelect: jest.fn(),
         onTaskReschedule: jest.fn(),
         onTaskSendToAppleReminders: jest.fn(),
-        onTaskSendToAppleCalendar: jest.fn(),
         onToday: jest.fn()
       }
     );
     collect(remindersOnlyContainer).find((element) => element.classes.has("task-hub-calendar-item"))?.dispatch("contextmenu");
 
-    expect(mockMenus[0].items.map((item) => item.title)).toEqual(["sendToAppleReminders"]);
+    expect(mockMenus[0].items.map((item) => item.title)).toEqual(["openSource", "deleteCalendarItem", "sendToAppleReminders"]);
   });
 
-  it("shows a disabled context menu hint when no Apple send destination is enabled", () => {
+  it("keeps delete available when no Apple send destination is enabled", () => {
     const disabledContainer = new FakeElement();
     renderCalendarView(
       disabledContainer as unknown as HTMLElement,
@@ -2301,7 +2384,6 @@ describe("renderCalendarView", () => {
         includeCompletedTasks: false,
         allowAppleReminderWriteback: false,
         allowAppleReminderCreate: false,
-        allowAppleCalendarTaskSend: false,
         allowTaskCreation: false,
         sources: [],
         t: (key) => key
@@ -2317,14 +2399,14 @@ describe("renderCalendarView", () => {
         onTaskJump: jest.fn(),
         onTaskSelect: jest.fn(),
         onTaskReschedule: jest.fn(),
-        onTaskSendToAppleCalendar: jest.fn(),
         onToday: jest.fn()
       }
     );
     collect(disabledContainer).find((element) => element.classes.has("task-hub-calendar-item"))?.dispatch("contextmenu");
 
-    expect(mockMenus.at(-1)?.items).toHaveLength(1);
-    expect(mockMenus.at(-1)?.items[0].title).toBe("sendToAppleCalendarDisabled");
+    expect(mockMenus.at(-1)?.items).toHaveLength(2);
+    expect(mockMenus.at(-1)?.items[0].title).toBe("openSource");
+    expect(mockMenus.at(-1)?.items[1].title).toBe("deleteCalendarItem");
 
     const remindersContainer = new FakeElement();
     renderCalendarView(
@@ -2337,7 +2419,6 @@ describe("renderCalendarView", () => {
         includeCompletedTasks: false,
         allowAppleReminderWriteback: false,
         allowAppleReminderCreate: true,
-        allowAppleCalendarTaskSend: true,
         allowTaskCreation: false,
         sources: [remindersSource],
         t: (key) => key
@@ -2353,12 +2434,13 @@ describe("renderCalendarView", () => {
         onTaskJump: jest.fn(),
         onTaskSelect: jest.fn(),
         onTaskReschedule: jest.fn(),
-        onTaskSendToAppleCalendar: jest.fn(),
         onToday: jest.fn()
       }
     );
     collect(remindersContainer).find((element) => element.classes.has("task-hub-calendar-item"))?.dispatch("contextmenu");
 
-    expect(mockMenus).toHaveLength(1);
+    expect(mockMenus).toHaveLength(2);
+    expect(mockMenus.at(-1)?.items).toHaveLength(1);
+    expect(mockMenus.at(-1)?.items[0].title).toBe("openSource");
   });
 });

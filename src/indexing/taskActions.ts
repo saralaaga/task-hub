@@ -22,6 +22,7 @@ const OPEN_TASK_MARKER = /^(\s*)- \[ \]/;
 const COMPLETED_TASK_MARKER = /^(\s*)- \[[xX]\]/;
 const EMOJI_DUE = /(?:^|\s)📅\s*\d{4}-\d{2}-\d{2}(?=\s|$)/u;
 const INLINE_DUE = /(?:^|\s)due::\s*\d{4}-\d{2}-\d{2}(?=\s|$)/u;
+const SCHEDULED_TIME = /(?:^|\s)⏰\s*\d{1,2}:\d{2}(?=\s|$)/u;
 const SEARCH_WINDOW = 5;
 const DEFAULT_COMPLETION_MESSAGES: CompletionMessages = {
   lineChangedConflict: "The task line changed and Task Hub could not safely identify the original task.",
@@ -65,14 +66,15 @@ export function rescheduleTaskInContent(
   content: string,
   task: TaskItem,
   targetDate: string,
-  messages: RescheduleMessages = DEFAULT_RESCHEDULE_MESSAGES
+  messages: RescheduleMessages = DEFAULT_RESCHEDULE_MESSAGES,
+  startMinutes?: number
 ): CompletionResult {
-  if (task.dueDate === targetDate) {
+  if (task.dueDate === targetDate && startMinutes === undefined) {
     return { status: "already_in_state" };
   }
 
   const lines = content.split(/\r?\n/);
-  const direct = tryRescheduleAtLine(lines, task.line, task.rawLine, targetDate, messages);
+  const direct = tryRescheduleAtLine(lines, task.line, task.rawLine, targetDate, messages, startMinutes);
   if (direct.status !== "conflict") {
     return withContent(direct, lines);
   }
@@ -85,7 +87,7 @@ export function rescheduleTaskInContent(
     };
   }
 
-  return withContent(tryRescheduleAtLine(lines, nearby, task.rawLine, targetDate, messages), lines);
+  return withContent(tryRescheduleAtLine(lines, nearby, task.rawLine, targetDate, messages, startMinutes), lines);
 }
 
 export function deleteTaskInContent(
@@ -144,7 +146,8 @@ function tryRescheduleAtLine(
   line: number,
   rawLine: string,
   targetDate: string,
-  messages: RescheduleMessages
+  messages: RescheduleMessages,
+  startMinutes?: number
 ): CompletionResult {
   const currentLine = lines[line];
   if (currentLine === undefined) {
@@ -155,7 +158,7 @@ function tryRescheduleAtLine(
     return { status: "conflict", message: messages.lineMismatchConflict };
   }
 
-  const nextLine = replaceDueDate(currentLine, targetDate);
+  const nextLine = updateScheduledTime(replaceDueDate(currentLine, targetDate), startMinutes);
   if (!nextLine) {
     return { status: "conflict", message: messages.dateTokenMissing };
   }
@@ -212,6 +215,26 @@ function replaceDueDate(line: string, targetDate: string): string | undefined {
     return line.replace(INLINE_DUE, (match) => match.replace(/\d{4}-\d{2}-\d{2}/, targetDate));
   }
   return undefined;
+}
+
+function updateScheduledTime(line: string | undefined, startMinutes: number | undefined): string | undefined {
+  if (!line || startMinutes === undefined) return line;
+  const timeToken = ` ⏰ ${formatTime(startMinutes)}`;
+  if (SCHEDULED_TIME.test(line)) {
+    return line.replace(SCHEDULED_TIME, timeToken);
+  }
+  if (EMOJI_DUE.test(line)) {
+    return line.replace(EMOJI_DUE, (match) => `${match}${timeToken}`);
+  }
+  if (INLINE_DUE.test(line)) {
+    return line.replace(INLINE_DUE, (match) => `${match}${timeToken}`);
+  }
+  return line;
+}
+
+function formatTime(minutes: number): string {
+  const clamped = Math.max(0, Math.min(23 * 60 + 45, Math.round(minutes / 15) * 15));
+  return `${String(Math.floor(clamped / 60)).padStart(2, "0")}:${String(clamped % 60).padStart(2, "0")}`;
 }
 
 function lineAt(content: string, line: number): string | undefined {

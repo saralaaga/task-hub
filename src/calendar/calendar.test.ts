@@ -75,7 +75,7 @@ describe("buildCalendarItems", () => {
     expect(items.map((item) => item.id)).toEqual(["task:open", "task:done"]);
   });
 
-  it("keeps Apple Reminder tasks with due times on the time grid", () => {
+  it("keeps Apple Reminder tasks with due times as time-point items", () => {
     const items = buildCalendarItems({
       tasks: [
         task({
@@ -95,11 +95,11 @@ describe("buildCalendarItems", () => {
       date: "2026-05-06",
       allDay: false,
       startMinutes: 570,
-      endMinutes: 630
+      endMinutes: undefined
     });
   });
 
-  it("uses local Apple Reminder duration overrides for timed reminders", () => {
+  it("does not assign real durations to timed reminders", () => {
     const items = buildCalendarItems({
       tasks: [
         task({
@@ -121,8 +121,22 @@ describe("buildCalendarItems", () => {
 
     expect(items[0]).toMatchObject({
       startMinutes: 570,
-      endMinutes: 660
+      endMinutes: undefined
     });
+  });
+
+  it("sorts tasks with the same time by creation date descending", () => {
+    const items = buildCalendarItems({
+      tasks: [
+        task({ id: "older", text: "Older", dueDate: "2026-05-06", scheduledDate: "2026-05-06T09:30", createdDate: "2026-05-01T09:00:00" }),
+        task({ id: "newer", text: "Newer", dueDate: "2026-05-06", scheduledDate: "2026-05-06T09:30", createdDate: "2026-05-02T09:00:00" })
+      ],
+      events: [],
+      visibleSourceIds: new Set(["vault"]),
+      includeCompletedTasks: false
+    });
+
+    expect(items.map((item) => item.id)).toEqual(["task:newer", "task:older"]);
   });
 
   it("filters hidden external sources", () => {
@@ -253,7 +267,7 @@ describe("buildCalendarItems", () => {
     expect(items[0]).toMatchObject({ isMultiDay: false });
   });
 
-  it("keeps Apple all-day ISO end dates inclusive", () => {
+  it("treats Apple all-day ISO end dates as exclusive", () => {
     const items = buildCalendarItems({
       tasks: [],
       events: [
@@ -277,8 +291,7 @@ describe("buildCalendarItems", () => {
       "2026-10-03",
       "2026-10-04",
       "2026-10-05",
-      "2026-10-06",
-      "2026-10-07"
+      "2026-10-06"
     ]);
   });
 });
@@ -329,6 +342,7 @@ function task(overrides: Partial<TaskItem>): TaskItem {
     tags: [],
     dueDate: overrides.dueDate,
     scheduledDate: overrides.scheduledDate,
+    createdDate: overrides.createdDate,
     externalId: overrides.externalId,
     source: overrides.source ?? "vault"
   };

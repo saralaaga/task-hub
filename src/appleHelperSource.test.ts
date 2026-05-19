@@ -8,6 +8,17 @@ describe("Apple helper source", () => {
     expect(source).toContain("store.event(withIdentifier: id) ?? store.calendarItem(withIdentifier: id) as? EKEvent");
   });
 
+  it("deletes Apple Calendar events by eventIdentifier before falling back to calendarItemIdentifier", () => {
+    const source = readFileSync(path.join(__dirname, "..", "apple-helper", "TaskHubAppleHelper.swift"), "utf8");
+    const start = source.indexOf("func deleteCalendarEvent(store: EKEventStore)");
+    const end = source.indexOf("@main", start);
+    const deleteSource = source.slice(start, end);
+
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(end).toBeGreaterThan(start);
+    expect(deleteSource).toContain("store.event(withIdentifier: id) ?? store.calendarItem(withIdentifier: id) as? EKEvent");
+  });
+
   it("can create all-day Apple Calendar events from dated tasks", () => {
     const source = readFileSync(path.join(__dirname, "..", "apple-helper", "TaskHubAppleHelper.swift"), "utf8");
 
@@ -40,12 +51,13 @@ describe("Apple helper source", () => {
     );
   });
 
-  it("can list Apple calendars with identifiers and colors", () => {
+  it("can list Apple calendars with identifiers, colors, and writability", () => {
     const source = readFileSync(path.join(__dirname, "..", "apple-helper", "TaskHubAppleHelper.swift"), "utf8");
 
     expect(source).toContain("case \"calendar-lists\"");
     expect(source).toContain("func readCalendarLists(store: EKEventStore)");
-    expect(source).toContain("CalendarListRecord(id: calendar.calendarIdentifier");
+    expect(source).toContain("id: calendar.calendarIdentifier");
     expect(source).toContain("color: hexColor(from: calendar)");
+    expect(source).toContain("writable: calendar.allowsContentModifications");
   });
 });
