@@ -86,6 +86,11 @@ describe("Apple Reminders migration", () => {
     notices.length = 0;
     savedData.length = 0;
     jest.clearAllMocks();
+    jest.spyOn(TaskHubPlugin.prototype, "isLocalAppleSupported").mockReturnValue(true);
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
   });
 
   it("creates the Apple Reminder and then removes the source Markdown task", async () => {
