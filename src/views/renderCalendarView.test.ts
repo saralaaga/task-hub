@@ -887,6 +887,7 @@ describe("renderCalendarView", () => {
 
     const popover = collect(fakeDocument.body).find((element) => element.classes.has("task-hub-calendar-detail-popover"));
     expect(popover).toBeDefined();
+    expect(item?.classes.has("is-selected")).toBe(true);
     expect(onTaskSelect).not.toHaveBeenCalled();
     expect(onDateCreateTask).not.toHaveBeenCalled();
     const titleInput = collect(popover as FakeElement).find((element) => element.type === "text");
@@ -2470,6 +2471,7 @@ describe("renderCalendarView", () => {
 
     expect(contextEvent.preventDefault).toHaveBeenCalled();
     expect(contextEvent.stopPropagation).toHaveBeenCalled();
+    expect(item?.classes.has("is-selected")).toBe(true);
     expect(mockMenus[0].items[0].title).toBe("openSource");
     expect(mockMenus[0].items[0].icon).toBe("external-link");
     expect(mockMenus[0].items[1].title).toBe("deleteCalendarItem");
@@ -2479,6 +2481,54 @@ describe("renderCalendarView", () => {
     expect(onTaskJump).toHaveBeenCalledWith(task);
     expect(onTaskDelete).toHaveBeenCalledWith(task);
     expect(onTaskSendToAppleReminders).toHaveBeenCalledWith(task);
+  });
+
+  it("selects every rendered span of a multi-day event when one span is clicked", () => {
+    const container = new FakeElement();
+    const multiDayEvent = {
+      ...classEvent,
+      id: "multi-day-select",
+      title: "Multi-day select",
+      start: "2026-09-17T09:00:00",
+      end: "2026-09-19T18:00:00",
+      allDay: false
+    };
+
+    renderCalendarView(
+      container as unknown as HTMLElement,
+      {
+        mode: "month",
+        focusDate: new Date("2026-09-08T12:00:00Z"),
+        weekStart: "monday",
+        visibleSourceIds: new Set(["apple-calendar:class"]),
+        includeCompletedTasks: false,
+        allowAppleReminderWriteback: false,
+        allowAppleCalendarWriteback: false,
+        allowTaskCreation: false,
+        sources: [classCalendarSource],
+        t: (key) => key
+      },
+      [],
+      [multiDayEvent],
+      {
+        onLayerToggle: jest.fn(),
+        onModeChange: jest.fn(),
+        onMove: jest.fn(),
+        onDateCreateTask: jest.fn(),
+        onTaskComplete: jest.fn(),
+        onTaskJump: jest.fn(),
+        onTaskSelect: jest.fn(),
+        onTaskReschedule: jest.fn(),
+        onEventReschedule: jest.fn(),
+        onToday: jest.fn()
+      }
+    );
+
+    const cards = collect(container).filter((element) => element.classes.has("task-hub-calendar-item") && element.classes.has("is-multi-day"));
+    cards[1]?.click();
+
+    expect(cards).toHaveLength(3);
+    expect(cards.every((element) => element.classes.has("is-selected"))).toBe(true);
   });
 
   it("shows only the enabled Apple destination in the calendar context menu", () => {

@@ -1147,6 +1147,13 @@
   opacity: 0.72;
 }
 
+.task-hub-calendar-item.is-selected {
+  background: color-mix(in srgb, var(--task-hub-item-color) 76%, black);
+  border-left-color: color-mix(in srgb, var(--task-hub-item-color) 88%, white);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--task-hub-item-color) 72%, white), 0 4px 14px rgb(0 0 0 / 18%);
+  opacity: 1;
+}
+
 .task-hub-calendar-item-body {
   display: grid;
   gap: 2px;
@@ -1171,6 +1178,18 @@
 
 .task-hub-calendar-item.is-completed .task-hub-calendar-item-time {
   color: var(--text-faint);
+}
+
+.task-hub-calendar-item.is-selected .task-hub-calendar-item-title,
+.task-hub-calendar-item.is-selected .task-hub-calendar-item-time,
+.task-hub-calendar-item.is-selected.is-completed .task-hub-calendar-item-title,
+.task-hub-calendar-item.is-selected.is-completed .task-hub-calendar-item-time,
+.task-hub-calendar-item.is-selected.is-multi-day .task-hub-calendar-item-title::before {
+  color: white;
+}
+
+.task-hub-calendar-item.is-selected input[type="checkbox"] {
+  accent-color: white;
 }
 
 .task-hub-calendar-more {

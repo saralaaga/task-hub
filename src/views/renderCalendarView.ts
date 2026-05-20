@@ -72,6 +72,8 @@ let activeDragGrabOffsetXPixels = 0;
 let activeDragGrabOffsetYPixels = 0;
 let activeDragFeedbackElement: HTMLElement | undefined;
 let activeDetailsElement: HTMLElement | undefined;
+let activeSelectedCalendarItemKey: string | undefined;
+let activeCalendarItemElements = new Map<string, Set<HTMLElement>>();
 const WEEK_START_DAY_INDEX: Record<WeekStart, number> = {
   sunday: 0,
   monday: 1,
@@ -97,6 +99,7 @@ export function renderCalendarView(
 ): void {
   activeDetailsElement?.remove();
   activeDetailsElement = undefined;
+  activeCalendarItemElements = new Map();
   container.empty();
   const today = toLocalDateKey(state.today ?? new Date());
   const range = getCalendarRange(state.mode, state.focusDate, state.weekStart);
@@ -387,6 +390,7 @@ function renderTimedCalendarItem(
   layout?: TimedItemLayout
 ): void {
   const row = container.createDiv({ cls: calendarItemClass(item, "task-hub-calendar-timed-item") });
+  registerCalendarItemElement(row, item);
   bindCalendarItemDrag(row, item, state);
   bindCalendarItemContextMenu(row, item, state, handlers);
   if (item.color) row.style.setProperty("--task-hub-item-color", item.color);
@@ -408,11 +412,13 @@ function renderTimedCalendarItem(
   if (task) {
     row.addEventListener("click", (event) => {
       event.stopPropagation();
+      selectCalendarItem(row, item);
       renderCalendarDetailsPopover(row, item, handlers, state);
     });
   } else {
     row.addEventListener("click", (event) => {
       event.stopPropagation();
+      selectCalendarItem(row, item);
       renderCalendarDetailsPopover(row, item, handlers, state);
     });
   }
@@ -614,6 +620,7 @@ function renderLayerToggle(
 
 function renderCalendarItem(container: HTMLElement, item: CalendarItem, handlers: CalendarViewHandlers, state: CalendarViewState): void {
   const row = container.createDiv({ cls: calendarItemClass(item) });
+  registerCalendarItemElement(row, item);
   bindCalendarItemDrag(row, item, state);
   bindCalendarItemContextMenu(row, item, state, handlers);
   if (item.color) row.style.setProperty("--task-hub-item-color", item.color);
@@ -622,14 +629,45 @@ function renderCalendarItem(container: HTMLElement, item: CalendarItem, handlers
   if (task) {
     row.addEventListener("click", (event) => {
       event.stopPropagation();
+      selectCalendarItem(row, item);
       renderCalendarDetailsPopover(row, item, handlers, state);
     });
   } else {
     row.addEventListener("click", (event) => {
       event.stopPropagation();
+      selectCalendarItem(row, item);
       renderCalendarDetailsPopover(row, item, handlers, state);
     });
   }
+}
+
+function registerCalendarItemElement(element: HTMLElement, item: CalendarItem): void {
+  const key = calendarItemSelectionKey(item);
+  element.setAttr("data-task-hub-calendar-selection", key);
+  const elements = activeCalendarItemElements.get(key) ?? new Set<HTMLElement>();
+  elements.add(element);
+  activeCalendarItemElements.set(key, elements);
+  if (key === activeSelectedCalendarItemKey) {
+    element.addClass("is-selected");
+  }
+}
+
+function selectCalendarItem(element: HTMLElement, item: CalendarItem): void {
+  activeSelectedCalendarItemKey = calendarItemSelectionKey(item);
+  for (const elements of activeCalendarItemElements.values()) {
+    for (const candidate of elements) {
+      candidate.removeClass("is-selected");
+    }
+  }
+  for (const selected of activeCalendarItemElements.get(activeSelectedCalendarItemKey) ?? [element]) {
+    selected.addClass("is-selected");
+  }
+}
+
+function calendarItemSelectionKey(item: CalendarItem): string {
+  if (item.task) return `task:${item.task.id}`;
+  if (item.event) return `event:${calendarEventLayerId(item.event)}:${item.event.id}`;
+  return item.id;
 }
 
 function renderCalendarDetailsPopover(anchor: HTMLElement, item: CalendarItem, handlers: CalendarViewHandlers, state: CalendarViewState): void {
@@ -898,6 +936,7 @@ function bindCalendarItemContextMenu(
   element.addEventListener("contextmenu", (event) => {
     event.preventDefault();
     event.stopPropagation();
+    selectCalendarItem(element, item);
     const menu = new Menu();
     let itemCount = 0;
     if (item.task) {
