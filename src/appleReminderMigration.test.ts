@@ -136,6 +136,51 @@ describe("Apple Reminders migration", () => {
     expect(notices).toContain("Apple Reminder created and source task removed.");
   });
 
+  it("preserves a timed Markdown task start time when sending it to Apple Reminders", async () => {
+    const file = { path: "Inbox.md", extension: "md", stat: { ctime: 1, mtime: 2, size: 3 } };
+    const plugin = new TaskHubPlugin({} as never, {} as never);
+    const process = jest.fn(async (_file, update) => update("- [ ] Pay invoice 📅 2026-05-20 ⏰ 09:30\nNext"));
+    plugin.app = {
+      vault: {
+        adapter: {},
+        getFileByPath: jest.fn(() => file),
+        read: jest.fn(async () => "- [ ] Pay invoice 📅 2026-05-20 ⏰ 09:30\nNext"),
+        process,
+        cachedRead: jest.fn(async () => "Next")
+      },
+      workspace: {
+        getLeavesOfType: jest.fn(() => [])
+      }
+    } as never;
+    plugin.settings = {
+      ...DEFAULT_SETTINGS,
+      localApple: {
+        ...DEFAULT_SETTINGS.localApple,
+        enabled: true,
+        remindersEnabled: true,
+        remindersCreateEnabled: true
+      }
+    };
+    plugin.taskIndex = {
+      reindexFile: jest.fn(async () => undefined)
+    } as never;
+    plugin.syncLocalApple = jest.fn(async () => undefined) as never;
+
+    await plugin.sendTaskToAppleReminders(task({
+      rawLine: "- [ ] Pay invoice 📅 2026-05-20 ⏰ 09:30",
+      text: "Pay invoice",
+      scheduledDate: "2026-05-20T09:30"
+    }));
+
+    expect(createAppleReminder).toHaveBeenCalledWith({
+      title: "Pay invoice",
+      notes: expect.stringContaining("Source: Inbox.md:1"),
+      dueDate: "2026-05-20",
+      startMinutes: 570,
+      listId: undefined
+    });
+  });
+
   it("reschedules a timed Markdown task in place instead of sending it to Apple Calendar", async () => {
     const file = { path: "Inbox.md", extension: "md", stat: { ctime: 1, mtime: 2, size: 3 } };
     const plugin = new TaskHubPlugin({} as never, {} as never);
@@ -460,7 +505,7 @@ describe("Apple Reminders migration", () => {
   });
 });
 
-function task(): TaskItem {
+function task(overrides: Partial<TaskItem> = {}): TaskItem {
   return {
     id: "Inbox.md:0:904c04a88c5cf4eec11d8e6c5d80860fd24fca31",
     filePath: "Inbox.md",
@@ -470,7 +515,8 @@ function task(): TaskItem {
     completed: false,
     tags: [],
     dueDate: "2026-05-20",
-    source: "vault"
+    source: "vault",
+    ...overrides
   };
 }
 

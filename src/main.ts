@@ -1,5 +1,6 @@
 import { ButtonComponent, Editor, MarkdownView, Menu, Modal, Notice, Platform, Plugin, requestUrl, Setting, TFile, WorkspaceLeaf } from "obsidian";
 import { PLUGIN_DISPLAY_NAME, TASK_HUB_VIEW_TYPE } from "./constants";
+import { appleCalendarEventToReminderInput, appleReminderToCalendarEventInput } from "./calendar/appleConversion";
 import { fetchIcsSource } from "./calendar/icsClient";
 import { createTranslator } from "./i18n";
 import { registerTaskHubIcon, TASK_HUB_ICON_ID } from "./icons";
@@ -78,6 +79,11 @@ function parseTimeInputValue(value: string): number | undefined {
   return Math.max(0, Math.min(23 * 60 + 45, Math.round((hours * 60 + minutes) / 15) * 15));
 }
 
+function startMinutesFromTask(task: TaskItem): number | undefined {
+  const time = task.scheduledDate?.match(/T(\d{2}):(\d{2})/);
+  return time ? parseTimeInputValue(`${time[1]}:${time[2]}`) : undefined;
+}
+
 function eventDateKey(value: string): string {
   return value.slice(0, 10);
 }
@@ -141,6 +147,22 @@ export default class TaskHubPlugin extends Plugin {
       this.settings.localApple.calendarEnabled &&
       this.settings.localApple.calendarTaskSendEnabled
     );
+  }
+
+  canConvertAppleCalendarAndReminders(): boolean {
+    return (
+      this.isLocalAppleSupported() &&
+      this.settings.localApple.enabled &&
+      this.settings.localApple.calendarEnabled &&
+      this.settings.localApple.remindersEnabled &&
+      this.settings.localApple.calendarWritebackEnabled &&
+      this.settings.localApple.remindersWritebackEnabled &&
+      this.settings.localApple.remindersCreateEnabled
+    );
+  }
+
+  notifyLocalAppleConversionDisabled(): void {
+    new Notice(createTranslator(this.settings.language)("appleCalendarReminderConversionDisabled"));
   }
 
   getAppleReminderLists() {
@@ -466,7 +488,8 @@ export default class TaskHubPlugin extends Plugin {
       !this.isLocalAppleSupported() ||
       !this.settings.localApple.enabled ||
       !this.settings.localApple.calendarEnabled ||
-      !this.settings.localApple.calendarWritebackEnabled
+      !this.settings.localApple.calendarWritebackEnabled ||
+      !this.isWritableAppleCalendarEvent(event)
     ) {
       const result: CompletionResult = {
         status: "conflict",
@@ -591,7 +614,8 @@ export default class TaskHubPlugin extends Plugin {
       !this.isLocalAppleSupported() ||
       !this.settings.localApple.enabled ||
       !this.settings.localApple.calendarEnabled ||
-      !this.settings.localApple.calendarWritebackEnabled
+      !this.settings.localApple.calendarWritebackEnabled ||
+      !this.isWritableAppleCalendarEvent(event)
     ) {
       const result: CompletionResult = {
         status: "conflict",
@@ -660,6 +684,7 @@ export default class TaskHubPlugin extends Plugin {
         title: currentTask.text,
         notes: this.appleReminderNotes(currentTask),
         dueDate: currentTask.dueDate,
+        startMinutes: startMinutesFromTask(currentTask),
         listId: this.settings.localApple.remindersDefaultListId
       });
       this.settings.appleReminderLinks = {
@@ -698,12 +723,88 @@ export default class TaskHubPlugin extends Plugin {
     }
   }
 
+  async convertAppleCalendarEventToReminder(event: CalendarEvent): Promise<void> {
+    const t = createTranslator(this.settings.language);
+    if (
+      event.sourceId !== "apple-calendar" ||
+      !this.settings.localApple.calendarReminderConversionEnabled ||
+      !this.canConvertAppleCalendarAndReminders() ||
+      !this.isWritableAppleCalendarEvent(event)
+    ) {
+      new Notice(t("appleCalendarReminderConversionDisabled"));
+      return;
+    }
+
+    try {
+      await createAppleReminder(appleCalendarEventToReminderInput(event, this.settings.localApple.remindersDefaultListId));
+      try {
+        await deleteAppleCalendarEvent(event.id);
+      } catch (error) {
+        await this.syncLocalApple({ silent: true });
+        new Notice(`${t("appleCalendarReminderConversionPartial")} ${error instanceof Error ? error.message : String(error)}`);
+        return;
+      }
+      await this.syncLocalApple({ silent: true });
+      new Notice(t("appleCalendarReminderConverted"));
+    } catch (error) {
+      new Notice(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  async convertAppleReminderToCalendarEvent(task: TaskItem): Promise<void> {
+    const t = createTranslator(this.settings.language);
+    if (
+      task.source !== "apple-reminders" ||
+      !task.externalId ||
+      !this.settings.localApple.calendarReminderConversionEnabled ||
+      !this.canConvertAppleCalendarAndReminders()
+    ) {
+      new Notice(t("appleCalendarReminderConversionDisabled"));
+      return;
+    }
+
+    try {
+      await createAppleCalendarEvent(
+        appleReminderToCalendarEventInput(
+          task,
+          this.settings.localApple.calendarDefaultTimedTaskDurationMinutes,
+          this.settings.calendarEventCreationDefaultTarget.type === "apple-calendar"
+            ? this.settings.calendarEventCreationDefaultTarget.calendarId
+            : undefined
+        )
+      );
+      try {
+        await deleteAppleReminder(task.externalId);
+      } catch (error) {
+        await this.syncLocalApple({ silent: true });
+        new Notice(`${t("appleCalendarReminderConversionPartial")} ${error instanceof Error ? error.message : String(error)}`);
+        return;
+      }
+      await this.syncLocalApple({ silent: true });
+      new Notice(t("appleCalendarReminderConverted"));
+    } catch (error) {
+      new Notice(error instanceof Error ? error.message : String(error));
+    }
+  }
+
   async confirmRiskySourceDeletionSetting(): Promise<boolean> {
     const t = createTranslator(this.settings.language);
     return new Promise((resolve) => {
       new RiskySourceDeletionModal(this, {
         title: t("localAppleRemindersCreateRiskTitle"),
         message: t("localAppleRemindersCreateRiskConfirm"),
+        onConfirm: () => resolve(true),
+        onCancel: () => resolve(false)
+      }).open();
+    });
+  }
+
+  async confirmRiskyAppleConversionSetting(): Promise<boolean> {
+    const t = createTranslator(this.settings.language);
+    return new Promise((resolve) => {
+      new RiskySourceDeletionModal(this, {
+        title: t("appleCalendarReminderConversionRiskTitle"),
+        message: t("appleCalendarReminderConversionRiskConfirm"),
         onConfirm: () => resolve(true),
         onCancel: () => resolve(false)
       }).open();
@@ -1134,6 +1235,12 @@ export default class TaskHubPlugin extends Plugin {
 
   private appleCalendarDisplayColor(calendar: AppleCalendarInfo): string {
     return this.settings.localApple.calendarColorOverrides[calendar.id] ?? calendar.color ?? this.settings.localApple.calendarColor;
+  }
+
+  private isWritableAppleCalendarEvent(event: CalendarEvent): boolean {
+    if (event.sourceId !== "apple-calendar") return false;
+    if (!event.calendarId) return true;
+    return this.settings.localApple.calendars.find((calendar) => calendar.id === event.calendarId)?.writable !== false;
   }
 
   private appleCalendarSourceStatus(calendarId: string, status: CalendarSourceStatus): CalendarSourceStatus {

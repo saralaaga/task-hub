@@ -127,6 +127,7 @@ export type LocalAppleIntegrationSettings = {
   calendars: AppleCalendarInfo[];
   calendarWritebackEnabled: boolean;
   calendarTaskSendEnabled: boolean;
+  calendarReminderConversionEnabled: boolean;
   calendarDefaultTimedTaskDurationMinutes: number;
   calendarLookbackDays: number;
   calendarLookaheadDays: number;

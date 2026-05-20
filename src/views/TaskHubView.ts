@@ -187,6 +187,8 @@ export class TaskHubView extends ItemView {
           allowAppleReminderWriteback: this.plugin.settings.localApple.remindersWritebackEnabled,
           allowAppleReminderCreate: this.plugin.canCreateAppleReminders(),
           allowAppleCalendarWriteback: this.plugin.settings.localApple.calendarWritebackEnabled,
+          allowAppleCalendarReminderConversion:
+            this.plugin.settings.localApple.calendarReminderConversionEnabled && this.plugin.canConvertAppleCalendarAndReminders(),
           allowTaskCreation: this.plugin.settings.calendarTaskCreationEnabled,
           showLunarCalendar: this.plugin.settings.language === "zh" && this.plugin.settings.showLunarCalendar,
           defaultTimedTaskDurationMinutes: this.plugin.settings.localApple.calendarDefaultTimedTaskDurationMinutes,
@@ -226,9 +228,11 @@ export class TaskHubView extends ItemView {
           onTaskReschedule: (task, dateKey) => void this.plugin.rescheduleTask(task, dateKey),
           onTaskDelete: (task) => void this.plugin.deleteCalendarTask(task),
           onTaskSendToAppleReminders: (task) => void this.plugin.sendTaskToAppleReminders(task),
+          onTaskSendToAppleCalendar: (task) => void this.plugin.convertAppleReminderToCalendarEvent(task),
           onEventReschedule: (event, dateKey) => void this.plugin.rescheduleCalendarEvent(event, dateKey),
           onEventUpdate: (event, draft) => void this.plugin.updateCalendarEvent(event, draft),
-          onEventDelete: (event) => void this.plugin.deleteCalendarEvent(event)
+          onEventDelete: (event) => void this.plugin.deleteCalendarEvent(event),
+          onEventSendToAppleReminders: (event) => void this.plugin.convertAppleCalendarEventToReminder(event)
         }
       );
       return;

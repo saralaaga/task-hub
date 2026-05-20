@@ -2567,6 +2567,60 @@ describe("renderCalendarView", () => {
     expect(mockMenus[0].items.map((item) => item.title)).toEqual(["openSource", "deleteCalendarItem", "sendToAppleReminders"]);
   });
 
+  it("keeps read-only Apple Calendar events display-only in the context menu", () => {
+    const container = new FakeElement();
+    const birthdayEvent: CalendarEvent = {
+      id: "birthday-1",
+      sourceId: "apple-calendar",
+      title: "Birthday",
+      start: "2026-05-08",
+      allDay: true,
+      calendarId: "birthdays",
+      calendarName: "Birthdays"
+    };
+
+    renderCalendarView(
+      container as unknown as HTMLElement,
+      {
+        mode: "month",
+        focusDate: new Date("2026-05-08T12:00:00Z"),
+        weekStart: "monday",
+        visibleSourceIds: new Set(["apple-calendar:birthdays"]),
+        includeCompletedTasks: false,
+        allowAppleReminderWriteback: true,
+        allowAppleCalendarWriteback: true,
+        allowAppleCalendarReminderConversion: true,
+        allowTaskCreation: false,
+        appleCalendars: [{ id: "birthdays", name: "Birthdays", writable: false }],
+        sources: [{
+          ...source,
+          id: "apple-calendar:birthdays",
+          name: "Apple Calendar / Birthdays"
+        }],
+        t: (key) => key
+      },
+      [],
+      [birthdayEvent],
+      {
+        onLayerToggle: jest.fn(),
+        onModeChange: jest.fn(),
+        onMove: jest.fn(),
+        onDateCreateTask: jest.fn(),
+        onTaskComplete: jest.fn(),
+        onTaskJump: jest.fn(),
+        onTaskSelect: jest.fn(),
+        onTaskReschedule: jest.fn(),
+        onEventDelete: jest.fn(),
+        onEventSendToAppleReminders: jest.fn(),
+        onToday: jest.fn()
+      }
+    );
+
+    collect(container).find((element) => element.classes.has("task-hub-calendar-item"))?.dispatch("contextmenu");
+
+    expect(mockMenus[0].items.map((item) => item.title)).toEqual(["sendToAppleRemindersDisabled"]);
+  });
+
   it("keeps delete available when no Apple send destination is enabled", () => {
     const disabledContainer = new FakeElement();
     renderCalendarView(

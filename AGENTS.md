@@ -120,6 +120,7 @@ cp src/styles.css /Users/carlos/Coding/testValut/.obsidian/plugins/task-hub/styl
 - 本地 Apple Reminders / Apple Calendar 同步，设置页可开关。
 - 本地 Apple Reminders 完成状态回写，设置页可开关；未开启时外部提醒事项复选框必须禁用。
 - 本地 Apple Reminders / Apple Calendar 正式同步路径应通过插件安装目录中的 `taskhub-apple-helper` 调用 EventKit；不要把 AppleScript/JXA 作为默认后端。
+- Apple Calendar 中 `writable: false` 的日历（例如生日、节假日、订阅/系统日历）必须只读渲染和展示；不要提供改期、编辑、删除或转换为提醒事项等会修改/移除源事件的操作。
 - 普通用户不需要 Xcode；开发者构建 helper 时需要 macOS Swift 工具链。
 - Obsidian 社区插件官方 Release 附件默认是 `manifest.json`、`main.js`、可选 `styles.css`；当前 `taskhub-apple-helper` 先作为可选本地/开发能力记录，除非设计并验证单独分发路径，否则不要声称插件市场会自动安装 helper。
 - English / 中文 UI。

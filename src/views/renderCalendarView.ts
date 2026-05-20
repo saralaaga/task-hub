@@ -14,6 +14,7 @@ export type CalendarViewState = {
   allowAppleReminderWriteback: boolean;
   allowAppleReminderCreate?: boolean;
   allowAppleCalendarWriteback?: boolean;
+  allowAppleCalendarReminderConversion?: boolean;
   allowTaskCreation: boolean;
   showLunarCalendar?: boolean;
   today?: Date;
@@ -49,6 +50,8 @@ export type CalendarViewHandlers = {
   onEventReschedule?: (event: CalendarEvent, target: CalendarDropTarget) => void;
   onEventUpdate?: (event: CalendarEvent, draft: Extract<CalendarItemEditDraft, { kind: "event" }>) => void;
   onEventDelete?: (event: CalendarEvent) => void;
+  onEventSendToAppleReminders?: (event: CalendarEvent) => void;
+  onTaskSendToAppleCalendar?: (task: TaskItem) => void;
 };
 
 const MODE_LABEL_KEYS: Record<CalendarViewMode, TranslationKey> = {
@@ -984,6 +987,30 @@ function bindCalendarItemContextMenu(
           });
       });
     }
+    if (item.task && canSendAppleReminderToCalendar(item, state)) {
+      menu.addItem((menuItem) => {
+        itemCount += 1;
+        menuItem
+          .setTitle(state.t("sendToAppleCalendar"))
+          .setIcon("calendar-plus")
+          .onClick(() => {
+            const task = item.task;
+            if (task) handlers.onTaskSendToAppleCalendar?.(task);
+          });
+      });
+    }
+    if (item.event && canSendAppleCalendarEventToReminders(item, state)) {
+      menu.addItem((menuItem) => {
+        itemCount += 1;
+        menuItem
+          .setTitle(state.t("sendToAppleReminders"))
+          .setIcon("bell-plus")
+          .onClick(() => {
+            const event = item.event;
+            if (event) handlers.onEventSendToAppleReminders?.(event);
+          });
+      });
+    }
     if (itemCount === 0) {
       menu.addItem((menuItem) => {
         menuItem
@@ -1241,7 +1268,7 @@ function isTaskHubDrag(event: DragEvent): boolean {
 
 function canDragCalendarItem(item: CalendarItem, state: CalendarViewState): boolean {
   if (item.kind === "event") {
-    return item.event?.sourceId === "apple-calendar" && Boolean(state.allowAppleCalendarWriteback) && Boolean(item.event.id);
+    return isWritableAppleCalendarEvent(item, state) && Boolean(state.allowAppleCalendarWriteback);
   }
   if (item.task?.source === "vault") return true;
   return item.task?.source === "apple-reminders" && state.allowAppleReminderWriteback && Boolean(item.task.externalId);
@@ -1251,7 +1278,7 @@ function canResizeCalendarItem(item: CalendarItem, state: CalendarViewState): bo
   if (item.allDay || item.startMinutes === undefined) return false;
   if (item.kind === "task") return false;
   if (item.kind === "event") {
-    return item.event?.sourceId === "apple-calendar" && Boolean(state.allowAppleCalendarWriteback) && Boolean(item.event.id);
+    return isWritableAppleCalendarEvent(item, state) && Boolean(state.allowAppleCalendarWriteback);
   }
   return item.task?.source === "apple-reminders" && state.allowAppleReminderWriteback && Boolean(item.task.externalId);
 }
@@ -1262,11 +1289,34 @@ function canDeleteTask(item: CalendarItem, state: CalendarViewState): boolean {
 }
 
 function canDeleteEvent(item: CalendarItem, state: CalendarViewState): boolean {
-  return item.event?.sourceId === "apple-calendar" && Boolean(state.allowAppleCalendarWriteback) && Boolean(item.event.id);
+  return isWritableAppleCalendarEvent(item, state) && Boolean(state.allowAppleCalendarWriteback);
 }
 
 function canSendTaskToAppleReminders(item: CalendarItem, state: CalendarViewState): boolean {
   return Boolean(state.allowAppleReminderCreate && item.task?.source === "vault");
+}
+
+function canSendAppleReminderToCalendar(item: CalendarItem, state: CalendarViewState): boolean {
+  return Boolean(
+    state.allowAppleCalendarReminderConversion &&
+      item.task?.source === "apple-reminders" &&
+      item.task.externalId &&
+      item.task.dueDate
+  );
+}
+
+function canSendAppleCalendarEventToReminders(item: CalendarItem, state: CalendarViewState): boolean {
+  return Boolean(
+    state.allowAppleCalendarReminderConversion &&
+      isWritableAppleCalendarEvent(item, state)
+  );
+}
+
+function isWritableAppleCalendarEvent(item: CalendarItem, state: CalendarViewState): boolean {
+  const event = item.event;
+  if (event?.sourceId !== "apple-calendar" || !event.id) return false;
+  if (!event.calendarId) return true;
+  return state.appleCalendars?.find((calendar) => calendar.id === event.calendarId)?.writable !== false;
 }
 
 function taskPointTopPixels(startMinutes: number): number {

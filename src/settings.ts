@@ -34,6 +34,7 @@ export const DEFAULT_SETTINGS: TaskHubSettings = {
     calendars: [],
     calendarWritebackEnabled: false,
     calendarTaskSendEnabled: false,
+    calendarReminderConversionEnabled: false,
     calendarDefaultTimedTaskDurationMinutes: 60,
     calendarLookbackDays: 30,
     calendarLookaheadDays: 90
@@ -267,6 +268,7 @@ export class TaskHubSettingTab extends PluginSettingTab {
             this.plugin.settings.localApple.calendarEnabled = false;
             this.plugin.settings.localApple.calendarWritebackEnabled = false;
             this.plugin.settings.localApple.calendarTaskSendEnabled = false;
+            this.plugin.settings.localApple.calendarReminderConversionEnabled = false;
             this.plugin.settings.localApple.remindersEnabled = false;
             this.plugin.settings.localApple.remindersWritebackEnabled = false;
             this.plugin.settings.localApple.remindersCreateEnabled = false;
@@ -316,6 +318,7 @@ export class TaskHubSettingTab extends PluginSettingTab {
           if (!value) {
             this.plugin.settings.localApple.calendarWritebackEnabled = false;
             this.plugin.settings.localApple.calendarTaskSendEnabled = false;
+            this.plugin.settings.localApple.calendarReminderConversionEnabled = false;
           }
           await this.plugin.saveSettings();
           await this.plugin.syncLocalApple();
@@ -341,6 +344,7 @@ export class TaskHubSettingTab extends PluginSettingTab {
           if (!value) {
             this.plugin.settings.localApple.remindersWritebackEnabled = false;
             this.plugin.settings.localApple.remindersCreateEnabled = false;
+            this.plugin.settings.localApple.calendarReminderConversionEnabled = false;
           }
           await this.plugin.saveSettings();
           await this.plugin.syncLocalApple();
@@ -420,6 +424,9 @@ export class TaskHubSettingTab extends PluginSettingTab {
             return;
           }
           this.plugin.settings.localApple.calendarWritebackEnabled = value;
+          if (!value) {
+            this.plugin.settings.localApple.calendarReminderConversionEnabled = false;
+          }
           await this.plugin.saveSettings();
           this.display();
         });
@@ -444,6 +451,28 @@ export class TaskHubSettingTab extends PluginSettingTab {
           this.display();
         });
       });
+
+    if (this.plugin.settings.localApple.remindersEnabled) {
+      new Setting(panel)
+        .setName(t("localAppleCalendarReminderConversion"))
+        .setDesc(t("localAppleCalendarReminderConversionDesc"))
+        .addToggle((toggle) => {
+          toggle.setValue(this.plugin.settings.localApple.calendarReminderConversionEnabled).onChange(async (value) => {
+            if (value && !this.plugin.canConvertAppleCalendarAndReminders()) {
+              this.plugin.notifyLocalAppleConversionDisabled();
+              this.display();
+              return;
+            }
+            if (value && !(await this.plugin.confirmRiskyAppleConversionSetting())) {
+              this.display();
+              return;
+            }
+            this.plugin.settings.localApple.calendarReminderConversionEnabled = value;
+            await this.plugin.saveSettings();
+            this.display();
+          });
+        });
+    }
 
     new Setting(panel)
       .setName(t("localAppleCalendarDefaultTimedTaskDuration"))
@@ -542,6 +571,9 @@ export class TaskHubSettingTab extends PluginSettingTab {
             return;
           }
           this.plugin.settings.localApple.remindersWritebackEnabled = value;
+          if (!value) {
+            this.plugin.settings.localApple.calendarReminderConversionEnabled = false;
+          }
           await this.plugin.saveSettings();
           this.display();
         });
@@ -562,6 +594,9 @@ export class TaskHubSettingTab extends PluginSettingTab {
             return;
           }
           this.plugin.settings.localApple.remindersCreateEnabled = value;
+          if (!value) {
+            this.plugin.settings.localApple.calendarReminderConversionEnabled = false;
+          }
           await this.plugin.saveSettings();
           this.display();
         });

@@ -12,6 +12,11 @@ export type TranslationKey =
   | "appleReminderAlreadySent"
   | "appleCalendarCreateDisabled"
   | "appleCalendarEventCreated"
+  | "appleCalendarReminderConversionDisabled"
+  | "appleCalendarReminderConversionPartial"
+  | "appleCalendarReminderConverted"
+  | "appleCalendarReminderConversionRiskConfirm"
+  | "appleCalendarReminderConversionRiskTitle"
   | "appleReminderCreateDisabled"
   | "appleReminderCreateVaultOnly"
   | "appleReminderCreated"
@@ -86,6 +91,8 @@ export type TranslationKey =
   | "localAppleCalendarColorsDesc"
   | "localAppleCalendarSystemColor"
   | "localAppleCalendarDesc"
+  | "localAppleCalendarReminderConversion"
+  | "localAppleCalendarReminderConversionDesc"
   | "localAppleCalendarTaskSend"
   | "localAppleCalendarTaskSendDesc"
   | "localAppleCalendarDefaultTimedTaskDuration"
@@ -155,6 +162,7 @@ export type TranslationKey =
   | "settingsTitle"
   | "friday"
   | "sendCurrentTaskToAppleReminders"
+  | "sendToAppleCalendar"
   | "sendToAppleReminders"
   | "sendToAppleRemindersDisabled"
   | "showCompletedByDefault"
@@ -223,6 +231,12 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     appleReminderAlreadySent: "This task was already sent to Apple Reminders",
     appleCalendarCreateDisabled: "Turn on Local Apple, Apple Calendar, and task sending in Task Hub settings first.",
     appleCalendarEventCreated: "Apple Calendar event created.",
+    appleCalendarReminderConversionDisabled: "Turn on Local Apple, Apple Calendar, Apple Reminders, and conversion in Task Hub settings first.",
+    appleCalendarReminderConversionPartial: "The target item was created, but Task Hub could not delete the source item.",
+    appleCalendarReminderConverted: "Converted Apple Calendar and Reminders item.",
+    appleCalendarReminderConversionRiskConfirm:
+      "This feature moves items between Apple Calendar and Apple Reminders. Task Hub creates the target item first, then deletes the source Apple item. If the delete step fails, you may need to remove a duplicate manually.",
+    appleCalendarReminderConversionRiskTitle: "Confirm Apple item conversion",
     appleReminderCreateDisabled: "Turn on Local Apple, Apple Reminders, and reminder creation in Task Hub settings first.",
     appleReminderCreateVaultOnly: "Only vault Markdown tasks can be sent to Apple Reminders.",
     appleReminderCreated: "Apple Reminder created.",
@@ -297,6 +311,9 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     localAppleCalendarColorsDesc: "Override the display color for each local Apple calendar. Leave the system color in place when it looks right.",
     localAppleCalendarSystemColor: "System color",
     localAppleCalendarDesc: "Read local Apple Calendar events into the Task Hub calendar. macOS may ask for permission.",
+    localAppleCalendarReminderConversion: "Convert Apple Calendar and Reminders",
+    localAppleCalendarReminderConversionDesc:
+      "Add right-click actions to move Apple Calendar events to Apple Reminders and Apple Reminders to Apple Calendar. Task Hub creates the target item first, then deletes the source item.",
     localAppleCalendarTaskSend: "Send tasks to Apple Calendar",
     localAppleCalendarTaskSendDesc:
       "Allow right-clicking dated vault tasks in the calendar to create all-day Apple Calendar events, then remove the source Markdown task after creation succeeds.",
@@ -378,6 +395,7 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     settingsTitle: "Task Hub Settings",
     friday: "Friday",
     sendCurrentTaskToAppleReminders: "Send current task to Apple Reminders",
+    sendToAppleCalendar: "Convert to Apple Calendar",
     sendToAppleReminders: "Send to Apple Reminders",
     sendToAppleRemindersDisabled: "Enable Apple Reminders creation in settings first",
     showCompletedByDefault: "Show completed tasks by default",
@@ -441,6 +459,12 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     appleReminderAlreadySent: "这条任务已经发送到 Apple 提醒事项",
     appleCalendarCreateDisabled: "请先在 Task Hub 设置中开启本地 Apple、Apple 日历和发送任务到 Apple 日历。",
     appleCalendarEventCreated: "已创建 Apple 日历事件。",
+    appleCalendarReminderConversionDisabled: "请先在 Task Hub 设置中开启本地 Apple、Apple 日历、Apple 提醒事项和互相转换。",
+    appleCalendarReminderConversionPartial: "目标项目已经创建，但 Task Hub 未能删除源项目。",
+    appleCalendarReminderConverted: "已转换 Apple 日历和提醒事项项目。",
+    appleCalendarReminderConversionRiskConfirm:
+      "此功能会在 Apple 日历和 Apple 提醒事项之间移动项目。Task Hub 会先创建目标项目，再删除源 Apple 项目。如果删除步骤失败，可能需要你手动清理重复项目。",
+    appleCalendarReminderConversionRiskTitle: "确认 Apple 项目转换",
     appleReminderCreateDisabled: "请先在 Task Hub 设置中开启本地 Apple、Apple 提醒事项和创建提醒事项。",
     appleReminderCreateVaultOnly: "只有 vault 中的 Markdown 任务可以发送到 Apple 提醒事项。",
     appleReminderCreated: "已创建 Apple 提醒事项。",
@@ -515,6 +539,9 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     localAppleCalendarColorsDesc: "按本机 Apple 日历分别覆盖渲染颜色；系统颜色合适时可以保持默认。",
     localAppleCalendarSystemColor: "系统颜色",
     localAppleCalendarDesc: "读取本机 Apple 日历事件到 Task Hub 日历中。macOS 可能会请求权限。",
+    localAppleCalendarReminderConversion: "Apple 日历和提醒事项互相转换",
+    localAppleCalendarReminderConversionDesc:
+      "在右键菜单中加入 Apple 日历事件与 Apple 提醒事项的移动式转换。Task Hub 会先创建目标项目，再删除源项目。",
     localAppleCalendarTaskSend: "发送任务到 Apple 日历",
     localAppleCalendarTaskSendDesc:
       "允许在日历中右键带日期的 vault 任务，创建全天 Apple 日历事件；创建成功后再删除源 Markdown 任务。",
@@ -590,6 +617,7 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     settingsTitle: "Task Hub 设置",
     friday: "周五",
     sendCurrentTaskToAppleReminders: "将当前任务发送到 Apple 提醒事项",
+    sendToAppleCalendar: "转换为 Apple 日历",
     sendToAppleReminders: "发送到 Apple 提醒事项",
     sendToAppleRemindersDisabled: "请先在设置中开启创建 Apple 提醒事项",
     showCompletedByDefault: "默认显示已完成任务",
