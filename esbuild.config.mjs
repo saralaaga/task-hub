@@ -1,8 +1,8 @@
 import esbuild from "esbuild";
 import process from "process";
-import builtins from "builtin-modules";
 import { createHash } from "crypto";
 import { existsSync, readFileSync } from "fs";
+import { builtinModules } from "module";
 
 const prod = process.argv[2] === "production";
 const appleHelperPath = "taskhub-apple-helper";
@@ -28,7 +28,8 @@ const context = await esbuild.context({
     "@lezer/common",
     "@lezer/highlight",
     "@lezer/lr",
-    ...builtins
+    ...builtinModules,
+    ...builtinModules.map((name) => `node:${name}`)
   ],
   format: "cjs",
   target: "es2020",

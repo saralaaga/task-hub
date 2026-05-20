@@ -4,6 +4,8 @@
 
 Task Hub 是一个仅支持 Obsidian 桌面端的任务聚合插件。它会把散落在 vault 各个 Markdown 笔记里的任务集中到任务、日历和标签视图里，让你既保留纯文本笔记的自由，又能有一个统一的任务工作台。
 
+![Task Hub 日历总览](assets/task-hub-calendar-overview.png)
+
 ## 功能
 
 - 扫描 vault 中的 Markdown 任务：`- [ ]` 和 `- [x]`。
@@ -57,6 +59,16 @@ Task Hub 会在本地扫描当前 vault 的 Markdown 文件，并把插件设置
 
 Task Hub 不会把 vault 任务发送到远程服务。
 
+## 为什么需要这些权限？
+
+Obsidian 插件审核页可能会显示一些能力警告。Task Hub 使用这些能力的范围如下：
+
+- **枚举 vault 文件：** Task Hub 需要扫描 vault 中的 Markdown 文件，查找任务行和日期标记。
+- **读取/写入 vault：** Task Hub 读取单个笔记用于索引；只有在你完成、删除、编辑或拖动改期支持的任务时才写回。Markdown 任务写回前会确认原始任务行仍匹配，避免改错行。
+- **文件系统访问：** 插件会在 macOS 桌面端检查并安装位于插件目录内的可选 Local Apple helper。
+- **执行 shell 命令：** 插件只会启动随插件打包的 `taskhub-apple-helper`，用于可选的 Apple Reminders 和 Apple Calendar 集成。helper 通过 macOS 本地权限读取提醒事项/日历，不会索要 Apple ID。
+- **网络请求：** Task Hub 只会请求你手动配置的公共 ICS 日历 URL。
+
 ## 安装
 
 当 Task Hub 上架 Obsidian 社区插件市场后，可从 **设置 -> 第三方插件 -> 浏览** 中安装。
@@ -68,7 +80,7 @@ Task Hub 不会把 vault 任务发送到远程服务。
 3. 把下载的文件复制到该目录。
 4. 重启 Obsidian 或重新加载第三方插件，然后启用 **Task Hub**。
 
-本地 Apple Reminders 和 Apple Calendar 支持依赖 `taskhub-apple-helper` 二进制文件。Obsidian 社区插件安装器只会下载标准插件附件，因此 helper 目前作为可选的本地/开发能力处理，除非后续提供单独的分发路径。
+本地 Apple Reminders 和 Apple Calendar 支持依赖插件包内的 `taskhub-apple-helper` 二进制文件。GitHub release 附件会保持为 Obsidian 支持的标准文件（`main.js`、`manifest.json` 和 `styles.css`）；helper 通过插件包/源码构建路径分发，不作为额外 release 附件上传。
 
 ## 开发
 
@@ -109,3 +121,5 @@ Obsidian 社区插件 release 的 GitHub tag 必须和 `manifest.json` 中的 `v
 - `LICENSE`
 - `manifest.json`
 - `versions.json`
+
+不要在社区插件 GitHub release 中额外上传 `taskhub-apple-helper` 等文件。Obsidian 只会从 release 附件下载 `main.js`、`manifest.json` 和 `styles.css`。

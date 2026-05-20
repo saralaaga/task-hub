@@ -3,10 +3,12 @@ name: Release
 on:
   push:
     tags:
-      - "v*.*.*"
+      - "*.*.*"
 
 permissions:
   contents: write
+  id-token: write
+  attestations: write
 
 jobs:
   build-release:
@@ -65,6 +67,14 @@ jobs:
           test -s dist/main.js
           test -s dist/manifest.json
           test -s dist/styles.css
+
+      - name: Generate artifact attestations
+        uses: actions/attest@v4
+        with:
+          subject-path: |
+            dist/main.js
+            dist/manifest.json
+            dist/styles.css
 
       - name: Create GitHub release
         env:
