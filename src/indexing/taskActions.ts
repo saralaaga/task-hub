@@ -13,6 +13,13 @@ export type RescheduleMessages = CompletionMessages & {
 
 export type CompletionAction = "complete" | "reopen";
 
+export type TaskLineUpdate = {
+  title: string;
+  date?: string;
+  startTime?: string;
+  tags: string[];
+};
+
 export type CompletionResult =
   | { status: "updated"; content: string; line: number }
   | { status: "already_in_state" }
@@ -20,9 +27,11 @@ export type CompletionResult =
 
 const OPEN_TASK_MARKER = /^(\s*)- \[ \]/;
 const COMPLETED_TASK_MARKER = /^(\s*)- \[[xX]\]/;
+const TASK_PREFIX = /^(\s*- \[[ xX]\]\s+)(.*)$/;
 const EMOJI_DUE = /(?:^|\s)📅\s*\d{4}-\d{2}-\d{2}(?=\s|$)/u;
 const INLINE_DUE = /(?:^|\s)due::\s*\d{4}-\d{2}-\d{2}(?=\s|$)/u;
 const SCHEDULED_TIME = /(?:^|\s)⏰\s*\d{1,2}:\d{2}(?=\s|$)/u;
+const TAG = /(^|\s)(#[\p{L}\p{N}_/-]+)/gu;
 const SEARCH_WINDOW = 5;
 const DEFAULT_COMPLETION_MESSAGES: CompletionMessages = {
   lineChangedConflict: "The task line changed and Task Hub could not safely identify the original task.",
@@ -112,6 +121,29 @@ export function deleteTaskInContent(
   return withContent(tryDeleteAtLine(lines, nearby, task.rawLine, messages), lines);
 }
 
+export function updateTaskLineInContent(
+  content: string,
+  task: TaskItem,
+  update: TaskLineUpdate,
+  messages: CompletionMessages = DEFAULT_COMPLETION_MESSAGES
+): CompletionResult {
+  const lines = content.split(/\r?\n/);
+  const direct = tryUpdateTaskLineAtLine(lines, task.line, task.rawLine, update, messages);
+  if (direct.status !== "conflict") {
+    return withContent(direct, lines);
+  }
+
+  const nearby = findNearbyLine(lines, task);
+  if (nearby === undefined) {
+    return {
+      status: "conflict",
+      message: messages.lineChangedConflict
+    };
+  }
+
+  return withContent(tryUpdateTaskLineAtLine(lines, nearby, task.rawLine, update, messages), lines);
+}
+
 function tryToggleAtLine(
   lines: string[],
   line: number,
@@ -186,6 +218,36 @@ function tryDeleteAtLine(
   return { status: "updated", content: "", line };
 }
 
+function tryUpdateTaskLineAtLine(
+  lines: string[],
+  line: number,
+  rawLine: string,
+  update: TaskLineUpdate,
+  messages: CompletionMessages
+): CompletionResult {
+  const currentLine = lines[line];
+  if (currentLine === undefined) {
+    return { status: "conflict", message: messages.lineOutsideFile };
+  }
+
+  if (currentLine !== rawLine) {
+    return { status: "conflict", message: messages.lineMismatchConflict };
+  }
+
+  const match = currentLine.match(TASK_PREFIX);
+  if (!match) {
+    return { status: "conflict", message: messages.lineNoLongerOpen };
+  }
+
+  const nextLine = `${match[1]}${buildUpdatedTaskBody(match[2], update)}`;
+  if (nextLine === currentLine) {
+    return { status: "already_in_state" };
+  }
+
+  lines[line] = nextLine;
+  return { status: "updated", content: "", line };
+}
+
 function findNearbyLine(lines: string[], task: TaskItem): number | undefined {
   const start = Math.max(0, task.line - SEARCH_WINDOW);
   const end = Math.min(lines.length - 1, task.line + SEARCH_WINDOW);
@@ -230,6 +292,37 @@ function updateScheduledTime(line: string | undefined, startMinutes: number | un
     return line.replace(INLINE_DUE, (match) => `${match}${timeToken}`);
   }
   return line;
+}
+
+function buildUpdatedTaskBody(currentBody: string, update: TaskLineUpdate): string {
+  const title = update.title.replace(/\s+/g, " ").trim();
+  const parts = [title || cleanTaskBody(currentBody)];
+  if (update.date) {
+    parts.push(INLINE_DUE.test(currentBody) ? `due:: ${update.date}` : `📅 ${update.date}`);
+  }
+  if (update.startTime) {
+    parts.push(`⏰ ${update.startTime}`);
+  }
+  parts.push(...normalizeTags(update.tags));
+  return parts.filter(Boolean).join(" ");
+}
+
+function cleanTaskBody(body: string): string {
+  return body
+    .replace(EMOJI_DUE, " ")
+    .replace(INLINE_DUE, " ")
+    .replace(SCHEDULED_TIME, " ")
+    .replace(TAG, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function normalizeTags(tags: string[]): string[] {
+  const normalized = tags
+    .map((tag) => tag.trim())
+    .filter(Boolean)
+    .map((tag) => (tag.startsWith("#") ? tag : `#${tag}`));
+  return Array.from(new Set(normalized));
 }
 
 function formatTime(minutes: number): string {

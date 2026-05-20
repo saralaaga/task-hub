@@ -27,6 +27,7 @@ export type TranslationKey =
   | "calendarCreationKind"
   | "calendarTaskCreation"
   | "calendarTaskCreationDesc"
+  | "calendarDetails"
   | "changed"
   | "clearFilters"
   | "cancel"
@@ -50,6 +51,7 @@ export type TranslationKey =
   | "eventCreationDurationMinutes"
   | "eventCreationPlaceholder"
   | "eventCreationTitle"
+  | "eventUpdated"
   | "events"
   | "externalTaskReadOnly"
   | "externalSourceOpenUnavailable"
@@ -163,6 +165,11 @@ export type TranslationKey =
   | "skipped"
   | "sourceSearch"
   | "source"
+  | "save"
+  | "startTime"
+  | "endTime"
+  | "date"
+  | "readOnly"
   | "supportedTaskSyntax"
   | "supportedTaskSyntaxDesc"
   | "sync"
@@ -175,6 +182,7 @@ export type TranslationKey =
   | "taskDateAlreadySet"
   | "taskDateTokenMissing"
   | "taskDateUpdated"
+  | "taskUpdated"
   | "taskCreationFile"
   | "taskCreationFileDesc"
   | "taskCreationDefaultTarget"
@@ -230,6 +238,7 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     calendarCreationKind: "Create",
     calendarTaskCreation: "Create from calendar",
     calendarTaskCreationDesc: "Click empty calendar space to create a task or an Apple Calendar event.",
+    calendarDetails: "Calendar details",
     changed: "changed",
     clearFilters: "Clear",
     cancel: "Cancel",
@@ -253,6 +262,7 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     eventCreationDurationMinutes: "Minutes",
     eventCreationPlaceholder: "Event title",
     eventCreationTitle: "Create event",
+    eventUpdated: "Event updated.",
     events: "events",
     externalTaskReadOnly: "External items are read-only unless the matching Apple writeback option is enabled.",
     externalSourceOpenUnavailable: "Task Hub could not open this external source.",
@@ -325,7 +335,7 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     localAppleRemindersDefaultListInbox: "Default Reminders list",
     localAppleRemindersWriteback: "Write completion status to Apple Reminders",
     localAppleRemindersWritebackDesc:
-      "Allow Task Hub checkboxes to complete or reopen local Apple Reminders. Task Hub does not delete or edit reminder titles, dates, notes, or tags.",
+      "Allow Task Hub to complete, reopen, reschedule, and edit local Apple Reminders from supported Task Hub controls.",
     localAppleRequestAccess: "Request access",
     localAppleNoEnabledTabs: "Turn on Apple Calendar or Apple Reminders to configure that integration.",
     localAppleUnsupportedPlatform:
@@ -358,6 +368,10 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     rescanning: "Rescanning...",
     rescanTaskHub: "Rescan Task Hub",
     remove: "Remove",
+    readOnly: "Read-only",
+    date: "Date",
+    endTime: "End time",
+    save: "Save",
     search: "Search",
     searchTags: "Search tags",
     searchTasks: "Search tasks",
@@ -374,6 +388,7 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     skipped: "skipped",
     sourceSearch: "Folder or file",
     source: "Source",
+    startTime: "Start time",
     supportedTaskSyntax: "Supported task syntax",
     supportedTaskSyntaxDesc: "Version 1 supports - [ ], - [x], Obsidian tags, 📅 YYYY-MM-DD, and due:: YYYY-MM-DD.",
     sync: "Sync",
@@ -386,6 +401,7 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     taskDateAlreadySet: "Task is already on that date.",
     taskDateTokenMissing: "The task line does not contain a supported due date.",
     taskDateUpdated: "Task date updated.",
+    taskUpdated: "Task updated.",
     taskCreationDefaultTarget: "Default task destination",
     taskCreationDefaultTargetDesc: "Default task destination selected when you create a task from the calendar.",
     taskCreationBody: "Body",
@@ -440,6 +456,7 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     calendarCreationKind: "创建",
     calendarTaskCreation: "允许从日历创建",
     calendarTaskCreationDesc: "点击日历空白区域创建任务或 Apple 日历事件。",
+    calendarDetails: "日历详情",
     changed: "已变化",
     clearFilters: "清空",
     cancel: "取消",
@@ -463,6 +480,7 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     eventCreationDurationMinutes: "分钟",
     eventCreationPlaceholder: "事件标题",
     eventCreationTitle: "创建事件",
+    eventUpdated: "事件已更新。",
     events: "个事件",
     externalTaskReadOnly: "外部项目默认只读；Apple 提醒事项和 Apple 日历的部分写入能力需要在设置中显式开启。",
     externalSourceOpenUnavailable: "Task Hub 无法打开这个外部来源。",
@@ -530,7 +548,7 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     localAppleRemindersDefaultListDesc: "Task Hub 新建 Apple 提醒事项时默认使用的列表。",
     localAppleRemindersDefaultListInbox: "默认提醒事项列表",
     localAppleRemindersWriteback: "写入 Apple 提醒事项完成状态",
-    localAppleRemindersWritebackDesc: "允许通过 Task Hub 的选择框完成或重新打开本机 Apple 提醒事项；Task Hub 不会删除或编辑提醒事项标题、日期、备注、标签。",
+    localAppleRemindersWritebackDesc: "允许通过 Task Hub 支持的控件完成、重新打开、改期和编辑本机 Apple 提醒事项。",
     localAppleRequestAccess: "请求权限",
     localAppleNoEnabledTabs: "开启 Apple 日历或 Apple 提醒事项后，再配置对应集成。",
     localAppleUnsupportedPlatform: "此功能仅支持 macOS。Apple 日历和提醒事项依赖本机 macOS 系统权限，当前系统无法启用。",
@@ -556,12 +574,16 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     overdue: "已逾期",
     parseError: "解析错误",
     previous: "上一页",
+    readOnly: "只读",
     rescan: "重新扫描",
     rescanComplete: "Task Hub 已刷新。",
     rescanFailed: "Task Hub 刷新失败",
     rescanning: "刷新中...",
     rescanTaskHub: "重新扫描 Task Hub",
     remove: "删除",
+    date: "日期",
+    endTime: "结束时间",
+    save: "保存",
     search: "搜索",
     searchTags: "搜索标签",
     searchTasks: "搜索任务",
@@ -578,6 +600,7 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     skipped: "已跳过",
     sourceSearch: "文件夹或文件",
     source: "来源",
+    startTime: "开始时间",
     supportedTaskSyntax: "支持的任务语法",
     supportedTaskSyntaxDesc: "版本 1 支持 - [ ]、- [x]、Obsidian 标签、📅 YYYY-MM-DD 和 due:: YYYY-MM-DD。",
     sync: "同步",
@@ -590,6 +613,7 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     taskDateAlreadySet: "任务已经在这个日期。",
     taskDateTokenMissing: "任务行中没有可支持的日期标记。",
     taskDateUpdated: "任务日期已更新。",
+    taskUpdated: "任务已更新。",
     taskCreationDefaultTarget: "默认任务创建位置",
     taskCreationDefaultTargetDesc: "从日历新建任务时默认选中的任务创建位置。",
     taskCreationBody: "正文",

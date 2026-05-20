@@ -12,7 +12,9 @@ import {
   readAppleReminderLists,
   reminderToTask,
   setAppleCalendarEventDate,
+  setAppleCalendarEventDetails,
   setAppleReminderCompleted,
+  setAppleReminderDetails,
   setAppleReminderDueDate,
   setAppleReminderList
 } from "./localApple";
@@ -246,6 +248,51 @@ describe("local Apple mapping", () => {
     ]);
   });
 
+  it("writes Apple Reminder detail fields through the helper", async () => {
+    await withPlatform("darwin", () =>
+      setAppleReminderDetails({
+        id: "reminder-1",
+        title: "Send invoice",
+        dueDate: "2026-05-20",
+        startMinutes: 570,
+        listId: "list-1"
+      })
+    );
+
+    expect(execFile.mock.calls.at(-1)?.[1]).toEqual([
+      "set-reminder-details",
+      "--id",
+      "reminder-1",
+      "--title",
+      "Send invoice",
+      "--due",
+      "2026-05-20",
+      "--start-minutes",
+      "570",
+      "--list-id",
+      "list-1"
+    ]);
+  });
+
+  it("can clear Apple Reminder due fields through the detail helper", async () => {
+    await withPlatform("darwin", () =>
+      setAppleReminderDetails({
+        id: "reminder-1",
+        title: "Send invoice",
+        dueDate: null
+      })
+    );
+
+    expect(execFile.mock.calls.at(-1)?.[1]).toEqual([
+      "set-reminder-details",
+      "--id",
+      "reminder-1",
+      "--title",
+      "Send invoice",
+      "--clear-due"
+    ]);
+  });
+
   it("writes Apple Calendar event dates through the helper", async () => {
     await withPlatform("darwin", () =>
       setAppleCalendarEventDate({
@@ -299,6 +346,44 @@ describe("local Apple mapping", () => {
       "570",
       "--duration-minutes",
       "90",
+      "--all-day",
+      "false"
+    ]);
+  });
+
+  it("writes Apple Calendar event detail fields through the helper", async () => {
+    await withPlatform("darwin", () =>
+      setAppleCalendarEventDetails({
+        id: "event-1",
+        title: "Design review",
+        targetDate: "2026-05-20",
+        startMinutes: 570,
+        durationMinutes: 45,
+        start: "2026-05-06T09:30:00.000Z",
+        end: "2026-05-06T10:30:00.000Z",
+        allDay: false,
+        calendarId: "calendar-1"
+      })
+    );
+
+    expect(execFile.mock.calls.at(-1)?.[1]).toEqual([
+      "set-calendar-event-details",
+      "--id",
+      "event-1",
+      "--title",
+      "Design review",
+      "--date",
+      "2026-05-20",
+      "--start",
+      "2026-05-06T09:30:00.000Z",
+      "--end",
+      "2026-05-06T10:30:00.000Z",
+      "--start-minutes",
+      "570",
+      "--duration-minutes",
+      "45",
+      "--calendar-id",
+      "calendar-1",
       "--all-day",
       "false"
     ]);

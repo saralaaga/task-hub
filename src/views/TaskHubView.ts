@@ -191,6 +191,8 @@ export class TaskHubView extends ItemView {
           showLunarCalendar: this.plugin.settings.language === "zh" && this.plugin.settings.showLunarCalendar,
           defaultTimedTaskDurationMinutes: this.plugin.settings.localApple.calendarDefaultTimedTaskDurationMinutes,
           taskDurationOverrides: this.plugin.settings.localApple.reminderDurationOverrides,
+          appleReminderLists: this.plugin.getAppleReminderLists(),
+          appleCalendars: this.plugin.getAppleCalendars(),
           sources: calendarSources,
           t
         },
@@ -217,15 +219,15 @@ export class TaskHubView extends ItemView {
           onTaskComplete: (task) => void this.plugin.completeTask(task),
           onTaskJump: (task) => void this.plugin.jumpToTask(task),
           onTaskSelect: (task) => {
-            this.view = "tasks";
-            this.filters = { ...this.filters, sourceQuery: task.source === "apple-reminders" ? "apple-reminders" : this.filters.sourceQuery };
             this.selectedTaskId = task.id;
             this.render();
           },
+          onTaskUpdate: (task, draft) => void this.plugin.updateCalendarTask(task, draft),
           onTaskReschedule: (task, dateKey) => void this.plugin.rescheduleTask(task, dateKey),
           onTaskDelete: (task) => void this.plugin.deleteCalendarTask(task),
           onTaskSendToAppleReminders: (task) => void this.plugin.sendTaskToAppleReminders(task),
           onEventReschedule: (event, dateKey) => void this.plugin.rescheduleCalendarEvent(event, dateKey),
+          onEventUpdate: (event, draft) => void this.plugin.updateCalendarEvent(event, draft),
           onEventDelete: (event) => void this.plugin.deleteCalendarEvent(event)
         }
       );

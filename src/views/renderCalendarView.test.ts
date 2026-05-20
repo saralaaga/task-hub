@@ -57,6 +57,7 @@ class FakeDocument {
       dataTransfer: event.dataTransfer ?? new FakeDataTransfer(),
       clientX: event.clientX ?? 0,
       clientY: event.clientY ?? 0,
+      key: event.key,
       preventDefault: event.preventDefault ?? jest.fn(),
       stopPropagation: event.stopPropagation ?? jest.fn()
     };
@@ -88,6 +89,7 @@ class FakeElement {
   draggable = false;
   text = "";
   type = "";
+  value = "";
   attributes = new Map<string, string>();
   classes = new Set<string>();
   style = new Proxy({ setProperty: jest.fn() }, {
@@ -124,6 +126,15 @@ class FakeElement {
     return this.append(options);
   }
 
+  createSvg(tag: string, options: { attr?: Record<string, string> } = {}): FakeElement {
+    const child = this.append();
+    child.type = tag;
+    for (const [name, value] of Object.entries(options.attr ?? {})) {
+      child.attributes.set(name, value);
+    }
+    return child;
+  }
+
   querySelector(selector: string): FakeElement | null {
     if (!selector.startsWith(".")) return null;
     const classes = selector.split(".").filter(Boolean);
@@ -136,6 +147,14 @@ class FakeElement {
 
   removeClass(cls: string): void {
     this.classes.delete(cls);
+  }
+
+  toggleClass(cls: string, enabled: boolean): void {
+    if (enabled) {
+      this.classes.add(cls);
+    } else {
+      this.classes.delete(cls);
+    }
   }
 
   setAttr(name: string, value: string): void {
@@ -194,6 +213,7 @@ class FakeElement {
       dataTransfer: event.dataTransfer ?? new FakeDataTransfer(),
       clientX: event.clientX ?? 0,
       clientY: event.clientY ?? 0,
+      key: event.key,
       preventDefault: event.preventDefault ?? jest.fn(),
       stopPropagation: event.stopPropagation ?? jest.fn()
     };
@@ -201,6 +221,10 @@ class FakeElement {
       listener(fakeEvent);
     }
     return fakeEvent;
+  }
+
+  add(option: FakeElement): void {
+    this.appendChild(option);
   }
 
   private append(options: { cls?: string; text?: string } = {}): FakeElement {
@@ -221,6 +245,7 @@ type FakeEvent = {
   dataTransfer: FakeDataTransfer;
   clientX: number;
   clientY: number;
+  key?: string;
   preventDefault(): void;
   stopPropagation(): void;
 };
@@ -322,6 +347,11 @@ describe("renderCalendarView", () => {
       querySelector(selector: string): FakeElement | null {
         return currentTestRoot?.querySelector(selector) ?? null;
       }
+    };
+    (globalThis as unknown as { window: { innerWidth: number; innerHeight: number; open: jest.Mock } }).window = {
+      innerWidth: 1200,
+      innerHeight: 800,
+      open: jest.fn()
     };
   });
 
@@ -817,10 +847,11 @@ describe("renderCalendarView", () => {
     expect(onDateCreateTask).not.toHaveBeenCalled();
   });
 
-  it("opens existing calendar tasks instead of creating a new task", () => {
+  it("opens an editable popover for existing calendar tasks instead of creating a new task", () => {
     const container = new FakeElement();
     const onDateCreateTask = jest.fn();
     const onTaskSelect = jest.fn();
+    const onTaskUpdate = jest.fn();
 
     renderCalendarView(
       container as unknown as HTMLElement,
@@ -845,6 +876,7 @@ describe("renderCalendarView", () => {
         onTaskComplete: jest.fn(),
         onTaskJump: jest.fn(),
         onTaskSelect,
+        onTaskUpdate,
         onTaskReschedule: jest.fn(),
         onToday: jest.fn()
       }
@@ -853,11 +885,25 @@ describe("renderCalendarView", () => {
     const item = collect(container).find((element) => element.classes.has("task-hub-calendar-item"));
     item?.click();
 
-    expect(onTaskSelect).toHaveBeenCalledWith(task);
+    const popover = collect(fakeDocument.body).find((element) => element.classes.has("task-hub-calendar-detail-popover"));
+    expect(popover).toBeDefined();
+    expect(onTaskSelect).not.toHaveBeenCalled();
     expect(onDateCreateTask).not.toHaveBeenCalled();
+    const titleInput = collect(popover as FakeElement).find((element) => element.type === "text");
+    const save = collect(popover as FakeElement).find((element) => element.text === "save");
+    const logo = collect(popover as FakeElement).find((element) => element.classes.has("task-hub-calendar-detail-logo"));
+    expect(save?.disabled).toBe(true);
+    expect(logo?.classes.has("is-obsidian")).toBe(true);
+    if (titleInput) {
+      titleInput.value = "Updated task";
+      titleInput.dispatch("input");
+    }
+    expect(save?.disabled).toBe(false);
+    save?.click();
+    expect(onTaskUpdate).toHaveBeenCalledWith(task, expect.objectContaining({ title: "Updated task" }));
   });
 
-  it("does not create a task when clicking an existing calendar event", () => {
+  it("opens a read-only popover for ICS events", () => {
     const container = new FakeElement();
     const onDateCreateTask = jest.fn();
 
@@ -867,15 +913,15 @@ describe("renderCalendarView", () => {
         mode: "month",
         focusDate: new Date("2026-05-08T12:00:00Z"),
         weekStart: "monday",
-        visibleSourceIds: new Set(["apple-calendar"]),
+        visibleSourceIds: new Set(["ics-source"]),
         includeCompletedTasks: false,
         allowAppleReminderWriteback: false,
         allowTaskCreation: true,
-        sources: [source],
+        sources: [{ ...source, id: "ics-source", type: "ics" }],
         t: (key) => key
       },
       [],
-      [event],
+      [{ ...event, id: "ics-event", sourceId: "ics-source", url: "https://example.com/event" }],
       {
         onLayerToggle: jest.fn(),
         onModeChange: jest.fn(),
@@ -884,6 +930,7 @@ describe("renderCalendarView", () => {
         onTaskComplete: jest.fn(),
         onTaskJump: jest.fn(),
         onTaskSelect: jest.fn(),
+        onEventUpdate: jest.fn(),
         onTaskReschedule: jest.fn(),
         onToday: jest.fn()
       }
@@ -892,7 +939,59 @@ describe("renderCalendarView", () => {
     const item = collect(container).find((element) => element.classes.has("task-hub-calendar-item"));
     item?.click();
 
+    const popover = collect(fakeDocument.body).find((element) => element.classes.has("task-hub-calendar-detail-popover"));
+    const save = collect(popover as FakeElement).find((element) => element.text === "save");
+    const titleInput = collect(popover as FakeElement).find((element) => element.type === "text");
+    const open = collect(popover as FakeElement).find((element) => element.text === "openSource");
+    const allDayRow = collect(popover as FakeElement).find((element) => element.classes.has("task-hub-calendar-detail-check"));
+    const hiddenTimeFields = collect(popover as FakeElement).filter((element) => element.classes.has("task-hub-calendar-detail-field") && element.classes.has("is-hidden"));
+    expect(popover).toBeDefined();
+    expect(allDayRow).toBeDefined();
+    expect(hiddenTimeFields).toHaveLength(2);
+    expect(save?.disabled).toBe(true);
+    expect(titleInput?.disabled).toBe(true);
+    open?.click();
+    expect(window.open).toHaveBeenCalledWith("https://example.com/event");
     expect(onDateCreateTask).not.toHaveBeenCalled();
+  });
+
+  it("closes the detail popover when clicking outside it", () => {
+    const container = new FakeElement();
+
+    renderCalendarView(
+      container as unknown as HTMLElement,
+      {
+        mode: "month",
+        focusDate: new Date("2026-05-08T12:00:00Z"),
+        weekStart: "monday",
+        visibleSourceIds: new Set(["vault"]),
+        includeCompletedTasks: false,
+        allowAppleReminderWriteback: false,
+        allowTaskCreation: false,
+        sources: [],
+        t: (key) => key
+      },
+      [task],
+      [],
+      {
+        onLayerToggle: jest.fn(),
+        onModeChange: jest.fn(),
+        onMove: jest.fn(),
+        onDateCreateTask: jest.fn(),
+        onTaskComplete: jest.fn(),
+        onTaskJump: jest.fn(),
+        onTaskSelect: jest.fn(),
+        onTaskReschedule: jest.fn(),
+        onToday: jest.fn()
+      }
+    );
+
+    collect(container).find((element) => element.classes.has("task-hub-calendar-item"))?.click();
+    expect(collect(fakeDocument.body).some((element) => element.classes.has("task-hub-calendar-detail-popover"))).toBe(true);
+
+    fakeDocument.dispatch("click");
+
+    expect(collect(fakeDocument.body).some((element) => element.classes.has("task-hub-calendar-detail-popover"))).toBe(false);
   });
 
   it("creates a task from a week all-day slot when calendar task creation is enabled", () => {
@@ -1095,6 +1194,9 @@ describe("renderCalendarView", () => {
     item?.click();
 
     expect(onDateCreateTask).not.toHaveBeenCalled();
+    const popover = collect(fakeDocument.body).find((element) => element.classes.has("task-hub-calendar-detail-popover"));
+    const logo = collect(popover as FakeElement).find((element) => element.classes.has("task-hub-calendar-detail-logo"));
+    expect(logo?.classes.has("is-apple")).toBe(true);
   });
 
   it("makes vault calendar tasks draggable", () => {
@@ -1759,7 +1861,7 @@ describe("renderCalendarView", () => {
     expect(rowStyles.map((style) => style.right)).toEqual([undefined, undefined]);
   });
 
-  it("renders timed Apple Reminders as point rows without a duration range", () => {
+  it("renders timed Apple Reminders as point rows without a visible time label", () => {
     const container = new FakeElement();
     const reminderTask = {
       ...task,
@@ -1801,7 +1903,50 @@ describe("renderCalendarView", () => {
 
     expect(row?.classes.has("is-time-point")).toBe(true);
     expect((row?.style as unknown as { height: string }).height).toBe("28px");
-    expect(timeLabel?.text).toBe("15:00");
+    expect(timeLabel).toBeUndefined();
+  });
+
+  it("keeps visible time ranges for timed Apple Calendar events", () => {
+    const container = new FakeElement();
+    const timedEvent = {
+      ...event,
+      id: "event-timed",
+      start: "2026-05-08T08:10:00",
+      end: "2026-05-08T08:55:00",
+      allDay: false
+    };
+
+    renderCalendarView(
+      container as unknown as HTMLElement,
+      {
+        mode: "day",
+        focusDate: new Date("2026-05-08T12:00:00Z"),
+        weekStart: "monday",
+        visibleSourceIds: new Set(["apple-calendar"]),
+        includeCompletedTasks: false,
+        allowAppleReminderWriteback: false,
+        allowTaskCreation: false,
+        sources: [source],
+        t: (key) => key
+      },
+      [],
+      [timedEvent],
+      {
+        onLayerToggle: jest.fn(),
+        onModeChange: jest.fn(),
+        onMove: jest.fn(),
+        onDateCreateTask: jest.fn(),
+        onTaskComplete: jest.fn(),
+        onTaskJump: jest.fn(),
+        onTaskSelect: jest.fn(),
+        onTaskReschedule: jest.fn(),
+        onToday: jest.fn()
+      }
+    );
+
+    const timeLabel = collect(container).find((element) => element.classes.has("task-hub-calendar-item-time"));
+
+    expect(timeLabel?.text).toBe("08:10-08:55");
   });
 
   it("stacks nearby timed task points so they do not cover each other", () => {

@@ -51,6 +51,25 @@ describe("Apple helper source", () => {
     );
   });
 
+  it("can update Apple Reminder detail fields", () => {
+    const source = readFileSync(path.join(__dirname, "..", "apple-helper", "TaskHubAppleHelper.swift"), "utf8");
+
+    expect(source).toContain("case \"set-reminder-details\"");
+    expect(source).toContain("func setReminderDetails(store: EKEventStore)");
+    expect(source).toContain("reminder.title = title");
+    expect(source).toContain("hasArgument(\"--clear-due\")");
+    expect(source).toContain("reminder.calendar = calendar");
+  });
+
+  it("can update Apple Calendar event detail fields", () => {
+    const source = readFileSync(path.join(__dirname, "..", "apple-helper", "TaskHubAppleHelper.swift"), "utf8");
+
+    expect(source).toContain("case \"set-calendar-event-details\"");
+    expect(source).toContain("func setCalendarEventDetails(store: EKEventStore)");
+    expect(source).toContain("event.title = title");
+    expect(source).toContain("event.calendar = calendar");
+  });
+
   it("can list Apple calendars with identifiers, colors, and writability", () => {
     const source = readFileSync(path.join(__dirname, "..", "apple-helper", "TaskHubAppleHelper.swift"), "utf8");
 

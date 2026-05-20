@@ -226,7 +226,7 @@ export async function setAppleReminderDueDate(id: string, dueDate: string, start
   );
 }
 
-export async function setAppleCalendarEventDate(input: {
+export type AppleCalendarEventDateUpdate = {
   id: string;
   targetDate: string;
   startMinutes?: number;
@@ -234,9 +234,44 @@ export async function setAppleCalendarEventDate(input: {
   end?: string;
   allDay: boolean;
   durationMinutes?: number;
-}): Promise<void> {
+};
+
+export type AppleReminderDetailsUpdate = {
+  id: string;
+  title: string;
+  dueDate?: string | null;
+  startMinutes?: number;
+  listId?: string;
+};
+
+export type AppleCalendarEventDetailsUpdate = AppleCalendarEventDateUpdate & {
+  title: string;
+  calendarId?: string;
+};
+
+export async function setAppleReminderDetails(input: AppleReminderDetailsUpdate): Promise<void> {
+  const args = ["set-reminder-details", "--id", input.id, "--title", input.title];
+  if (input.dueDate) args.push("--due", input.dueDate);
+  if (input.dueDate === null) args.push("--clear-due");
+  if (input.startMinutes !== undefined) args.push("--start-minutes", String(input.startMinutes));
+  if (input.listId) args.push("--list-id", input.listId);
+  parseHelperJson<{ ok: boolean }>(await runAppleHelper(args));
+}
+
+export async function setAppleCalendarEventDate(input: AppleCalendarEventDateUpdate): Promise<void> {
+  parseHelperJson<{ ok: boolean }>(await runAppleHelper(calendarEventUpdateArgs("set-calendar-event-date", input)));
+}
+
+export async function setAppleCalendarEventDetails(input: AppleCalendarEventDetailsUpdate): Promise<void> {
+  const args = calendarEventUpdateArgs("set-calendar-event-details", input);
+  args.splice(3, 0, "--title", input.title);
+  if (input.calendarId) args.splice(args.length - 2, 0, "--calendar-id", input.calendarId);
+  parseHelperJson<{ ok: boolean }>(await runAppleHelper(args));
+}
+
+function calendarEventUpdateArgs(command: string, input: AppleCalendarEventDateUpdate): string[] {
   const args = [
-    "set-calendar-event-date",
+    command,
     "--id",
     input.id,
     "--date",
@@ -249,7 +284,7 @@ export async function setAppleCalendarEventDate(input: {
   if (input.end) args.splice(args.length - 2, 0, "--end", input.end);
   if (input.startMinutes !== undefined) args.splice(args.length - 2, 0, "--start-minutes", String(input.startMinutes));
   if (input.durationMinutes !== undefined) args.splice(args.length - 2, 0, "--duration-minutes", String(input.durationMinutes));
-  parseHelperJson<{ ok: boolean }>(await runAppleHelper(args));
+  return args;
 }
 
 export async function createAppleCalendarEvent(input: {

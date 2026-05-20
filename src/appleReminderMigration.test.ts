@@ -64,12 +64,22 @@ jest.mock("./localApple", () => ({
   readAppleRemindersData: jest.fn(),
   requestLocalAppleAccess: jest.fn(),
   setAppleCalendarEventDate: jest.fn(),
+  setAppleCalendarEventDetails: jest.fn(),
   setAppleReminderCompleted: jest.fn(),
+  setAppleReminderDetails: jest.fn(),
   setAppleReminderDueDate: jest.fn(),
   setAppleReminderList: jest.fn()
 }));
 
-const { createAppleCalendarEvent, createAppleReminder, deleteAppleCalendarEvent, deleteAppleReminder, setAppleReminderDueDate } = jest.requireMock("./localApple");
+const {
+  createAppleCalendarEvent,
+  createAppleReminder,
+  deleteAppleCalendarEvent,
+  deleteAppleReminder,
+  setAppleCalendarEventDetails,
+  setAppleReminderDetails,
+  setAppleReminderDueDate
+} = jest.requireMock("./localApple");
 
 describe("Apple Reminders migration", () => {
   beforeEach(() => {
@@ -335,6 +345,113 @@ describe("Apple Reminders migration", () => {
 
     expect(deleteAppleCalendarEvent).toHaveBeenCalledWith("event-1");
     expect(notices).toContain("Calendar item deleted.");
+  });
+
+  it("updates a Markdown calendar task detail draft in place", async () => {
+    const file = { path: "Inbox.md", extension: "md", stat: { ctime: 1, mtime: 2, size: 3 } };
+    const plugin = new TaskHubPlugin({} as never, {} as never);
+    const process = jest.fn(async (_file, update) => update("- [ ] Pay invoice 📅 2026-05-20\nNext"));
+    plugin.app = {
+      vault: {
+        adapter: {},
+        getFileByPath: jest.fn(() => file),
+        process,
+        cachedRead: jest.fn(async () => "Next")
+      },
+      workspace: { getLeavesOfType: jest.fn(() => []) }
+    } as never;
+    plugin.settings = DEFAULT_SETTINGS;
+    plugin.taskIndex = { reindexFile: jest.fn(async () => undefined) } as never;
+
+    await plugin.updateCalendarTask(task(), {
+      kind: "task",
+      title: "Send invoice",
+      date: "2026-05-21",
+      startTime: "09:30",
+      tags: ["#finance"],
+      reminderListId: ""
+    });
+
+    await expect(process.mock.results[0].value).resolves.toBe("- [ ] Send invoice 📅 2026-05-21 ⏰ 09:30 #finance\nNext");
+    expect(notices).toContain("Task updated.");
+  });
+
+  it("updates Apple Reminder detail drafts through the helper", async () => {
+    const plugin = new TaskHubPlugin({} as never, {} as never);
+    plugin.app = { workspace: { getLeavesOfType: jest.fn(() => []) } } as never;
+    plugin.settings = {
+      ...DEFAULT_SETTINGS,
+      localApple: {
+        ...DEFAULT_SETTINGS.localApple,
+        enabled: true,
+        remindersEnabled: true,
+        remindersWritebackEnabled: true,
+        remindersCreateEnabled: true
+      }
+    };
+    plugin.syncLocalApple = jest.fn(async () => undefined) as never;
+
+    await plugin.updateCalendarTask(appleReminderTask(), {
+      kind: "task",
+      title: "Send invoice",
+      date: "2026-05-21",
+      startTime: "09:30",
+      reminderListId: "list-1"
+    });
+
+    expect(setAppleReminderDetails).toHaveBeenCalledWith({
+      id: "reminder-1",
+      title: "Send invoice",
+      dueDate: "2026-05-21",
+      startMinutes: 570,
+      listId: "list-1"
+    });
+    expect(notices).toContain("Task updated.");
+  });
+
+  it("updates Apple Calendar event detail drafts through the helper", async () => {
+    const plugin = new TaskHubPlugin({} as never, {} as never);
+    plugin.app = { workspace: { getLeavesOfType: jest.fn(() => []) } } as never;
+    plugin.settings = {
+      ...DEFAULT_SETTINGS,
+      localApple: {
+        ...DEFAULT_SETTINGS.localApple,
+        enabled: true,
+        calendarEnabled: true,
+        calendarWritebackEnabled: true
+      }
+    };
+    plugin.syncLocalApple = jest.fn(async () => undefined) as never;
+
+    await plugin.updateCalendarEvent({
+      id: "event-1",
+      sourceId: "apple-calendar",
+      title: "Design review",
+      start: "2026-05-20T09:30:00",
+      end: "2026-05-20T10:30:00",
+      allDay: false
+    }, {
+      kind: "event",
+      title: "Updated review",
+      date: "2026-05-21",
+      startTime: "10:00",
+      endTime: "11:15",
+      allDay: false,
+      calendarId: "calendar-1"
+    });
+
+    expect(setAppleCalendarEventDetails).toHaveBeenCalledWith({
+      id: "event-1",
+      title: "Updated review",
+      targetDate: "2026-05-21",
+      startMinutes: 600,
+      durationMinutes: 75,
+      start: "2026-05-20T09:30:00",
+      end: "2026-05-20T10:30:00",
+      allDay: false,
+      calendarId: "calendar-1"
+    });
+    expect(notices).toContain("Event updated.");
   });
 });
 

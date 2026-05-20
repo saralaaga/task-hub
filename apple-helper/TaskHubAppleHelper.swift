@@ -220,6 +220,10 @@ func argumentValue(_ name: String) -> String? {
     return args[index + 1]
 }
 
+func hasArgument(_ name: String) -> Bool {
+    CommandLine.arguments.contains(name)
+}
+
 func parseIsoDate(_ text: String?) -> Date? {
     guard let text else {
         return nil
@@ -510,6 +514,57 @@ func setReminderDue(store: EKEventStore) {
     )
 }
 
+func setReminderDetails(store: EKEventStore) {
+    requireAccess(.reminder)
+
+    guard let id = argumentValue("--id"), !id.isEmpty else {
+        fail("invalid_arguments", "set-reminder-details requires --id.", exitCode: 2)
+    }
+
+    guard let title = argumentValue("--title"), !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+        fail("invalid_arguments", "set-reminder-details requires --title.", exitCode: 2)
+    }
+
+    guard let reminder = store.calendarItem(withIdentifier: id) as? EKReminder else {
+        fail("not_found", "Apple Reminder no longer exists. Sync Task Hub and try again.", exitCode: 9)
+    }
+
+    reminder.title = title
+    if hasArgument("--clear-due") {
+        reminder.dueDateComponents = nil
+    } else if argumentValue("--due") != nil || integerArgument("--start-minutes") != nil {
+        reminder.dueDateComponents = dueDateComponents(from: argumentValue("--due"), startMinutes: integerArgument("--start-minutes"))
+    }
+    if let listId = argumentValue("--list-id"), !listId.isEmpty {
+        guard let calendar = store.calendar(withIdentifier: listId), calendar.allowsContentModifications else {
+            fail("not_found", "Apple Reminders list no longer exists or is not writable.", exitCode: 9)
+        }
+        reminder.calendar = calendar
+    }
+
+    do {
+        try store.save(reminder, commit: true)
+    } catch {
+        fail("eventkit_error", error.localizedDescription, exitCode: 7)
+    }
+
+    writeJson(
+        HelperOutput(
+            ok: true,
+            platform: nil,
+            reminders: nil,
+            lists: nil,
+            calendars: nil,
+            events: nil,
+            reminderId: nil,
+            remindersStatus: nil,
+            calendarStatus: nil,
+            code: nil,
+            message: nil
+        )
+    )
+}
+
 func setReminderList(store: EKEventStore) {
     requireAccess(.reminder)
 
@@ -554,6 +609,32 @@ func setReminderList(store: EKEventStore) {
     )
 }
 
+func applyCalendarEventTiming(event: EKEvent, targetDate: String, start: String?, end: String?, allDayText: String, startMinutes: Int?, durationMinutes: Int?) {
+    let calendar = Calendar.current
+    guard let originalStart = parseIsoDate(start) ?? event.startDate else {
+        fail("invalid_arguments", "calendar event update requires --start ISO date.", exitCode: 2)
+    }
+    let originalEnd = parseIsoDate(end) ?? event.endDate ?? originalStart.addingTimeInterval(60 * 60)
+    guard let nextStart = moveDate(originalStart, toDateKey: targetDate, calendar: calendar) else {
+        fail("invalid_arguments", "calendar event update requires a real --date value.", exitCode: 2)
+    }
+
+    if let startMinutes {
+        let duration = max(durationMinutes ?? Int(max(originalEnd.timeIntervalSince(originalStart), 60) / 60), 1)
+        guard let timedStart = dateTime(on: nextStart, minutesFromMidnight: startMinutes, calendar: calendar) else {
+            fail("invalid_arguments", "calendar event update requires valid --start-minutes.", exitCode: 2)
+        }
+        event.isAllDay = false
+        event.startDate = timedStart
+        event.endDate = timedStart.addingTimeInterval(TimeInterval(duration * 60))
+    } else {
+        let duration = max(originalEnd.timeIntervalSince(originalStart), 60)
+        event.isAllDay = allDayText == "true"
+        event.startDate = nextStart
+        event.endDate = nextStart.addingTimeInterval(duration)
+    }
+}
+
 func setCalendarEventDate(store: EKEventStore) {
     requireAccess(.event)
 
@@ -573,29 +654,78 @@ func setCalendarEventDate(store: EKEventStore) {
         fail("not_found", "Apple Calendar event no longer exists. Sync Task Hub and try again.", exitCode: 9)
     }
 
-    let calendar = Calendar.current
-    guard let originalStart = parseIsoDate(argumentValue("--start")) ?? event.startDate else {
-        fail("invalid_arguments", "set-calendar-event-date requires --start ISO date.", exitCode: 2)
-    }
-    let originalEnd = parseIsoDate(argumentValue("--end")) ?? event.endDate ?? originalStart.addingTimeInterval(60 * 60)
-    guard let nextStart = moveDate(originalStart, toDateKey: targetDate, calendar: calendar) else {
-        fail("invalid_arguments", "set-calendar-event-date requires a real --date value.", exitCode: 2)
+    applyCalendarEventTiming(
+        event: event,
+        targetDate: targetDate,
+        start: argumentValue("--start"),
+        end: argumentValue("--end"),
+        allDayText: allDayText,
+        startMinutes: integerArgument("--start-minutes"),
+        durationMinutes: integerArgument("--duration-minutes")
+    )
+
+    do {
+        try store.save(event, span: .thisEvent, commit: true)
+    } catch {
+        fail("eventkit_error", error.localizedDescription, exitCode: 7)
     }
 
-    if let startMinutes = integerArgument("--start-minutes") {
-        let durationMinutes = max(integerArgument("--duration-minutes") ?? Int(max(originalEnd.timeIntervalSince(originalStart), 60) / 60), 1)
-        guard let timedStart = dateTime(on: nextStart, minutesFromMidnight: startMinutes, calendar: calendar) else {
-            fail("invalid_arguments", "set-calendar-event-date requires valid --start-minutes.", exitCode: 2)
-        }
-        event.isAllDay = false
-        event.startDate = timedStart
-        event.endDate = timedStart.addingTimeInterval(TimeInterval(durationMinutes * 60))
-    } else {
-        let duration = max(originalEnd.timeIntervalSince(originalStart), 60)
-        event.isAllDay = allDayText == "true"
-        event.startDate = nextStart
-        event.endDate = nextStart.addingTimeInterval(duration)
+    writeJson(
+        HelperOutput(
+            ok: true,
+            platform: nil,
+            reminders: nil,
+            lists: nil,
+            calendars: nil,
+            events: nil,
+            reminderId: nil,
+            remindersStatus: nil,
+            calendarStatus: nil,
+            code: nil,
+            message: nil
+        )
+    )
+}
+
+func setCalendarEventDetails(store: EKEventStore) {
+    requireAccess(.event)
+
+    guard let id = argumentValue("--id"), !id.isEmpty else {
+        fail("invalid_arguments", "set-calendar-event-details requires --id.", exitCode: 2)
     }
+
+    guard let title = argumentValue("--title"), !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+        fail("invalid_arguments", "set-calendar-event-details requires --title.", exitCode: 2)
+    }
+
+    guard let targetDate = argumentValue("--date"), parseDateKey(targetDate) != nil else {
+        fail("invalid_arguments", "set-calendar-event-details requires --date YYYY-MM-DD.", exitCode: 2)
+    }
+
+    guard let allDayText = argumentValue("--all-day"), allDayText == "true" || allDayText == "false" else {
+        fail("invalid_arguments", "set-calendar-event-details requires --all-day true or false.", exitCode: 2)
+    }
+
+    guard let event = store.event(withIdentifier: id) ?? store.calendarItem(withIdentifier: id) as? EKEvent else {
+        fail("not_found", "Apple Calendar event no longer exists. Sync Task Hub and try again.", exitCode: 9)
+    }
+
+    event.title = title
+    if let calendarId = argumentValue("--calendar-id"), !calendarId.isEmpty {
+        guard let calendar = store.calendar(withIdentifier: calendarId), calendar.allowsContentModifications else {
+            fail("not_found", "Apple Calendar no longer exists or is not writable.", exitCode: 9)
+        }
+        event.calendar = calendar
+    }
+    applyCalendarEventTiming(
+        event: event,
+        targetDate: targetDate,
+        start: argumentValue("--start"),
+        end: argumentValue("--end"),
+        allDayText: allDayText,
+        startMinutes: integerArgument("--start-minutes"),
+        durationMinutes: integerArgument("--duration-minutes")
+    )
 
     do {
         try store.save(event, span: .thisEvent, commit: true)
@@ -885,8 +1015,12 @@ struct TaskHubAppleHelper {
             setReminderCompleted(store: store)
         case "set-reminder-due":
             setReminderDue(store: store)
+        case "set-reminder-details":
+            setReminderDetails(store: store)
         case "set-calendar-event-date":
             setCalendarEventDate(store: store)
+        case "set-calendar-event-details":
+            setCalendarEventDetails(store: store)
         case "set-reminder-list":
             setReminderList(store: store)
         case "create-reminder":

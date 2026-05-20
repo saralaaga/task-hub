@@ -4,7 +4,7 @@ import { fetchIcsSource } from "./calendar/icsClient";
 import { createTranslator } from "./i18n";
 import { registerTaskHubIcon, TASK_HUB_ICON_ID } from "./icons";
 import { parseTaskAtLine } from "./indexing/editorTask";
-import { completeTaskInContent, deleteTaskInContent, rescheduleTaskInContent, type CompletionResult } from "./indexing/taskActions";
+import { completeTaskInContent, deleteTaskInContent, rescheduleTaskInContent, updateTaskLineInContent, type CompletionResult } from "./indexing/taskActions";
 import { TaskIndex } from "./indexing/taskIndex";
 import { openExternalTaskSource } from "./externalSources";
 import { appendTaskToContent, createTaskLine, normalizeTaskCreationFilePath } from "./taskCreation";
@@ -25,7 +25,9 @@ import {
   readAppleRemindersData,
   requestLocalAppleAccess,
   setAppleCalendarEventDate,
+  setAppleCalendarEventDetails,
   setAppleReminderCompleted,
+  setAppleReminderDetails,
   setAppleReminderDueDate,
   setAppleReminderList,
   type AppleHelperStatus
@@ -42,7 +44,7 @@ import {
   serializeCreationTarget,
   TaskHubSettingTab
 } from "./settings";
-import type { AppleCalendarInfo, CalendarCreationKind, CalendarCreationTarget, CalendarEvent, CalendarSourceStatus, LocalAppleSyncStatus, TaskHubSettings, TaskItem } from "./types";
+import type { AppleCalendarInfo, CalendarCreationKind, CalendarCreationTarget, CalendarEvent, CalendarItemEditDraft, CalendarSourceStatus, LocalAppleSyncStatus, TaskHubSettings, TaskItem } from "./types";
 import type { CalendarDropTarget } from "./views/renderCalendarView";
 import { TaskHubView } from "./views/TaskHubView";
 
@@ -74,6 +76,18 @@ function parseTimeInputValue(value: string): number | undefined {
   const minutes = Number(match[2]);
   if (hours > 23 || minutes > 59) return undefined;
   return Math.max(0, Math.min(23 * 60 + 45, Math.round((hours * 60 + minutes) / 15) * 15));
+}
+
+function eventDateKey(value: string): string {
+  return value.slice(0, 10);
+}
+
+function eventDurationFromDraft(draft: Extract<CalendarItemEditDraft, { kind: "event" }>): number | undefined {
+  if (draft.allDay) return undefined;
+  const start = draft.startTime ? parseTimeInputValue(draft.startTime) : undefined;
+  const end = draft.endTime ? parseTimeInputValue(draft.endTime) : undefined;
+  if (start === undefined || end === undefined) return undefined;
+  return Math.max(1, end - start);
 }
 
 function durationInputParts(durationMinutes: number | undefined): { days: string; hours: string; minutes: string } {
@@ -486,6 +500,125 @@ export default class TaskHubPlugin extends Plugin {
         status: "conflict",
         message: error instanceof Error ? error.message : String(error)
       };
+      new Notice(result.message);
+      return result;
+    }
+  }
+
+  async updateCalendarTask(task: TaskItem, draft: Extract<CalendarItemEditDraft, { kind: "task" }>): Promise<CompletionResult> {
+    const t = createTranslator(this.settings.language);
+    const title = draft.title.replace(/\s+/g, " ").trim();
+    if (!title) {
+      const result: CompletionResult = { status: "conflict", message: t("taskUpdateFailed") };
+      new Notice(result.message);
+      return result;
+    }
+
+    if (task.source === "apple-reminders") {
+      if (!this.isLocalAppleSupported()) {
+        const result: CompletionResult = { status: "conflict", message: t("localAppleUnsupportedPlatform") };
+        new Notice(result.message);
+        return result;
+      }
+      if (!this.settings.localApple.remindersWritebackEnabled || !task.externalId) {
+        const result: CompletionResult = { status: "conflict", message: t("externalTaskReadOnly") };
+        new Notice(result.message);
+        return result;
+      }
+      try {
+        await setAppleReminderDetails({
+          id: task.externalId,
+          title,
+          dueDate: draft.date || null,
+          startMinutes: draft.startTime ? parseTimeInputValue(draft.startTime) : undefined,
+          listId: draft.reminderListId || undefined
+        });
+        await this.syncLocalApple({ silent: true });
+        new Notice(t("taskUpdated"));
+        this.refreshOpenViews();
+        return { status: "updated", content: "", line: 0 };
+      } catch (error) {
+        const result: CompletionResult = { status: "conflict", message: error instanceof Error ? error.message : String(error) };
+        new Notice(result.message);
+        return result;
+      }
+    }
+
+    if (task.source !== "vault") {
+      const result: CompletionResult = { status: "conflict", message: t("externalTaskReadOnly") };
+      new Notice(result.message);
+      return result;
+    }
+
+    const file = this.app.vault.getFileByPath(task.filePath);
+    if (!file) {
+      const result: CompletionResult = { status: "conflict", message: `${t("fileNotFound")}: ${task.filePath}` };
+      new Notice(result.message);
+      return result;
+    }
+
+    const update = { result: { status: "conflict", message: t("taskUpdateFailed") } as CompletionResult };
+    await this.app.vault.process(file, (content) => {
+      update.result = updateTaskLineInContent(content, task, {
+        title,
+        date: draft.date,
+        startTime: draft.startTime,
+        tags: draft.tags ?? []
+      }, {
+        lineChangedConflict: t("lineChangedConflict"),
+        lineMismatchConflict: t("lineMismatchConflict"),
+        lineNoLongerOpen: t("lineNoLongerOpen"),
+        lineOutsideFile: t("lineOutsideFile")
+      });
+      return update.result.status === "updated" ? update.result.content : content;
+    });
+    if (update.result.status === "updated") {
+      await this.reindexVaultFile(file);
+      new Notice(t("taskUpdated"));
+    } else if (update.result.status === "conflict") {
+      new Notice(update.result.message);
+    }
+    this.refreshOpenViews();
+    return update.result;
+  }
+
+  async updateCalendarEvent(event: CalendarEvent, draft: Extract<CalendarItemEditDraft, { kind: "event" }>): Promise<CompletionResult> {
+    const t = createTranslator(this.settings.language);
+    const title = draft.title.replace(/\s+/g, " ").trim();
+    if (
+      !title ||
+      event.sourceId !== "apple-calendar" ||
+      !this.isLocalAppleSupported() ||
+      !this.settings.localApple.enabled ||
+      !this.settings.localApple.calendarEnabled ||
+      !this.settings.localApple.calendarWritebackEnabled
+    ) {
+      const result: CompletionResult = {
+        status: "conflict",
+        message: !this.isLocalAppleSupported() ? t("localAppleUnsupportedPlatform") : t("externalTaskReadOnly")
+      };
+      new Notice(result.message);
+      return result;
+    }
+
+    try {
+      await setAppleCalendarEventDetails({
+        id: event.id,
+        title,
+        targetDate: draft.date,
+        startMinutes: draft.allDay || !draft.startTime ? undefined : parseTimeInputValue(draft.startTime),
+        durationMinutes: eventDurationFromDraft(draft),
+        start: event.start,
+        end: event.end,
+        allDay: draft.allDay,
+        calendarId: draft.calendarId || undefined
+      });
+      await this.syncLocalApple({ silent: true });
+      new Notice(t("eventUpdated"));
+      this.refreshOpenViews();
+      return { status: "updated", content: "", line: 0 };
+    } catch (error) {
+      const result: CompletionResult = { status: "conflict", message: error instanceof Error ? error.message : String(error) };
       new Notice(result.message);
       return result;
     }

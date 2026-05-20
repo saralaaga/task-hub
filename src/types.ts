@@ -46,6 +46,25 @@ export type CalendarEvent = {
   url?: string;
 };
 
+export type CalendarItemEditDraft =
+  | {
+      kind: "task";
+      title: string;
+      date?: string;
+      startTime?: string;
+      tags?: string[];
+      reminderListId?: string;
+    }
+  | {
+      kind: "event";
+      title: string;
+      date: string;
+      startTime?: string;
+      endTime?: string;
+      allDay: boolean;
+      calendarId?: string;
+    };
+
 export type CalendarSourceStatus =
   | { state: "ok"; lastSyncedAt: string; eventCount: number }
   | {

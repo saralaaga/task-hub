@@ -1,4 +1,4 @@
-import { completeTaskInContent, deleteTaskInContent, rescheduleTaskInContent } from "./taskActions";
+import { completeTaskInContent, deleteTaskInContent, rescheduleTaskInContent, updateTaskLineInContent } from "./taskActions";
 import type { TaskItem } from "../types";
 
 describe("completeTaskInContent", () => {
@@ -161,6 +161,67 @@ describe("deleteTaskInContent", () => {
   it("returns a conflict instead of deleting a different task", () => {
     const task = taskItem({ line: 0, rawLine: "- [ ] Pay invoice 📅 2026-05-08" });
     const result = deleteTaskInContent("- [ ] Call supplier 📅 2026-05-08", task);
+
+    expect(result.status).toBe("conflict");
+  });
+});
+
+describe("updateTaskLineInContent", () => {
+  it("updates title, date, time, and tags while preserving the task marker", () => {
+    const task = taskItem({ line: 0, rawLine: "- [ ] Pay invoice 📅 2026-05-08 ⏰ 08:15 #finance", dueDate: "2026-05-08" });
+    const result = updateTaskLineInContent("- [ ] Pay invoice 📅 2026-05-08 ⏰ 08:15 #finance", task, {
+      title: "Send invoice",
+      date: "2026-05-12",
+      startTime: "09:30",
+      tags: ["#finance", "#client/acme"]
+    });
+
+    expect(result).toEqual({
+      status: "updated",
+      content: "- [ ] Send invoice 📅 2026-05-12 ⏰ 09:30 #finance #client/acme",
+      line: 0
+    });
+  });
+
+  it("adds a due token when a dated task line did not have one yet", () => {
+    const task = taskItem({ line: 0, rawLine: "- [ ] Pay invoice", dueDate: undefined, tags: [] });
+    const result = updateTaskLineInContent("- [ ] Pay invoice", task, {
+      title: "Pay invoice",
+      date: "2026-05-12",
+      startTime: "",
+      tags: []
+    });
+
+    expect(result).toEqual({
+      status: "updated",
+      content: "- [ ] Pay invoice 📅 2026-05-12",
+      line: 0
+    });
+  });
+
+  it("removes a scheduled time when the draft time is empty", () => {
+    const task = taskItem({ line: 0, rawLine: "- [ ] Pay invoice 📅 2026-05-08 ⏰ 08:15 #finance", dueDate: "2026-05-08" });
+    const result = updateTaskLineInContent("- [ ] Pay invoice 📅 2026-05-08 ⏰ 08:15 #finance", task, {
+      title: "Pay invoice",
+      date: "2026-05-08",
+      startTime: "",
+      tags: ["#finance"]
+    });
+
+    expect(result).toEqual({
+      status: "updated",
+      content: "- [ ] Pay invoice 📅 2026-05-08 #finance",
+      line: 0
+    });
+  });
+
+  it("returns a conflict instead of editing a changed line", () => {
+    const task = taskItem({ line: 0, rawLine: "- [ ] Pay invoice 📅 2026-05-08", dueDate: "2026-05-08" });
+    const result = updateTaskLineInContent("- [ ] Call supplier 📅 2026-05-08", task, {
+      title: "Pay invoice",
+      date: "2026-05-12",
+      tags: []
+    });
 
     expect(result.status).toBe("conflict");
   });
