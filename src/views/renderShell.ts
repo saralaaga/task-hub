@@ -93,11 +93,6 @@ function renderConditionMenu(container: HTMLElement, state: ShellState, handlers
   const header = panel.createDiv({ cls: "task-hub-condition-panel-header" });
   header.createSpan({ cls: "task-hub-condition-panel-title", text: state.t("conditionMatch") });
 
-  const operator = header.createEl("select", { cls: "task-hub-condition-control is-compact" });
-  operator.createEl("option", { text: state.t("and"), value: "and" });
-  operator.createEl("option", { text: state.t("or"), value: "or" });
-  operator.value = conditions.operator;
-
   const tagRow = panel.createEl("label", { cls: "task-hub-condition-row" });
   tagRow.createSpan({ text: state.t("conditionTag") });
   const tag = tagRow.createEl("input", {
@@ -108,7 +103,12 @@ function renderConditionMenu(container: HTMLElement, state: ShellState, handlers
   });
 
   const dateRow = panel.createEl("label", { cls: "task-hub-condition-row" });
-  dateRow.createSpan({ text: state.t("conditionDate") });
+  const dateLabel = dateRow.createSpan({ cls: "task-hub-condition-label-with-operator" });
+  dateLabel.createSpan({ text: state.t("conditionDate") });
+  const operator = dateLabel.createEl("select", { cls: "task-hub-condition-operator" });
+  operator.createEl("option", { text: state.t("and"), value: "and" });
+  operator.createEl("option", { text: state.t("or"), value: "or" });
+  operator.value = conditions.operator;
   const date = dateRow.createEl("select", { cls: "task-hub-condition-control" });
   date.createEl("option", { text: state.t("conditionDate"), value: "" });
   for (const bucket of ["overdue", "today", "thisWeek", "future", "noDate"] as DateBucket[]) {
@@ -117,7 +117,9 @@ function renderConditionMenu(container: HTMLElement, state: ShellState, handlers
   date.value = conditions.dateBucket;
 
   const textRow = panel.createEl("label", { cls: "task-hub-condition-row" });
-  textRow.createSpan({ text: state.t("conditionText") });
+  const textLabel = textRow.createSpan({ cls: "task-hub-condition-label-with-operator" });
+  textLabel.createSpan({ text: state.t("conditionText") });
+  textLabel.createSpan({ cls: "task-hub-condition-operator-spacer" });
   const text = textRow.createEl("input", {
     cls: "task-hub-condition-control",
     attr: { placeholder: state.t("conditionText") },

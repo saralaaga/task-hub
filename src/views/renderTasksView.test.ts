@@ -33,8 +33,25 @@ class FakeElement {
     return this.append(options);
   }
 
+  createSvg(tag: string, options: { attr?: Record<string, string> } = {}): FakeElement {
+    const child = this.append();
+    child.type = tag;
+    for (const [name, value] of Object.entries(options.attr ?? {})) {
+      child.attrs.set(name, value);
+    }
+    return child;
+  }
+
   setAttr(name: string, value: string): void {
     this.attrs.set(name, value);
+  }
+
+  toggleClass(cls: string, enabled: boolean): void {
+    if (enabled) {
+      this.classes.add(cls);
+    } else {
+      this.classes.delete(cls);
+    }
   }
 
   addEventListener(name: string, listener: (event: { stopPropagation(): void }) => void): void {
@@ -95,15 +112,6 @@ function findElementByText(element: FakeElement, text: string): FakeElement | un
   return collect(element).find((child) => child.text === text);
 }
 
-function findAncestorWithClass(root: FakeElement, target: FakeElement, className: string): FakeElement | undefined {
-  for (const child of root.children) {
-    if (child === target) return root.classes.has(className) ? root : undefined;
-    const found = findAncestorWithClass(child, target, className);
-    if (found) return found;
-  }
-  return undefined;
-}
-
 function textValues(element: FakeElement): string[] {
   return collect(element).map((child) => child.text).filter(Boolean);
 }
@@ -115,7 +123,6 @@ describe("renderTasksView", () => {
     onSendToAppleReminders: jest.fn(),
     onSelect: jest.fn(),
     onTagSelect: jest.fn(),
-    onTagQueryChange: jest.fn(),
     onSourceSelect: jest.fn(),
     onAppleReminderListChange: jest.fn()
   });
@@ -191,6 +198,27 @@ describe("renderTasksView", () => {
     expect(row?.style.setProperty).toHaveBeenCalledWith("--task-hub-source-color", "var(--interactive-accent)");
   });
 
+  it("marks task details with the selected task source logo and color", () => {
+    const container = new FakeElement();
+
+    renderTasksView(
+      container as unknown as HTMLElement,
+      [baseTask],
+      [baseTask],
+      { status: "open", tags: [], sourceQuery: "", textQuery: "" },
+      handlers(),
+      new Date("2026-05-08T12:00:00Z"),
+      (key) => key,
+      { allowAppleReminderWriteback: true, sourceColors: { "apple-reminders": "#22c55e" } }
+    );
+
+    const details = collect(container).find((element) => element.classes.has("task-hub-task-details"));
+    const logo = collect(details as FakeElement).find((element) => element.classes.has("task-hub-detail-source-logo"));
+
+    expect(details?.style.setProperty).toHaveBeenCalledWith("--task-hub-source-color", "#22c55e");
+    expect(logo?.classes.has("is-apple")).toBe(true);
+  });
+
   it("renders task tags as individual tag chips", () => {
     const container = new FakeElement();
     const task = { ...baseTask, tags: ["#project", "#client/acme"] };
@@ -208,6 +236,31 @@ describe("renderTasksView", () => {
 
     const chips = collect(container).filter((element) => element.classes.has("task-hub-task-tag"));
     expect(chips.map((chip) => chip.text)).toEqual(["#project", "#client/acme"]);
+  });
+
+  it("uses task tag chips as clickable filters without rendering the sidebar tag panel", () => {
+    const container = new FakeElement();
+    const viewHandlers = handlers();
+    const task = { ...baseTask, tags: ["#project", "#client/acme"] };
+
+    renderTasksView(
+      container as unknown as HTMLElement,
+      [task],
+      [task],
+      { status: "open", tags: [], sourceQuery: "", textQuery: "" },
+      viewHandlers,
+      new Date("2026-05-08T12:00:00Z"),
+      (key) => key,
+      { allowAppleReminderWriteback: true }
+    );
+
+    const sidebarTagPanel = collect(container).find((element) => element.classes.has("task-hub-sidebar-tag-panel"));
+    const chip = collect(container).find((element) => element.classes.has("task-hub-task-tag") && element.text === "#project");
+
+    expect(sidebarTagPanel).toBeUndefined();
+    expect(chip).toBeDefined();
+    chip!.click();
+    expect(viewHandlers.onTagSelect).toHaveBeenCalledWith("#project");
   });
 
   it("renders escaped Markdown punctuation in task titles as plain text", () => {
@@ -304,6 +357,39 @@ describe("renderTasksView", () => {
     const list = collect(container).find((element) => element.classes.has("task-hub-task-list-pane"));
 
     expect(list?.scrollTop).toBe(320);
+  });
+
+  it("selects a task in place without rebuilding the task list", () => {
+    const container = new FakeElement();
+    const viewHandlers = handlers();
+    const firstTask = { ...baseTask, id: "first", text: "First" };
+    const secondTask = { ...baseTask, id: "second", text: "Second" };
+
+    renderTasksView(
+      container as unknown as HTMLElement,
+      [firstTask, secondTask],
+      [firstTask, secondTask],
+      { status: "open", tags: [], sourceQuery: "", textQuery: "" },
+      viewHandlers,
+      new Date("2026-05-08T12:00:00Z"),
+      (key) => key,
+      { allowAppleReminderWriteback: true, selectedTaskId: "first" }
+    );
+
+    const list = collect(container).find((element) => element.classes.has("task-hub-task-list-pane"));
+    const originalListChildren = list?.children;
+    const firstRow = collect(container).find((element) => element.classes.has("task-hub-task-row") && collect(element).some((child) => child.text === "First"));
+    const secondRow = collect(container).find((element) => element.classes.has("task-hub-task-row") && collect(element).some((child) => child.text === "Second"));
+
+    list!.scrollTop = 240;
+    secondRow!.click();
+
+    expect(list?.children).toBe(originalListChildren);
+    expect(list?.scrollTop).toBe(240);
+    expect(firstRow?.classes.has("is-selected")).toBe(false);
+    expect(secondRow?.classes.has("is-selected")).toBe(true);
+    expect(viewHandlers.onSelect).toHaveBeenCalledWith(secondTask);
+    expect(collect(container).some((element) => element.classes.has("task-hub-detail-title") && element.text === "Second")).toBe(true);
   });
 
   it("keeps source counts stable when one source is selected", () => {
@@ -458,83 +544,6 @@ describe("renderTasksView", () => {
     );
 
     expect(findElementByText(container, "sendToAppleReminders")).toBeUndefined();
-  });
-
-  it("renders a searchable multi-select tag panel", () => {
-    const container = new FakeElement();
-    const tasks = [
-      { ...baseTask, id: "a", tags: ["#alpha"] },
-      { ...baseTask, id: "b", tags: ["#beta"] },
-      { ...baseTask, id: "c", tags: ["#client/acme"] }
-    ];
-
-    renderTasksView(
-      container as unknown as HTMLElement,
-      tasks,
-      tasks,
-      { status: "open", tags: ["#beta"], tagQuery: "be", sourceQuery: "", textQuery: "" },
-      handlers(),
-      new Date("2026-05-08T12:00:00Z"),
-      (key) => key,
-      { allowAppleReminderWriteback: true }
-    );
-
-    const elements = collect(container);
-    const tagOptions = elements.filter((element) => element.classes.has("task-hub-sidebar-tag-option"));
-    expect(elements.some((element) => element.classes.has("task-hub-sidebar-tag-options"))).toBe(true);
-    expect(tagOptions.some((element) => element.children.some((child) => child.text === "#beta"))).toBe(true);
-    expect(tagOptions.some((element) => element.children.some((child) => child.text === "#alpha"))).toBe(false);
-    expect(tagOptions.some((element) => element.classes.has("is-active"))).toBe(true);
-  });
-
-  it("excludes completed tasks from tag counts when completed tasks are hidden", () => {
-    const container = new FakeElement();
-    const openTask = { ...baseTask, id: "open-alpha", tags: ["#alpha"] };
-    const completedTask = { ...baseTask, id: "done-alpha", completed: true, tags: ["#alpha"] };
-
-    renderTasksView(
-      container as unknown as HTMLElement,
-      [openTask],
-      [openTask, completedTask],
-      { status: "open", tags: [], sourceQuery: "", textQuery: "" },
-      handlers(),
-      new Date("2026-05-08T12:00:00Z"),
-      (key) => key,
-      { allowAppleReminderWriteback: true }
-    );
-
-    const tagText = findElementByText(container, "#alpha");
-    const tagOption = tagText ? findAncestorWithClass(container, tagText, "task-hub-sidebar-tag-option") : undefined;
-
-    expect(tagOption?.children.some((child) => child.text === "1")).toBe(true);
-    expect(tagOption?.children.some((child) => child.text === "2")).toBe(false);
-  });
-
-  it("allows selecting parent tags for nested tag groups", () => {
-    const container = new FakeElement();
-    const testHandlers = handlers();
-    const tasks = [
-      { ...baseTask, id: "nested", tags: ["#client/acme"] }
-    ];
-
-    renderTasksView(
-      container as unknown as HTMLElement,
-      tasks,
-      tasks,
-      { status: "open", tags: [], sourceQuery: "", textQuery: "" },
-      testHandlers,
-      new Date("2026-05-08T12:00:00Z"),
-      (key) => key,
-      { allowAppleReminderWriteback: true }
-    );
-
-    const parentText = findElementByText(container, "#client");
-    const parentOption = parentText ? findAncestorWithClass(container, parentText, "task-hub-sidebar-tag-option") : undefined;
-    const parentCheckbox = parentOption?.children.find((child) => child.type === "checkbox");
-    parentCheckbox?.change();
-
-    expect(parentOption).toBeDefined();
-    expect(testHandlers.onTagSelect).toHaveBeenCalledWith("#client");
   });
 
 });

@@ -108,7 +108,6 @@ export class TaskHubView extends ItemView {
           onSendToAppleReminders: (task) => void this.plugin.sendTaskToAppleReminders(task),
           onSelect: (task) => {
             this.selectedTaskId = task.id;
-            this.render();
           },
           onTagSelect: (tag) => {
             this.filters = {
@@ -117,11 +116,7 @@ export class TaskHubView extends ItemView {
                 ? this.filters.tags.filter((existing) => existing !== tag)
                 : [...this.filters.tags, tag]
             };
-            this.render();
-          },
-          onTagQueryChange: (tagQuery) => {
-            this.filters = { ...this.filters, tagQuery };
-            this.render();
+            this.render({ preserveTaskListScroll: true });
           },
           onSourceSelect: (source) => {
             this.filters = { ...this.filters, sourceQuery: source === "all" ? "" : source };

@@ -530,6 +530,9 @@ func setReminderDetails(store: EKEventStore) {
     }
 
     reminder.title = title
+    if hasArgument("--notes") {
+        reminder.notes = argumentValue("--notes")
+    }
     if hasArgument("--clear-due") {
         reminder.dueDateComponents = nil
     } else if argumentValue("--due") != nil || integerArgument("--start-minutes") != nil {
@@ -711,6 +714,9 @@ func setCalendarEventDetails(store: EKEventStore) {
     }
 
     event.title = title
+    if hasArgument("--notes") {
+        event.notes = argumentValue("--notes")
+    }
     if let calendarId = argumentValue("--calendar-id"), !calendarId.isEmpty {
         guard let calendar = store.calendar(withIdentifier: calendarId), calendar.allowsContentModifications else {
             fail("not_found", "Apple Calendar no longer exists or is not writable.", exitCode: 9)

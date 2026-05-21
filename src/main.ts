@@ -554,7 +554,8 @@ export default class TaskHubPlugin extends Plugin {
           title,
           dueDate: draft.date || null,
           startMinutes: draft.startTime ? parseTimeInputValue(draft.startTime) : undefined,
-          listId: draft.reminderListId || undefined
+          listId: draft.reminderListId || undefined,
+          notes: draft.notes
         });
         await this.syncLocalApple({ silent: true });
         new Notice(t("taskUpdated"));
@@ -635,7 +636,8 @@ export default class TaskHubPlugin extends Plugin {
         start: event.start,
         end: event.end,
         allDay: draft.allDay,
-        calendarId: draft.calendarId || undefined
+        calendarId: draft.calendarId || undefined,
+        notes: draft.notes
       });
       await this.syncLocalApple({ silent: true });
       new Notice(t("eventUpdated"));

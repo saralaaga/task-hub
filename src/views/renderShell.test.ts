@@ -174,6 +174,20 @@ describe("renderShell", () => {
     });
   });
 
+  it("places the condition operator with the date and text labels", () => {
+    const { container } = renderForTest();
+    const header = collect(container).find((element) => element.classes.has("task-hub-condition-panel-header"));
+    const dateRow = collect(container).find((element) => element.classes.has("task-hub-condition-row") && collect(element).some((child) => child.text === "conditionDate"));
+    const textRow = collect(container).find((element) => element.classes.has("task-hub-condition-row") && collect(element).some((child) => child.text === "conditionText"));
+
+    expect(header).toBeDefined();
+    expect(collect(header!).some((element) => element.type === "select")).toBe(false);
+    expect(dateRow).toBeDefined();
+    expect(textRow).toBeDefined();
+    expect(collect(dateRow!).some((element) => element.type === "select" && element.classes.has("task-hub-condition-operator"))).toBe(true);
+    expect(collect(textRow!).some((element) => element.classes.has("task-hub-condition-operator-spacer"))).toBe(true);
+  });
+
   it("shows disabled busy feedback while rescanning", () => {
     const { container } = renderShellForState({ isRefreshing: true });
     const rescanButton = collect(container).find((element) => element.attrs.get("aria-label") === "rescanning");

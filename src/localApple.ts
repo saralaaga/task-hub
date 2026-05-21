@@ -242,11 +242,13 @@ export type AppleReminderDetailsUpdate = {
   dueDate?: string | null;
   startMinutes?: number;
   listId?: string;
+  notes?: string;
 };
 
 export type AppleCalendarEventDetailsUpdate = AppleCalendarEventDateUpdate & {
   title: string;
   calendarId?: string;
+  notes?: string;
 };
 
 export async function setAppleReminderDetails(input: AppleReminderDetailsUpdate): Promise<void> {
@@ -255,6 +257,7 @@ export async function setAppleReminderDetails(input: AppleReminderDetailsUpdate)
   if (input.dueDate === null) args.push("--clear-due");
   if (input.startMinutes !== undefined) args.push("--start-minutes", String(input.startMinutes));
   if (input.listId) args.push("--list-id", input.listId);
+  if (input.notes !== undefined) args.push("--notes", input.notes);
   parseHelperJson<{ ok: boolean }>(await runAppleHelper(args));
 }
 
@@ -266,6 +269,7 @@ export async function setAppleCalendarEventDetails(input: AppleCalendarEventDeta
   const args = calendarEventUpdateArgs("set-calendar-event-details", input);
   args.splice(3, 0, "--title", input.title);
   if (input.calendarId) args.splice(args.length - 2, 0, "--calendar-id", input.calendarId);
+  if (input.notes !== undefined) args.splice(args.length - 2, 0, "--notes", input.notes);
   parseHelperJson<{ ok: boolean }>(await runAppleHelper(args));
 }
 
@@ -477,7 +481,7 @@ export function calendarRecordToEvent(record: AppleCalendarRecord, index: number
     calendarName: record.calendar,
     calendarColor: normalizeHexColor(record.calendarColor),
     location: record.location,
-    description: [record.calendar, record.notes].filter(Boolean).join("\n\n"),
+    description: record.notes,
     url: record.url
   };
 }

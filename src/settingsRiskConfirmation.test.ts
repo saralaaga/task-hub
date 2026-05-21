@@ -18,7 +18,60 @@ type TextControl = {
 };
 
 const toggles: ToggleControl[] = [];
-const settings: Array<{ name?: string; desc?: string; toggle?: ToggleControl; text?: TextControl }> = [];
+const swatchClicks: Array<() => void> = [];
+const colorInputs: MockElement[] = [];
+const settings: Array<{ name?: string; desc?: string; toggle?: ToggleControl; text?: TextControl; controlEl?: MockElement }> = [];
+
+class MockElement {
+  children: MockElement[] = [];
+  scrollTop = 0;
+  className = "";
+  textContent = "";
+  type = "";
+  value = "";
+  style = { setProperty: jest.fn() };
+  private listeners = new Map<string, Array<() => void>>();
+
+  empty = jest.fn(() => {
+    this.children = [];
+    this.scrollTop = 0;
+  });
+
+  createDiv(options: { cls?: string } = {}): MockElement {
+    const child = new MockElement();
+    child.className = options.cls ?? "";
+    this.children.push(child);
+    return child;
+  }
+
+  createEl(_tag: string, options: { cls?: string; type?: string } = {}): MockElement {
+    const child = this.createDiv({ cls: options.cls });
+    child.type = options.type ?? _tag;
+    if (child.type === "color") {
+      colorInputs.push(child);
+    }
+    return child;
+  }
+
+  addEventListener(name: string, listener: () => void): void {
+    this.listeners.set(name, [...(this.listeners.get(name) ?? []), listener]);
+    if (this.className.includes("task-hub-color-swatch") && name === "click") {
+      swatchClicks.push(listener);
+    }
+  }
+
+  dispatch(name: string): void {
+    for (const listener of this.listeners.get(name) ?? []) {
+      listener();
+    }
+  }
+
+  addClass(cls: string): void {
+    this.className = `${this.className} ${cls}`.trim();
+  }
+
+  setAttribute(): void {}
+}
 
 type MockSettingInstance = {
   name?: string;
@@ -32,14 +85,7 @@ jest.mock(
   () => ({
     App: class {},
     PluginSettingTab: class {
-      containerEl = {
-        empty: jest.fn(),
-        createDiv: jest.fn(() => ({
-          createEl: jest.fn(() => ({ addEventListener: jest.fn() })),
-          createDiv: jest.fn(),
-          empty: jest.fn()
-        }))
-      };
+      containerEl = new MockElement();
       constructor(
         public app: unknown,
         public plugin: unknown
@@ -48,6 +94,7 @@ jest.mock(
     Setting: class {
       name?: string;
       desc?: string;
+      controlEl = new MockElement();
       constructor() {
         settings.push(this);
       }
@@ -92,6 +139,15 @@ jest.mock(
         return this;
       }
       addExtraButton() {
+        arguments[0]?.({
+          extraSettingsEl: new MockElement(),
+          setIcon() {
+            return this;
+          },
+          setTooltip() {
+            return this;
+          }
+        });
         return this;
       }
       addToggle(build: (toggle: ToggleControl) => void) {
@@ -111,7 +167,8 @@ jest.mock(
         build(toggle);
         return this;
       }
-      then() {
+      then(build?: (setting: { controlEl: MockElement }) => void) {
+        build?.({ controlEl: this.controlEl });
         return this;
       }
     }
@@ -122,6 +179,8 @@ jest.mock(
 describe("TaskHubSettingTab risky Apple Reminders setting", () => {
   beforeEach(() => {
     toggles.length = 0;
+    swatchClicks.length = 0;
+    colorInputs.length = 0;
     settings.length = 0;
     Object.assign(globalThis, {
       document: {
@@ -261,6 +320,43 @@ describe("TaskHubSettingTab risky Apple Reminders setting", () => {
     expect(plugin.settings.localApple.calendarLookaheadDays).toBe(360);
     expect(plugin.saveSettings).toHaveBeenCalled();
     expect(plugin.syncLocalApple).toHaveBeenCalledWith({ silent: true });
+  });
+
+  it("preserves the settings scroll position after choosing an Apple Calendar color swatch", async () => {
+    const plugin = pluginForSettings();
+    plugin.settings.localApple.calendarEnabled = true;
+    plugin.settings.localApple.calendars = [{ id: "work", name: "Work", color: "#5ECC89", writable: true }];
+    const tab = new TaskHubSettingTab({} as never, plugin as never);
+    const container = (tab as unknown as { containerEl: MockElement }).containerEl;
+
+    tab.display();
+    container.scrollTop = 480;
+    expect(swatchClicks.length).toBeGreaterThan(0);
+
+    swatchClicks[0]();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(plugin.saveSettings).toHaveBeenCalled();
+    expect(container.scrollTop).toBe(480);
+  });
+
+  it("opens a native color input from the Apple Calendar color preview", async () => {
+    const plugin = pluginForSettings();
+    plugin.settings.localApple.calendarEnabled = true;
+    plugin.settings.localApple.calendars = [{ id: "work", name: "Work", color: "#5ECC89", writable: true }];
+    const tab = new TaskHubSettingTab({} as never, plugin as never);
+
+    tab.display();
+    const colorInput = colorInputs[0];
+    expect(colorInput).toBeDefined();
+
+    colorInput.value = "#123456";
+    colorInput.dispatch("input");
+    await Promise.resolve();
+
+    expect(plugin.settings.localApple.calendarColorOverrides.work).toBe("#123456");
+    expect(plugin.saveSettings).toHaveBeenCalled();
   });
 });
 

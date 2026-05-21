@@ -8,7 +8,6 @@ export type TaskRowHandlers = {
   onSendToAppleReminders: (task: TaskItem) => void;
   onSelect: (task: TaskItem) => void;
   onTagSelect: (tag: string) => void;
-  onTagQueryChange: (query: string) => void;
   onSourceSelect: (source: "all" | "vault" | "apple-reminders") => void;
   onAppleReminderListChange: (task: TaskItem, listId: string) => void;
 };
@@ -20,7 +19,6 @@ export type TaskRenderOptions = {
   sourceColors?: Partial<Record<TaskItem["source"], string>>;
   appleReminderLists?: AppleReminderList[];
   taskListScrollTop?: number;
-  tagQuery?: string;
 };
 
 const BUCKETS = ["overdue", "today", "thisWeek", "future", "noDate"] as const;
@@ -53,7 +51,7 @@ export function renderTasksView(
   }
 
   const sortedTasks = sortTasksByCompletion(tasks);
-  const selectedTask = sortedTasks.find((task) => task.id === options.selectedTaskId) ?? sortedTasks[0];
+  let selectedTask = sortedTasks.find((task) => task.id === options.selectedTaskId) ?? sortedTasks[0];
   const workbench = container.createDiv({ cls: "task-hub-task-workbench" });
   renderTaskSidebar(workbench, allTasks, filters, handlers, now, t);
   const list = workbench.createDiv({ cls: "task-hub-task-list-pane" });
@@ -65,6 +63,18 @@ export function renderTasksView(
   }
 
   const groups = groupTasksByDateBucket(sortedTasks, now);
+  const rowsByTaskId = new Map<string, HTMLElement>();
+  let detailsHost: HTMLElement | undefined;
+  const selectTask = (task: TaskItem) => {
+    selectedTask = task;
+    for (const [taskId, row] of rowsByTaskId) {
+      row.toggleClass("is-selected", taskId === task.id);
+    }
+    if (detailsHost) {
+      renderTaskDetails(detailsHost, selectedTask, handlers, options, t);
+    }
+    handlers.onSelect(task);
+  };
 
   for (const bucket of BUCKETS) {
     const bucketTasks = groups[bucket];
@@ -75,11 +85,13 @@ export function renderTasksView(
     const cards = section.createDiv({ cls: "task-hub-task-card-flow" });
 
     for (const task of bucketTasks) {
-      renderTaskRow(cards, task, handlers, options, task.id === selectedTask?.id);
+      const row = renderTaskRow(cards, task, handlers, options, task.id === selectedTask?.id, selectTask);
+      rowsByTaskId.set(task.id, row);
     }
   }
   restoreTaskListScroll(list, options);
-  renderTaskDetails(workbench, selectedTask, handlers, options, t);
+  detailsHost = workbench.createDiv({ cls: "task-hub-task-details-host" });
+  renderTaskDetails(detailsHost, selectedTask, handlers, options, t);
 }
 
 function restoreTaskListScroll(list: HTMLElement, options: TaskRenderOptions): void {
@@ -115,74 +127,6 @@ function renderTaskSidebar(
     filters.sourceQuery === "apple-reminders",
     () => handlers.onSourceSelect("apple-reminders")
   );
-  const tagCountTasks = filterTasks(allTasks, { ...filters, tags: [], tagQuery: undefined }, now);
-  renderTagFilter(sidebar, tagCountTasks, filters, handlers, t);
-}
-
-function renderTagFilter(
-  container: HTMLElement,
-  allTasks: TaskItem[],
-  filters: TaskFilterState,
-  handlers: TaskRowHandlers,
-  t: Translator
-): void {
-  const tagCounts = countTags(allTasks);
-  container.createEl("h3", { text: t("tags") });
-  const panel = container.createDiv({ cls: "task-hub-sidebar-tag-panel" });
-  const search = panel.createEl("input", {
-    cls: "task-hub-sidebar-tag-search",
-    attr: { placeholder: t("searchTags") },
-    type: "search",
-    value: filters.tagQuery ?? ""
-  });
-  search.addEventListener("input", () => {
-    handlers.onTagQueryChange(search.value);
-  });
-  const query = (filters.tagQuery ?? "").trim().toLowerCase();
-  const visibleTags = query ? tagCounts.filter(([tag]) => tag.toLowerCase().includes(query)) : tagCounts;
-  const list = panel.createDiv({ cls: "task-hub-sidebar-tag-options" });
-  if (visibleTags.length === 0) {
-    list.createDiv({ cls: "task-hub-sidebar-tag-empty", text: t("noTags") });
-    return;
-  }
-  for (const group of buildTagGroups(visibleTags)) {
-    const hasChildren = group.children.length > 0;
-    const rootSelected = filters.tags.includes(group.root);
-    const childSelected = group.children.some((child) => filters.tags.includes(child.tag));
-    const rootMatchesQuery = query && group.root.toLowerCase().includes(query);
-    if (!hasChildren) {
-      renderTagCheckbox(list, group.root, group.directCount, rootSelected, handlers);
-      continue;
-    }
-
-    const details = list.createEl("details", { cls: `task-hub-sidebar-tag-group ${rootSelected || childSelected ? "is-active" : ""}` });
-    details.open = Boolean(rootSelected || childSelected || rootMatchesQuery || query);
-    const summary = details.createEl("summary", { cls: "task-hub-sidebar-tag-summary" });
-    renderTagCheckbox(summary, group.root, group.totalCount, rootSelected, handlers, "task-hub-sidebar-tag-option is-group-root");
-
-    for (const child of group.children) {
-      renderTagCheckbox(details, child.tag, child.count, filters.tags.includes(child.tag), handlers, "task-hub-sidebar-tag-option is-child");
-    }
-  }
-}
-
-function renderTagCheckbox(
-  container: HTMLElement,
-  tag: string,
-  count: number,
-  active: boolean,
-  handlers: TaskRowHandlers,
-  cls = "task-hub-sidebar-tag-option"
-): void {
-  const option = container.createEl("label", { cls: `${cls} ${active ? "is-active" : ""}` });
-  const checkbox = option.createEl("input", { type: "checkbox" });
-  checkbox.checked = active;
-  checkbox.addEventListener("click", (event) => {
-    event.stopPropagation();
-  });
-  checkbox.addEventListener("change", () => handlers.onTagSelect(tag));
-  option.createSpan({ text: tag });
-  option.createSpan({ cls: "task-hub-sidebar-count", text: String(count) });
 }
 
 function renderSidebarButton(
@@ -203,8 +147,9 @@ function renderTaskRow(
   task: TaskItem,
   handlers: TaskRowHandlers,
   options: TaskRenderOptions,
-  selected: boolean
-): void {
+  selected: boolean,
+  onSelect: (task: TaskItem) => void
+): HTMLElement {
   const classes = ["task-hub-task-row", selected ? "is-selected" : "", task.completed ? "is-completed" : ""].filter(Boolean).join(" ");
   const row = container.createDiv({ cls: classes });
   const color = options.sourceColors?.[task.source];
@@ -223,14 +168,19 @@ function renderTaskRow(
   const meta = body.createDiv({ cls: "task-hub-task-meta" });
   if (task.dueDate) meta.createSpan({ text: task.dueDate });
   for (const tag of task.tags) {
-    meta.createSpan({ cls: "task-hub-task-tag", text: tag });
+    const chip = meta.createEl("button", { cls: "task-hub-task-tag", text: tag });
+    chip.addEventListener("click", (event) => {
+      event.stopPropagation();
+      handlers.onTagSelect(tag);
+    });
   }
   meta.createSpan({ cls: "task-hub-task-source", text: task.externalSourceName ?? task.filePath });
 
-  row.addEventListener("click", () => handlers.onSelect(task));
+  row.addEventListener("click", () => onSelect(task));
   row.addEventListener("dblclick", () => {
     handlers.onJump(task);
   });
+  return row;
 }
 
 function renderPlainTaskText(text: string): string {
@@ -244,8 +194,15 @@ function renderTaskDetails(
   options: TaskRenderOptions,
   t: Translator
 ): void {
+  container.empty();
   const details = container.createDiv({ cls: `task-hub-task-details ${task?.completed ? "is-completed" : ""}` });
-  details.createEl("h3", { text: t("taskDetails") });
+  if (task) {
+    const color = options.sourceColors?.[task.source];
+    if (color) details.style.setProperty("--task-hub-source-color", color);
+  }
+  const header = details.createDiv({ cls: "task-hub-detail-header" });
+  renderTaskDetailSourceLogo(header, task);
+  header.createEl("h3", { text: t("taskDetails") });
   if (!task) {
     details.createDiv({ cls: "task-hub-empty", text: t("noMatchingTasks") });
     return;
@@ -301,48 +258,20 @@ function renderTaskDetails(
   }
 }
 
+function renderTaskDetailSourceLogo(container: HTMLElement, task: TaskItem | undefined): void {
+  if (!task) return;
+  const source = task.source === "apple-reminders" ? "apple" : "obsidian";
+  const logo = container.createSpan({ cls: `task-hub-detail-source-logo is-${source}` });
+  logo.setAttr("aria-hidden", "true");
+  if (source === "apple") {
+    logo.createSvg("svg", { attr: { viewBox: "0 0 24 24", focusable: "false" } })
+      .createSvg("path", { attr: { d: "M16.2 2.2c.1 1.2-.4 2.4-1.2 3.3-.8.9-2.1 1.5-3.2 1.4-.1-1.1.4-2.3 1.1-3.1.9-1 2.3-1.6 3.3-1.6ZM20 17.4c-.4.9-.6 1.3-1.1 2.1-.7 1.1-1.8 2.5-3.1 2.5-1.1 0-1.4-.7-2.9-.7s-1.8.7-2.9.7c-1.3 0-2.3-1.3-3.1-2.4-2.1-3.2-2.4-7-.9-9 1-1.3 2.5-2.1 3.9-2.1 1.4 0 2.3.7 3.1.7.8 0 2-.8 3.4-.7 1.2 0 2.4.5 3.3 1.7-2.9 1.6-2.4 5.6.3 7.2Z" } });
+    return;
+  }
+  logo.createSvg("svg", { attr: { viewBox: "0 0 24 24", focusable: "false" } })
+    .createSvg("path", { attr: { d: "M12 2 4.8 6.1 3.5 16 12 22l8.5-6-1.3-9.9L12 2Zm0 2.8 4.7 2.7-1 7.2L12 17.4l-3.7-2.7-1-7.2L12 4.8Zm0 3.2-2.2 1.3.5 3.6L12 14l1.7-1.1.5-3.6L12 8Z" } });
+}
+
 function canOpenSource(task: TaskItem): boolean {
   return task.source === "vault" || task.source === "apple-reminders";
-}
-
-function countTags(tasks: TaskItem[]): Array<[string, number]> {
-  const counts = new Map<string, number>();
-  for (const task of tasks) {
-    for (const tag of task.tags) {
-      counts.set(tag, (counts.get(tag) ?? 0) + 1);
-    }
-  }
-  return Array.from(counts.entries()).sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]));
-}
-
-type TagGroup = {
-  root: string;
-  directCount: number;
-  totalCount: number;
-  children: Array<{ tag: string; count: number }>;
-};
-
-function buildTagGroups(tagCounts: Array<[string, number]>): TagGroup[] {
-  const groups = new Map<string, TagGroup>();
-  for (const [tag, count] of tagCounts) {
-    const root = getRootTag(tag);
-    const group = groups.get(root) ?? { root, directCount: 0, totalCount: 0, children: [] };
-    group.totalCount += count;
-    if (tag === root) {
-      group.directCount += count;
-    } else {
-      group.children.push({ tag, count });
-    }
-    groups.set(root, group);
-  }
-
-  return Array.from(groups.values()).sort((left, right) => {
-    if (right.totalCount !== left.totalCount) return right.totalCount - left.totalCount;
-    return left.root.localeCompare(right.root);
-  });
-}
-
-function getRootTag(tag: string): string {
-  const slashIndex = tag.indexOf("/");
-  return slashIndex === -1 ? tag : tag.slice(0, slashIndex);
 }

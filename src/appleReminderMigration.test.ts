@@ -446,7 +446,8 @@ describe("Apple Reminders migration", () => {
       title: "Send invoice",
       date: "2026-05-21",
       startTime: "09:30",
-      reminderListId: "list-1"
+      reminderListId: "list-1",
+      notes: "Bring the signed copy"
     });
 
     expect(setAppleReminderDetails).toHaveBeenCalledWith({
@@ -454,7 +455,8 @@ describe("Apple Reminders migration", () => {
       title: "Send invoice",
       dueDate: "2026-05-21",
       startMinutes: 570,
-      listId: "list-1"
+      listId: "list-1",
+      notes: "Bring the signed copy"
     });
     expect(notices).toContain("Task updated.");
   });
@@ -487,7 +489,8 @@ describe("Apple Reminders migration", () => {
       startTime: "10:00",
       endTime: "11:15",
       allDay: false,
-      calendarId: "calendar-1"
+      calendarId: "calendar-1",
+      notes: "Discuss launch scope"
     });
 
     expect(setAppleCalendarEventDetails).toHaveBeenCalledWith({
@@ -499,7 +502,8 @@ describe("Apple Reminders migration", () => {
       start: "2026-05-20T09:30:00",
       end: "2026-05-20T10:30:00",
       allDay: false,
-      calendarId: "calendar-1"
+      calendarId: "calendar-1",
+      notes: "Discuss launch scope"
     });
     expect(notices).toContain("Event updated.");
   });

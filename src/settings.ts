@@ -84,8 +84,9 @@ export class TaskHubSettingTab extends PluginSettingTab {
     super(app, plugin);
   }
 
-  display(): void {
+  display(options: { preserveScroll?: boolean } = {}): void {
     const { containerEl } = this;
+    const scrollTop = options.preserveScroll ? containerEl.scrollTop : undefined;
     const t = createTranslator(this.plugin.settings.language);
     containerEl.empty();
 
@@ -104,7 +105,7 @@ export class TaskHubSettingTab extends PluginSettingTab {
           .onChange(async (value) => {
             this.plugin.settings.language = value as TaskHubSettings["language"];
             await this.plugin.saveSettings();
-            this.display();
+            this.display({ preserveScroll: true });
           });
       });
 
@@ -181,7 +182,7 @@ export class TaskHubSettingTab extends PluginSettingTab {
         toggle.setValue(this.plugin.settings.calendarTaskCreationEnabled).onChange(async (value) => {
           this.plugin.settings.calendarTaskCreationEnabled = value;
           await this.plugin.saveSettings();
-          this.display();
+          this.display({ preserveScroll: true });
         });
       });
 
@@ -247,6 +248,9 @@ export class TaskHubSettingTab extends PluginSettingTab {
 
     this.displayCalendarSources(containerEl);
     this.displayLocalApple(containerEl);
+    if (scrollTop !== undefined) {
+      containerEl.scrollTop = scrollTop;
+    }
   }
 
   private displayLocalApple(containerEl: HTMLElement): void {
@@ -260,7 +264,7 @@ export class TaskHubSettingTab extends PluginSettingTab {
         toggle.setValue(this.plugin.settings.localApple.enabled).onChange(async (value) => {
           if (value && !this.plugin.isLocalAppleSupported()) {
             this.plugin.notifyLocalAppleUnsupported();
-            this.display();
+            this.display({ preserveScroll: true });
             return;
           }
           this.plugin.settings.localApple.enabled = value;
@@ -275,7 +279,7 @@ export class TaskHubSettingTab extends PluginSettingTab {
           }
           await this.plugin.saveSettings();
           await this.plugin.syncLocalApple();
-          this.display();
+          this.display({ preserveScroll: true });
         });
       })
       .addButton((button) => {
@@ -284,7 +288,7 @@ export class TaskHubSettingTab extends PluginSettingTab {
           .setDisabled(!this.plugin.settings.localApple.enabled)
           .onClick(async () => {
             await this.plugin.refreshLocalAppleStatus();
-            this.display();
+            this.display({ preserveScroll: true });
           });
       })
       .addButton((button) => {
@@ -296,7 +300,7 @@ export class TaskHubSettingTab extends PluginSettingTab {
           )
           .onClick(async () => {
             await this.plugin.requestLocalApplePermissions();
-            this.display();
+            this.display({ preserveScroll: true });
           });
       });
 
@@ -311,7 +315,7 @@ export class TaskHubSettingTab extends PluginSettingTab {
         toggle.setValue(this.plugin.settings.localApple.calendarEnabled).onChange(async (value) => {
           if (value && !this.plugin.isLocalAppleSupported()) {
             this.plugin.notifyLocalAppleUnsupported();
-            this.display();
+            this.display({ preserveScroll: true });
             return;
           }
           this.plugin.settings.localApple.calendarEnabled = value;
@@ -322,7 +326,7 @@ export class TaskHubSettingTab extends PluginSettingTab {
           }
           await this.plugin.saveSettings();
           await this.plugin.syncLocalApple();
-          this.display();
+          this.display({ preserveScroll: true });
         });
       });
 
@@ -337,7 +341,7 @@ export class TaskHubSettingTab extends PluginSettingTab {
         toggle.setValue(this.plugin.settings.localApple.remindersEnabled).onChange(async (value) => {
           if (value && !this.plugin.isLocalAppleSupported()) {
             this.plugin.notifyLocalAppleUnsupported();
-            this.display();
+            this.display({ preserveScroll: true });
             return;
           }
           this.plugin.settings.localApple.remindersEnabled = value;
@@ -348,7 +352,7 @@ export class TaskHubSettingTab extends PluginSettingTab {
           }
           await this.plugin.saveSettings();
           await this.plugin.syncLocalApple();
-          this.display();
+          this.display({ preserveScroll: true });
         });
       });
 
@@ -368,7 +372,7 @@ export class TaskHubSettingTab extends PluginSettingTab {
       });
       button.addEventListener("click", () => {
         this.localAppleTab = tab;
-        this.display();
+        this.display({ preserveScroll: true });
       });
     }
 
@@ -420,7 +424,7 @@ export class TaskHubSettingTab extends PluginSettingTab {
         toggle.setValue(this.plugin.settings.localApple.calendarWritebackEnabled).onChange(async (value) => {
           if (value && !this.plugin.isLocalAppleSupported()) {
             this.plugin.notifyLocalAppleUnsupported();
-            this.display();
+            this.display({ preserveScroll: true });
             return;
           }
           this.plugin.settings.localApple.calendarWritebackEnabled = value;
@@ -428,7 +432,7 @@ export class TaskHubSettingTab extends PluginSettingTab {
             this.plugin.settings.localApple.calendarReminderConversionEnabled = false;
           }
           await this.plugin.saveSettings();
-          this.display();
+          this.display({ preserveScroll: true });
         });
       });
 
@@ -439,16 +443,16 @@ export class TaskHubSettingTab extends PluginSettingTab {
         toggle.setValue(this.plugin.settings.localApple.calendarTaskSendEnabled).onChange(async (value) => {
           if (value && !this.plugin.isLocalAppleSupported()) {
             this.plugin.notifyLocalAppleUnsupported();
-            this.display();
+            this.display({ preserveScroll: true });
             return;
           }
           if (value && !(await this.plugin.confirmRiskySourceDeletionSetting())) {
-            this.display();
+            this.display({ preserveScroll: true });
             return;
           }
           this.plugin.settings.localApple.calendarTaskSendEnabled = value;
           await this.plugin.saveSettings();
-          this.display();
+          this.display({ preserveScroll: true });
         });
       });
 
@@ -460,16 +464,16 @@ export class TaskHubSettingTab extends PluginSettingTab {
           toggle.setValue(this.plugin.settings.localApple.calendarReminderConversionEnabled).onChange(async (value) => {
             if (value && !this.plugin.canConvertAppleCalendarAndReminders()) {
               this.plugin.notifyLocalAppleConversionDisabled();
-              this.display();
+              this.display({ preserveScroll: true });
               return;
             }
             if (value && !(await this.plugin.confirmRiskyAppleConversionSetting())) {
-              this.display();
+              this.display({ preserveScroll: true });
               return;
             }
             this.plugin.settings.localApple.calendarReminderConversionEnabled = value;
             await this.plugin.saveSettings();
-            this.display();
+            this.display({ preserveScroll: true });
           });
         });
     }
@@ -496,7 +500,7 @@ export class TaskHubSettingTab extends PluginSettingTab {
             this.plugin.settings.localApple.calendarLookbackDays = days;
             await this.plugin.saveSettings();
             await this.plugin.syncLocalApple({ silent: true });
-            this.display();
+            this.display({ preserveScroll: true });
           }
         });
       });
@@ -510,7 +514,7 @@ export class TaskHubSettingTab extends PluginSettingTab {
             this.plugin.settings.localApple.calendarLookaheadDays = days;
             await this.plugin.saveSettings();
             await this.plugin.syncLocalApple({ silent: true });
-            this.display();
+            this.display({ preserveScroll: true });
           }
         });
       });
@@ -567,7 +571,7 @@ export class TaskHubSettingTab extends PluginSettingTab {
         toggle.setValue(this.plugin.settings.localApple.remindersWritebackEnabled).onChange(async (value) => {
           if (value && !this.plugin.isLocalAppleSupported()) {
             this.plugin.notifyLocalAppleUnsupported();
-            this.display();
+            this.display({ preserveScroll: true });
             return;
           }
           this.plugin.settings.localApple.remindersWritebackEnabled = value;
@@ -575,7 +579,7 @@ export class TaskHubSettingTab extends PluginSettingTab {
             this.plugin.settings.localApple.calendarReminderConversionEnabled = false;
           }
           await this.plugin.saveSettings();
-          this.display();
+          this.display({ preserveScroll: true });
         });
       });
 
@@ -586,11 +590,11 @@ export class TaskHubSettingTab extends PluginSettingTab {
         toggle.setValue(this.plugin.settings.localApple.remindersCreateEnabled).onChange(async (value) => {
           if (value && !this.plugin.isLocalAppleSupported()) {
             this.plugin.notifyLocalAppleUnsupported();
-            this.display();
+            this.display({ preserveScroll: true });
             return;
           }
           if (value && !(await this.plugin.confirmRiskySourceDeletionSetting())) {
-            this.display();
+            this.display({ preserveScroll: true });
             return;
           }
           this.plugin.settings.localApple.remindersCreateEnabled = value;
@@ -598,7 +602,7 @@ export class TaskHubSettingTab extends PluginSettingTab {
             this.plugin.settings.localApple.calendarReminderConversionEnabled = false;
           }
           await this.plugin.saveSettings();
-          this.display();
+          this.display({ preserveScroll: true });
         });
       });
 
@@ -630,19 +634,26 @@ export class TaskHubSettingTab extends PluginSettingTab {
       .setDesc(description)
       .addExtraButton((button) => {
         const icon = button.extraSettingsEl;
+        const picker = icon.createEl("input", { cls: "task-hub-color-picker", type: "color" }) as HTMLInputElement;
         const setPreview = (color: string) => {
           icon.style.setProperty("--task-hub-color-preview", color);
           icon.setAttribute("aria-label", `${name}: ${color}`);
+          picker.value = normalizeColor(color, fallback);
         };
         button.setIcon("circle").setTooltip(name);
         icon.addClass("task-hub-color-preview");
         setPreview(value);
+        picker.addEventListener("input", async () => {
+          setColor(normalizeColor(picker.value, fallback));
+          await this.plugin.saveSettings();
+          this.display({ preserveScroll: true });
+        });
       })
       .addText((text) => {
         const applyColor = async (nextValue: string) => {
           setColor(normalizeColor(nextValue, fallback));
           await this.plugin.saveSettings();
-          this.display();
+          this.display({ preserveScroll: true });
         };
         text.setPlaceholder(fallback).setValue(value).onChange(applyColor);
       })
@@ -659,7 +670,7 @@ export class TaskHubSettingTab extends PluginSettingTab {
           swatch.style.setProperty("--task-hub-swatch-color", color);
           swatch.addEventListener("click", () => {
             setColor(color);
-            void this.plugin.saveSettings().then(() => this.display());
+            void this.plugin.saveSettings().then(() => this.display({ preserveScroll: true }));
           });
         }
       });
@@ -684,7 +695,7 @@ export class TaskHubSettingTab extends PluginSettingTab {
           toggle.setValue(source.enabled).onChange(async (value) => {
             source.enabled = value;
             await this.plugin.saveSettings();
-            this.display();
+            this.display({ preserveScroll: true });
           });
         })
         .addText((text) => {
@@ -705,7 +716,7 @@ export class TaskHubSettingTab extends PluginSettingTab {
         .addButton((button) => {
           button.setButtonText(t("sync")).onClick(async () => {
             await this.plugin.syncCalendarSource(source.id);
-            this.display();
+            this.display({ preserveScroll: true });
           });
         })
         .addButton((button) => {
@@ -714,7 +725,7 @@ export class TaskHubSettingTab extends PluginSettingTab {
               (candidate) => candidate.id !== source.id
             );
             await this.plugin.saveSettings();
-            this.display();
+            this.display({ preserveScroll: true });
           });
         });
     }
@@ -739,7 +750,7 @@ export class TaskHubSettingTab extends PluginSettingTab {
           if (!name || !url) return;
           this.plugin.settings.calendarSources.push(createCalendarSource(name, url));
           await this.plugin.saveSettings();
-          this.display();
+          this.display({ preserveScroll: true });
         });
       });
   }

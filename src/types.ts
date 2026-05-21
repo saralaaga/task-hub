@@ -54,6 +54,7 @@ export type CalendarItemEditDraft =
       startTime?: string;
       tags?: string[];
       reminderListId?: string;
+      notes?: string;
     }
   | {
       kind: "event";
@@ -63,6 +64,7 @@ export type CalendarItemEditDraft =
       endTime?: string;
       allDay: boolean;
       calendarId?: string;
+      notes?: string;
     };
 
 export type CalendarSourceStatus =

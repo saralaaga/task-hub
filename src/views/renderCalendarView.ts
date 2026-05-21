@@ -90,7 +90,15 @@ const WEEK_START_DAY_INDEX: Record<WeekStart, number> = {
 type TimedItemLayout = {
   columnIndex: number;
   columnCount: number;
-  stackIndex?: number;
+  topOffset?: number;
+};
+
+type TimedLayoutCandidate = {
+  item: CalendarItem;
+  startMinutes: number;
+  visualStart: number;
+  visualEnd: number;
+  topOffset: number;
 };
 
 export function renderCalendarView(
@@ -307,14 +315,10 @@ function renderAgendaDayHeader(
 
 function layoutTimedItems(items: CalendarItem[]): Map<string, TimedItemLayout> {
   const layouts = new Map<string, TimedItemLayout>();
-  for (const [item, layout] of layoutTimedTaskPoints(items.filter((item) => item.kind === "task"))) {
-    layouts.set(item.id, layout);
-  }
-
-  const sortedItems = [...items]
-    .filter((item) => item.kind === "event")
-    .sort((left, right) => (left.startMinutes ?? 0) - (right.startMinutes ?? 0) || itemEndMinutes(left) - itemEndMinutes(right) || left.title.localeCompare(right.title));
-  let group: CalendarItem[] = [];
+  const sortedItems = layoutTimedTaskPoints(items.filter((item) => item.kind === "task"))
+    .concat(items.filter((item) => item.kind === "event").map(timedEventLayoutCandidate))
+    .sort((left, right) => left.visualStart - right.visualStart || left.visualEnd - right.visualEnd || left.item.title.localeCompare(right.item.title));
+  let group: TimedLayoutCandidate[] = [];
   let groupEnd = -1;
 
   const flushGroup = () => {
@@ -326,50 +330,69 @@ function layoutTimedItems(items: CalendarItem[]): Map<string, TimedItemLayout> {
     groupEnd = -1;
   };
 
-  for (const item of sortedItems) {
-    const start = item.startMinutes ?? 0;
-    if (group.length > 0 && start >= groupEnd) {
+  for (const candidate of sortedItems) {
+    if (group.length > 0 && candidate.visualStart >= groupEnd) {
       flushGroup();
     }
-    group.push(item);
-    groupEnd = Math.max(groupEnd, itemEndMinutes(item));
+    group.push(candidate);
+    groupEnd = Math.max(groupEnd, candidate.visualEnd);
   }
   flushGroup();
 
   return layouts;
 }
 
-function layoutTimedTaskPoints(items: CalendarItem[]): Map<CalendarItem, TimedItemLayout> {
-  const layouts = new Map<CalendarItem, TimedItemLayout>();
+function layoutTimedTaskPoints(items: CalendarItem[]): TimedLayoutCandidate[] {
+  const candidates: TimedLayoutCandidate[] = [];
   const laneEnds: number[] = [];
   const sortedItems = [...items].sort((left, right) => (left.startMinutes ?? 0) - (right.startMinutes ?? 0) || (right.createdSortKey ?? "").localeCompare(left.createdSortKey ?? "") || left.title.localeCompare(right.title));
 
   for (const item of sortedItems) {
-    const top = taskPointTopPixels(item.startMinutes ?? 0);
-    let stackIndex = laneEnds.findIndex((end) => end <= top);
-    if (stackIndex === -1) {
-      stackIndex = laneEnds.length;
+    const startMinutes = item.startMinutes ?? 0;
+    const top = taskPointTopPixels(startMinutes);
+    let laneIndex = laneEnds.findIndex((end) => end <= top);
+    if (laneIndex === -1) {
+      laneIndex = laneEnds.length;
       laneEnds.push(0);
     }
-    laneEnds[stackIndex] = top + TASK_TIME_POINT_HEIGHT + TASK_TIME_POINT_GAP;
-    layouts.set(item, { columnIndex: 0, columnCount: 1, stackIndex });
+    const topOffset = laneIndex * (TASK_TIME_POINT_HEIGHT + TASK_TIME_POINT_GAP);
+    const visualStart = visualMinutesForPixels(top + topOffset);
+    const visualEnd = visualMinutesForPixels(top + topOffset + TASK_TIME_POINT_HEIGHT + TASK_TIME_POINT_GAP);
+    laneEnds[laneIndex] = top + topOffset + TASK_TIME_POINT_HEIGHT + TASK_TIME_POINT_GAP;
+    candidates.push({
+      item,
+      startMinutes,
+      visualStart,
+      visualEnd,
+      topOffset
+    });
   }
-  return layouts;
+  return candidates;
 }
 
-function layoutOverlapGroup(items: CalendarItem[]): Map<CalendarItem, TimedItemLayout> {
+function timedEventLayoutCandidate(item: CalendarItem): TimedLayoutCandidate {
+  const startMinutes = item.startMinutes ?? 0;
+  return {
+    item,
+    startMinutes,
+    visualStart: startMinutes,
+    visualEnd: itemEndMinutes(item),
+    topOffset: 0
+  };
+}
+
+function layoutOverlapGroup(items: TimedLayoutCandidate[]): Map<CalendarItem, TimedItemLayout> {
   const layouts = new Map<CalendarItem, TimedItemLayout>();
   const columnEnds: number[] = [];
 
-  for (const item of items) {
-    const start = item.startMinutes ?? 0;
-    let columnIndex = columnEnds.findIndex((end) => end <= start);
+  for (const candidate of items) {
+    let columnIndex = columnEnds.findIndex((end) => end <= candidate.visualStart);
     if (columnIndex === -1) {
       columnIndex = columnEnds.length;
       columnEnds.push(0);
     }
-    columnEnds[columnIndex] = itemEndMinutes(item);
-    layouts.set(item, { columnIndex, columnCount: 1 });
+    columnEnds[columnIndex] = candidate.visualEnd;
+    layouts.set(candidate.item, { columnIndex, columnCount: 1, topOffset: candidate.topOffset });
   }
 
   const columnCount = Math.max(1, columnEnds.length);
@@ -402,8 +425,7 @@ function renderTimedCalendarItem(
   const isTaskPoint = item.kind === "task";
   if (isTaskPoint) row.addClass("is-time-point");
   const baseTop = ((startMinutes - startHour * 60) / 60) * HOUR_HEIGHT;
-  const stackOffset = isTaskPoint ? (layout?.stackIndex ?? 0) * (TASK_TIME_POINT_HEIGHT + TASK_TIME_POINT_GAP) : 0;
-  row.style.top = `${baseTop + stackOffset}px`;
+  row.style.top = `${baseTop + (layout?.topOffset ?? 0)}px`;
   row.style.height = isTaskPoint ? `${TASK_TIME_POINT_HEIGHT}px` : `${Math.max(30, ((endMinutes - startMinutes) / 60) * HOUR_HEIGHT - 4)}px`;
   if (layout && layout.columnCount > 1) {
     row.style.left = `calc(${(100 * layout.columnIndex) / layout.columnCount}% + 6px)`;
@@ -681,6 +703,7 @@ function renderCalendarDetailsPopover(anchor: HTMLElement, item: CalendarItem, h
   popover.addEventListener("click", (event) => event.stopPropagation());
   ownerDocument.body.appendChild(popover);
   activeDetailsElement = popover;
+  if (item.color) popover.style.setProperty("--task-hub-item-color", item.color);
   positionDetailsPopover(popover, anchor);
 
   const closePopover = () => {
@@ -698,17 +721,25 @@ function renderCalendarDetailsPopover(anchor: HTMLElement, item: CalendarItem, h
   const header = popover.createDiv({ cls: "task-hub-calendar-detail-header" });
   const title = header.createDiv({ cls: "task-hub-calendar-detail-title" });
   renderDetailSourceLogo(title, item);
-  title.createSpan({ text: state.t("calendarDetails") });
+  title.createSpan({ text: state.t(item.task ? "taskDetails" : "calendarDetails") });
+  const headerControls = header.createDiv({ cls: "task-hub-calendar-detail-header-controls" });
+  const headerSourceSelect = item.event?.sourceId === "apple-calendar"
+    ? detailCompactSelect(headerControls, state.appleCalendars ?? [], item.event.calendarId)
+    : item.task?.source === "apple-reminders"
+      ? detailCompactSelect(headerControls, state.appleReminderLists ?? [], item.task.externalListId)
+    : undefined;
+  if (headerSourceSelect) header.addClass("has-calendar-select");
   const close = header.createEl("button", { cls: "task-hub-icon-button", text: "×" });
   close.setAttr("aria-label", state.t("cancel"));
   close.addEventListener("click", closePopover);
+  bindDetailsPopoverDrag(popover, header, ownerDocument);
 
   if (item.task) {
-    renderTaskDetailsPopover(popover, item.task, handlers, state, closePopover);
+    renderTaskDetailsPopover(popover, item.task, handlers, state, closePopover, item.task.source === "apple-reminders" ? headerSourceSelect : undefined);
     return;
   }
   if (item.event) {
-    renderEventDetailsPopover(popover, item.event, handlers, state, closePopover);
+    renderEventDetailsPopover(popover, item.event, handlers, state, closePopover, headerSourceSelect);
   }
 }
 
@@ -744,36 +775,79 @@ function positionDetailsPopover(popover: HTMLElement, anchor: HTMLElement): void
   popover.style.top = `${top}px`;
 }
 
+function bindDetailsPopoverDrag(popover: HTMLElement, handle: HTMLElement, ownerDocument: Document): void {
+  handle.addEventListener("pointerdown", (event) => {
+    const target = event.target as HTMLElement | null;
+    if (target?.closest("button, input, select, textarea, a")) return;
+    event.preventDefault();
+    event.stopPropagation();
+
+    const startLeft = Number.parseFloat(popover.style.left || "0");
+    const startTop = Number.parseFloat(popover.style.top || "0");
+    const startX = event.clientX;
+    const startY = event.clientY;
+    const pointerId = event.pointerId;
+    popover.addClass("is-dragging");
+
+    const move = (moveEvent: PointerEvent) => {
+      if (moveEvent.pointerId !== pointerId) return;
+      moveEvent.preventDefault();
+      const maxLeft = Math.max(8, (window.innerWidth || 1024) - popover.getBoundingClientRect().width - 8);
+      const maxTop = Math.max(8, (window.innerHeight || 768) - popover.getBoundingClientRect().height - 8);
+      const left = Math.max(8, Math.min(startLeft + moveEvent.clientX - startX, maxLeft));
+      const top = Math.max(8, Math.min(startTop + moveEvent.clientY - startY, maxTop));
+      popover.style.left = `${left}px`;
+      popover.style.top = `${top}px`;
+    };
+
+    const end = (endEvent: PointerEvent) => {
+      if (endEvent.pointerId !== pointerId) return;
+      popover.removeClass("is-dragging");
+      ownerDocument.removeEventListener("pointermove", move);
+      ownerDocument.removeEventListener("pointerup", end);
+      ownerDocument.removeEventListener("pointercancel", end);
+    };
+
+    ownerDocument.addEventListener("pointermove", move);
+    ownerDocument.addEventListener("pointerup", end);
+    ownerDocument.addEventListener("pointercancel", end);
+  });
+}
+
 function renderTaskDetailsPopover(
   popover: HTMLElement,
   task: TaskItem,
   handlers: CalendarViewHandlers,
   state: CalendarViewState,
-  closePopover: () => void
+  closePopover: () => void,
+  headerList?: HTMLSelectElement
 ): void {
   const editable = task.source === "vault" || (task.source === "apple-reminders" && state.allowAppleReminderWriteback);
-  const title = detailInput(popover, state.t("taskCreationBody"), task.text);
-  const date = detailInput(popover, state.t("date"), task.dueDate ?? "", "date");
-  const time = detailInput(popover, state.t("startTime"), timeFromTask(task), "time");
+  const form = popover.createDiv({ cls: "task-hub-calendar-detail-form" });
+  const title = detailInput(form, state.t("taskCreationBody"), task.text);
+  const date = detailInput(form, state.t("date"), task.dueDate ?? "", "date");
+  const time = detailInput(form, state.t("startTime"), timeFromTask(task), "time");
+  let notes: HTMLTextAreaElement | undefined;
   let tags: HTMLInputElement | undefined;
   let list: HTMLSelectElement | undefined;
   if (task.source === "vault") {
-    tags = detailInput(popover, state.t("tags"), task.tags.join(" ")) as HTMLInputElement;
+    tags = detailInput(form, state.t("tags"), task.tags.join(" ")) as HTMLInputElement;
   }
   if (task.source === "apple-reminders") {
-    list = detailSelect(popover, state.t("appleReminderList"), state.appleReminderLists ?? [], task.externalListId);
+    list = headerList ?? detailSelect(form, state.t("appleReminderList"), state.appleReminderLists ?? [], task.externalListId, true);
+    notes = detailTextarea(form, state.t("notes"), task.contextPreview ?? "");
   }
   if (!editable) {
-    for (const field of [title, date, time, tags, list]) {
+    for (const field of [title, date, time, tags, notes, list]) {
       if (field) field.disabled = true;
     }
   }
   const actions = popover.createDiv({ cls: "task-hub-calendar-detail-actions" });
   const save = actions.createEl("button", { cls: "mod-cta", text: state.t("save") });
   const updateSaveState = () => {
-    save.disabled = !editable || !taskDraftChanged(task, title.value, date.value, time.value, tags?.value, list?.value);
+    save.disabled = !editable || !taskDraftChanged(task, title.value, date.value, time.value, tags?.value, list?.value, notes?.value);
   };
-  for (const input of [title, date, time, tags, list].filter(Boolean)) {
+  for (const input of [title, date, time, tags, notes, list].filter(Boolean)) {
     input?.addEventListener("input", updateSaveState);
     input?.addEventListener("change", updateSaveState);
   }
@@ -785,7 +859,8 @@ function renderTaskDetailsPopover(
       date: date.value,
       startTime: time.value,
       tags: tags ? tags.value.split(/\s+/).filter(Boolean) : undefined,
-      reminderListId: list?.value
+      reminderListId: list?.value,
+      notes: notes?.value
     });
     closePopover();
   });
@@ -804,39 +879,42 @@ function renderEventDetailsPopover(
   event: CalendarEvent,
   handlers: CalendarViewHandlers,
   state: CalendarViewState,
-  closePopover: () => void
+  closePopover: () => void,
+  headerCalendar?: HTMLSelectElement
 ): void {
   const editable = event.sourceId === "apple-calendar" && Boolean(state.allowAppleCalendarWriteback);
-  const title = detailInput(popover, state.t("eventCreationPlaceholder"), event.title);
-  const date = detailInput(popover, state.t("date"), event.start.slice(0, 10), "date");
-  const allDay = popover.createEl("label", { cls: "task-hub-calendar-detail-check" });
+  const form = popover.createDiv({ cls: "task-hub-calendar-detail-form" });
+  const title = detailInput(form, state.t("eventCreationPlaceholder"), event.title);
+  const dateRow = form.createDiv({ cls: "task-hub-calendar-detail-date-row" });
+  const date = detailInput(dateRow, state.t("date"), event.start.slice(0, 10), "date");
+  const allDay = dateRow.createEl("label", { cls: "task-hub-calendar-detail-check" });
   const allDayCheckbox = allDay.createEl("input", { type: "checkbox" });
   allDayCheckbox.checked = event.allDay;
   allDay.createSpan({ text: state.t("allDay") });
-  const startField = detailInputField(popover, state.t("startTime"), event.allDay ? "" : timeFromDateTime(event.start), "time");
-  const endField = detailInputField(popover, state.t("endTime"), event.allDay ? "" : timeFromDateTime(event.end), "time");
+  const timeRow = form.createDiv({ cls: "task-hub-calendar-detail-time-row" });
+  const startField = detailInputField(timeRow, state.t("startTime"), event.allDay ? "" : timeFromDateTime(event.start), "time");
+  const endField = detailInputField(timeRow, state.t("endTime"), event.allDay ? "" : timeFromDateTime(event.end), "time");
   const start = startField.input;
   const end = endField.input;
   const updateTimedFieldVisibility = () => {
-    startField.field.toggleClass("is-hidden", allDayCheckbox.checked);
-    endField.field.toggleClass("is-hidden", allDayCheckbox.checked);
+    timeRow.toggleClass("is-hidden", allDayCheckbox.checked);
   };
   updateTimedFieldVisibility();
-  const calendar = detailSelect(popover, state.t("localAppleCalendar"), state.appleCalendars ?? [], event.calendarId);
-  if (event.location) popover.createDiv({ cls: "task-hub-detail-facts", text: event.location });
-  if (event.description) popover.createDiv({ cls: "task-hub-detail-context", text: event.description });
-  if (event.url) popover.createDiv({ cls: "task-hub-detail-note", text: event.url });
+  const calendar = headerCalendar ?? detailSelect(form, state.t("localAppleCalendar"), state.appleCalendars ?? [], event.calendarId, true);
+  const notes = detailTextarea(form, state.t("notes"), event.description ?? "");
+  if (event.location) form.createDiv({ cls: "task-hub-calendar-detail-readonly-row", text: event.location });
+  if (event.url) form.createDiv({ cls: "task-hub-calendar-detail-readonly-row is-muted", text: event.url });
   if (!editable) {
-    for (const field of [title, date, start, end, calendar, allDayCheckbox]) {
+    for (const field of [title, date, start, end, calendar, notes, allDayCheckbox]) {
       field.disabled = true;
     }
   }
   const actions = popover.createDiv({ cls: "task-hub-calendar-detail-actions" });
   const save = actions.createEl("button", { cls: "mod-cta", text: state.t("save") });
   const updateSaveState = () => {
-    save.disabled = !editable || !eventDraftChanged(event, title.value, date.value, start.value, end.value, allDayCheckbox.checked, calendar.value);
+    save.disabled = !editable || !eventDraftChanged(event, title.value, date.value, start.value, end.value, allDayCheckbox.checked, calendar.value, notes.value);
   };
-  for (const input of [title, date, start, end, calendar, allDayCheckbox]) {
+  for (const input of [title, date, start, end, calendar, notes, allDayCheckbox]) {
     input.addEventListener("input", updateSaveState);
     input.addEventListener("change", () => {
       updateTimedFieldVisibility();
@@ -852,7 +930,8 @@ function renderEventDetailsPopover(
       startTime: start.value,
       endTime: end.value,
       allDay: allDayCheckbox.checked,
-      calendarId: calendar.value
+      calendarId: calendar.value,
+      notes: notes.value
     });
     closePopover();
   });
@@ -885,15 +964,39 @@ function detailInputField(
   return { field, input };
 }
 
+function detailTextarea(container: HTMLElement, label: string, value: string | undefined): HTMLTextAreaElement {
+  const field = container.createEl("label", { cls: "task-hub-calendar-detail-field" });
+  field.createSpan({ text: label });
+  const textarea = field.createEl("textarea") as HTMLTextAreaElement;
+  textarea.value = value ?? "";
+  return textarea;
+}
+
 function detailSelect(
   container: HTMLElement,
   label: string,
   options: Array<{ id: string; name: string }>,
-  value: string | undefined
+  value: string | undefined,
+  inline = false
 ): HTMLSelectElement {
-  const field = container.createEl("label", { cls: "task-hub-calendar-detail-field" });
+  const field = container.createEl("label", {
+    cls: `task-hub-calendar-detail-field ${inline ? "task-hub-calendar-detail-inline-row" : ""}`
+  });
   field.createSpan({ text: label });
   const select = field.createEl("select") as HTMLSelectElement;
+  for (const option of options) {
+    select.createEl("option", { value: option.id, text: option.name });
+  }
+  if (value) select.value = value;
+  return select;
+}
+
+function detailCompactSelect(
+  container: HTMLElement,
+  options: Array<{ id: string; name: string }>,
+  value: string | undefined
+): HTMLSelectElement {
+  const select = container.createEl("select", { cls: "task-hub-calendar-detail-header-select" }) as HTMLSelectElement;
   for (const option of options) {
     select.createEl("option", { value: option.id, text: option.name });
   }
@@ -909,22 +1012,24 @@ function timeFromDateTime(value: string | undefined): string {
   return value?.match(/T(\d{2}):(\d{2})/)?.slice(1, 3).join(":") ?? "";
 }
 
-function taskDraftChanged(task: TaskItem, title: string, date: string, time: string, tags: string | undefined, listId: string | undefined): boolean {
+function taskDraftChanged(task: TaskItem, title: string, date: string, time: string, tags: string | undefined, listId: string | undefined, notes: string | undefined): boolean {
   if (title.trim() !== task.text) return true;
   if (date !== (task.dueDate ?? "")) return true;
   if (time !== timeFromTask(task)) return true;
   if (task.source === "vault" && (tags ?? "").trim() !== task.tags.join(" ")) return true;
   if (task.source === "apple-reminders" && (listId ?? "") !== (task.externalListId ?? "")) return true;
+  if (task.source === "apple-reminders" && (notes ?? "") !== (task.contextPreview ?? "")) return true;
   return false;
 }
 
-function eventDraftChanged(event: CalendarEvent, title: string, date: string, start: string, end: string, allDay: boolean, calendarId: string): boolean {
+function eventDraftChanged(event: CalendarEvent, title: string, date: string, start: string, end: string, allDay: boolean, calendarId: string, notes: string): boolean {
   if (title.trim() !== event.title) return true;
   if (date !== event.start.slice(0, 10)) return true;
   if (allDay !== event.allDay) return true;
   if (!allDay && start !== timeFromDateTime(event.start)) return true;
   if (!allDay && end !== timeFromDateTime(event.end)) return true;
   if (event.sourceId === "apple-calendar" && calendarId !== (event.calendarId ?? "")) return true;
+  if (event.sourceId === "apple-calendar" && notes !== (event.description ?? "")) return true;
   return false;
 }
 
@@ -983,7 +1088,10 @@ function bindCalendarItemContextMenu(
           .setIcon("bell-plus")
           .onClick(() => {
             const task = item.task;
-            if (task) handlers.onTaskSendToAppleReminders?.(task);
+            if (task) {
+              markCalendarItemExternalSending(item);
+              handlers.onTaskSendToAppleReminders?.(task);
+            }
           });
       });
     }
@@ -995,7 +1103,10 @@ function bindCalendarItemContextMenu(
           .setIcon("calendar-plus")
           .onClick(() => {
             const task = item.task;
-            if (task) handlers.onTaskSendToAppleCalendar?.(task);
+            if (task) {
+              markCalendarItemExternalSending(item);
+              handlers.onTaskSendToAppleCalendar?.(task);
+            }
           });
       });
     }
@@ -1007,7 +1118,10 @@ function bindCalendarItemContextMenu(
           .setIcon("bell-plus")
           .onClick(() => {
             const event = item.event;
-            if (event) handlers.onEventSendToAppleReminders?.(event);
+            if (event) {
+              markCalendarItemExternalSending(item);
+              handlers.onEventSendToAppleReminders?.(event);
+            }
           });
       });
     }
@@ -1021,6 +1135,13 @@ function bindCalendarItemContextMenu(
     }
     menu.showAtMouseEvent(event);
   });
+}
+
+function markCalendarItemExternalSending(item: CalendarItem): void {
+  const key = calendarItemSelectionKey(item);
+  for (const element of activeCalendarItemElements.get(key) ?? []) {
+    element.addClass("is-external-sending");
+  }
 }
 
 function bindCalendarItemDrag(element: HTMLElement, item: CalendarItem, state: CalendarViewState): void {
@@ -1321,6 +1442,10 @@ function isWritableAppleCalendarEvent(item: CalendarItem, state: CalendarViewSta
 
 function taskPointTopPixels(startMinutes: number): number {
   return (startMinutes / 60) * HOUR_HEIGHT;
+}
+
+function visualMinutesForPixels(pixels: number): number {
+  return (pixels / HOUR_HEIGHT) * 60;
 }
 
 function calendarItemClass(item: CalendarItem, extraClass = ""): string {

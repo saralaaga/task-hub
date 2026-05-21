@@ -137,6 +137,7 @@ export type TranslationKey =
   | "neverSynced"
   | "networkError"
   | "next"
+  | "notes"
   | "noMatchingTasks"
   | "noOpenTasks"
   | "noTags"
@@ -366,6 +367,7 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     neverSynced: "Never synced",
     networkError: "Network error",
     next: "Next",
+    notes: "Notes",
     noMatchingTasks: "No tasks match the current filters.",
     noOpenTasks: "No open tasks found in the indexed vault.",
     noTags: "No tags found in indexed tasks.",
@@ -588,6 +590,7 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     neverSynced: "从未同步",
     networkError: "网络错误",
     next: "下一页",
+    notes: "备注",
     noMatchingTasks: "没有符合当前筛选条件的任务。",
     noOpenTasks: "当前索引的仓库中没有未完成任务。",
     noTags: "索引任务中没有标签。",

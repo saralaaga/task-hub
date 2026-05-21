@@ -140,7 +140,7 @@ describe("local Apple mapping", () => {
       calendarName: "Work",
       calendarColor: "#FF9500",
       location: "Office",
-      description: "Work\n\nBring agenda"
+      description: "Bring agenda"
     });
   });
 
@@ -255,7 +255,8 @@ describe("local Apple mapping", () => {
         title: "Send invoice",
         dueDate: "2026-05-20",
         startMinutes: 570,
-        listId: "list-1"
+        listId: "list-1",
+        notes: "Bring the signed copy"
       })
     );
 
@@ -270,7 +271,9 @@ describe("local Apple mapping", () => {
       "--start-minutes",
       "570",
       "--list-id",
-      "list-1"
+      "list-1",
+      "--notes",
+      "Bring the signed copy"
     ]);
   });
 
@@ -362,7 +365,8 @@ describe("local Apple mapping", () => {
         start: "2026-05-06T09:30:00.000Z",
         end: "2026-05-06T10:30:00.000Z",
         allDay: false,
-        calendarId: "calendar-1"
+        calendarId: "calendar-1",
+        notes: "Discuss launch scope"
       })
     );
 
@@ -384,6 +388,8 @@ describe("local Apple mapping", () => {
       "45",
       "--calendar-id",
       "calendar-1",
+      "--notes",
+      "Discuss launch scope",
       "--all-day",
       "false"
     ]);
