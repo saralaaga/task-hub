@@ -51,6 +51,54 @@
   margin-right: 4px;
 }
 
+.task-hub-create-modal {
+  width: min(560px, calc(100vw - 32px));
+}
+
+.task-hub-create-modal .modal-content {
+  display: grid;
+  gap: 0;
+}
+
+.task-hub-create-modal .setting-item {
+  align-items: center;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 280px);
+}
+
+.task-hub-create-modal .setting-item-info {
+  justify-content: start;
+  min-width: 0;
+  text-align: left;
+}
+
+.task-hub-create-modal .setting-item-control {
+  justify-content: end;
+  min-width: 0;
+}
+
+.task-hub-create-modal .setting-item-control input,
+.task-hub-create-modal .setting-item-control select,
+.task-hub-create-modal .setting-item-control textarea {
+  box-sizing: border-box;
+  width: min(280px, 100%);
+}
+
+.task-hub-create-modal .setting-item-control textarea {
+  min-height: 96px;
+  resize: vertical;
+}
+
+.task-hub-create-modal .setting-item:has(textarea) {
+  align-items: start;
+}
+
+.task-hub-create-modal .setting-item:has(textarea) .setting-item-info,
+.task-hub-create-modal .setting-item:has(textarea) .setting-item-control {
+  padding-top: 4px;
+}
+
 .task-hub-filter-strip {
   align-items: center;
   display: flex;

@@ -860,10 +860,11 @@ export default class TaskHubPlugin extends Plugin {
     new CreateTaskModal(this, target).open();
   }
 
-  async createTaskForDate(calendarTarget: CalendarDropTarget, text: string, target: CalendarCreationTarget = this.defaultCalendarCreationTarget()): Promise<void> {
+  async createTaskForDate(calendarTarget: CalendarDropTarget, text: string, target: CalendarCreationTarget = this.defaultCalendarCreationTarget(), notes?: string): Promise<void> {
     const t = createTranslator(this.settings.language);
     const timedTarget = calendarDropTargetParts(calendarTarget);
     const taskText = text.replace(/\s+/g, " ").trim();
+    const cleanNotes = notes?.trim() || undefined;
     if (!taskText) return;
 
     if (target.type === "apple-reminders") {
@@ -873,6 +874,7 @@ export default class TaskHubPlugin extends Plugin {
       }
       const reminderId = await createAppleReminder({
         title: taskText,
+        ...(cleanNotes ? { notes: cleanNotes } : {}),
         dueDate: timedTarget.dateKey,
         startMinutes: timedTarget.startMinutes,
         listId: target.listId ?? this.settings.localApple.remindersDefaultListId
@@ -892,6 +894,7 @@ export default class TaskHubPlugin extends Plugin {
         timedTarget.startMinutes ?? (durationMinutes % (24 * 60) === 0 ? undefined : 0);
       await createAppleCalendarEvent({
         title: taskText,
+        ...(cleanNotes ? { notes: cleanNotes } : {}),
         date: timedTarget.dateKey,
         startMinutes,
         durationMinutes,
@@ -1373,6 +1376,7 @@ export default class TaskHubPlugin extends Plugin {
 
 class CreateTaskModal extends Modal {
   private taskText = "";
+  private notes = "";
   private calendarTarget: CalendarDropTarget;
   private creationKind: CalendarCreationKind;
   private target: CalendarCreationTarget;
@@ -1398,6 +1402,7 @@ class CreateTaskModal extends Modal {
     const t = createTranslator(this.plugin.settings.language);
     const targetParts = calendarDropTargetParts(this.calendarTarget);
     this.titleEl.setText(`${this.creationKind === "event" ? t("eventCreationTitle") : t("taskCreationTitle")} · ${targetParts.dateKey}`);
+    this.modalEl.addClass("task-hub-create-modal");
     this.contentEl.empty();
 
     let submitButton: ButtonComponent | undefined;
@@ -1406,7 +1411,7 @@ class CreateTaskModal extends Modal {
       if (!text) return;
       submitButton?.setDisabled(true);
       try {
-        await this.plugin.createTaskForDate(this.calendarTarget, text, this.target);
+        await this.plugin.createTaskForDate(this.calendarTarget, text, this.target, this.notes);
         this.close();
       } catch (error) {
         submitButton?.setDisabled(false);
@@ -1524,8 +1529,19 @@ class CreateTaskModal extends Modal {
         }
         dropdown.setValue(serializeCreationTarget(this.target)).onChange((value) => {
           this.target = parseCreationTarget(value, this.creationKind);
+          this.render();
         });
       });
+
+    if (this.target.type === "apple-reminders" || this.target.type === "apple-calendar") {
+      new Setting(this.contentEl)
+        .setName(t("notes"))
+        .addTextArea((text) => {
+          text.setValue(this.notes).onChange((value) => {
+            this.notes = value;
+          });
+        });
+    }
 
     new Setting(this.contentEl)
       .addButton((button) => {

@@ -2547,6 +2547,59 @@ describe("renderCalendarView", () => {
     });
   });
 
+  it("does not create a timed task from the click synthesized after resizing an event", () => {
+    const container = new FakeElement();
+    const onDateCreateTask = jest.fn();
+    const onEventReschedule = jest.fn();
+    const timedEvent = {
+      ...event,
+      start: "2026-05-08T10:00:00",
+      end: "2026-05-08T11:00:00",
+      allDay: false
+    };
+
+    renderCalendarView(
+      container as unknown as HTMLElement,
+      {
+        mode: "day",
+        focusDate: new Date("2026-05-08T12:00:00Z"),
+        weekStart: "monday",
+        visibleSourceIds: new Set(["apple-calendar"]),
+        includeCompletedTasks: false,
+        allowAppleReminderWriteback: false,
+        allowAppleCalendarWriteback: true,
+        allowTaskCreation: true,
+        sources: [source],
+        t: (key) => key
+      },
+      [],
+      [timedEvent],
+      {
+        onLayerToggle: jest.fn(),
+        onModeChange: jest.fn(),
+        onMove: jest.fn(),
+        onDateCreateTask,
+        onTaskComplete: jest.fn(),
+        onTaskJump: jest.fn(),
+        onTaskSelect: jest.fn(),
+        onTaskReschedule: jest.fn(),
+        onEventReschedule,
+        onToday: jest.fn()
+      }
+    );
+
+    const column = collect(container).find((element) => element.classes.has("task-hub-agenda-column"));
+    const bottomHandle = collect(container).find((element) => element.classes.has("task-hub-calendar-resize-handle") && element.classes.has("is-end"));
+    column!.boundingRect = { top: 0 };
+    bottomHandle?.dispatch("pointerdown", { clientY: 280 });
+    fakeDocument.dispatch("pointermove", { clientY: 308 });
+    fakeDocument.dispatch("pointerup", { clientY: 308 });
+    column?.dispatch("click", { clientY: 308 });
+
+    expect(onEventReschedule).toHaveBeenCalled();
+    expect(onDateCreateTask).not.toHaveBeenCalled();
+  });
+
   it("does not make Apple Calendar events draggable when writeback is disabled", () => {
     const container = new FakeElement();
 

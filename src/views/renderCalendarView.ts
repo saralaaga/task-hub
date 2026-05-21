@@ -77,6 +77,7 @@ let activeDragFeedbackElement: HTMLElement | undefined;
 let activeDetailsElement: HTMLElement | undefined;
 let activeSelectedCalendarItemKey: string | undefined;
 let activeCalendarItemElements = new Map<string, Set<HTMLElement>>();
+let suppressNextTimedCreationClick = false;
 const WEEK_START_DAY_INDEX: Record<WeekStart, number> = {
   sunday: 0,
   monday: 1,
@@ -494,6 +495,7 @@ function bindCalendarItemResize(
       const onPointerUp = (upEvent: PointerEvent) => {
         upEvent.preventDefault();
         upEvent.stopPropagation();
+        suppressNextTimedCreationClick = true;
         const target = lastTarget ?? resizeDropTarget(column, upEvent, item, startHour, edge);
         lastTarget = undefined;
         finishResize();
@@ -592,6 +594,12 @@ function bindTimedTaskCreation(
 ): void {
   if (!state.allowTaskCreation) return;
   element.addEventListener("click", (event) => {
+    if (suppressNextTimedCreationClick) {
+      suppressNextTimedCreationClick = false;
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
     handlers.onDateCreateTask(timedCreationTarget(element, event, dateKey, startHour, state));
   });
 }

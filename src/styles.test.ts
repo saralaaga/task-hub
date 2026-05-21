@@ -64,4 +64,19 @@ describe("Task Hub styles", () => {
     expect(selectedSwatchRule).toContain("inset 0 0 0 3px color-mix(in srgb, var(--task-hub-swatch-color) 72%, white)");
     expect(selectedSwatchRule).not.toContain("inset 0 0 0 2px var(--background-primary)");
   });
+
+  it("keeps the calendar creation modal narrow with aligned controls", () => {
+    const styles = readFileSync(path.join(__dirname, "styles.css"), "utf8");
+    const modalRule = styles.match(/\.task-hub-create-modal\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const rowRule = styles.match(/\.task-hub-create-modal\s+\.setting-item\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const infoRule = styles.match(/\.task-hub-create-modal\s+\.setting-item-info\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const controlRule = styles.match(/\.task-hub-create-modal\s+\.setting-item-control\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const textareaRule = styles.match(/\.task-hub-create-modal\s+\.setting-item-control\s+textarea\s*\{(?<body>\s*min-height:[^}]+)\}/)?.groups?.body ?? "";
+
+    expect(modalRule).toContain("width: min(560px, calc(100vw - 32px))");
+    expect(rowRule).toContain("grid-template-columns: minmax(0, 1fr) minmax(220px, 280px)");
+    expect(infoRule).toContain("text-align: left");
+    expect(controlRule).toContain("justify-content: end");
+    expect(textareaRule).toContain("min-height: 96px");
+  });
 });

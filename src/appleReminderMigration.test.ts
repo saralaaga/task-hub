@@ -274,14 +274,15 @@ describe("Apple Reminders migration", () => {
     await plugin.createTaskForDate({ dateKey: "2026-05-20", startMinutes: 570 }, "Design review", {
       type: "apple-calendar",
       calendarId: "work"
-    });
+    }, "Bring prototype notes");
 
     expect(createAppleCalendarEvent).toHaveBeenCalledWith({
       title: "Design review",
       date: "2026-05-20",
       startMinutes: 570,
       durationMinutes: 60,
-      calendarId: "work"
+      calendarId: "work",
+      notes: "Bring prototype notes"
     });
     expect(notices).toContain("Apple Calendar event created.");
   });
@@ -316,6 +317,40 @@ describe("Apple Reminders migration", () => {
       durationMinutes: 60,
       calendarId: "work"
     });
+  });
+
+  it("creates an Apple Reminder with modal notes", async () => {
+    const plugin = new TaskHubPlugin({} as never, {} as never);
+    plugin.app = {
+      workspace: {
+        getLeavesOfType: jest.fn(() => [])
+      }
+    } as never;
+    plugin.settings = {
+      ...DEFAULT_SETTINGS,
+      localApple: {
+        ...DEFAULT_SETTINGS.localApple,
+        enabled: true,
+        remindersEnabled: true,
+        remindersCreateEnabled: true,
+        remindersDefaultListId: "default-list"
+      }
+    };
+    plugin.syncLocalApple = jest.fn(async () => undefined) as never;
+
+    await plugin.createTaskForDate("2026-05-20", "Design review", {
+      type: "apple-reminders",
+      listId: "list-1"
+    }, "Bring prototype notes");
+
+    expect(createAppleReminder).toHaveBeenCalledWith({
+      title: "Design review",
+      dueDate: "2026-05-20",
+      startMinutes: undefined,
+      listId: "list-1",
+      notes: "Bring prototype notes"
+    });
+    expect(notices).toContain("Apple Reminder created.: reminder-created-1");
   });
 
   it("deletes a Markdown task from the calendar context action", async () => {
