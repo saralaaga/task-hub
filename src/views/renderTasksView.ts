@@ -53,7 +53,6 @@ export function renderTasksView(
   const sortedTasks = sortTasksByCompletion(tasks);
   let selectedTask = sortedTasks.find((task) => task.id === options.selectedTaskId) ?? sortedTasks[0];
   const workbench = container.createDiv({ cls: "task-hub-task-workbench" });
-  renderTaskSidebar(workbench, allTasks, filters, handlers, now, t);
   const list = workbench.createDiv({ cls: "task-hub-task-list-pane" });
 
   if (sortedTasks.length === 0) {
@@ -98,48 +97,6 @@ function restoreTaskListScroll(list: HTMLElement, options: TaskRenderOptions): v
   if (options.taskListScrollTop !== undefined) {
     list.scrollTop = options.taskListScrollTop;
   }
-}
-
-function renderTaskSidebar(
-  container: HTMLElement,
-  allTasks: TaskItem[],
-  filters: TaskFilterState,
-  handlers: TaskRowHandlers,
-  now: Date,
-  t: Translator
-): void {
-  const sidebar = container.createDiv({ cls: "task-hub-task-sidebar" });
-  const sourceCountTasks = filterTasks(allTasks, { ...filters, sourceQuery: "" }, now);
-  const total = sourceCountTasks.length;
-  sidebar.createEl("h3", { text: t("filters") });
-  renderSidebarButton(sidebar, t("all"), total, !filters.sourceQuery, () => handlers.onSourceSelect("all"));
-  renderSidebarButton(
-    sidebar,
-    t("vaultTasks"),
-    sourceCountTasks.filter((task) => task.source === "vault").length,
-    filters.sourceQuery === "vault",
-    () => handlers.onSourceSelect("vault")
-  );
-  renderSidebarButton(
-    sidebar,
-    "Apple Reminders",
-    sourceCountTasks.filter((task) => task.source === "apple-reminders").length,
-    filters.sourceQuery === "apple-reminders",
-    () => handlers.onSourceSelect("apple-reminders")
-  );
-}
-
-function renderSidebarButton(
-  container: HTMLElement,
-  label: string,
-  count: number,
-  active: boolean,
-  onClick: () => void
-): void {
-  const button = container.createEl("button", { cls: `task-hub-sidebar-item ${active ? "is-active" : ""}` });
-  button.createSpan({ text: label });
-  button.createSpan({ cls: "task-hub-sidebar-count", text: String(count) });
-  button.addEventListener("click", onClick);
 }
 
 function renderTaskRow(

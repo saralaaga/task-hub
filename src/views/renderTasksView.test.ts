@@ -334,7 +334,7 @@ describe("renderTasksView", () => {
 
     const elements = collect(container);
     expect(elements.some((element) => element.classes.has("task-hub-task-workbench"))).toBe(true);
-    expect(elements.some((element) => element.classes.has("task-hub-task-sidebar"))).toBe(true);
+    expect(elements.some((element) => element.classes.has("task-hub-task-sidebar"))).toBe(false);
     expect(elements.some((element) => element.classes.has("task-hub-task-list-pane"))).toBe(true);
     expect(elements.some((element) => element.classes.has("task-hub-task-details"))).toBe(false);
     expect(elements.some((element) => element.classes.has("task-hub-empty") && element.text === "noMatchingTasks")).toBe(true);
@@ -392,7 +392,7 @@ describe("renderTasksView", () => {
     expect(collect(container).some((element) => element.classes.has("task-hub-detail-title") && element.text === "Second")).toBe(true);
   });
 
-  it("keeps source counts stable when one source is selected", () => {
+  it("does not render the old source filter sidebar in the task workbench", () => {
     const container = new FakeElement();
     const vaultTask = { ...baseTask, id: "vault-1", source: "vault" as const, filePath: "Project.md", externalSourceName: undefined };
     const appleTask = { ...baseTask, id: "apple-1", source: "apple-reminders" as const };
@@ -408,12 +408,8 @@ describe("renderTasksView", () => {
       { allowAppleReminderWriteback: true }
     );
 
-    const texts = textValues(container);
-    expect(texts).toContain("all");
-    expect(texts).toContain("2");
-    expect(texts).toContain("vaultTasks");
-    expect(texts).toContain("1");
-    expect(texts).toContain("Apple Reminders");
+    expect(collect(container).some((element) => element.classes.has("task-hub-task-sidebar"))).toBe(false);
+    expect(textValues(container)).not.toContain("vaultTasks");
   });
 
   it("selects the first open task when completed tasks arrive first", () => {

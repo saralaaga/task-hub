@@ -90,6 +90,7 @@ function renderForTest(overrides: Partial<TaskFilterState> = {}) {
     onRescan: jest.fn(),
     onStatusChange: jest.fn(),
     onConditionChange: jest.fn(),
+    onSourceFilterChange: jest.fn(),
     onTextQueryChange: jest.fn()
   };
 
@@ -98,6 +99,11 @@ function renderForTest(overrides: Partial<TaskFilterState> = {}) {
     {
       view: "tasks",
       availableTags: [],
+      sourceFilters: [
+        { id: "all", label: "all", count: 37 },
+        { id: "vault", label: "vaultTasks", count: 20 },
+        { id: "apple-reminders", label: "Apple Reminders", count: 17 }
+      ],
       filters: { ...baseFilters(), ...overrides },
       stats: { taskCount: 0, indexed: 0, skipped: 0, failed: 0 },
       t: (key) => key
@@ -115,6 +121,7 @@ function renderShellForState(stateOverrides: Partial<Parameters<typeof renderShe
     onRescan: jest.fn(),
     onStatusChange: jest.fn(),
     onConditionChange: jest.fn(),
+    onSourceFilterChange: jest.fn(),
     onTextQueryChange: jest.fn()
   };
 
@@ -123,6 +130,11 @@ function renderShellForState(stateOverrides: Partial<Parameters<typeof renderShe
     {
       view: "tasks",
       availableTags: [],
+      sourceFilters: [
+        { id: "all", label: "all", count: 37 },
+        { id: "vault", label: "vaultTasks", count: 20 },
+        { id: "apple-reminders", label: "Apple Reminders", count: 17 }
+      ],
       filters: baseFilters(),
       stats: { taskCount: 0, indexed: 0, skipped: 0, failed: 0 },
       t: (key) => key,
@@ -186,6 +198,23 @@ describe("renderShell", () => {
     expect(textRow).toBeDefined();
     expect(collect(dateRow!).some((element) => element.type === "select" && element.classes.has("task-hub-condition-operator"))).toBe(true);
     expect(collect(textRow!).some((element) => element.classes.has("task-hub-condition-operator-spacer"))).toBe(true);
+  });
+
+  it("renders source filters inside the condition panel", () => {
+    const { container, handlers } = renderForTest({ sourceQuery: "apple-reminders" });
+    const panel = collect(container).find((element) => element.classes.has("task-hub-condition-panel"));
+    const sourceRow = collect(container).find((element) => element.classes.has("task-hub-condition-source-row"));
+    const appleChip = collect(container).find((element) => element.classes.has("task-hub-source-filter-chip") && collect(element).some((child) => child.text === "Apple Reminders"));
+    const count = appleChip ? collect(appleChip).find((element) => element.classes.has("task-hub-source-filter-count")) : undefined;
+
+    expect(panel).toBeDefined();
+    expect(sourceRow).toBeDefined();
+    expect(appleChip).toBeDefined();
+    expect(appleChip?.classes.has("is-active")).toBe(true);
+    expect(count?.text).toBe("17");
+
+    appleChip!.trigger("click");
+    expect(handlers.onSourceFilterChange).toHaveBeenCalledWith("apple-reminders");
   });
 
   it("shows disabled busy feedback while rescanning", () => {

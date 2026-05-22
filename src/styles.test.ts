@@ -79,4 +79,40 @@ describe("Task Hub styles", () => {
     expect(controlRule).toContain("justify-content: end");
     expect(textareaRule).toContain("min-height: 96px");
   });
+
+  it("renders tag view chips with white lightweight text and lifted shadows", () => {
+    const styles = readFileSync(path.join(__dirname, "styles.css"), "utf8");
+    const tagViewChipRule = styles.match(/\.task-hub-tag-task\s+\.task-hub-task-tag\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const contextChipRule = styles.match(/\.task-hub-tag-task\.is-context\s+\.task-hub-task-tag\s*\{(?<body>[^}]+)\}/g)?.at(-1) ?? "";
+
+    expect(tagViewChipRule).toContain("color: white");
+    expect(tagViewChipRule).toContain("font-weight: 400");
+    expect(tagViewChipRule).toContain("0 3px 8px color-mix(in srgb, var(--task-hub-source-color) 28%, transparent)");
+    expect(tagViewChipRule).toContain("0 1px 2px rgb(0 0 0 / 16%)");
+    expect(contextChipRule).toContain("color: white");
+    expect(contextChipRule).toContain("font-weight: 400");
+  });
+
+  it("renders task list chips with white lightweight text and lifted shadows", () => {
+    const styles = readFileSync(path.join(__dirname, "styles.css"), "utf8");
+    const taskListChipRule = styles.match(/\.task-hub-task-row\s+\.task-hub-task-tag\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+
+    expect(taskListChipRule).toContain("color: white");
+    expect(taskListChipRule).toContain("font-weight: 400");
+    expect(taskListChipRule).toContain("0 3px 8px color-mix(in srgb, var(--task-hub-source-color) 28%, transparent)");
+    expect(taskListChipRule).toContain("0 1px 2px rgb(0 0 0 / 16%)");
+  });
+
+  it("keeps source filtering inside the condition panel instead of a task sidebar", () => {
+    const styles = readFileSync(path.join(__dirname, "styles.css"), "utf8");
+    const workbenchRule = styles.match(/\.task-hub-task-workbench\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const chipRule = styles.match(/\.task-hub-source-filter-chip\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const activeChipRule = styles.match(/\.task-hub-source-filter-chip:hover,\s*\.task-hub-source-filter-chip:focus-visible,\s*\.task-hub-source-filter-chip\.is-active\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+
+    expect(workbenchRule).toContain("grid-template-columns: minmax(280px, 1fr) auto");
+    expect(styles).not.toContain(".task-hub-task-sidebar {");
+    expect(chipRule).toContain("display: inline-flex");
+    expect(chipRule).toContain("border-radius: 7px");
+    expect(activeChipRule).toContain("var(--interactive-accent)");
+  });
 });

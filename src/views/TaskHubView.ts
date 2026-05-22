@@ -67,6 +67,7 @@ export class TaskHubView extends ItemView {
         view: this.view,
         filters: this.filters,
         availableTags: collectTags(allTasks),
+        sourceFilters: taskSourceFilterOptions(allTasks, this.filters, new Date(), t),
         stats: this.plugin.taskIndex.getStats(),
         isRefreshing: this.isRefreshing,
         t
@@ -83,6 +84,10 @@ export class TaskHubView extends ItemView {
         },
         onConditionChange: (conditions) => {
           this.filters = { ...this.filters, conditions };
+          this.render();
+        },
+        onSourceFilterChange: (source) => {
+          this.filters = { ...this.filters, sourceQuery: source === "all" ? "" : source };
           this.render();
         },
         onTextQueryChange: (textQuery) => {
@@ -275,6 +280,15 @@ export class TaskHubView extends ItemView {
 
 function findTaskListPane(container: HTMLElement): HTMLElement | undefined {
   return container.querySelector<HTMLElement>(".task-hub-task-list-pane") ?? undefined;
+}
+
+function taskSourceFilterOptions(tasks: TaskItem[], filters: TaskFilterState, now: Date, t: ReturnType<typeof createTranslator>) {
+  const sourceCountTasks = filterTasks(tasks, { ...filters, sourceQuery: "" }, now);
+  return [
+    { id: "all" as const, label: t("all"), count: sourceCountTasks.length },
+    { id: "vault" as const, label: t("vaultTasks"), count: sourceCountTasks.filter((task) => task.source === "vault").length },
+    { id: "apple-reminders" as const, label: "Apple Reminders", count: sourceCountTasks.filter((task) => task.source === "apple-reminders").length }
+  ];
 }
 
 function collectTags(tasks: TaskItem[]): string[] {

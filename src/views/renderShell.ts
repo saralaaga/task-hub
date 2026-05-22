@@ -10,9 +10,16 @@ export type ShellState = {
   view: DashboardView;
   filters: TaskFilterState;
   availableTags: string[];
+  sourceFilters?: SourceFilterOption[];
   stats: TaskIndexStats;
   isRefreshing?: boolean;
   t: Translator;
+};
+
+export type SourceFilterOption = {
+  id: "all" | "vault" | "apple-reminders";
+  label: string;
+  count: number;
 };
 
 export type ShellHandlers = {
@@ -20,6 +27,7 @@ export type ShellHandlers = {
   onRescan: () => void | Promise<void>;
   onStatusChange: (status: TaskFilterState["status"]) => void;
   onConditionChange: (conditions: NonNullable<TaskFilterState["conditions"]>) => void;
+  onSourceFilterChange?: (source: SourceFilterOption["id"]) => void;
   onTextQueryChange: (query: string) => void;
 };
 
@@ -79,7 +87,8 @@ function renderFilters(container: HTMLElement, state: ShellState, handlers: Shel
 
 function renderConditionMenu(container: HTMLElement, state: ShellState, handlers: ShellHandlers): void {
   const conditions = state.filters.conditions ?? { operator: "and" as const, tag: "", dateBucket: "" as const, text: "" };
-  const activeConditionCount = [conditions.tag.trim(), conditions.dateBucket, conditions.text.trim()].filter(Boolean).length;
+  const sourceActive = state.filters.sourceQuery === "vault" || state.filters.sourceQuery === "apple-reminders";
+  const activeConditionCount = [conditions.tag.trim(), conditions.dateBucket, conditions.text.trim(), sourceActive ? state.filters.sourceQuery : ""].filter(Boolean).length;
   const menu = container.createEl("details", { cls: "task-hub-condition-menu" });
 
   const trigger = menu.createEl("summary", { cls: activeConditionCount > 0 ? "task-hub-condition-trigger is-active" : "task-hub-condition-trigger" });
@@ -126,6 +135,26 @@ function renderConditionMenu(container: HTMLElement, state: ShellState, handlers
     type: "search",
     value: conditions.text
   });
+
+  if (state.sourceFilters && handlers.onSourceFilterChange) {
+    const sourceRow = panel.createDiv({ cls: "task-hub-condition-row task-hub-condition-source-row" });
+    sourceRow.createSpan({ text: state.t("source") });
+    const sourceOptions = sourceRow.createDiv({ cls: "task-hub-source-filter-options" });
+    const activeSource = state.filters.sourceQuery === "vault" || state.filters.sourceQuery === "apple-reminders"
+      ? state.filters.sourceQuery
+      : "all";
+    for (const source of state.sourceFilters) {
+      const button = sourceOptions.createEl("button", {
+        cls: `task-hub-source-filter-chip ${source.id === activeSource ? "is-active" : ""}`
+      });
+      button.createSpan({ text: source.label });
+      button.createSpan({ cls: "task-hub-source-filter-count", text: String(source.count) });
+      button.addEventListener("click", (event) => {
+        event.preventDefault();
+        handlers.onSourceFilterChange?.(source.id);
+      });
+    }
+  }
 
   const apply = () => {
     handlers.onConditionChange({
