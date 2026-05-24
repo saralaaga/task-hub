@@ -78,7 +78,7 @@ export function rescheduleTaskInContent(
   messages: RescheduleMessages = DEFAULT_RESCHEDULE_MESSAGES,
   startMinutes?: number
 ): CompletionResult {
-  if (task.dueDate === targetDate && startMinutes === undefined) {
+  if (task.dueDate === targetDate && startMinutes === undefined && !taskHasScheduledTime(task)) {
     return { status: "already_in_state" };
   }
 
@@ -280,7 +280,8 @@ function replaceDueDate(line: string, targetDate: string): string | undefined {
 }
 
 function updateScheduledTime(line: string | undefined, startMinutes: number | undefined): string | undefined {
-  if (!line || startMinutes === undefined) return line;
+  if (!line) return line;
+  if (startMinutes === undefined) return line.replace(SCHEDULED_TIME, "");
   const timeToken = ` ⏰ ${formatTime(startMinutes)}`;
   if (SCHEDULED_TIME.test(line)) {
     return line.replace(SCHEDULED_TIME, timeToken);
@@ -292,6 +293,10 @@ function updateScheduledTime(line: string | undefined, startMinutes: number | un
     return line.replace(INLINE_DUE, (match) => `${match}${timeToken}`);
   }
   return line;
+}
+
+function taskHasScheduledTime(task: TaskItem): boolean {
+  return Boolean(task.scheduledDate) || SCHEDULED_TIME.test(task.rawLine);
 }
 
 function buildUpdatedTaskBody(currentBody: string, update: TaskLineUpdate): string {

@@ -31,6 +31,7 @@ import {
   setAppleReminderDetails,
   setAppleReminderDueDate,
   setAppleReminderList,
+  type AppleHelperErrorCode,
   type AppleHelperStatus
 } from "./localApple";
 import {
@@ -129,6 +130,48 @@ export default class TaskHubPlugin extends Plugin {
 
   notifyLocalAppleUnsupported(): void {
     new Notice(createTranslator(this.settings.language)("localAppleUnsupportedPlatform"));
+  }
+
+  private isLocalAppleErrorCode(error: unknown, code: AppleHelperErrorCode): boolean {
+    return typeof error === "object" && error !== null && (error as { code?: unknown }).code === code;
+  }
+
+  private async requestRemindersAccessAfterNotDetermined(error: unknown): Promise<boolean> {
+    if (!this.isLocalAppleErrorCode(error, "not_determined")) return false;
+
+    const attemptedAt = new Date().toISOString();
+    const status = await requestLocalAppleAccess({ reminders: true, calendar: false });
+    const nextStatus = localAppleStatusFromHelper(status, attemptedAt);
+    if (nextStatus.reminders?.state === "ok") {
+      this.localAppleStatus = {
+        state: "ok",
+        lastSyncedAt: attemptedAt,
+        itemCount: this.localAppleTasks.length + this.localAppleEvents.length,
+        reminders: nextStatus.reminders,
+        calendar: this.localAppleStatus.calendar ?? { state: "never" }
+      };
+    } else {
+      this.localAppleStatus = {
+        state: "error",
+        lastAttemptAt: attemptedAt,
+        message: nextStatus.reminders?.state === "error" ? nextStatus.reminders.message : "Apple Reminders access was not granted.",
+        reminders: nextStatus.reminders ?? { state: "never" },
+        calendar: this.localAppleStatus.calendar ?? { state: "never" }
+      };
+    }
+    this.refreshOpenViews();
+    return status.remindersStatus?.authorization === "fullAccess" || status.remindersStatus?.authorization === "authorized";
+  }
+
+  private async writeAppleReminderWithAccessRetry<T>(write: () => Promise<T>): Promise<T> {
+    try {
+      return await write();
+    } catch (error) {
+      if (!(await this.requestRemindersAccessAfterNotDetermined(error))) {
+        throw error;
+      }
+      return write();
+    }
   }
 
   canCreateAppleReminders(): boolean {
@@ -263,7 +306,8 @@ export default class TaskHubPlugin extends Plugin {
       }
 
       try {
-        await setAppleReminderCompleted(task.externalId, !task.completed);
+        const reminderId = task.externalId;
+        await this.writeAppleReminderWithAccessRetry(() => setAppleReminderCompleted(reminderId, !task.completed));
         await this.syncLocalApple({ silent: true });
         new Notice(task.completed ? t("taskReopened") : t("taskCompleted"));
         this.refreshOpenViews();
@@ -339,13 +383,16 @@ export default class TaskHubPlugin extends Plugin {
         return result;
       }
 
-      if (timedTarget.startMinutes === undefined && task.dueDate === timedTarget.dateKey) {
+      if (timedTarget.startMinutes === undefined && task.dueDate === timedTarget.dateKey && startMinutesFromTask(task) === undefined) {
         new Notice(t("taskDateAlreadySet"));
         return { status: "already_in_state" };
       }
 
       try {
-        await setAppleReminderDueDate(task.externalId, timedTarget.dateKey, timedTarget.startMinutes);
+        const reminderId = task.externalId;
+        await this.writeAppleReminderWithAccessRetry(() =>
+          setAppleReminderDueDate(reminderId, timedTarget.dateKey, timedTarget.startMinutes)
+        );
         await this.syncLocalApple({ silent: true });
         new Notice(t("taskDateUpdated"));
         this.refreshOpenViews();
@@ -414,7 +461,8 @@ export default class TaskHubPlugin extends Plugin {
         return result;
       }
       try {
-        await deleteAppleReminder(task.externalId);
+        const reminderId = task.externalId;
+        await this.writeAppleReminderWithAccessRetry(() => deleteAppleReminder(reminderId));
         await this.syncLocalApple({ silent: true });
         new Notice(t("calendarItemDeleted"));
         this.refreshOpenViews();
@@ -548,15 +596,16 @@ export default class TaskHubPlugin extends Plugin {
         new Notice(result.message);
         return result;
       }
-      try {
-        await setAppleReminderDetails({
+      const input = {
           id: task.externalId,
           title,
           dueDate: draft.date || null,
           startMinutes: draft.startTime ? parseTimeInputValue(draft.startTime) : undefined,
           listId: draft.reminderListId || undefined,
           notes: draft.notes
-        });
+        };
+      try {
+        await this.writeAppleReminderWithAccessRetry(() => setAppleReminderDetails(input));
         await this.syncLocalApple({ silent: true });
         new Notice(t("taskUpdated"));
         this.refreshOpenViews();
@@ -682,13 +731,14 @@ export default class TaskHubPlugin extends Plugin {
     }
 
     try {
-      const reminderId = await createAppleReminder({
+      const input = {
         title: currentTask.text,
         notes: this.appleReminderNotes(currentTask),
         dueDate: currentTask.dueDate,
         startMinutes: startMinutesFromTask(currentTask),
         listId: this.settings.localApple.remindersDefaultListId
-      });
+      };
+      const reminderId = await this.writeAppleReminderWithAccessRetry(() => createAppleReminder(input));
       this.settings.appleReminderLinks = {
         ...this.settings.appleReminderLinks,
         [currentTask.id]: reminderId
@@ -738,7 +788,9 @@ export default class TaskHubPlugin extends Plugin {
     }
 
     try {
-      await createAppleReminder(appleCalendarEventToReminderInput(event, this.settings.localApple.remindersDefaultListId));
+      await this.writeAppleReminderWithAccessRetry(() =>
+        createAppleReminder(appleCalendarEventToReminderInput(event, this.settings.localApple.remindersDefaultListId))
+      );
       try {
         await deleteAppleCalendarEvent(event.id);
       } catch (error) {
@@ -776,7 +828,8 @@ export default class TaskHubPlugin extends Plugin {
         )
       );
       try {
-        await deleteAppleReminder(task.externalId);
+        const reminderId = task.externalId;
+        await this.writeAppleReminderWithAccessRetry(() => deleteAppleReminder(reminderId));
       } catch (error) {
         await this.syncLocalApple({ silent: true });
         new Notice(`${t("appleCalendarReminderConversionPartial")} ${error instanceof Error ? error.message : String(error)}`);
@@ -848,7 +901,8 @@ export default class TaskHubPlugin extends Plugin {
     if (!listId || task.externalListId === listId) return;
 
     try {
-      await setAppleReminderList(task.externalId, listId);
+      const reminderId = task.externalId;
+      await this.writeAppleReminderWithAccessRetry(() => setAppleReminderList(reminderId, listId));
       await this.syncLocalApple({ silent: true });
       new Notice(t("appleReminderListUpdated"));
     } catch (error) {
@@ -872,13 +926,14 @@ export default class TaskHubPlugin extends Plugin {
         new Notice(t("appleReminderCreateDisabled"));
         return;
       }
-      const reminderId = await createAppleReminder({
+      const input = {
         title: taskText,
         ...(cleanNotes ? { notes: cleanNotes } : {}),
         dueDate: timedTarget.dateKey,
         startMinutes: timedTarget.startMinutes,
         listId: target.listId ?? this.settings.localApple.remindersDefaultListId
-      });
+      };
+      const reminderId = await this.writeAppleReminderWithAccessRetry(() => createAppleReminder(input));
       await this.syncLocalApple({ silent: true });
       new Notice(`${t("appleReminderCreated")}: ${reminderId}`);
       return;

@@ -6,6 +6,13 @@ Task Hub 是一个仅支持 Obsidian 桌面端的任务聚合插件。它会把�
 
 ![Task Hub 日历总览](assets/task-hub-calendar-overview.png)
 
+## 兼容性
+
+- **Obsidian：** Task Hub 是仅支持桌面端的插件，`manifest.json` 中声明的 `minAppVersion` 为 `1.5.0`。请使用 Obsidian 桌面端 1.5.0 或更新版本。
+- **移动端：** 暂不支持 Obsidian 移动端。
+- **本地 Apple 集成：** Apple Reminders 和 Apple Calendar 集成仅支持 macOS，目前支持并验证的范围是 macOS 14 Sonoma 或更新版本。helper 中保留了旧版 EventKit 权限请求路径，但 macOS 13 及更早版本不属于当前测试支持矩阵。
+- **其他桌面系统：** vault 任务、标签、日历和公共 ICS 等核心功能面向 Obsidian 桌面端；Apple Reminders 和 Apple Calendar 功能在非 macOS 系统上不可用。
+
 ## 功能
 
 - 扫描 vault 中的 Markdown 任务：`- [ ]` 和 `- [x]`。

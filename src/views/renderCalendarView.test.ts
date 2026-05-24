@@ -864,6 +864,7 @@ describe("renderCalendarView", () => {
     const onDateCreateTask = jest.fn();
     const onTaskSelect = jest.fn();
     const onTaskUpdate = jest.fn();
+    const onTaskDelete = jest.fn();
 
     renderCalendarView(
       container as unknown as HTMLElement,
@@ -890,6 +891,7 @@ describe("renderCalendarView", () => {
         onTaskSelect,
         onTaskUpdate,
         onTaskReschedule: jest.fn(),
+        onTaskDelete,
         onToday: jest.fn()
       }
     );
@@ -914,11 +916,19 @@ describe("renderCalendarView", () => {
     expect(save?.disabled).toBe(false);
     save?.click();
     expect(onTaskUpdate).toHaveBeenCalledWith(task, expect.objectContaining({ title: "Updated task" }));
+
+    item?.click();
+    const nextPopover = collect(fakeDocument.body).find((element) => element.classes.has("task-hub-calendar-detail-popover"));
+    const deleteButton = collect(nextPopover as FakeElement).find((element) => element.text === "deleteCalendarItem");
+    expect(deleteButton?.classes.has("task-hub-calendar-detail-delete")).toBe(true);
+    deleteButton?.click();
+    expect(onTaskDelete).toHaveBeenCalledWith(task);
   });
 
   it("edits Apple Reminder notes from the calendar task popover", () => {
     const container = new FakeElement();
     const onTaskUpdate = jest.fn();
+    const onTaskDelete = jest.fn();
     const reminderTask = {
       ...task,
       source: "apple-reminders" as const,
@@ -956,6 +966,7 @@ describe("renderCalendarView", () => {
         onTaskSelect: jest.fn(),
         onTaskUpdate,
         onTaskReschedule: jest.fn(),
+        onTaskDelete,
         onToday: jest.fn()
       }
     );
@@ -980,6 +991,11 @@ describe("renderCalendarView", () => {
     save?.click();
 
     expect(onTaskUpdate).toHaveBeenCalledWith(reminderTask, expect.objectContaining({ notes: "Updated notes\nsecond line" }));
+
+    collect(container).find((element) => element.classes.has("task-hub-calendar-item"))?.click();
+    const nextPopover = collect(fakeDocument.body).find((element) => element.classes.has("task-hub-calendar-detail-popover"));
+    collect(nextPopover as FakeElement).find((element) => element.text === "deleteCalendarItem")?.click();
+    expect(onTaskDelete).toHaveBeenCalledWith(reminderTask);
   });
 
   it("opens a read-only popover for ICS events", () => {
@@ -1022,6 +1038,7 @@ describe("renderCalendarView", () => {
     const save = collect(popover as FakeElement).find((element) => element.text === "save");
     const titleInput = collect(popover as FakeElement).find((element) => element.type === "text");
     const open = collect(popover as FakeElement).find((element) => element.text === "openSource");
+    const deleteButton = collect(popover as FakeElement).find((element) => element.text === "deleteCalendarItem");
     const allDayRow = collect(popover as FakeElement).find((element) => element.classes.has("task-hub-calendar-detail-check"));
     const hiddenTimeRows = collect(popover as FakeElement).filter((element) => element.classes.has("task-hub-calendar-detail-time-row") && element.classes.has("is-hidden"));
     expect(popover).toBeDefined();
@@ -1029,6 +1046,7 @@ describe("renderCalendarView", () => {
     expect(hiddenTimeRows).toHaveLength(1);
     expect(save?.disabled).toBe(true);
     expect(titleInput?.disabled).toBe(true);
+    expect(deleteButton).toBeUndefined();
     open?.click();
     expect(window.open).toHaveBeenCalledWith("https://example.com/event");
     expect(onDateCreateTask).not.toHaveBeenCalled();
@@ -1376,6 +1394,7 @@ describe("renderCalendarView", () => {
   it("edits Apple Calendar event notes and keeps calendar selector on one row", () => {
     const container = new FakeElement();
     const onEventUpdate = jest.fn();
+    const onEventDelete = jest.fn();
     const timedEvent = {
       ...event,
       start: "2026-05-08T09:00",
@@ -1417,6 +1436,7 @@ describe("renderCalendarView", () => {
         onTaskSelect: jest.fn(),
         onTaskReschedule: jest.fn(),
         onEventUpdate,
+        onEventDelete,
         onToday: jest.fn()
       }
     );
@@ -1437,6 +1457,11 @@ describe("renderCalendarView", () => {
     save?.click();
 
     expect(onEventUpdate).toHaveBeenCalledWith(timedEvent, expect.objectContaining({ notes: "Updated event notes" }));
+
+    collect(container).find((element) => element.classes.has("task-hub-calendar-timed-item"))?.click();
+    const nextPopover = collect(fakeDocument.body).find((element) => element.classes.has("task-hub-calendar-detail-popover"));
+    collect(nextPopover as FakeElement).find((element) => element.text === "deleteCalendarItem")?.click();
+    expect(onEventDelete).toHaveBeenCalledWith(timedEvent);
   });
 
   it("makes vault calendar tasks draggable", () => {
@@ -2050,7 +2075,7 @@ describe("renderCalendarView", () => {
     });
   });
 
-  it("places visually overlapping timed task points on separate rows", () => {
+  it("renders visually overlapping timed task points as one stacked summary at the true start time", () => {
     const container = new FakeElement();
     const firstTask = {
       ...task,
@@ -2095,9 +2120,12 @@ describe("renderCalendarView", () => {
 
     const rows = collect(container).filter((element) => element.classes.has("task-hub-calendar-timed-item"));
     const rowTops = rows.map((row) => (row.style as unknown as { top: string }).top);
+    const count = collect(container).find((element) => element.classes.has("task-hub-calendar-overlap-count"));
 
-    expect(rows).toHaveLength(2);
-    expect(rowTops).toEqual(["196px", "242px"]);
+    expect(rows).toHaveLength(1);
+    expect(rowTops).toEqual(["196px"]);
+    expect(rows[0].classes.has("is-overlap-stack")).toBe(true);
+    expect(count?.text).toBe("+1");
   });
 
   it("places timed tasks beside overlapping calendar events", () => {
@@ -2241,7 +2269,7 @@ describe("renderCalendarView", () => {
     expect(timeLabel?.text).toBe("08:10-08:55");
   });
 
-  it("stacks nearby timed task points so they do not cover each other", () => {
+  it("summarizes same-time task points instead of showing them side by side", () => {
     const container = new FakeElement();
     const firstTask = {
       ...task,
@@ -2284,11 +2312,174 @@ describe("renderCalendarView", () => {
       }
     );
 
-    const rowTops = collect(container)
-      .filter((element) => element.classes.has("task-hub-calendar-timed-item"))
-      .map((row) => (row.style as unknown as { top: string }).top);
+    const rows = collect(container).filter((element) => element.classes.has("task-hub-calendar-timed-item"));
+    const rowTops = rows.map((row) => (row.style as unknown as { top: string }).top);
+    const count = collect(container).find((element) => element.classes.has("task-hub-calendar-overlap-count"));
 
-    expect(rowTops).toEqual(["504px", "536px"]);
+    expect(rows).toHaveLength(1);
+    expect(rowTops).toEqual(["504px"]);
+    expect(count?.text).toBe("+1");
+  });
+
+  it("uses an incomplete task as the visible representative for overlapping task points", () => {
+    const container = new FakeElement();
+    const completedTask = {
+      ...task,
+      id: "task-point-completed",
+      text: "Done task",
+      completed: true,
+      scheduledDate: "2026-05-08T15:00",
+      createdSortKey: "2026-05-08T12:00:00"
+    };
+    const openTask = {
+      ...task,
+      id: "task-point-open",
+      text: "Open task",
+      completed: false,
+      scheduledDate: "2026-05-08T15:00",
+      createdSortKey: "2026-05-08T11:00:00"
+    };
+
+    renderCalendarView(
+      container as unknown as HTMLElement,
+      {
+        mode: "day",
+        focusDate: new Date("2026-05-08T12:00:00Z"),
+        weekStart: "monday",
+        visibleSourceIds: new Set(["vault"]),
+        includeCompletedTasks: true,
+        allowAppleReminderWriteback: false,
+        allowTaskCreation: false,
+        sources: [],
+        t: (key) => key
+      },
+      [completedTask, openTask],
+      [],
+      {
+        onLayerToggle: jest.fn(),
+        onModeChange: jest.fn(),
+        onMove: jest.fn(),
+        onDateCreateTask: jest.fn(),
+        onTaskComplete: jest.fn(),
+        onTaskJump: jest.fn(),
+        onTaskSelect: jest.fn(),
+        onTaskReschedule: jest.fn(),
+        onToday: jest.fn()
+      }
+    );
+
+    const visibleRow = collect(container).find((element) => element.classes.has("task-hub-calendar-timed-item"));
+    const visibleTitle = visibleRow ? collect(visibleRow).find((element) => element.classes.has("task-hub-calendar-item-title")) : undefined;
+
+    expect(visibleRow?.classes.has("is-completed")).toBe(false);
+    expect(visibleTitle?.text).toBe("Open task");
+  });
+
+  it("expands same-time task overlaps into a small list when clicked", () => {
+    const container = new FakeElement();
+    const firstTask = {
+      ...task,
+      id: "task-point-1",
+      text: "First",
+      scheduledDate: "2026-05-08T15:00"
+    };
+    const secondTask = {
+      ...task,
+      id: "task-point-2",
+      text: "Second",
+      scheduledDate: "2026-05-08T15:00"
+    };
+
+    renderCalendarView(
+      container as unknown as HTMLElement,
+      {
+        mode: "day",
+        focusDate: new Date("2026-05-08T12:00:00Z"),
+        weekStart: "monday",
+        visibleSourceIds: new Set(["vault"]),
+        includeCompletedTasks: false,
+        allowAppleReminderWriteback: false,
+        allowTaskCreation: false,
+        sources: [],
+        t: (key) => key
+      },
+      [firstTask, secondTask],
+      [],
+      {
+        onLayerToggle: jest.fn(),
+        onModeChange: jest.fn(),
+        onMove: jest.fn(),
+        onDateCreateTask: jest.fn(),
+        onTaskComplete: jest.fn(),
+        onTaskJump: jest.fn(),
+        onTaskSelect: jest.fn(),
+        onTaskReschedule: jest.fn(),
+        onToday: jest.fn()
+      }
+    );
+
+    collect(container).find((element) => element.classes.has("task-hub-calendar-timed-item"))?.click();
+
+    const overlapPopover = collect(fakeDocument.body).find((element) => element.classes.has("task-hub-calendar-overlap-popover"));
+    const titles = overlapPopover ? collect(overlapPopover).filter((element) => element.classes.has("task-hub-calendar-overlap-title")).map((element) => element.text) : [];
+
+    expect(overlapPopover).toBeDefined();
+    expect(titles).toEqual(["First", "Second"]);
+  });
+
+  it("completes a task from the overlap list checkbox without opening task details", () => {
+    const container = new FakeElement();
+    const onTaskComplete = jest.fn();
+    const firstTask = {
+      ...task,
+      id: "task-point-1",
+      text: "First",
+      scheduledDate: "2026-05-08T15:00"
+    };
+    const secondTask = {
+      ...task,
+      id: "task-point-2",
+      text: "Second",
+      scheduledDate: "2026-05-08T15:00"
+    };
+
+    renderCalendarView(
+      container as unknown as HTMLElement,
+      {
+        mode: "day",
+        focusDate: new Date("2026-05-08T12:00:00Z"),
+        weekStart: "monday",
+        visibleSourceIds: new Set(["vault"]),
+        includeCompletedTasks: false,
+        allowAppleReminderWriteback: false,
+        allowTaskCreation: false,
+        sources: [],
+        t: (key) => key
+      },
+      [firstTask, secondTask],
+      [],
+      {
+        onLayerToggle: jest.fn(),
+        onModeChange: jest.fn(),
+        onMove: jest.fn(),
+        onDateCreateTask: jest.fn(),
+        onTaskComplete,
+        onTaskJump: jest.fn(),
+        onTaskSelect: jest.fn(),
+        onTaskReschedule: jest.fn(),
+        onToday: jest.fn()
+      }
+    );
+
+    collect(container).find((element) => element.classes.has("task-hub-calendar-timed-item"))?.click();
+    const overlapPopover = collect(fakeDocument.body).find((element) => element.classes.has("task-hub-calendar-overlap-popover"));
+    const checkbox = overlapPopover ? collect(overlapPopover).find((element) => element.classes.has("task-hub-calendar-overlap-check")) : undefined;
+
+    checkbox?.click();
+
+    expect(onTaskComplete).toHaveBeenCalledWith(firstTask);
+    expect(collect(fakeDocument.body).some((element) => element.classes.has("task-hub-calendar-overlap-popover"))).toBe(true);
+    expect(collect(fakeDocument.body).some((element) => element.classes.has("task-hub-calendar-detail-popover"))).toBe(false);
   });
 
   it("does not show resize handles for timed Apple Reminders", () => {

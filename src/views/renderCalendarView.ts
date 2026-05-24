@@ -91,7 +91,10 @@ const WEEK_START_DAY_INDEX: Record<WeekStart, number> = {
 type TimedItemLayout = {
   columnIndex: number;
   columnCount: number;
-  topOffset?: number;
+  overlapIndex?: number;
+  overlapCount?: number;
+  overlapItems?: CalendarItem[];
+  isOverlapRepresentative?: boolean;
 };
 
 type TimedLayoutCandidate = {
@@ -99,7 +102,8 @@ type TimedLayoutCandidate = {
   startMinutes: number;
   visualStart: number;
   visualEnd: number;
-  topOffset: number;
+  overlapIndex: number;
+  overlapCount: number;
 };
 
 export function renderCalendarView(
@@ -345,30 +349,38 @@ function layoutTimedItems(items: CalendarItem[]): Map<string, TimedItemLayout> {
 
 function layoutTimedTaskPoints(items: CalendarItem[]): TimedLayoutCandidate[] {
   const candidates: TimedLayoutCandidate[] = [];
-  const laneEnds: number[] = [];
-  const sortedItems = [...items].sort((left, right) => (left.startMinutes ?? 0) - (right.startMinutes ?? 0) || (right.createdSortKey ?? "").localeCompare(left.createdSortKey ?? "") || left.title.localeCompare(right.title));
+  const sortedItems = [...items].sort(
+    (left, right) =>
+      (left.startMinutes ?? 0) - (right.startMinutes ?? 0) ||
+      taskCompletionRank(left) - taskCompletionRank(right) ||
+      (right.createdSortKey ?? "").localeCompare(left.createdSortKey ?? "") ||
+      left.title.localeCompare(right.title)
+  );
 
-  for (const item of sortedItems) {
+  for (let index = 0; index < sortedItems.length; index += 1) {
+    const item = sortedItems[index];
     const startMinutes = item.startMinutes ?? 0;
-    const top = taskPointTopPixels(startMinutes);
-    let laneIndex = laneEnds.findIndex((end) => end <= top);
-    if (laneIndex === -1) {
-      laneIndex = laneEnds.length;
-      laneEnds.push(0);
-    }
-    const topOffset = laneIndex * (TASK_TIME_POINT_HEIGHT + TASK_TIME_POINT_GAP);
-    const visualStart = visualMinutesForPixels(top + topOffset);
-    const visualEnd = visualMinutesForPixels(top + topOffset + TASK_TIME_POINT_HEIGHT + TASK_TIME_POINT_GAP);
-    laneEnds[laneIndex] = top + topOffset + TASK_TIME_POINT_HEIGHT + TASK_TIME_POINT_GAP;
+    const overlapping = sortedItems.filter((candidate) => taskPointsOverlap(item, candidate));
     candidates.push({
       item,
       startMinutes,
-      visualStart,
-      visualEnd,
-      topOffset
+      visualStart: startMinutes,
+      visualEnd: visualMinutesForPixels(taskPointTopPixels(startMinutes) + TASK_TIME_POINT_HEIGHT),
+      overlapIndex: overlapping.findIndex((candidate) => candidate.id === item.id),
+      overlapCount: overlapping.length
     });
   }
   return candidates;
+}
+
+function taskCompletionRank(item: CalendarItem): number {
+  return item.task?.completed ? 1 : 0;
+}
+
+function taskPointsOverlap(left: CalendarItem, right: CalendarItem): boolean {
+  const leftTop = taskPointTopPixels(left.startMinutes ?? 0);
+  const rightTop = taskPointTopPixels(right.startMinutes ?? 0);
+  return Math.abs(leftTop - rightTop) < TASK_TIME_POINT_HEIGHT + TASK_TIME_POINT_GAP;
 }
 
 function timedEventLayoutCandidate(item: CalendarItem): TimedLayoutCandidate {
@@ -378,7 +390,8 @@ function timedEventLayoutCandidate(item: CalendarItem): TimedLayoutCandidate {
     startMinutes,
     visualStart: startMinutes,
     visualEnd: itemEndMinutes(item),
-    topOffset: 0
+    overlapIndex: 0,
+    overlapCount: 1
   };
 }
 
@@ -387,13 +400,31 @@ function layoutOverlapGroup(items: TimedLayoutCandidate[]): Map<CalendarItem, Ti
   const columnEnds: number[] = [];
 
   for (const candidate of items) {
+    if (candidate.item.kind === "task" && candidate.overlapCount > 1 && candidate.overlapIndex > 0) {
+      layouts.set(candidate.item, {
+        columnIndex: 0,
+        columnCount: 1,
+        overlapIndex: candidate.overlapIndex,
+        overlapCount: candidate.overlapCount,
+        overlapItems: overlappingTaskItems(candidate, items),
+        isOverlapRepresentative: false
+      });
+      continue;
+    }
     let columnIndex = columnEnds.findIndex((end) => end <= candidate.visualStart);
     if (columnIndex === -1) {
       columnIndex = columnEnds.length;
       columnEnds.push(0);
     }
     columnEnds[columnIndex] = candidate.visualEnd;
-    layouts.set(candidate.item, { columnIndex, columnCount: 1, topOffset: candidate.topOffset });
+    layouts.set(candidate.item, {
+      columnIndex,
+      columnCount: 1,
+      overlapIndex: candidate.overlapIndex,
+      overlapCount: candidate.overlapCount,
+      overlapItems: overlappingTaskItems(candidate, items),
+      isOverlapRepresentative: candidate.overlapCount <= 1 || candidate.overlapIndex === 0
+    });
   }
 
   const columnCount = Math.max(1, columnEnds.length);
@@ -401,6 +432,13 @@ function layoutOverlapGroup(items: TimedLayoutCandidate[]): Map<CalendarItem, Ti
     layouts.set(item, { ...layout, columnCount });
   }
   return layouts;
+}
+
+function overlappingTaskItems(candidate: TimedLayoutCandidate, items: TimedLayoutCandidate[]): CalendarItem[] | undefined {
+  if (candidate.item.kind !== "task" || candidate.overlapCount <= 1) return undefined;
+  return items
+    .filter((other) => other.item.kind === "task" && taskPointsOverlap(candidate.item, other.item))
+    .map((other) => other.item);
 }
 
 function itemEndMinutes(item: CalendarItem): number {
@@ -416,6 +454,7 @@ function renderTimedCalendarItem(
   state: CalendarViewState,
   layout?: TimedItemLayout
 ): void {
+  if (item.kind === "task" && isTaskPointHiddenByOverlap(layout)) return;
   const row = container.createDiv({ cls: calendarItemClass(item, "task-hub-calendar-timed-item") });
   registerCalendarItemElement(row, item);
   bindCalendarItemDrag(row, item, state);
@@ -426,19 +465,31 @@ function renderTimedCalendarItem(
   const isTaskPoint = item.kind === "task";
   if (isTaskPoint) row.addClass("is-time-point");
   const baseTop = ((startMinutes - startHour * 60) / 60) * HOUR_HEIGHT;
-  row.style.top = `${baseTop + (layout?.topOffset ?? 0)}px`;
+  row.style.top = `${baseTop}px`;
   row.style.height = isTaskPoint ? `${TASK_TIME_POINT_HEIGHT}px` : `${Math.max(30, ((endMinutes - startMinutes) / 60) * HOUR_HEIGHT - 4)}px`;
+  if (isTaskPoint && (layout?.overlapCount ?? 1) > 1) {
+    row.addClass(layout?.isOverlapRepresentative ? "is-overlap-stack" : "is-overlap-hidden");
+    row.style.zIndex = String(10 + (layout?.overlapCount ?? 1));
+    row.setAttr("data-task-hub-overlap-count", String(layout?.overlapCount ?? 1));
+  }
   if (layout && layout.columnCount > 1) {
     row.style.left = `calc(${(100 * layout.columnIndex) / layout.columnCount}% + 6px)`;
     row.style.right = `calc(${100 - (100 * (layout.columnIndex + 1)) / layout.columnCount}% + 6px)`;
   }
   renderCalendarItemContent(row, item, handlers, state, isTaskPoint ? undefined : formatTimeRange(startMinutes, endMinutes));
+  if (isTaskPoint && layout?.isOverlapRepresentative && (layout.overlapCount ?? 1) > 1) {
+    row.createSpan({ cls: "task-hub-calendar-overlap-count", text: `+${(layout.overlapCount ?? 1) - 1}` });
+  }
   bindCalendarItemResize(row, container, item, startHour, handlers, state);
   const task = item.task;
   if (task) {
     row.addEventListener("click", (event) => {
       event.stopPropagation();
       selectCalendarItem(row, item);
+      if (layout?.overlapItems && layout.overlapItems.length > 1) {
+        renderTimedTaskOverlapPopover(row, layout.overlapItems, handlers, state);
+        return;
+      }
       renderCalendarDetailsPopover(row, item, handlers, state);
     });
   } else {
@@ -448,6 +499,10 @@ function renderTimedCalendarItem(
       renderCalendarDetailsPopover(row, item, handlers, state);
     });
   }
+}
+
+function isTaskPointHiddenByOverlap(layout: TimedItemLayout | undefined): boolean {
+  return Boolean(layout && (layout.overlapCount ?? 1) > 1 && !layout.isOverlapRepresentative);
 }
 
 function bindCalendarItemResize(
@@ -743,11 +798,51 @@ function renderCalendarDetailsPopover(anchor: HTMLElement, item: CalendarItem, h
   bindDetailsPopoverDrag(popover, header, ownerDocument);
 
   if (item.task) {
-    renderTaskDetailsPopover(popover, item.task, handlers, state, closePopover, item.task.source === "apple-reminders" ? headerSourceSelect : undefined);
+    renderTaskDetailsPopover(popover, item, item.task, handlers, state, closePopover, item.task.source === "apple-reminders" ? headerSourceSelect : undefined);
     return;
   }
   if (item.event) {
-    renderEventDetailsPopover(popover, item.event, handlers, state, closePopover, headerSourceSelect);
+    renderEventDetailsPopover(popover, item, item.event, handlers, state, closePopover, headerSourceSelect);
+  }
+}
+
+function renderTimedTaskOverlapPopover(anchor: HTMLElement, items: CalendarItem[], handlers: CalendarViewHandlers, state: CalendarViewState): void {
+  activeDetailsElement?.remove();
+  const ownerDocument = anchor.ownerDocument;
+  const popover = ownerDocument.createElement("div");
+  popover.addClass("task-hub-calendar-overlap-popover");
+  popover.addEventListener("click", (event) => event.stopPropagation());
+  ownerDocument.body.appendChild(popover);
+  activeDetailsElement = popover;
+  positionDetailsPopover(popover, anchor);
+
+  const closePopover = () => {
+    ownerDocument.removeEventListener("click", closePopover);
+    popover.remove();
+    if (activeDetailsElement === popover) activeDetailsElement = undefined;
+  };
+  ownerDocument.addEventListener("click", closePopover);
+
+  for (const item of items) {
+    const row = popover.createDiv({ cls: calendarItemClass(item, "task-hub-calendar-overlap-row") });
+    if (item.color) row.style.setProperty("--task-hub-item-color", item.color);
+    const task = item.task;
+    const checkbox = row.createEl("input", { cls: "task-hub-calendar-overlap-check", type: "checkbox" });
+    checkbox.checked = Boolean(task?.completed);
+    checkbox.disabled = !task || !canToggleCalendarTask(task, state);
+    checkbox.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (task) handlers.onTaskComplete(task);
+    });
+    const body = row.createDiv({ cls: "task-hub-calendar-overlap-body" });
+    body.createSpan({ cls: "task-hub-calendar-overlap-title", text: item.title });
+    if (item.startMinutes !== undefined) body.createSpan({ cls: "task-hub-calendar-overlap-time", text: formatMinutes(item.startMinutes) });
+    row.addEventListener("click", (event) => {
+      event.stopPropagation();
+      closePopover();
+      selectCalendarItem(anchor, item);
+      renderCalendarDetailsPopover(anchor, item, handlers, state);
+    });
   }
 }
 
@@ -824,6 +919,7 @@ function bindDetailsPopoverDrag(popover: HTMLElement, handle: HTMLElement, owner
 
 function renderTaskDetailsPopover(
   popover: HTMLElement,
+  item: CalendarItem,
   task: TaskItem,
   handlers: CalendarViewHandlers,
   state: CalendarViewState,
@@ -851,6 +947,10 @@ function renderTaskDetailsPopover(
     }
   }
   const actions = popover.createDiv({ cls: "task-hub-calendar-detail-actions" });
+  renderDetailDeleteButton(actions, state, canDeleteTask(item, state), () => {
+    handlers.onTaskDelete?.(task);
+    closePopover();
+  });
   const save = actions.createEl("button", { cls: "mod-cta", text: state.t("save") });
   const updateSaveState = () => {
     save.disabled = !editable || !taskDraftChanged(task, title.value, date.value, time.value, tags?.value, list?.value, notes?.value);
@@ -884,6 +984,7 @@ function renderTaskDetailsPopover(
 
 function renderEventDetailsPopover(
   popover: HTMLElement,
+  item: CalendarItem,
   event: CalendarEvent,
   handlers: CalendarViewHandlers,
   state: CalendarViewState,
@@ -918,6 +1019,10 @@ function renderEventDetailsPopover(
     }
   }
   const actions = popover.createDiv({ cls: "task-hub-calendar-detail-actions" });
+  renderDetailDeleteButton(actions, state, canDeleteEvent(item, state), () => {
+    handlers.onEventDelete?.(event);
+    closePopover();
+  });
   const save = actions.createEl("button", { cls: "mod-cta", text: state.t("save") });
   const updateSaveState = () => {
     save.disabled = !editable || !eventDraftChanged(event, title.value, date.value, start.value, end.value, allDayCheckbox.checked, calendar.value, notes.value);
@@ -953,6 +1058,12 @@ function renderEventDetailsPopover(
   if (!editable) {
     popover.createDiv({ cls: "task-hub-detail-note", text: state.t("readOnly") });
   }
+}
+
+function renderDetailDeleteButton(actions: HTMLElement, state: CalendarViewState, canDelete: boolean, onDelete: () => void): void {
+  if (!canDelete) return;
+  const button = actions.createEl("button", { cls: "task-hub-calendar-detail-delete", text: state.t("deleteCalendarItem") });
+  button.addEventListener("click", onDelete);
 }
 
 function detailInput(container: HTMLElement, label: string, value: string | undefined, type = "text"): HTMLInputElement {

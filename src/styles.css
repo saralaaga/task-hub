@@ -724,7 +724,7 @@ body .task-hub-view button.task-hub-color-swatch {
 
 .task-hub-task-text {
   -webkit-line-clamp: 3;
-  font-weight: 600;
+  font-weight: 400;
   line-height: 1.35;
 }
 
@@ -1303,7 +1303,7 @@ body .task-hub-view button.task-hub-color-swatch {
 .task-hub-calendar-item-title {
   color: var(--text-normal);
   font-size: var(--font-ui-smaller);
-  font-weight: 600;
+  font-weight: 400;
   line-height: 1.25;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1471,6 +1471,87 @@ body .task-hub-view button.task-hub-color-swatch {
   left: 6px;
   position: absolute;
   right: 6px;
+}
+
+.task-hub-calendar-timed-item.is-overlap-stack {
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 48%) inset,
+    0 2px 6px rgb(0 0 0 / 12%);
+  padding-right: 36px;
+}
+
+.task-hub-calendar-overlap-count {
+  align-items: center;
+  background: color-mix(in srgb, var(--task-hub-item-color, var(--interactive-accent)) 22%, var(--background-primary));
+  border: 1px solid color-mix(in srgb, var(--task-hub-item-color, var(--interactive-accent)) 36%, transparent);
+  border-radius: 999px;
+  color: var(--text-muted);
+  display: inline-flex;
+  font-size: var(--font-ui-smaller);
+  height: 20px;
+  justify-content: center;
+  min-width: 28px;
+  padding: 0 7px;
+  position: absolute;
+  right: 7px;
+  top: 4px;
+}
+
+.task-hub-calendar-overlap-popover {
+  background: color-mix(in srgb, var(--background-primary) 96%, transparent);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 10px;
+  box-shadow: 0 16px 38px rgb(0 0 0 / 22%);
+  display: grid;
+  gap: 0;
+  min-width: 260px;
+  overflow: hidden;
+  padding: 8px;
+  position: fixed;
+  width: min(340px, calc(100vw - 16px));
+  z-index: 1000;
+}
+
+.task-hub-calendar-overlap-row {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 18px minmax(0, 1fr);
+  padding: 8px;
+}
+
+.task-hub-calendar-overlap-row:hover,
+.task-hub-calendar-overlap-row:focus-visible {
+  background: color-mix(in srgb, var(--task-hub-item-color, var(--interactive-accent)) 12%, transparent);
+}
+
+.task-hub-calendar-overlap-check {
+  accent-color: var(--task-hub-item-color, var(--interactive-accent));
+  height: 18px;
+  margin: 0;
+  width: 18px;
+}
+
+.task-hub-calendar-overlap-body {
+  display: grid;
+  min-width: 0;
+}
+
+.task-hub-calendar-overlap-title {
+  color: var(--text-normal);
+  font-weight: 400;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-hub-calendar-overlap-time {
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
 }
 
 .task-hub-calendar-detail-popover {
@@ -1686,7 +1767,19 @@ body .task-hub-view button.task-hub-color-swatch {
 .task-hub-calendar-detail-actions {
   display: grid;
   gap: 8px;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+}
+
+.task-hub-calendar-detail-delete {
+  background: color-mix(in srgb, var(--text-error, #d14343) 10%, var(--background-primary));
+  border-color: color-mix(in srgb, var(--text-error, #d14343) 36%, var(--background-modifier-border));
+  color: var(--text-error, #d14343);
+}
+
+.task-hub-calendar-detail-delete:hover,
+.task-hub-calendar-detail-delete:focus-visible {
+  background: color-mix(in srgb, var(--text-error, #d14343) 16%, var(--background-primary));
+  border-color: color-mix(in srgb, var(--text-error, #d14343) 52%, var(--background-modifier-border));
 }
 
 .task-hub-calendar-detail-readonly-row {

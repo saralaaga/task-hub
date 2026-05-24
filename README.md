@@ -6,6 +6,13 @@ Task Hub is a desktop-only Obsidian plugin that brings scattered Markdown tasks 
 
 ![Task Hub calendar overview](assets/task-hub-calendar-overview.png)
 
+## Compatibility
+
+- **Obsidian:** Task Hub is a desktop-only plugin and declares `minAppVersion` `1.5.0` in `manifest.json`. Use Obsidian desktop 1.5.0 or later.
+- **Mobile:** Obsidian mobile is not supported.
+- **Local Apple integration:** Apple Reminders and Apple Calendar integration is macOS-only and is supported on macOS 14 Sonoma or later. The helper contains a legacy EventKit permission path for older macOS releases, but macOS 13 and earlier are not part of the current tested support matrix.
+- **Other desktop systems:** Core vault task, tag, calendar, and public ICS features are designed for Obsidian desktop. Apple Reminders and Apple Calendar features are unavailable outside macOS.
+
 ## Features
 
 - Index Markdown tasks written as `- [ ]` and `- [x]`.

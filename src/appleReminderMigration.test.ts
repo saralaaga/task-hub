@@ -76,6 +76,7 @@ const {
   createAppleReminder,
   deleteAppleCalendarEvent,
   deleteAppleReminder,
+  requestLocalAppleAccess,
   setAppleCalendarEventDetails,
   setAppleReminderDetails,
   setAppleReminderDueDate
@@ -223,6 +224,35 @@ describe("Apple Reminders migration", () => {
     expect(notices).not.toContain("Apple Calendar event created and source task removed.");
   });
 
+  it("removes a timed Markdown task start time when dragged to the all-day area on the same date", async () => {
+    const file = { path: "Inbox.md", extension: "md", stat: { ctime: 1, mtime: 2, size: 3 } };
+    const plugin = new TaskHubPlugin({} as never, {} as never);
+    const process = jest.fn(async (_file, update) => update("- [ ] Pay invoice 📅 2026-05-20 ⏰ 09:30\nNext"));
+    plugin.app = {
+      vault: {
+        adapter: {},
+        getFileByPath: jest.fn(() => file),
+        process
+      },
+      workspace: {
+        getLeavesOfType: jest.fn(() => [])
+      }
+    } as never;
+    plugin.settings = DEFAULT_SETTINGS;
+    plugin.taskIndex = {
+      reindexFile: jest.fn(async () => undefined)
+    } as never;
+
+    await plugin.rescheduleTask(task({
+      rawLine: "- [ ] Pay invoice 📅 2026-05-20 ⏰ 09:30",
+      scheduledDate: "2026-05-20T09:30"
+    }), "2026-05-20");
+
+    await expect(process.mock.results[0].value).resolves.toBe("- [ ] Pay invoice 📅 2026-05-20\nNext");
+    expect(notices).toContain("Task date updated.");
+    expect(notices).not.toContain("Task is already on this date.");
+  });
+
   it("updates an Apple Reminder time when dragged within the same day", async () => {
     const plugin = new TaskHubPlugin({} as never, {} as never);
     plugin.app = {
@@ -247,6 +277,35 @@ describe("Apple Reminders migration", () => {
     });
 
     expect(setAppleReminderDueDate).toHaveBeenCalledWith("reminder-1", "2026-05-20", 570);
+    expect(savedData).toHaveLength(0);
+    expect(notices).toContain("Task date updated.");
+    expect(notices).not.toContain("Task is already on this date.");
+  });
+
+  it("removes an Apple Reminder start time when dragged to the all-day area on the same date", async () => {
+    const plugin = new TaskHubPlugin({} as never, {} as never);
+    plugin.app = {
+      workspace: {
+        getLeavesOfType: jest.fn(() => [])
+      }
+    } as never;
+    plugin.settings = {
+      ...DEFAULT_SETTINGS,
+      localApple: {
+        ...DEFAULT_SETTINGS.localApple,
+        enabled: true,
+        remindersEnabled: true,
+        remindersWritebackEnabled: true
+      }
+    };
+    plugin.syncLocalApple = jest.fn(async () => undefined) as never;
+
+    await plugin.rescheduleTask({
+      ...appleReminderTask(),
+      scheduledDate: "2026-05-20T09:30"
+    }, "2026-05-20");
+
+    expect(setAppleReminderDueDate).toHaveBeenCalledWith("reminder-1", "2026-05-20", undefined);
     expect(savedData).toHaveLength(0);
     expect(notices).toContain("Task date updated.");
     expect(notices).not.toContain("Task is already on this date.");
@@ -351,6 +410,34 @@ describe("Apple Reminders migration", () => {
       notes: "Bring prototype notes"
     });
     expect(notices).toContain("Apple Reminder created.: reminder-created-1");
+  });
+
+  it("requests Reminders access and retries when creating an Apple Reminder before permission is granted", async () => {
+    const notDetermined = Object.assign(new Error("Apple access has not been requested yet."), { code: "not_determined" });
+    createAppleReminder.mockRejectedValueOnce(notDetermined).mockResolvedValueOnce("reminder-created-after-access");
+    requestLocalAppleAccess.mockResolvedValueOnce({
+      ok: true,
+      remindersStatus: { authorization: "fullAccess" },
+      calendarStatus: { authorization: "notDetermined" }
+    });
+    const plugin = new TaskHubPlugin({} as never, {} as never);
+    plugin.app = { workspace: { getLeavesOfType: jest.fn(() => []) } } as never;
+    plugin.settings = {
+      ...DEFAULT_SETTINGS,
+      localApple: {
+        ...DEFAULT_SETTINGS.localApple,
+        enabled: true,
+        remindersEnabled: true,
+        remindersCreateEnabled: true
+      }
+    };
+    plugin.syncLocalApple = jest.fn(async () => undefined) as never;
+
+    await plugin.createTaskForDate("2026-05-20", "Design review", { type: "apple-reminders" });
+
+    expect(requestLocalAppleAccess).toHaveBeenCalledWith({ reminders: true, calendar: false });
+    expect(createAppleReminder).toHaveBeenCalledTimes(2);
+    expect(notices).toContain("Apple Reminder created.: reminder-created-after-access");
   });
 
   it("deletes a Markdown task from the calendar context action", async () => {
@@ -493,6 +580,41 @@ describe("Apple Reminders migration", () => {
       listId: "list-1",
       notes: "Bring the signed copy"
     });
+    expect(notices).toContain("Task updated.");
+  });
+
+  it("requests Reminders access and retries when updating before permission is granted", async () => {
+    const notDetermined = Object.assign(new Error("Apple access has not been requested yet."), { code: "not_determined" });
+    setAppleReminderDetails.mockRejectedValueOnce(notDetermined).mockResolvedValueOnce(undefined);
+    requestLocalAppleAccess.mockResolvedValueOnce({
+      ok: true,
+      remindersStatus: { authorization: "fullAccess" },
+      calendarStatus: { authorization: "notDetermined" }
+    });
+    const plugin = new TaskHubPlugin({} as never, {} as never);
+    plugin.app = { workspace: { getLeavesOfType: jest.fn(() => []) } } as never;
+    plugin.settings = {
+      ...DEFAULT_SETTINGS,
+      localApple: {
+        ...DEFAULT_SETTINGS.localApple,
+        enabled: true,
+        remindersEnabled: true,
+        remindersWritebackEnabled: true
+      }
+    };
+    plugin.syncLocalApple = jest.fn(async () => undefined) as never;
+
+    await plugin.updateCalendarTask(appleReminderTask(), {
+      kind: "task",
+      title: "Send invoice",
+      date: "2026-05-21",
+      startTime: "09:30",
+      reminderListId: "",
+      notes: "Bring the signed copy"
+    });
+
+    expect(requestLocalAppleAccess).toHaveBeenCalledWith({ reminders: true, calendar: false });
+    expect(setAppleReminderDetails).toHaveBeenCalledTimes(2);
     expect(notices).toContain("Task updated.");
   });
 

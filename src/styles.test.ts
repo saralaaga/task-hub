@@ -103,6 +103,17 @@ describe("Task Hub styles", () => {
     expect(taskListChipRule).toContain("0 1px 2px rgb(0 0 0 / 16%)");
   });
 
+  it("keeps task content text lightweight in task and calendar cards", () => {
+    const styles = readFileSync(path.join(__dirname, "styles.css"), "utf8");
+    const taskTextRule = styles.match(/\.task-hub-task-text\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const calendarTitleRule = Array.from(styles.matchAll(/\.task-hub-calendar-item-title\s*\{(?<body>[^}]+)\}/g))
+      .map((match) => match.groups?.body ?? "")
+      .find((body) => body.includes("font-size")) ?? "";
+
+    expect(taskTextRule).toContain("font-weight: 400");
+    expect(calendarTitleRule).toContain("font-weight: 400");
+  });
+
   it("keeps source filtering inside the condition panel instead of a task sidebar", () => {
     const styles = readFileSync(path.join(__dirname, "styles.css"), "utf8");
     const workbenchRule = styles.match(/\.task-hub-task-workbench\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
