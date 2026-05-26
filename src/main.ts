@@ -212,6 +212,15 @@ export default class TaskHubPlugin extends Plugin {
     return this.settings.localApple.remindersLists;
   }
 
+  getAppleReminderListColors(): Record<string, string> {
+    return Object.fromEntries(
+      this.settings.localApple.remindersLists.map((list) => [
+        list.id,
+        this.settings.localApple.reminderColorOverrides[list.id] ?? this.settings.localApple.remindersColor
+      ])
+    );
+  }
+
   getAppleCalendars() {
     return this.settings.localApple.calendars;
   }

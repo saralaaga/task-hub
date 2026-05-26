@@ -138,6 +138,29 @@ describe("renderTagsView", () => {
     expect(row?.style.setProperty).toHaveBeenCalledWith("--task-hub-source-color", "#22c55e");
   });
 
+  it("uses Apple Reminder list colors for tag tasks", () => {
+    const container = new FakeElement();
+    const reminderTask = {
+      ...appleTask("apple", "Apple task", ["#work"]),
+      externalListId: "personal"
+    };
+
+    renderTagsView(
+      container as unknown as HTMLElement,
+      [reminderTask],
+      { onTagSelect: jest.fn(), onTaskComplete: jest.fn(), onTaskSelect: jest.fn(), onReorderTags: jest.fn() },
+      (key) => key,
+      {
+        allowAppleReminderWriteback: true,
+        sourceColors: { "apple-reminders": "#f59e0b" },
+        taskColors: { personal: "#22c55e" }
+      }
+    );
+
+    const row = collect(container).find((element) => element.classes.has("task-hub-tag-task"));
+    expect(row?.style.setProperty).toHaveBeenCalledWith("--task-hub-source-color", "#22c55e");
+  });
+
   it("applies the Obsidian theme color to vault tag tasks", () => {
     const container = new FakeElement();
 

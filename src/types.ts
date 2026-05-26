@@ -118,6 +118,7 @@ export type LocalAppleIntegrationSettings = {
   enabled: boolean;
   remindersEnabled: boolean;
   remindersColor: string;
+  reminderColorOverrides: Record<string, string>;
   remindersWritebackEnabled: boolean;
   remindersCreateEnabled: boolean;
   remindersDefaultListId?: string;

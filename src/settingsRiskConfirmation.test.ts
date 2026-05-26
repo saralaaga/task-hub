@@ -358,6 +358,26 @@ describe("TaskHubSettingTab risky Apple Reminders setting", () => {
     expect(plugin.settings.localApple.calendarColorOverrides.work).toBe("#123456");
     expect(plugin.saveSettings).toHaveBeenCalled();
   });
+
+  it("opens a native color input from an Apple Reminders list color preview", async () => {
+    const plugin = pluginForSettings();
+    plugin.settings.localApple.remindersEnabled = true;
+    (plugin as unknown as { getAppleReminderLists: () => Array<{ id: string; name: string }> }).getAppleReminderLists = () => [
+      { id: "personal", name: "Personal" }
+    ];
+    const tab = new TaskHubSettingTab({} as never, plugin as never);
+
+    tab.display();
+    const colorInput = colorInputs.at(-1);
+    expect(colorInput).toBeDefined();
+
+    colorInput!.value = "#654321";
+    colorInput!.dispatch("input");
+    await Promise.resolve();
+
+    expect(plugin.settings.localApple.reminderColorOverrides.personal).toBe("#654321");
+    expect(plugin.saveSettings).toHaveBeenCalled();
+  });
 });
 
 function findToggle(name: string): ToggleControl | undefined {

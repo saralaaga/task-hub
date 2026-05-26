@@ -61,6 +61,7 @@ export class TaskHubView extends ItemView {
       vault: "var(--interactive-accent)",
       "apple-reminders": this.plugin.settings.localApple.remindersColor
     };
+    const taskColors = this.plugin.getAppleReminderListColors();
     const main = renderShell(
       container,
       {
@@ -137,6 +138,7 @@ export class TaskHubView extends ItemView {
           appleReminderLists: this.plugin.getAppleReminderLists(),
           selectedTaskId: this.selectedTaskId,
           sourceColors,
+          taskColors,
           taskListScrollTop: this.taskListScrollTop
         }
       );
@@ -169,7 +171,8 @@ export class TaskHubView extends ItemView {
         {
           allowAppleReminderWriteback: this.plugin.settings.localApple.remindersWritebackEnabled,
           orderedTags: this.plugin.settings.tagViewOrder,
-          sourceColors
+          sourceColors,
+          taskColors
         }
       );
       return;
@@ -193,6 +196,7 @@ export class TaskHubView extends ItemView {
           showLunarCalendar: this.plugin.settings.language === "zh" && this.plugin.settings.showLunarCalendar,
           defaultTimedTaskDurationMinutes: this.plugin.settings.localApple.calendarDefaultTimedTaskDurationMinutes,
           taskDurationOverrides: this.plugin.settings.localApple.reminderDurationOverrides,
+          taskColors,
           appleReminderLists: this.plugin.getAppleReminderLists(),
           appleCalendars: this.plugin.getAppleCalendars(),
           sources: calendarSources,

@@ -696,6 +696,42 @@ describe("renderCalendarView", () => {
     expect(item?.style.setProperty).toHaveBeenCalledWith("--task-hub-item-color", "#22c55e");
   });
 
+  it("uses Apple Reminder list colors for calendar task items", () => {
+    const container = new FakeElement();
+
+    renderCalendarView(
+      container as unknown as HTMLElement,
+      {
+        mode: "month",
+        focusDate: new Date("2026-05-08T12:00:00Z"),
+        weekStart: "monday",
+        visibleSourceIds: new Set(["apple-reminders"]),
+        includeCompletedTasks: false,
+        allowAppleReminderWriteback: true,
+        allowTaskCreation: false,
+        taskColors: { personal: "#ef4444" },
+        sources: [remindersSource],
+        t: (key) => key
+      },
+      [{ ...task, source: "apple-reminders", externalListId: "personal" }],
+      [],
+      {
+        onLayerToggle: jest.fn(),
+        onModeChange: jest.fn(),
+        onMove: jest.fn(),
+        onDateCreateTask: jest.fn(),
+        onTaskComplete: jest.fn(),
+        onTaskJump: jest.fn(),
+        onTaskSelect: jest.fn(),
+        onTaskReschedule: jest.fn(),
+        onToday: jest.fn()
+      }
+    );
+
+    const item = collect(container).find((element) => element.classes.has("task-hub-calendar-item"));
+    expect(item?.style.setProperty).toHaveBeenCalledWith("--task-hub-item-color", "#ef4444");
+  });
+
   it("creates a task for a month day when calendar task creation is enabled", () => {
     const container = new FakeElement();
     const onDateCreateTask = jest.fn();

@@ -219,6 +219,32 @@ describe("renderTasksView", () => {
     expect(logo?.classes.has("is-apple")).toBe(true);
   });
 
+  it("uses Apple Reminder list colors for task rows and details", () => {
+    const container = new FakeElement();
+    const task = { ...baseTask, externalListId: "personal" };
+
+    renderTasksView(
+      container as unknown as HTMLElement,
+      [task],
+      [task],
+      { status: "open", tags: [], sourceQuery: "", textQuery: "" },
+      handlers(),
+      new Date("2026-05-08T12:00:00Z"),
+      (key) => key,
+      {
+        allowAppleReminderWriteback: true,
+        sourceColors: { "apple-reminders": "#f59e0b" },
+        taskColors: { personal: "#22c55e" }
+      }
+    );
+
+    const row = collect(container).find((element) => element.classes.has("task-hub-task-row"));
+    const details = collect(container).find((element) => element.classes.has("task-hub-task-details"));
+
+    expect(row?.style.setProperty).toHaveBeenCalledWith("--task-hub-source-color", "#22c55e");
+    expect(details?.style.setProperty).toHaveBeenCalledWith("--task-hub-source-color", "#22c55e");
+  });
+
   it("renders task tags as individual tag chips", () => {
     const container = new FakeElement();
     const task = { ...baseTask, tags: ["#project", "#client/acme"] };

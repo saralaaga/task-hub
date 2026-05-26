@@ -12,6 +12,7 @@ export type TagRenderOptions = {
   allowAppleReminderWriteback: boolean;
   orderedTags?: string[];
   sourceColors?: Partial<Record<TaskItem["source"], string>>;
+  taskColors?: Record<string, string>;
 };
 
 export function renderTagsView(
@@ -90,7 +91,7 @@ function renderTagTask(
   const item = container.createDiv({
     cls: ["task-hub-tag-task", task.completed ? "is-completed" : "", contextOnly ? "is-context" : ""].filter(Boolean).join(" ")
   });
-  const color = options.sourceColors?.[task.source];
+  const color = taskDisplayColor(task, options);
   if (color) item.style.setProperty("--task-hub-source-color", color);
   item.style.setProperty("--task-hub-task-indent", String(task.indent ?? 0));
   const checkbox = item.createEl("input", { type: "checkbox" });
@@ -111,6 +112,10 @@ function renderTagTask(
     scheduleWrappedTagLayout(body, title);
   }
   item.addEventListener("click", () => handlers.onTaskSelect(task));
+}
+
+function taskDisplayColor(task: TaskItem, options: Pick<TagRenderOptions, "sourceColors" | "taskColors">): string | undefined {
+  return (task.externalListId ? options.taskColors?.[task.externalListId] : undefined) ?? options.sourceColors?.[task.source];
 }
 
 function tagsForTaskCard(task: TaskItem, cardTag: string | null | undefined): string[] {

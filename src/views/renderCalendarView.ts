@@ -20,6 +20,7 @@ export type CalendarViewState = {
   today?: Date;
   defaultTimedTaskDurationMinutes?: number;
   taskDurationOverrides?: Record<string, number>;
+  taskColors?: Record<string, string>;
   appleReminderLists?: AppleReminderList[];
   appleCalendars?: AppleCalendarInfo[];
   sources: CalendarSource[];
@@ -161,6 +162,7 @@ export function renderCalendarView(
     includeCompletedTasks: state.includeCompletedTasks,
     sourceColors: Object.fromEntries(state.sources.map((source) => [source.id, source.color])),
     eventColors: Object.fromEntries(events.filter((event) => event.sourceId === "apple-calendar" && event.calendarId).map((event) => [event.calendarId as string, appleCalendarEventColor(event, state)])),
+    taskColors: state.taskColors,
     taskDurationOverrides: state.taskDurationOverrides
   });
   const visibleItems = items.filter((item) => item.date >= range.start && item.date <= range.end);

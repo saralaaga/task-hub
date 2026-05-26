@@ -17,6 +17,7 @@ export type TaskRenderOptions = {
   allowAppleReminderWriteback: boolean;
   selectedTaskId?: string;
   sourceColors?: Partial<Record<TaskItem["source"], string>>;
+  taskColors?: Record<string, string>;
   appleReminderLists?: AppleReminderList[];
   taskListScrollTop?: number;
 };
@@ -109,7 +110,7 @@ function renderTaskRow(
 ): HTMLElement {
   const classes = ["task-hub-task-row", selected ? "is-selected" : "", task.completed ? "is-completed" : ""].filter(Boolean).join(" ");
   const row = container.createDiv({ cls: classes });
-  const color = options.sourceColors?.[task.source];
+  const color = taskDisplayColor(task, options);
   if (color) row.style.setProperty("--task-hub-source-color", color);
   const checkbox = row.createEl("input", { type: "checkbox" });
   checkbox.checked = task.completed;
@@ -154,7 +155,7 @@ function renderTaskDetails(
   container.empty();
   const details = container.createDiv({ cls: `task-hub-task-details ${task?.completed ? "is-completed" : ""}` });
   if (task) {
-    const color = options.sourceColors?.[task.source];
+    const color = taskDisplayColor(task, options);
     if (color) details.style.setProperty("--task-hub-source-color", color);
   }
   const header = details.createDiv({ cls: "task-hub-detail-header" });
@@ -213,6 +214,10 @@ function renderTaskDetails(
   if (!canToggle && task.source !== "vault") {
     details.createDiv({ cls: "task-hub-detail-note", text: t("externalTaskReadOnly") });
   }
+}
+
+function taskDisplayColor(task: TaskItem, options: Pick<TaskRenderOptions, "sourceColors" | "taskColors">): string | undefined {
+  return (task.externalListId ? options.taskColors?.[task.externalListId] : undefined) ?? options.sourceColors?.[task.source];
 }
 
 function renderTaskDetailSourceLogo(container: HTMLElement, task: TaskItem | undefined): void {

@@ -113,6 +113,9 @@ export type TranslationKey =
   | "localAppleReminders"
   | "localAppleRemindersColor"
   | "localAppleRemindersColorDesc"
+  | "localAppleReminderColorNoLists"
+  | "localAppleReminderListColors"
+  | "localAppleReminderListColorsDesc"
   | "localAppleRemindersDisabledDesc"
   | "localAppleRemindersDesc"
   | "localAppleRemindersCreate"
@@ -339,6 +342,9 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     localAppleReminders: "Apple Reminders",
     localAppleRemindersColor: "Apple Reminders color",
     localAppleRemindersColorDesc: "Preview the current color or pick a softer recommended color.",
+    localAppleReminderColorNoLists: "Sync Apple Reminders once to configure colors for individual lists.",
+    localAppleReminderListColors: "Apple Reminders list colors",
+    localAppleReminderListColorsDesc: "Override the display color for each local Apple Reminders list.",
     localAppleRemindersDisabledDesc: "Turn on Apple Reminders to configure local reading, completion writeback, and display color.",
     localAppleRemindersDesc: "Read local Apple Reminders into the task list and dated reminders into the calendar.",
     localAppleRemindersCreate: "Create Apple Reminders from vault tasks",
@@ -565,6 +571,9 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     localAppleReminders: "Apple 提醒事项",
     localAppleRemindersColor: "Apple 提醒事项颜色",
     localAppleRemindersColorDesc: "预览当前颜色，或选择一个更柔和的推荐颜色。",
+    localAppleReminderColorNoLists: "先同步一次 Apple 提醒事项后，再配置单个列表的颜色。",
+    localAppleReminderListColors: "Apple 提醒事项列表颜色",
+    localAppleReminderListColorsDesc: "按本机 Apple 提醒事项列表分别覆盖渲染颜色。",
     localAppleRemindersDisabledDesc: "启用 Apple 提醒事项后再配置本地读取、完成状态写入和显示颜色。",
     localAppleRemindersDesc: "读取本机 Apple 提醒事项到任务列表；有日期的提醒也会进入日历。",
     localAppleRemindersCreate: "从 vault 任务创建 Apple 提醒事项",

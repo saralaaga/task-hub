@@ -29,6 +29,7 @@ export type BuildCalendarItemsInput = {
   includeCompletedTasks: boolean;
   sourceColors?: Record<string, string>;
   eventColors?: Record<string, string>;
+  taskColors?: Record<string, string>;
   taskDurationOverrides?: Record<string, number>;
 };
 
@@ -66,7 +67,7 @@ export function buildCalendarItems(input: BuildCalendarItemsInput): CalendarItem
       allDay: taskStartMinutes === undefined,
       sourceId,
       kind: "task",
-      color: input.sourceColors?.[sourceId],
+      color: taskColor(task, input.taskColors, input.sourceColors),
       createdSortKey: task.createdDate ?? task.startDate ?? "",
       task
     });
@@ -108,6 +109,10 @@ export function buildCalendarItems(input: BuildCalendarItemsInput): CalendarItem
       taskCreatedSortRank(left, right) ||
       left.title.localeCompare(right.title)
   );
+}
+
+function taskColor(task: TaskItem, taskColors?: Record<string, string>, sourceColors?: Record<string, string>): string | undefined {
+  return (task.externalListId ? taskColors?.[task.externalListId] : undefined) ?? sourceColors?.[task.source];
 }
 
 function taskCreatedSortRank(left: CalendarItem, right: CalendarItem): number {

@@ -23,6 +23,7 @@ export const DEFAULT_SETTINGS: TaskHubSettings = {
     enabled: false,
     remindersEnabled: false,
     remindersColor: "#f59e0b",
+    reminderColorOverrides: {},
     remindersWritebackEnabled: false,
     remindersCreateEnabled: false,
     remindersDefaultListId: undefined,
@@ -62,6 +63,8 @@ export function normalizeTaskHubSettings(loaded: Partial<TaskHubSettings> | null
       ...(loadedLocalApple ?? {}),
       enabled: localAppleEnabled,
       remindersColor: loadedLocalApple?.remindersColor ?? DEFAULT_SETTINGS.localApple.remindersColor,
+      reminderColorOverrides:
+        loadedLocalApple?.reminderColorOverrides ?? DEFAULT_SETTINGS.localApple.reminderColorOverrides,
       reminderDurationOverrides:
         loadedLocalApple?.reminderDurationOverrides ?? DEFAULT_SETTINGS.localApple.reminderDurationOverrides,
       remindersLists: loadedLocalApple?.remindersLists ?? DEFAULT_SETTINGS.localApple.remindersLists,
@@ -563,6 +566,7 @@ export class TaskHubSettingTab extends PluginSettingTab {
         this.plugin.settings.localApple.remindersColor = color;
       }
     );
+    this.displayAppleReminderColorOverrides(panel, t);
 
     new Setting(panel)
       .setName(t("localAppleRemindersWriteback"))
@@ -617,6 +621,35 @@ export class TaskHubSettingTab extends PluginSettingTab {
             await this.plugin.saveSettings();
           });
         });
+    }
+  }
+
+  private displayAppleReminderColorOverrides(containerEl: HTMLElement, t: Translator): void {
+    const lists = this.plugin.getAppleReminderLists();
+    if (lists.length === 0) {
+      containerEl.createDiv({ cls: "task-hub-empty", text: t("localAppleReminderColorNoLists") });
+      return;
+    }
+
+    new Setting(containerEl).setName(t("localAppleReminderListColors")).setDesc(t("localAppleReminderListColorsDesc")).setHeading();
+    for (const list of lists) {
+      const value =
+        this.plugin.settings.localApple.reminderColorOverrides[list.id] ??
+        this.plugin.settings.localApple.remindersColor;
+      this.displayLocalAppleColorSetting(
+        containerEl,
+        t,
+        list.name,
+        `${t("appleReminderList")}: ${list.name}`,
+        value,
+        this.plugin.settings.localApple.remindersColor,
+        (color) => {
+          this.plugin.settings.localApple.reminderColorOverrides = {
+            ...this.plugin.settings.localApple.reminderColorOverrides,
+            [list.id]: color
+          };
+        }
+      );
     }
   }
 

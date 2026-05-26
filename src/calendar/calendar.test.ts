@@ -99,6 +99,27 @@ describe("buildCalendarItems", () => {
     });
   });
 
+  it("uses Apple Reminder list colors before the global Reminders source color", () => {
+    const items = buildCalendarItems({
+      tasks: [
+        task({
+          id: "reminder",
+          text: "List-colored reminder",
+          dueDate: "2026-05-06",
+          source: "apple-reminders",
+          externalListId: "personal"
+        })
+      ],
+      events: [],
+      visibleSourceIds: new Set(["apple-reminders"]),
+      includeCompletedTasks: false,
+      sourceColors: { "apple-reminders": "#f59e0b" },
+      taskColors: { personal: "#22c55e" }
+    });
+
+    expect(items[0]).toMatchObject({ color: "#22c55e" });
+  });
+
   it("does not assign real durations to timed reminders", () => {
     const items = buildCalendarItems({
       tasks: [
@@ -344,6 +365,7 @@ function task(overrides: Partial<TaskItem>): TaskItem {
     scheduledDate: overrides.scheduledDate,
     createdDate: overrides.createdDate,
     externalId: overrides.externalId,
+    externalListId: overrides.externalListId,
     source: overrides.source ?? "vault"
   };
 }
