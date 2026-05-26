@@ -182,6 +182,54 @@ describe("Apple Reminders migration", () => {
     });
   });
 
+  it("keeps the source Markdown task and shows a permission action when Reminders access is still pending", async () => {
+    const file = { path: "Inbox.md", extension: "md", stat: { ctime: 1, mtime: 2, size: 3 } };
+    const notDetermined = Object.assign(new Error("Apple access has not been requested yet."), { code: "not_determined" });
+    createAppleReminder.mockRejectedValueOnce(notDetermined);
+    requestLocalAppleAccess.mockResolvedValueOnce({
+      ok: true,
+      remindersStatus: { authorization: "notDetermined" },
+      calendarStatus: { authorization: "notDetermined" }
+    });
+    const plugin = new TaskHubPlugin({} as never, {} as never);
+    const process = jest.fn(async (_file, update) => update("- [ ] Pay invoice 📅 2026-05-20\nNext"));
+    plugin.app = {
+      vault: {
+        adapter: {},
+        getFileByPath: jest.fn(() => file),
+        read: jest.fn(async () => "- [ ] Pay invoice 📅 2026-05-20\nNext"),
+        process,
+        cachedRead: jest.fn(async () => "- [ ] Pay invoice 📅 2026-05-20\nNext")
+      },
+      workspace: {
+        getLeavesOfType: jest.fn(() => [])
+      }
+    } as never;
+    plugin.settings = {
+      ...DEFAULT_SETTINGS,
+      localApple: {
+        ...DEFAULT_SETTINGS.localApple,
+        enabled: true,
+        remindersEnabled: true,
+        remindersCreateEnabled: true
+      }
+    };
+    plugin.taskIndex = {
+      reindexFile: jest.fn(async () => undefined)
+    } as never;
+    plugin.syncLocalApple = jest.fn(async () => undefined) as never;
+
+    await plugin.sendTaskToAppleReminders(task());
+
+    expect(requestLocalAppleAccess).toHaveBeenCalledWith({ reminders: true, calendar: false });
+    expect(createAppleReminder).toHaveBeenCalledTimes(1);
+    expect(process).not.toHaveBeenCalled();
+    expect(Object.values(plugin.settings.appleReminderLinks)).not.toContain("reminder-created-1");
+    expect(notices).toContain(
+      "Apple Reminders permission is still pending. Open Task Hub settings > Local Apple, click Request access, then approve Reminders permission in macOS."
+    );
+  });
+
   it("adds source task tags to Apple Reminder titles when enabled", async () => {
     const file = { path: "Inbox.md", extension: "md", stat: { ctime: 1, mtime: 2, size: 3 } };
     const plugin = new TaskHubPlugin({} as never, {} as never);
@@ -480,6 +528,56 @@ describe("Apple Reminders migration", () => {
     expect(requestLocalAppleAccess).toHaveBeenCalledWith({ reminders: true, calendar: false });
     expect(createAppleReminder).toHaveBeenCalledTimes(2);
     expect(notices).toContain("Apple Reminder created.: reminder-created-after-access");
+  });
+
+  it("shows an Obsidian permission reminder when Apple Reminders write access is denied", async () => {
+    const denied = Object.assign(new Error("Apple access was denied in macOS Privacy & Security settings."), {
+      code: "permission_denied"
+    });
+    createAppleReminder.mockRejectedValueOnce(denied);
+    const plugin = new TaskHubPlugin({} as never, {} as never);
+    plugin.app = { workspace: { getLeavesOfType: jest.fn(() => []) } } as never;
+    plugin.settings = {
+      ...DEFAULT_SETTINGS,
+      localApple: {
+        ...DEFAULT_SETTINGS.localApple,
+        enabled: true,
+        remindersEnabled: true,
+        remindersCreateEnabled: true
+      }
+    };
+    plugin.syncLocalApple = jest.fn(async () => undefined) as never;
+
+    await plugin.createTaskForDate("2026-05-20", "Design review", { type: "apple-reminders" });
+
+    expect(notices).toContain(
+      "Apple Reminders permission is blocked. Open macOS System Settings > Privacy & Security > Reminders, allow Obsidian or Task Hub Apple Helper, then try again."
+    );
+  });
+
+  it("shows an Obsidian permission reminder when Apple Calendar write access is denied", async () => {
+    const denied = Object.assign(new Error("Apple access was denied in macOS Privacy & Security settings."), {
+      code: "permission_denied"
+    });
+    createAppleCalendarEvent.mockRejectedValueOnce(denied);
+    const plugin = new TaskHubPlugin({} as never, {} as never);
+    plugin.app = { workspace: { getLeavesOfType: jest.fn(() => []) } } as never;
+    plugin.settings = {
+      ...DEFAULT_SETTINGS,
+      localApple: {
+        ...DEFAULT_SETTINGS.localApple,
+        enabled: true,
+        calendarEnabled: true,
+        calendarTaskSendEnabled: true
+      }
+    };
+    plugin.syncLocalApple = jest.fn(async () => undefined) as never;
+
+    await plugin.createTaskForDate("2026-05-20", "Design review", { type: "apple-calendar" });
+
+    expect(notices).toContain(
+      "Apple Calendar permission is blocked. Open macOS System Settings > Privacy & Security > Calendars, allow Obsidian or Task Hub Apple Helper, then try again."
+    );
   });
 
   it("deletes a Markdown task from the calendar context action", async () => {

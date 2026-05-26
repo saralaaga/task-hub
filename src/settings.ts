@@ -83,7 +83,12 @@ export function normalizeTaskHubSettings(loaded: Partial<TaskHubSettings> | null
 }
 
 const SOFT_LOCAL_APPLE_COLORS = ["#d97757", "#c7925b", "#9aa66f", "#6f9f8f", "#6f94b8", "#8f83b5"];
+export const TASK_HUB_FEEDBACK_URL = "https://github.com/saralaaga/task-hub/issues/new";
 type LocalAppleTab = "calendar" | "reminders";
+
+export function openTaskHubFeedback(openUrl: (url: string) => void = (url) => window.open(url)): void {
+  openUrl(TASK_HUB_FEEDBACK_URL);
+}
 
 export class TaskHubSettingTab extends PluginSettingTab {
   constructor(app: App, private readonly plugin: TaskHubPlugin) {
@@ -97,6 +102,16 @@ export class TaskHubSettingTab extends PluginSettingTab {
     containerEl.empty();
 
     new Setting(containerEl).setName(t("settingsTitle")).setHeading();
+
+    new Setting(containerEl)
+      .setName(t("feedbackTitle"))
+      .setDesc(t("feedbackDesc"))
+      .addButton((button) => {
+        button
+          .setButtonText(t("feedbackButton"))
+          .setCta()
+          .onClick(() => openTaskHubFeedback());
+      });
 
     const basicSettingsGrid = containerEl.createDiv({ cls: "task-hub-settings-grid" });
 

@@ -1,5 +1,6 @@
 import {
   normalizeTaskHubSettings,
+  openTaskHubFeedback,
   parseEventCreationTarget,
   parseTaskCreationTarget,
   populateEventCreationTargetDropdown,
@@ -116,5 +117,13 @@ describe("normalizeTaskHubSettings", () => {
     expect(options).toEqual([
       { value: "apple-calendar:work", text: "localAppleCalendar: Work" }
     ]);
+  });
+
+  it("opens the Task Hub feedback issue page", () => {
+    const openUrl = jest.fn();
+
+    openTaskHubFeedback(openUrl);
+
+    expect(openUrl).toHaveBeenCalledWith("https://github.com/saralaaga/task-hub/issues/new");
   });
 });

@@ -36,6 +36,8 @@ execFileSync(
   { stdio: "inherit" }
 );
 
+execFileSync("codesign", ["-s", "-", "-f", "-i", "com.taskhub.applehelper", binary], { stdio: "inherit" });
+
 copyFileSync(binary, pluginBinary);
 chmodSync(pluginBinary, 0o755);
 console.log(`Built ${pluginBinary}`);

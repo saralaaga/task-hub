@@ -127,12 +127,25 @@ export default class TaskHubPlugin extends Plugin {
     return typeof error === "object" && error !== null && (error as { code?: unknown }).code === code;
   }
 
+  private localAppleErrorMessage(error: unknown, service: "calendar" | "reminders"): string {
+    const t = createTranslator(this.settings.language);
+    if (this.isLocalAppleErrorCode(error, "not_determined")) {
+      return service === "reminders" ? t("localAppleRemindersPermissionPending") : t("localAppleCalendarPermissionBlocked");
+    }
+    if (this.isLocalAppleErrorCode(error, "permission_denied") || this.isLocalAppleErrorCode(error, "restricted")) {
+      return service === "reminders" ? t("localAppleRemindersPermissionBlocked") : t("localAppleCalendarPermissionBlocked");
+    }
+    return error instanceof Error ? error.message : String(error);
+  }
+
   private async requestRemindersAccessAfterNotDetermined(error: unknown): Promise<boolean> {
     if (!this.isLocalAppleErrorCode(error, "not_determined")) return false;
 
+    const t = createTranslator(this.settings.language);
     const attemptedAt = new Date().toISOString();
     const status = await requestLocalAppleAccess({ reminders: true, calendar: false });
     const nextStatus = localAppleStatusFromHelper(status, attemptedAt);
+    const granted = status.remindersStatus?.authorization === "fullAccess" || status.remindersStatus?.authorization === "authorized";
     if (nextStatus.reminders?.state === "ok") {
       this.localAppleStatus = {
         state: "ok",
@@ -145,13 +158,16 @@ export default class TaskHubPlugin extends Plugin {
       this.localAppleStatus = {
         state: "error",
         lastAttemptAt: attemptedAt,
-        message: nextStatus.reminders?.state === "error" ? nextStatus.reminders.message : "Apple Reminders access was not granted.",
+        message: nextStatus.reminders?.state === "error" ? nextStatus.reminders.message : t("localAppleRemindersPermissionPending"),
         reminders: nextStatus.reminders ?? { state: "never" },
         calendar: this.localAppleStatus.calendar ?? { state: "never" }
       };
     }
     this.refreshOpenViews();
-    return status.remindersStatus?.authorization === "fullAccess" || status.remindersStatus?.authorization === "authorized";
+    if (!granted) {
+      throw new Error(t("localAppleRemindersPermissionPending"));
+    }
+    return true;
   }
 
   private async writeAppleReminderWithAccessRetry<T>(write: () => Promise<T>): Promise<T> {
@@ -159,7 +175,7 @@ export default class TaskHubPlugin extends Plugin {
       return await write();
     } catch (error) {
       if (!(await this.requestRemindersAccessAfterNotDetermined(error))) {
-        throw error;
+        throw new Error(this.localAppleErrorMessage(error, "reminders"));
       }
       return write();
     }
@@ -521,7 +537,7 @@ export default class TaskHubPlugin extends Plugin {
       this.refreshOpenViews();
       return { status: "updated", content: "", line: 0 };
     } catch (error) {
-      const result: CompletionResult = { status: "conflict", message: error instanceof Error ? error.message : String(error) };
+      const result: CompletionResult = { status: "conflict", message: this.localAppleErrorMessage(error, "calendar") };
       new Notice(result.message);
       return result;
     }
@@ -569,7 +585,7 @@ export default class TaskHubPlugin extends Plugin {
     } catch (error) {
       const result: CompletionResult = {
         status: "conflict",
-        message: error instanceof Error ? error.message : String(error)
+        message: this.localAppleErrorMessage(error, "calendar")
       };
       new Notice(result.message);
       return result;
@@ -611,7 +627,7 @@ export default class TaskHubPlugin extends Plugin {
         this.refreshOpenViews();
         return { status: "updated", content: "", line: 0 };
       } catch (error) {
-        const result: CompletionResult = { status: "conflict", message: error instanceof Error ? error.message : String(error) };
+        const result: CompletionResult = { status: "conflict", message: this.localAppleErrorMessage(error, "reminders") };
         new Notice(result.message);
         return result;
       }
@@ -693,7 +709,7 @@ export default class TaskHubPlugin extends Plugin {
       this.refreshOpenViews();
       return { status: "updated", content: "", line: 0 };
     } catch (error) {
-      const result: CompletionResult = { status: "conflict", message: error instanceof Error ? error.message : String(error) };
+      const result: CompletionResult = { status: "conflict", message: this.localAppleErrorMessage(error, "calendar") };
       new Notice(result.message);
       return result;
     }
@@ -933,9 +949,13 @@ export default class TaskHubPlugin extends Plugin {
         startMinutes: timedTarget.startMinutes,
         listId: target.listId ?? this.settings.localApple.remindersDefaultListId
       };
-      const reminderId = await this.writeAppleReminderWithAccessRetry(() => createAppleReminder(input));
-      await this.syncLocalApple({ silent: true });
-      new Notice(`${t("appleReminderCreated")}: ${reminderId}`);
+      try {
+        const reminderId = await this.writeAppleReminderWithAccessRetry(() => createAppleReminder(input));
+        await this.syncLocalApple({ silent: true });
+        new Notice(`${t("appleReminderCreated")}: ${reminderId}`);
+      } catch (error) {
+        new Notice(this.localAppleErrorMessage(error, "reminders"));
+      }
       return;
     }
 
@@ -947,16 +967,20 @@ export default class TaskHubPlugin extends Plugin {
       const durationMinutes = validCalendarEventDuration(timedTarget.durationMinutes ?? 60);
       const startMinutes =
         timedTarget.startMinutes ?? (durationMinutes % (24 * 60) === 0 ? undefined : 0);
-      await createAppleCalendarEvent({
-        title: taskText,
-        ...(cleanNotes ? { notes: cleanNotes } : {}),
-        date: timedTarget.dateKey,
-        startMinutes,
-        durationMinutes,
-        calendarId: target.calendarId
-      });
-      await this.syncLocalApple({ silent: true });
-      new Notice(t("appleCalendarEventCreated"));
+      try {
+        await createAppleCalendarEvent({
+          title: taskText,
+          ...(cleanNotes ? { notes: cleanNotes } : {}),
+          date: timedTarget.dateKey,
+          startMinutes,
+          durationMinutes,
+          calendarId: target.calendarId
+        });
+        await this.syncLocalApple({ silent: true });
+        new Notice(t("appleCalendarEventCreated"));
+      } catch (error) {
+        new Notice(this.localAppleErrorMessage(error, "calendar"));
+      }
       return;
     }
 

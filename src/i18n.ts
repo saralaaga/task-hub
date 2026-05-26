@@ -62,6 +62,9 @@ export type TranslationKey =
   | "externalTaskReadOnly"
   | "externalSourceOpenUnavailable"
   | "externalCalendars"
+  | "feedbackButton"
+  | "feedbackDesc"
+  | "feedbackTitle"
   | "failedSync"
   | "failed"
   | "fileNotFound"
@@ -111,6 +114,7 @@ export type TranslationKey =
   | "localApplePermissionDenied"
   | "localApplePermissionNotDetermined"
   | "localApplePermissionRestricted"
+  | "localAppleCalendarPermissionBlocked"
   | "localAppleReminders"
   | "localAppleRemindersColor"
   | "localAppleRemindersColorDesc"
@@ -129,6 +133,8 @@ export type TranslationKey =
   | "localAppleRemindersDefaultList"
   | "localAppleRemindersDefaultListDesc"
   | "localAppleRemindersDefaultListInbox"
+  | "localAppleRemindersPermissionBlocked"
+  | "localAppleRemindersPermissionPending"
   | "localAppleRemindersWriteback"
   | "localAppleRemindersWritebackDesc"
   | "localAppleRequestAccess"
@@ -289,6 +295,9 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     externalTaskReadOnly: "External items are read-only unless the matching Apple writeback option is enabled.",
     externalSourceOpenUnavailable: "Task Hub could not open this external source.",
     externalCalendars: "External calendars",
+    feedbackButton: "Report bug / suggest",
+    feedbackDesc: "Open the GitHub issue page to report bugs, share ideas, or leave feedback.",
+    feedbackTitle: "Feedback",
     failed: "failed",
     failedSync: "Failed to sync",
     fileNotFound: "File not found",
@@ -343,6 +352,8 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     localApplePermissionDenied: "Permission denied in macOS Privacy & Security settings.",
     localApplePermissionNotDetermined: "Permission has not been requested.",
     localApplePermissionRestricted: "Permission is restricted on this Mac.",
+    localAppleCalendarPermissionBlocked:
+      "Apple Calendar permission is blocked. Open macOS System Settings > Privacy & Security > Calendars, allow Obsidian or Task Hub Apple Helper, then try again.",
     localAppleReminders: "Apple Reminders",
     localAppleRemindersColor: "Apple Reminders color",
     localAppleRemindersColorDesc: "Preview the current color or pick a softer recommended color.",
@@ -364,6 +375,10 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     localAppleRemindersDefaultList: "Default Reminders list",
     localAppleRemindersDefaultListDesc: "Default list for new Apple Reminders created from Task Hub.",
     localAppleRemindersDefaultListInbox: "Default Reminders list",
+    localAppleRemindersPermissionBlocked:
+      "Apple Reminders permission is blocked. Open macOS System Settings > Privacy & Security > Reminders, allow Obsidian or Task Hub Apple Helper, then try again.",
+    localAppleRemindersPermissionPending:
+      "Apple Reminders permission is still pending. Open Task Hub settings > Local Apple, click Request access, then approve Reminders permission in macOS.",
     localAppleRemindersWriteback: "Write completion status to Apple Reminders",
     localAppleRemindersWritebackDesc:
       "Allow Task Hub to complete, reopen, reschedule, and edit local Apple Reminders from supported Task Hub controls.",
@@ -525,6 +540,9 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     externalTaskReadOnly: "外部项目默认只读；Apple 提醒事项和 Apple 日历的部分写入能力需要在设置中显式开启。",
     externalSourceOpenUnavailable: "Task Hub 无法打开这个外部来源。",
     externalCalendars: "外部日历",
+    feedbackButton: "报 bug / 提建议",
+    feedbackDesc: "打开 GitHub issue 页面，反馈问题、想法或使用建议。",
+    feedbackTitle: "反馈",
     failed: "失败",
     failedSync: "同步失败",
     fileNotFound: "文件未找到",
@@ -576,6 +594,8 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     localApplePermissionDenied: "权限已在 macOS 隐私与安全性设置中被拒绝。",
     localApplePermissionNotDetermined: "尚未请求权限。",
     localApplePermissionRestricted: "这台 Mac 限制了该权限。",
+    localAppleCalendarPermissionBlocked:
+      "Apple 日历权限被阻止。请打开 macOS 系统设置 > 隐私与安全性 > 日历，允许 Obsidian 或 Task Hub Apple Helper 后重试。",
     localAppleReminders: "Apple 提醒事项",
     localAppleRemindersColor: "Apple 提醒事项颜色",
     localAppleRemindersColorDesc: "预览当前颜色，或选择一个更柔和的推荐颜色。",
@@ -596,6 +616,10 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     localAppleRemindersDefaultList: "默认提醒事项列表",
     localAppleRemindersDefaultListDesc: "Task Hub 新建 Apple 提醒事项时默认使用的列表。",
     localAppleRemindersDefaultListInbox: "默认提醒事项列表",
+    localAppleRemindersPermissionBlocked:
+      "Apple 提醒事项权限被阻止。请打开 macOS 系统设置 > 隐私与安全性 > 提醒事项，允许 Obsidian 或 Task Hub Apple Helper 后重试。",
+    localAppleRemindersPermissionPending:
+      "Apple 提醒事项权限仍未授权。请打开 Task Hub 设置 > 本地 Apple，点击请求权限，并在 macOS 中批准提醒事项权限。",
     localAppleRemindersWriteback: "写入 Apple 提醒事项完成状态",
     localAppleRemindersWritebackDesc: "允许通过 Task Hub 支持的控件完成、重新打开、改期和编辑本机 Apple 提醒事项。",
     localAppleRequestAccess: "请求权限",
