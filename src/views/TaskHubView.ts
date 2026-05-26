@@ -1,5 +1,6 @@
 import { ItemView, Notice, WorkspaceLeaf } from "obsidian";
 import { TASK_HUB_VIEW_TYPE } from "../constants";
+import { toLocalDateKey } from "../calendar/dateBuckets";
 import { filterTasks, sortTasksByCompletion, type TaskFilterState } from "../filtering/filters";
 import { createTranslator } from "../i18n";
 import type TaskHubPlugin from "../main";
@@ -79,6 +80,7 @@ export class TaskHubView extends ItemView {
           this.render();
         },
         onRescan: () => void this.refreshData(),
+        onCreateTask: () => this.plugin.openCreateTaskModal(toLocalDateKey(new Date())),
         onStatusChange: (status) => {
           this.filters = { ...this.filters, status };
           this.render();

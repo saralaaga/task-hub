@@ -88,6 +88,7 @@ function renderForTest(overrides: Partial<TaskFilterState> = {}) {
   const handlers = {
     onViewChange: jest.fn<void, [DashboardView]>(),
     onRescan: jest.fn(),
+    onCreateTask: jest.fn(),
     onStatusChange: jest.fn(),
     onConditionChange: jest.fn(),
     onSourceFilterChange: jest.fn(),
@@ -119,6 +120,7 @@ function renderShellForState(stateOverrides: Partial<Parameters<typeof renderShe
   const handlers = {
     onViewChange: jest.fn<void, [DashboardView]>(),
     onRescan: jest.fn(),
+    onCreateTask: jest.fn(),
     onStatusChange: jest.fn(),
     onConditionChange: jest.fn(),
     onSourceFilterChange: jest.fn(),
@@ -225,5 +227,14 @@ describe("renderShell", () => {
     expect(rescanButton!.disabled).toBe(true);
     expect(rescanButton!.attrs.get("aria-busy")).toBe("true");
     expect(rescanButton!.classes.has("is-refreshing")).toBe(true);
+  });
+
+  it("opens the create task flow from the toolbar", () => {
+    const { container, handlers } = renderForTest();
+    const createButton = collect(container).find((element) => element.attrs.get("aria-label") === "add");
+
+    expect(createButton).toBeDefined();
+    createButton!.trigger("click");
+    expect(handlers.onCreateTask).toHaveBeenCalledTimes(1);
   });
 });

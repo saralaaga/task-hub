@@ -265,14 +265,26 @@
 .task-hub-search-group {
   align-items: center;
   display: flex;
-  flex: 1 1 360px;
+  flex: 0 1 260px;
   gap: 6px;
-  min-width: 180px;
+  min-width: 160px;
 }
 
 .task-hub-search-control {
   flex: 1 1 auto;
   min-width: 0;
+}
+
+.task-hub-create-task-button {
+  align-items: center;
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: 5px;
+  min-height: 32px;
+}
+
+.task-hub-create-task-button-icon {
+  flex: 0 0 auto;
 }
 
 .task-hub-search-button {

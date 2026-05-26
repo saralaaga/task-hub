@@ -25,6 +25,7 @@ export type SourceFilterOption = {
 export type ShellHandlers = {
   onViewChange: (view: DashboardView) => void;
   onRescan: () => void | Promise<void>;
+  onCreateTask: () => void;
   onStatusChange: (status: TaskFilterState["status"]) => void;
   onConditionChange: (conditions: NonNullable<TaskFilterState["conditions"]>) => void;
   onSourceFilterChange?: (source: SourceFilterOption["id"]) => void;
@@ -70,6 +71,15 @@ function renderFilters(container: HTMLElement, state: ShellState, handlers: Shel
   const filters = container.createDiv({ cls: "task-hub-filter-strip" });
   renderConditionMenu(filters, state, handlers);
   renderSearch(filters, state, handlers);
+
+  const createTask = filters.createEl("button", { cls: "task-hub-create-task-button" });
+  createTask.setAttr("aria-label", state.t("add"));
+  createTask.setAttr("title", state.t("add"));
+  setIcon(createTask.createSpan({ cls: "task-hub-create-task-button-icon" }), "plus");
+  createTask.createSpan({ text: state.t("add") });
+  createTask.addEventListener("click", () => {
+    handlers.onCreateTask();
+  });
 
   const rescanLabel = state.isRefreshing ? state.t("rescanning") : state.t("rescan");
   const rescan = filters.createEl("button", { cls: `task-hub-icon-button task-hub-rescan-button ${state.isRefreshing ? "is-refreshing" : ""}` });
