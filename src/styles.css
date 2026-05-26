@@ -60,6 +60,30 @@
   gap: 0;
 }
 
+.task-hub-create-modal-title {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.task-hub-create-date-input {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  color: inherit;
+  font: inherit;
+  font-weight: inherit;
+  height: auto;
+  padding: 0;
+  width: 10.5em;
+}
+
+.task-hub-create-date-input:hover,
+.task-hub-create-date-input:focus-visible {
+  background: var(--background-modifier-hover);
+}
+
 .task-hub-create-modal .setting-item {
   align-items: center;
   display: grid;

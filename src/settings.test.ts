@@ -29,6 +29,7 @@ describe("normalizeTaskHubSettings", () => {
     expect(settings.localApple.calendarDefaultTimedTaskDurationMinutes).toBe(60);
     expect(settings.localApple.reminderDurationOverrides).toEqual({});
     expect(settings.localApple.reminderColorOverrides).toEqual({});
+    expect(settings.localApple.remindersCreateTagsEnabled).toBe(false);
     expect(settings.calendarCreationDefaultKind).toBe("task");
     expect(settings.calendarTaskCreationDefaultTarget).toEqual({ type: "vault" });
     expect(settings.calendarEventCreationDefaultTarget).toEqual({ type: "apple-calendar" });

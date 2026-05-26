@@ -182,6 +182,48 @@ describe("Apple Reminders migration", () => {
     });
   });
 
+  it("adds source task tags to Apple Reminder titles when enabled", async () => {
+    const file = { path: "Inbox.md", extension: "md", stat: { ctime: 1, mtime: 2, size: 3 } };
+    const plugin = new TaskHubPlugin({} as never, {} as never);
+    const process = jest.fn(async (_file, update) => update("- [ ] Pay invoice #work #client/acme 📅 2026-05-20\nNext"));
+    plugin.app = {
+      vault: {
+        adapter: {},
+        getFileByPath: jest.fn(() => file),
+        read: jest.fn(async () => "- [ ] Pay invoice #work #client/acme 📅 2026-05-20\nNext"),
+        process,
+        cachedRead: jest.fn(async () => "Next")
+      },
+      workspace: {
+        getLeavesOfType: jest.fn(() => [])
+      }
+    } as never;
+    plugin.settings = {
+      ...DEFAULT_SETTINGS,
+      localApple: {
+        ...DEFAULT_SETTINGS.localApple,
+        enabled: true,
+        remindersEnabled: true,
+        remindersCreateEnabled: true,
+        remindersCreateTagsEnabled: true
+      }
+    };
+    plugin.taskIndex = {
+      reindexFile: jest.fn(async () => undefined)
+    } as never;
+    plugin.syncLocalApple = jest.fn(async () => undefined) as never;
+
+    await plugin.sendTaskToAppleReminders(task({
+      rawLine: "- [ ] Pay invoice #work #client/acme 📅 2026-05-20",
+      text: "Pay invoice",
+      tags: ["#work", "#client/acme"]
+    }));
+
+    expect(createAppleReminder).toHaveBeenCalledWith(expect.objectContaining({
+      title: "Pay invoice #work #client-acme"
+    }));
+  });
+
   it("reschedules a timed Markdown task in place instead of sending it to Apple Calendar", async () => {
     const file = { path: "Inbox.md", extension: "md", stat: { ctime: 1, mtime: 2, size: 3 } };
     const plugin = new TaskHubPlugin({} as never, {} as never);

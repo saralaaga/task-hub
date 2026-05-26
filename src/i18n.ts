@@ -45,6 +45,7 @@ export type TranslationKey =
   | "day"
   | "defaultView"
   | "defaultViewDesc"
+  | "delete"
   | "deleteCalendarItem"
   | "event"
   | "eventCreationDefaultTarget"
@@ -120,6 +121,8 @@ export type TranslationKey =
   | "localAppleRemindersDesc"
   | "localAppleRemindersCreate"
   | "localAppleRemindersCreateDesc"
+  | "localAppleRemindersCreateTags"
+  | "localAppleRemindersCreateTagsDesc"
   | "localAppleRemindersCreateRiskConfirm"
   | "localAppleRemindersCreateRiskEnable"
   | "localAppleRemindersCreateRiskTitle"
@@ -269,6 +272,7 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     day: "Day",
     defaultView: "Default view",
     defaultViewDesc: "View shown when Task Hub opens.",
+    delete: "Delete",
     deleteCalendarItem: "Delete from calendar",
     event: "Event",
     eventCreationDefaultTarget: "Default event destination",
@@ -350,6 +354,9 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     localAppleRemindersCreate: "Create Apple Reminders from vault tasks",
     localAppleRemindersCreateDesc:
       "Allow Task Hub to create Apple Reminders from vault tasks, then remove the source Markdown task after creation succeeds.",
+    localAppleRemindersCreateTags: "Send source tags to Apple Reminders",
+    localAppleRemindersCreateTagsDesc:
+      "When a vault task has tags, append them as Apple Reminders hashtags in the new reminder title. Nested tags use hyphens.",
     localAppleRemindersCreateRiskConfirm:
       "This feature changes your vault's original Markdown data. After Task Hub creates an Apple Reminder, it will delete the source task line from your note. If sync or indexing is stale, you may need to resolve duplicates or conflicts manually. Confirm only after backing up or trusting this workflow.",
     localAppleRemindersCreateRiskEnable: "Confirm and enable",
@@ -501,6 +508,7 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     day: "日",
     defaultView: "默认视图",
     defaultViewDesc: "打开 Task Hub 时默认显示的视图。",
+    delete: "Delete",
     deleteCalendarItem: "从日历删除",
     event: "事件",
     eventCreationDefaultTarget: "默认事件创建位置",
@@ -578,6 +586,9 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     localAppleRemindersDesc: "读取本机 Apple 提醒事项到任务列表；有日期的提醒也会进入日历。",
     localAppleRemindersCreate: "从 vault 任务创建 Apple 提醒事项",
     localAppleRemindersCreateDesc: "允许从 vault 任务创建 Apple 提醒事项；创建成功后再删除源 Markdown 任务。",
+    localAppleRemindersCreateTags: "发送源标签到 Apple 提醒事项",
+    localAppleRemindersCreateTagsDesc:
+      "vault 任务包含标签时，将它们作为 Apple 提醒事项可识别的 #标签 追加到新提醒事项标题；嵌套标签会使用连字符。",
     localAppleRemindersCreateRiskConfirm:
       "此功能会更改你的库中的原始 Markdown 数据。Task Hub 创建 Apple 提醒事项成功后，会删除笔记中的源任务行。如果同步或索引不是最新，可能需要你手动处理重复或冲突。请在确认已备份或信任此工作流后再开启。",
     localAppleRemindersCreateRiskEnable: "确认并开启",

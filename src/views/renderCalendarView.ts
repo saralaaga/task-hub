@@ -1,5 +1,6 @@
 import { Menu } from "obsidian";
 import { buildCalendarItems, calendarEventLayerId, getCalendarRange, type CalendarItem, type CalendarViewMode } from "../calendar/calendarModel";
+import type { CalendarDropTarget } from "../calendar/calendarDropTarget";
 import { toLocalDateKey } from "../calendar/dateBuckets";
 import { formatLunarDayLabel, formatLunarMonthTitle } from "../calendar/lunarCalendar";
 import type { TranslationKey, Translator } from "../i18n";
@@ -26,14 +27,6 @@ export type CalendarViewState = {
   sources: CalendarSource[];
   t: Translator;
 };
-
-export type CalendarDropTarget =
-  | string
-  | {
-      dateKey: string;
-      startMinutes?: number;
-      durationMinutes?: number;
-    };
 
 export type CalendarViewHandlers = {
   onModeChange: (mode: CalendarViewMode) => void;
@@ -1064,7 +1057,8 @@ function renderEventDetailsPopover(
 
 function renderDetailDeleteButton(actions: HTMLElement, state: CalendarViewState, canDelete: boolean, onDelete: () => void): void {
   if (!canDelete) return;
-  const button = actions.createEl("button", { cls: "task-hub-calendar-detail-delete", text: state.t("deleteCalendarItem") });
+  const button = actions.createEl("button", { cls: "task-hub-calendar-detail-delete", text: state.t("delete") });
+  button.setAttr("title", state.t("deleteCalendarItem"));
   button.addEventListener("click", onDelete);
 }
 

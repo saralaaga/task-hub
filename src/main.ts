@@ -1,6 +1,8 @@
 import { ButtonComponent, Editor, MarkdownView, Menu, Modal, Notice, Platform, Plugin, requestUrl, Setting, TFile, WorkspaceLeaf } from "obsidian";
 import { PLUGIN_DISPLAY_NAME, TASK_HUB_VIEW_TYPE } from "./constants";
 import { appleCalendarEventToReminderInput, appleReminderToCalendarEventInput } from "./calendar/appleConversion";
+import { calendarDropTargetParts, withCalendarDropTargetDate, type CalendarDropTarget, type TimedCalendarTarget } from "./calendar/calendarDropTarget";
+import { appleReminderTitleWithTags } from "./appleReminderTags";
 import { fetchIcsSource } from "./calendar/icsClient";
 import { createTranslator } from "./i18n";
 import { registerTaskHubIcon, TASK_HUB_ICON_ID } from "./icons";
@@ -47,18 +49,7 @@ import {
   TaskHubSettingTab
 } from "./settings";
 import type { AppleCalendarInfo, CalendarCreationKind, CalendarCreationTarget, CalendarEvent, CalendarItemEditDraft, CalendarSourceStatus, LocalAppleSyncStatus, TaskHubSettings, TaskItem } from "./types";
-import type { CalendarDropTarget } from "./views/renderCalendarView";
 import { TaskHubView } from "./views/TaskHubView";
-
-type TimedCalendarTarget = {
-  dateKey: string;
-  startMinutes?: number;
-  durationMinutes?: number;
-};
-
-function calendarDropTargetParts(target: CalendarDropTarget): TimedCalendarTarget {
-  return typeof target === "string" ? { dateKey: target } : target;
-}
 
 function validCalendarEventDuration(value: number | undefined): number {
   if (!Number.isFinite(value) || value === undefined) return 60;
@@ -741,7 +732,7 @@ export default class TaskHubPlugin extends Plugin {
 
     try {
       const input = {
-        title: currentTask.text,
+        title: appleReminderTitleWithTags(currentTask.text, currentTask.tags, this.settings.localApple.remindersCreateTagsEnabled),
         notes: this.appleReminderNotes(currentTask),
         dueDate: currentTask.dueDate,
         startMinutes: startMinutesFromTask(currentTask),
@@ -1465,7 +1456,7 @@ class CreateTaskModal extends Modal {
   private render(): void {
     const t = createTranslator(this.plugin.settings.language);
     const targetParts = calendarDropTargetParts(this.calendarTarget);
-    this.titleEl.setText(`${this.creationKind === "event" ? t("eventCreationTitle") : t("taskCreationTitle")} · ${targetParts.dateKey}`);
+    this.renderTitle(t, targetParts.dateKey);
     this.modalEl.addClass("task-hub-create-modal");
     this.contentEl.empty();
 
@@ -1621,6 +1612,30 @@ class CreateTaskModal extends Modal {
 
   onClose(): void {
     this.contentEl.empty();
+  }
+
+  private renderTitle(t: ReturnType<typeof createTranslator>, dateKey: string): void {
+    this.titleEl.empty();
+    this.titleEl.addClass("task-hub-create-modal-title");
+    this.titleEl.createSpan({ text: `${this.creationKind === "event" ? t("eventCreationTitle") : t("taskCreationTitle")} · ` });
+    const date = this.titleEl.createEl("input", {
+      cls: "task-hub-create-date-input",
+      attr: { "aria-label": t("date") },
+      type: "date",
+      value: dateKey
+    });
+    date.addEventListener("change", () => {
+      if (!date.value) return;
+      this.calendarTarget = withCalendarDropTargetDate(this.calendarTarget, date.value);
+    });
+    const openPicker = () => {
+      try {
+        date.showPicker?.();
+      } catch {
+        date.focus();
+      }
+    };
+    date.addEventListener("click", openPicker);
   }
 
   private defaultTargetForKind(kind: CalendarCreationKind): CalendarCreationTarget {

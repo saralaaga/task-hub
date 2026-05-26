@@ -955,7 +955,7 @@ describe("renderCalendarView", () => {
 
     item?.click();
     const nextPopover = collect(fakeDocument.body).find((element) => element.classes.has("task-hub-calendar-detail-popover"));
-    const deleteButton = collect(nextPopover as FakeElement).find((element) => element.text === "deleteCalendarItem");
+    const deleteButton = collect(nextPopover as FakeElement).find((element) => element.text === "delete");
     expect(deleteButton?.classes.has("task-hub-calendar-detail-delete")).toBe(true);
     deleteButton?.click();
     expect(onTaskDelete).toHaveBeenCalledWith(task);
@@ -1030,7 +1030,7 @@ describe("renderCalendarView", () => {
 
     collect(container).find((element) => element.classes.has("task-hub-calendar-item"))?.click();
     const nextPopover = collect(fakeDocument.body).find((element) => element.classes.has("task-hub-calendar-detail-popover"));
-    collect(nextPopover as FakeElement).find((element) => element.text === "deleteCalendarItem")?.click();
+    collect(nextPopover as FakeElement).find((element) => element.text === "delete")?.click();
     expect(onTaskDelete).toHaveBeenCalledWith(reminderTask);
   });
 
@@ -1074,7 +1074,7 @@ describe("renderCalendarView", () => {
     const save = collect(popover as FakeElement).find((element) => element.text === "save");
     const titleInput = collect(popover as FakeElement).find((element) => element.type === "text");
     const open = collect(popover as FakeElement).find((element) => element.text === "openSource");
-    const deleteButton = collect(popover as FakeElement).find((element) => element.text === "deleteCalendarItem");
+    const deleteButton = collect(popover as FakeElement).find((element) => element.text === "delete");
     const allDayRow = collect(popover as FakeElement).find((element) => element.classes.has("task-hub-calendar-detail-check"));
     const hiddenTimeRows = collect(popover as FakeElement).filter((element) => element.classes.has("task-hub-calendar-detail-time-row") && element.classes.has("is-hidden"));
     expect(popover).toBeDefined();
@@ -1496,7 +1496,7 @@ describe("renderCalendarView", () => {
 
     collect(container).find((element) => element.classes.has("task-hub-calendar-timed-item"))?.click();
     const nextPopover = collect(fakeDocument.body).find((element) => element.classes.has("task-hub-calendar-detail-popover"));
-    collect(nextPopover as FakeElement).find((element) => element.text === "deleteCalendarItem")?.click();
+    collect(nextPopover as FakeElement).find((element) => element.text === "delete")?.click();
     expect(onEventDelete).toHaveBeenCalledWith(timedEvent);
   });
 

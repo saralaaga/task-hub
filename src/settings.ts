@@ -26,6 +26,7 @@ export const DEFAULT_SETTINGS: TaskHubSettings = {
     reminderColorOverrides: {},
     remindersWritebackEnabled: false,
     remindersCreateEnabled: false,
+    remindersCreateTagsEnabled: false,
     remindersDefaultListId: undefined,
     reminderDurationOverrides: {},
     remindersLists: [],
@@ -67,6 +68,8 @@ export function normalizeTaskHubSettings(loaded: Partial<TaskHubSettings> | null
         loadedLocalApple?.reminderColorOverrides ?? DEFAULT_SETTINGS.localApple.reminderColorOverrides,
       reminderDurationOverrides:
         loadedLocalApple?.reminderDurationOverrides ?? DEFAULT_SETTINGS.localApple.reminderDurationOverrides,
+      remindersCreateTagsEnabled:
+        loadedLocalApple?.remindersCreateTagsEnabled ?? DEFAULT_SETTINGS.localApple.remindersCreateTagsEnabled,
       remindersLists: loadedLocalApple?.remindersLists ?? DEFAULT_SETTINGS.localApple.remindersLists,
       calendarColor: loadedLocalApple?.calendarColor ?? DEFAULT_SETTINGS.localApple.calendarColor,
       calendarColorOverrides: loadedLocalApple?.calendarColorOverrides ?? DEFAULT_SETTINGS.localApple.calendarColorOverrides,
@@ -611,6 +614,16 @@ export class TaskHubSettingTab extends PluginSettingTab {
       });
 
     if (this.plugin.settings.localApple.remindersCreateEnabled) {
+      new Setting(panel)
+        .setName(t("localAppleRemindersCreateTags"))
+        .setDesc(t("localAppleRemindersCreateTagsDesc"))
+        .addToggle((toggle) => {
+          toggle.setValue(this.plugin.settings.localApple.remindersCreateTagsEnabled).onChange(async (value) => {
+            this.plugin.settings.localApple.remindersCreateTagsEnabled = value;
+            await this.plugin.saveSettings();
+          });
+        });
+
       new Setting(panel)
         .setName(t("localAppleRemindersDefaultList"))
         .setDesc(t("localAppleRemindersDefaultListDesc"))
