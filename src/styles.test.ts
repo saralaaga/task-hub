@@ -138,6 +138,19 @@ describe("Task Hub styles", () => {
     expect(sectionRule).toContain("width: min(760px, 100%)");
   });
 
+  it("keeps task details moderately wide without horizontal resize scrollbars", () => {
+    const styles = readFileSync(path.join(__dirname, "styles.css"), "utf8");
+    const detailsRules = Array.from(styles.matchAll(/\.task-hub-task-details\s*\{(?<body>[^}]+)\}/g)).map((match) => match.groups?.body ?? "");
+    const sizingRule = detailsRules.find((body) => body.includes("max-height")) ?? "";
+    const actionRule = styles.match(/\.task-hub-detail-actions\.has-three-actions\.is-long-language\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+
+    expect(sizingRule).toContain("overflow-x: hidden");
+    expect(sizingRule).toContain("overflow-y: auto");
+    expect(sizingRule).toContain("resize: none");
+    expect(sizingRule).toContain("width: clamp(300px, 24vw, 460px)");
+    expect(actionRule).toContain("grid-template-columns: repeat(3, minmax(72px, 1fr))");
+  });
+
   it("animates completed task rows out when hidden by the open-task filter", () => {
     const styles = readFileSync(path.join(__dirname, "styles.css"), "utf8");
     const exitingRule = styles.match(/\.task-hub-task-row\.is-exiting\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";

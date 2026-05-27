@@ -3,6 +3,7 @@ import { createHash } from "crypto";
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import * as path from "path";
 import { promisify } from "util";
+import { extractAppleReminderTitleTags } from "./appleReminderTags";
 import type { AppleCalendarInfo, AppleReminderList, CalendarEvent, CalendarSourceStatus, TaskItem } from "./types";
 
 declare const TASKHUB_APPLE_HELPER_BASE64: string;
@@ -450,6 +451,7 @@ type AppleCalendarRecord = {
 export function reminderToTask(record: AppleReminderRecord, index: number): TaskItem {
   const dueDate = toDateKey(record.dueDate);
   const scheduledDate = toLocalDateTime(record.dueDate);
+  const parsedTitle = extractAppleReminderTitleTags(record.name ?? "Untitled reminder");
   return {
     id: `apple-reminders:${record.id ?? index}`,
     externalId: record.id,
@@ -458,9 +460,9 @@ export function reminderToTask(record: AppleReminderRecord, index: number): Task
     filePath: `${APPLE_REMINDERS_SOURCE_NAME}${record.list ? `/${record.list}` : ""}`,
     line: 0,
     rawLine: "",
-    text: record.name ?? "Untitled reminder",
+    text: parsedTitle.title || "Untitled reminder",
     completed: Boolean(record.completed),
-    tags: [],
+    tags: parsedTitle.tags,
     dueDate,
     scheduledDate,
     contextPreview: record.notes,

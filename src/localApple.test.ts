@@ -77,6 +77,24 @@ describe("local Apple mapping", () => {
     });
   });
 
+  it("extracts Apple Reminder hashtags as Task Hub tags and removes them from the display title", () => {
+    expect(
+      reminderToTask(
+        {
+          id: "reminder-1",
+          name: "Buy milk #errand #client-acme",
+          list: "Personal",
+          completed: false
+        },
+        0
+      )
+    ).toMatchObject({
+      text: "Buy milk",
+      tags: ["#errand", "#client-acme"],
+      source: "apple-reminders"
+    });
+  });
+
   it("preserves Apple Reminder due times for calendar placement", () => {
     expect(
       reminderToTask(

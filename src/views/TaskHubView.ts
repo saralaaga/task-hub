@@ -123,7 +123,9 @@ export class TaskHubView extends ItemView {
           onSourceSelect: (source) => {
             this.updateFilters({ ...this.filters, sourceQuery: source === "all" ? "" : source });
           },
-          onAppleReminderListChange: (task, listId) => void this.plugin.moveAppleReminderToList(task, listId)
+          onAppleReminderListChange: (task, listId) => void this.plugin.moveAppleReminderToList(task, listId),
+          onTaskUpdate: (task, draft) => void this.plugin.updateCalendarTask(task, draft),
+          onTaskDelete: (task) => void this.plugin.deleteCalendarTask(task)
         },
         now,
         t,

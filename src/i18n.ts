@@ -645,7 +645,7 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     noDate: "无日期",
     notSynced: "未同步",
     open: "未完成",
-    openSource: "打开源文件",
+    openSource: "打开来源",
     openTaskHub: "打开 Task Hub",
     opened: "已打开",
     or: "或",

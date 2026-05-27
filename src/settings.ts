@@ -3,7 +3,10 @@ import { createTranslator, type Translator } from "./i18n";
 import type TaskHubPlugin from "./main";
 import type { AppleCalendarInfo, CalendarCreationKind, CalendarCreationTarget, CalendarEventCreationTarget, CalendarSource, CalendarSourceStatus, CalendarTaskCreationTarget, LocalAppleSyncStatus, TaskHubSettings } from "./types";
 
+export const TASK_HUB_SETTINGS_SCHEMA_VERSION = 2;
+
 export const DEFAULT_SETTINGS: TaskHubSettings = {
+  settingsSchemaVersion: TASK_HUB_SETTINGS_SCHEMA_VERSION,
   language: "en",
   defaultView: "tasks",
   weekStart: "monday",
@@ -32,7 +35,7 @@ export const DEFAULT_SETTINGS: TaskHubSettings = {
     reminderColorOverrides: {},
     remindersWritebackEnabled: false,
     remindersCreateEnabled: false,
-    remindersCreateTagsEnabled: false,
+    remindersCreateTagsEnabled: true,
     remindersDefaultListId: undefined,
     reminderDurationOverrides: {},
     remindersLists: [],
@@ -51,12 +54,18 @@ export const DEFAULT_SETTINGS: TaskHubSettings = {
 
 export function normalizeTaskHubSettings(loaded: Partial<TaskHubSettings> | null): TaskHubSettings {
   const loadedLocalApple = loaded?.localApple as Partial<TaskHubSettings["localApple"]> | undefined;
+  const loadedSchemaVersion = loaded?.settingsSchemaVersion ?? 1;
   const localAppleEnabled =
     loadedLocalApple?.enabled ??
     Boolean(loadedLocalApple?.remindersEnabled || loadedLocalApple?.calendarEnabled || DEFAULT_SETTINGS.localApple.enabled);
+  const remindersCreateTagsEnabled =
+    loadedSchemaVersion < TASK_HUB_SETTINGS_SCHEMA_VERSION
+      ? DEFAULT_SETTINGS.localApple.remindersCreateTagsEnabled
+      : loadedLocalApple?.remindersCreateTagsEnabled ?? DEFAULT_SETTINGS.localApple.remindersCreateTagsEnabled;
   return {
     ...DEFAULT_SETTINGS,
     ...(loaded ?? {}),
+    settingsSchemaVersion: TASK_HUB_SETTINGS_SCHEMA_VERSION,
     calendarTaskCreationEnabled: loaded?.calendarTaskCreationEnabled ?? DEFAULT_SETTINGS.calendarTaskCreationEnabled,
     calendarCreationDefaultKind: loaded?.calendarCreationDefaultKind ?? DEFAULT_SETTINGS.calendarCreationDefaultKind,
     showLunarCalendar: loaded?.showLunarCalendar ?? DEFAULT_SETTINGS.showLunarCalendar,
@@ -75,8 +84,7 @@ export function normalizeTaskHubSettings(loaded: Partial<TaskHubSettings> | null
         loadedLocalApple?.reminderColorOverrides ?? DEFAULT_SETTINGS.localApple.reminderColorOverrides,
       reminderDurationOverrides:
         loadedLocalApple?.reminderDurationOverrides ?? DEFAULT_SETTINGS.localApple.reminderDurationOverrides,
-      remindersCreateTagsEnabled:
-        loadedLocalApple?.remindersCreateTagsEnabled ?? DEFAULT_SETTINGS.localApple.remindersCreateTagsEnabled,
+      remindersCreateTagsEnabled,
       remindersLists: loadedLocalApple?.remindersLists ?? DEFAULT_SETTINGS.localApple.remindersLists,
       calendarColor: loadedLocalApple?.calendarColor ?? DEFAULT_SETTINGS.localApple.calendarColor,
       calendarColorOverrides: loadedLocalApple?.calendarColorOverrides ?? DEFAULT_SETTINGS.localApple.calendarColorOverrides,

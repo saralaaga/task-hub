@@ -1,7 +1,8 @@
+import { Menu } from "obsidian";
 import { type DateBucket } from "../calendar/dateBuckets";
 import { getTaskBucket, type TaskFilterState } from "../filtering/filters";
 import type { Translator } from "../i18n";
-import type { AppleReminderList, TaskItem } from "../types";
+import type { AppleReminderList, CalendarItemEditDraft, TaskItem } from "../types";
 
 export type TaskRowHandlers = {
   onComplete: (task: TaskItem) => void;
@@ -11,6 +12,8 @@ export type TaskRowHandlers = {
   onTagSelect: (tag: string) => void;
   onSourceSelect: (source: "all" | "vault" | "apple-reminders") => void;
   onAppleReminderListChange: (task: TaskItem, listId: string) => void;
+  onTaskUpdate?: (task: TaskItem, draft: Extract<CalendarItemEditDraft, { kind: "task" }>) => void;
+  onTaskDelete?: (task: TaskItem) => void;
 };
 
 export type TaskRenderOptions = {
@@ -87,7 +90,7 @@ export function renderTasksView(
     const cards = section.createDiv({ cls: "task-hub-task-list-flow" });
 
     for (const task of bucketTasks) {
-      const row = renderTaskRow(cards, task, handlers, options, task.id === selectedTask?.id, selectTask);
+      const row = renderTaskRow(cards, task, handlers, options, t, task.id === selectedTask?.id, selectTask);
       rowsByTaskId.set(task.id, row);
     }
   }
@@ -107,6 +110,7 @@ function renderTaskRow(
   task: TaskItem,
   handlers: TaskRowHandlers,
   options: TaskRenderOptions,
+  t: Translator,
   selected: boolean,
   onSelect: (task: TaskItem) => void
 ): HTMLElement {
@@ -145,6 +149,19 @@ function renderTaskRow(
   row.addEventListener("click", () => onSelect(task));
   row.addEventListener("dblclick", () => {
     handlers.onJump(task);
+  });
+  row.addEventListener("contextmenu", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    onSelect(task);
+    const menu = new Menu();
+    menu.addItem((item) => {
+      item
+        .setTitle(t("deleteCalendarItem"))
+        .setIcon("trash")
+        .onClick(() => handlers.onTaskDelete?.(task));
+    });
+    menu.showAtMouseEvent(event);
   });
   return row;
 }
@@ -204,11 +221,14 @@ function renderTaskDetails(
     return;
   }
 
-  details.createDiv({ cls: `task-hub-detail-title ${task.completed ? "is-completed" : ""}`, text: task.text });
+  const canEditAppleReminder = task.source === "apple-reminders" && options.allowAppleReminderWriteback && Boolean(task.externalId);
+  if (!canEditAppleReminder) {
+    details.createDiv({ cls: `task-hub-detail-title ${task.completed ? "is-completed" : ""}`, text: task.text });
+  }
   const facts = details.createDiv({ cls: "task-hub-detail-facts" });
   facts.createDiv({ text: `${t("completed")}: ${task.completed ? t("completed") : t("open")}` });
-  if (task.dueDate) facts.createDiv({ text: `${t("today")}: ${task.dueDate}` });
-  if (task.tags.length > 0) facts.createDiv({ text: `${t("tags")}: ${task.tags.join(" ")}` });
+  if (!canEditAppleReminder && task.dueDate) facts.createDiv({ text: `${t("today")}: ${task.dueDate}` });
+  if (!canEditAppleReminder && task.tags.length > 0) facts.createDiv({ text: `${t("tags")}: ${task.tags.join(" ")}` });
   facts.createDiv({ text: `${t("source")}: ${task.externalSourceName ?? task.filePath}` });
   if (task.heading) facts.createDiv({ text: task.heading });
   if (task.contextPreview) {
@@ -216,28 +236,57 @@ function renderTaskDetails(
     details.createDiv({ cls: "task-hub-detail-context", text: task.contextPreview });
   }
 
-  if (task.source === "apple-reminders" && (options.appleReminderLists?.length ?? 0) > 0) {
+  let titleInput: HTMLInputElement | undefined;
+  let dateInput: HTMLInputElement | undefined;
+  let tagsInput: HTMLInputElement | undefined;
+  let listSelect: HTMLSelectElement | undefined;
+  if (task.source === "apple-reminders" && (canEditAppleReminder || (options.appleReminderLists?.length ?? 0) > 0)) {
     const editor = details.createDiv({ cls: "task-hub-detail-editor" });
-    const listRow = editor.createEl("label", { cls: "task-hub-detail-field" });
-    listRow.createSpan({ text: t("appleReminderList") });
-    const listSelect = listRow.createEl("select");
-    for (const list of options.appleReminderLists ?? []) {
-      listSelect.createEl("option", { value: list.id, text: list.name });
+    titleInput = canEditAppleReminder
+      ? detailInput(editor, t("taskCreationBody"), task.text, "text", "task-hub-detail-title-input")
+      : undefined;
+    dateInput = canEditAppleReminder ? detailInput(editor, t("date"), task.dueDate ?? "", "date") : undefined;
+    tagsInput = canEditAppleReminder
+      ? detailInput(editor, t("tags"), task.tags.join(" "), "text", "task-hub-detail-tags-input")
+      : undefined;
+    if ((options.appleReminderLists?.length ?? 0) > 0) {
+      const listRow = editor.createEl("label", { cls: "task-hub-detail-field" });
+      listRow.createSpan({ text: t("appleReminderList") });
+      listSelect = listRow.createEl("select");
+      for (const list of options.appleReminderLists ?? []) {
+        listSelect.createEl("option", { value: list.id, text: list.name });
+      }
+      if (task.externalListId) {
+        listSelect.value = task.externalListId;
+      }
+      listSelect.disabled = !canEditAppleReminder && (!options.allowAppleReminderCreate || !task.externalId);
+      listSelect.addEventListener("change", () => {
+        if (canEditAppleReminder) return;
+        handlers.onAppleReminderListChange(task, listSelect!.value);
+      });
     }
-    if (task.externalListId) {
-      listSelect.value = task.externalListId;
-    }
-    listSelect.disabled = !options.allowAppleReminderCreate || !task.externalId;
-    listSelect.addEventListener("change", () => handlers.onAppleReminderListChange(task, listSelect.value));
   }
 
   const canSendToAppleReminders = task.source === "vault" && Boolean(options.allowAppleReminderCreate);
   const actionLanguageClass = t("language") === "语言" ? "is-compact-language" : "is-long-language";
   const actions = details.createDiv({
-    cls: ["task-hub-detail-actions", canSendToAppleReminders ? "has-three-actions" : "", actionLanguageClass]
+    cls: ["task-hub-detail-actions", canSendToAppleReminders || canEditAppleReminder ? "has-three-actions" : "", actionLanguageClass]
       .filter(Boolean)
       .join(" ")
   });
+  if (canEditAppleReminder && titleInput && dateInput && tagsInput) {
+    const save = actions.createEl("button", { cls: "mod-cta task-hub-detail-save", text: t("save") });
+    save.addEventListener("click", () => {
+      handlers.onTaskUpdate?.(task, {
+        kind: "task",
+        title: titleInput.value,
+        date: dateInput.value,
+        startTime: timeFromTask(task),
+        tags: splitTaskTags(tagsInput.value),
+        reminderListId: listSelect?.value
+      });
+    });
+  }
   const canToggle = task.source === "vault" || (task.source === "apple-reminders" && options.allowAppleReminderWriteback);
   const completeButton = actions.createEl("button", { text: task.completed ? t("markOpen") : t("markComplete") });
   completeButton.disabled = !canToggle;
@@ -252,6 +301,29 @@ function renderTaskDetails(
   if (!canToggle && task.source !== "vault") {
     details.createDiv({ cls: "task-hub-detail-note", text: t("externalTaskReadOnly") });
   }
+}
+
+function detailInput(container: HTMLElement, label: string, value: string, type = "text", inputClass?: string): HTMLInputElement {
+  const row = container.createEl("label", { cls: "task-hub-detail-field" });
+  row.createSpan({ text: label });
+  const input = row.createEl("input", { cls: inputClass, type, value });
+  if (type === "date") {
+    input.addEventListener("click", () => openNativeDatePicker(input));
+    input.addEventListener("focus", () => openNativeDatePicker(input));
+  }
+  return input;
+}
+
+function openNativeDatePicker(input: HTMLInputElement): void {
+  input.showPicker?.();
+}
+
+function splitTaskTags(value: string): string[] {
+  return value.split(/\s+/).map((tag) => tag.trim()).filter(Boolean);
+}
+
+function timeFromTask(task: TaskItem): string | undefined {
+  return task.scheduledDate?.match(/T(\d{2}:\d{2})/)?.[1];
 }
 
 function taskDisplayColor(task: TaskItem, options: Pick<TaskRenderOptions, "sourceColors" | "taskColors">): string | undefined {

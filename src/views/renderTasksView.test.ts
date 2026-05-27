@@ -1,5 +1,44 @@
+jest.mock("obsidian", () => ({
+  Menu: class {
+    items: Array<{ title: string; icon: string; click?: () => void }> = [];
+    shownAt: unknown;
+
+    constructor() {
+      mockMenus.push(this);
+    }
+
+    addItem(build: (item: { setTitle(title: string): unknown; setIcon(icon: string): unknown; onClick(click: () => void): unknown }) => void): void {
+      const item = {
+        title: "",
+        icon: "",
+        click: undefined as (() => void) | undefined,
+        setTitle(title: string) {
+          this.title = title;
+          return this;
+        },
+        setIcon(icon: string) {
+          this.icon = icon;
+          return this;
+        },
+        onClick(click: () => void) {
+          this.click = click;
+          return this;
+        }
+      };
+      build(item);
+      this.items.push(item);
+    }
+
+    showAtMouseEvent(event: unknown): void {
+      this.shownAt = event;
+    }
+  }
+}), { virtual: true });
+
 import { renderTasksView } from "./renderTasksView";
 import type { TaskItem } from "../types";
+
+const mockMenus: Array<{ items: Array<{ title: string; icon: string; click?: () => void }>; shownAt: unknown }> = [];
 
 class FakeElement {
   children: FakeElement[] = [];
@@ -12,7 +51,8 @@ class FakeElement {
   scrollTop = 0;
   classes = new Set<string>();
   style = { setProperty: jest.fn() };
-  listeners = new Map<string, Array<(event: { stopPropagation(): void }) => void>>();
+  showPicker = jest.fn();
+  listeners = new Map<string, Array<(event: { preventDefault(): void; stopPropagation(): void }) => void>>();
 
   empty(): void {
     this.children = [];
@@ -54,20 +94,34 @@ class FakeElement {
     }
   }
 
-  addEventListener(name: string, listener: (event: { stopPropagation(): void }) => void): void {
+  addEventListener(name: string, listener: (event: { preventDefault(): void; stopPropagation(): void }) => void): void {
     this.listeners.set(name, [...(this.listeners.get(name) ?? []), listener]);
   }
 
   click(): void {
     for (const listener of this.listeners.get("click") ?? []) {
-      listener({ stopPropagation: jest.fn() });
+      listener({ preventDefault: jest.fn(), stopPropagation: jest.fn() });
     }
   }
 
   change(): void {
     for (const listener of this.listeners.get("change") ?? []) {
-      listener({ stopPropagation: jest.fn() });
+      listener({ preventDefault: jest.fn(), stopPropagation: jest.fn() });
     }
+  }
+
+  focus(): void {
+    for (const listener of this.listeners.get("focus") ?? []) {
+      listener({ preventDefault: jest.fn(), stopPropagation: jest.fn() });
+    }
+  }
+
+  dispatch(name: string): { preventDefault: jest.Mock; stopPropagation: jest.Mock } {
+    const event = { preventDefault: jest.fn(), stopPropagation: jest.fn() };
+    for (const listener of this.listeners.get(name) ?? []) {
+      listener(event);
+    }
+    return event;
   }
 
   private append(options: { cls?: string; text?: string } = {}): FakeElement {
@@ -121,6 +175,10 @@ function taskRowTitle(row: FakeElement): string | undefined {
 }
 
 describe("renderTasksView", () => {
+  beforeEach(() => {
+    mockMenus.length = 0;
+  });
+
   const handlers = () => ({
     onComplete: jest.fn(),
     onJump: jest.fn(),
@@ -128,7 +186,9 @@ describe("renderTasksView", () => {
     onSelect: jest.fn(),
     onTagSelect: jest.fn(),
     onSourceSelect: jest.fn(),
-    onAppleReminderListChange: jest.fn()
+    onAppleReminderListChange: jest.fn(),
+    onTaskUpdate: jest.fn(),
+    onTaskDelete: jest.fn()
   });
 
   it("disables Apple Reminders checkboxes when writeback is disabled", () => {
@@ -319,6 +379,131 @@ describe("renderTasksView", () => {
     expect(viewHandlers.onTagSelect).toHaveBeenCalledWith("#project");
   });
 
+  it("shows a right-click delete action for task list rows", () => {
+    const container = new FakeElement();
+    const viewHandlers = handlers();
+
+    renderTasksView(
+      container as unknown as HTMLElement,
+      [baseTask],
+      [baseTask],
+      { status: "open", tags: [], sourceQuery: "", textQuery: "" },
+      viewHandlers,
+      new Date("2026-05-08T12:00:00Z"),
+      (key) => key,
+      { allowAppleReminderWriteback: true }
+    );
+
+    const row = collect(container).find((element) => element.classes.has("task-hub-task-row"));
+    const event = row!.dispatch("contextmenu");
+    mockMenus[0].items[0].click?.();
+
+    expect(event.preventDefault).toHaveBeenCalled();
+    expect(event.stopPropagation).toHaveBeenCalled();
+    expect(row?.classes.has("is-selected")).toBe(true);
+    expect(mockMenus[0].items[0].title).toBe("deleteCalendarItem");
+    expect(mockMenus[0].items[0].icon).toBe("trash");
+    expect(viewHandlers.onTaskDelete).toHaveBeenCalledWith(baseTask);
+  });
+
+  it("edits Apple Reminder title, date, and tags from the task details pane", () => {
+    const container = new FakeElement();
+    const viewHandlers = handlers();
+    const task = { ...baseTask, tags: ["#home"] };
+
+    renderTasksView(
+      container as unknown as HTMLElement,
+      [task],
+      [task],
+      { status: "open", tags: [], sourceQuery: "", textQuery: "" },
+      viewHandlers,
+      new Date("2026-05-08T12:00:00Z"),
+      (key) => key,
+      { allowAppleReminderWriteback: true }
+    );
+
+    const title = collect(container).find((element) => element.classes.has("task-hub-detail-title-input"));
+    const date = collect(container).find((element) => element.type === "date");
+    const tags = collect(container).find((element) => element.classes.has("task-hub-detail-tags-input"));
+    title!.value = "Buy oat milk";
+    date!.value = "2026-05-09";
+    tags!.value = "#errand #client-acme";
+    findElementByText(container, "save")!.click();
+
+    expect(viewHandlers.onTaskUpdate).toHaveBeenCalledWith(task, {
+      kind: "task",
+      title: "Buy oat milk",
+      date: "2026-05-09",
+      startTime: undefined,
+      tags: ["#errand", "#client-acme"]
+    });
+  });
+
+  it("opens the native date picker when the Apple Reminder date field is clicked", () => {
+    const container = new FakeElement();
+
+    renderTasksView(
+      container as unknown as HTMLElement,
+      [baseTask],
+      [baseTask],
+      { status: "open", tags: [], sourceQuery: "", textQuery: "" },
+      handlers(),
+      new Date("2026-05-08T12:00:00Z"),
+      (key) => key,
+      { allowAppleReminderWriteback: true }
+    );
+
+    const date = collect(container).find((element) => element.type === "date");
+    date!.click();
+
+    expect(date?.showPicker).toHaveBeenCalled();
+  });
+
+  it("keeps the Apple Reminder save button in the same action row as the detail buttons", () => {
+    const container = new FakeElement();
+
+    renderTasksView(
+      container as unknown as HTMLElement,
+      [baseTask],
+      [baseTask],
+      { status: "open", tags: [], sourceQuery: "", textQuery: "" },
+      handlers(),
+      new Date("2026-05-08T12:00:00Z"),
+      (key) => key,
+      { allowAppleReminderWriteback: true }
+    );
+
+    const actions = collect(container).find((element) => element.classes.has("task-hub-detail-actions"));
+    const actionTexts = actions ? collect(actions).map((element) => element.text).filter(Boolean) : [];
+
+    expect(actions?.classes.has("has-three-actions")).toBe(true);
+    expect(actionTexts).toEqual(["save", "markComplete", "openSource"]);
+  });
+
+  it("preserves an Apple Reminder start time when saving task detail edits", () => {
+    const container = new FakeElement();
+    const viewHandlers = handlers();
+    const task = { ...baseTask, scheduledDate: "2026-05-08T09:30" };
+
+    renderTasksView(
+      container as unknown as HTMLElement,
+      [task],
+      [task],
+      { status: "open", tags: [], sourceQuery: "", textQuery: "" },
+      viewHandlers,
+      new Date("2026-05-08T12:00:00Z"),
+      (key) => key,
+      { allowAppleReminderWriteback: true }
+    );
+
+    collect(container).find((element) => element.classes.has("task-hub-detail-title-input"))!.value = "Buy oat milk";
+    findElementByText(container, "save")!.click();
+
+    expect(viewHandlers.onTaskUpdate).toHaveBeenCalledWith(task, expect.objectContaining({
+      startTime: "09:30"
+    }));
+  });
+
   it("renders escaped Markdown punctuation in task titles as plain text", () => {
     const container = new FakeElement();
     const task = { ...baseTask, text: "5 号楼缺少空调 \\* 3" };
@@ -445,7 +630,7 @@ describe("renderTasksView", () => {
     expect(firstRow?.classes.has("is-selected")).toBe(false);
     expect(secondRow?.classes.has("is-selected")).toBe(true);
     expect(viewHandlers.onSelect).toHaveBeenCalledWith(secondTask);
-    expect(collect(container).some((element) => element.classes.has("task-hub-detail-title") && element.text === "Second")).toBe(true);
+    expect(collect(container).some((element) => element.classes.has("task-hub-detail-title-input") && element.value === "Second")).toBe(true);
   });
 
   it("marks a task row as completing before calling the completion handler", () => {
@@ -563,7 +748,7 @@ describe("renderTasksView", () => {
       { allowAppleReminderWriteback: true }
     );
 
-    expect(collect(container).some((element) => element.classes.has("task-hub-detail-title") && element.text === "Open second")).toBe(true);
+    expect(collect(container).some((element) => element.classes.has("task-hub-detail-title-input") && element.value === "Open second")).toBe(true);
   });
 
   it("opens the selected vault task from the detail panel", () => {
@@ -607,6 +792,24 @@ describe("renderTasksView", () => {
     openButton?.click();
 
     expect(testHandlers.onJump).toHaveBeenCalledWith(baseTask);
+  });
+
+  it("renders the Chinese open source action as open origin", () => {
+    const container = new FakeElement();
+
+    renderTasksView(
+      container as unknown as HTMLElement,
+      [baseTask],
+      [baseTask],
+      { status: "open", tags: [], sourceQuery: "", textQuery: "" },
+      handlers(),
+      new Date("2026-05-08T12:00:00Z"),
+      (key) => (key === "openSource" ? "打开来源" : key),
+      { allowAppleReminderWriteback: true }
+    );
+
+    expect(findElementByText(container, "打开来源")).toBeDefined();
+    expect(findElementByText(container, "打开源文件")).toBeUndefined();
   });
 
   it("renders an Apple Reminders send action for vault tasks when creation is enabled", () => {

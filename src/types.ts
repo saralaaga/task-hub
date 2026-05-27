@@ -171,6 +171,7 @@ export type IndexedFileState = {
 };
 
 export type TaskHubSettings = {
+  settingsSchemaVersion: number;
   language: Language;
   defaultView: DefaultView;
   weekStart: WeekStart;

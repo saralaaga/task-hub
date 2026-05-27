@@ -389,9 +389,10 @@
 .task-hub-task-details {
   align-content: start;
   max-height: calc(100vh - 190px);
-  overflow: auto;
-  resize: horizontal;
-  width: clamp(250px, 18vw, 420px);
+  overflow-x: hidden;
+  overflow-y: auto;
+  resize: none;
+  width: clamp(300px, 24vw, 460px);
 }
 
 .task-hub-detail-header {
@@ -854,38 +855,44 @@ body .task-hub-view button.task-hub-color-swatch {
   font-size: var(--font-ui-smaller);
 }
 
+.task-hub-detail-field input,
 .task-hub-detail-field select {
   width: 100%;
 }
 
+.task-hub-detail-save {
+  justify-self: stretch;
+}
+
 .task-hub-detail-actions {
   display: grid;
-  gap: 8px;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  grid-template-columns: repeat(2, minmax(84px, 1fr));
   justify-content: start;
   max-width: 100%;
 }
 
 .task-hub-detail-actions button {
+  font-size: var(--font-ui-small);
   line-height: 1.2;
   min-width: 0;
   overflow-wrap: normal;
   text-align: center;
-  white-space: normal;
+  white-space: nowrap;
   word-break: normal;
 }
 
 .task-hub-detail-actions.has-three-actions.is-compact-language {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(72px, 1fr));
 }
 
 .task-hub-detail-actions.has-three-actions.is-long-language {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(72px, 1fr));
 }
 
 .task-hub-detail-actions.has-three-actions.is-compact-language .mod-cta,
 .task-hub-detail-actions.has-three-actions.is-long-language .mod-cta {
-  grid-column: 1 / -1;
+  grid-column: auto;
 }
 
 .task-hub-empty {

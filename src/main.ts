@@ -612,14 +612,15 @@ export default class TaskHubPlugin extends Plugin {
         new Notice(result.message);
         return result;
       }
+      const reminderTags = draft.tags ?? task.tags;
       const input = {
-          id: task.externalId,
-          title,
-          dueDate: draft.date || null,
-          startMinutes: draft.startTime ? parseTimeInputValue(draft.startTime) : undefined,
-          listId: draft.reminderListId || undefined,
-          notes: draft.notes
-        };
+        id: task.externalId,
+        title: appleReminderTitleWithTags(title, reminderTags, true),
+        dueDate: draft.date || null,
+        startMinutes: draft.startTime ? parseTimeInputValue(draft.startTime) : undefined,
+        listId: draft.reminderListId || undefined,
+        notes: draft.notes
+      };
       try {
         await this.writeAppleReminderWithAccessRetry(() => setAppleReminderDetails(input));
         await this.syncLocalApple({ silent: true });

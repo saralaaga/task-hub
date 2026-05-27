@@ -1,4 +1,5 @@
 import {
+  TASK_HUB_SETTINGS_SCHEMA_VERSION,
   normalizeTaskHubSettings,
   openTaskHubFeedback,
   parseEventCreationTarget,
@@ -30,7 +31,7 @@ describe("normalizeTaskHubSettings", () => {
     expect(settings.localApple.calendarDefaultTimedTaskDurationMinutes).toBe(60);
     expect(settings.localApple.reminderDurationOverrides).toEqual({});
     expect(settings.localApple.reminderColorOverrides).toEqual({});
-    expect(settings.localApple.remindersCreateTagsEnabled).toBe(false);
+    expect(settings.localApple.remindersCreateTagsEnabled).toBe(true);
     expect(settings.calendarCreationDefaultKind).toBe("task");
     expect(settings.calendarTaskCreationDefaultTarget).toEqual({ type: "vault" });
     expect(settings.calendarEventCreationDefaultTarget).toEqual({ type: "apple-calendar" });
@@ -102,6 +103,29 @@ describe("normalizeTaskHubSettings", () => {
     });
 
     expect(settings.taskViewFilters.dateBucket).toBe("tomorrow");
+  });
+
+  it("migrates the old Apple Reminder tag creation default to enabled", () => {
+    const settings = normalizeTaskHubSettings({
+      localApple: {
+        ...normalizeTaskHubSettings(null).localApple,
+        remindersCreateTagsEnabled: false
+      }
+    });
+
+    expect(settings.localApple.remindersCreateTagsEnabled).toBe(true);
+  });
+
+  it("preserves Apple Reminder tag creation when explicitly disabled after the migration", () => {
+    const settings = normalizeTaskHubSettings({
+      settingsSchemaVersion: TASK_HUB_SETTINGS_SCHEMA_VERSION,
+      localApple: {
+        ...normalizeTaskHubSettings(null).localApple,
+        remindersCreateTagsEnabled: false
+      }
+    });
+
+    expect(settings.localApple.remindersCreateTagsEnabled).toBe(false);
   });
 
   it("keeps Apple Calendar task sending behind its own explicit setting", () => {

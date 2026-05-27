@@ -25,3 +25,13 @@ export function normalizeAppleReminderTags(tags: string[]): string[] {
   }
   return normalized;
 }
+
+const APPLE_REMINDER_TAG = /(^|\s)(#[\p{L}\p{N}_-]+)/gu;
+
+export function extractAppleReminderTitleTags(title: string): { title: string; tags: string[] } {
+  const tags = Array.from(title.matchAll(APPLE_REMINDER_TAG), (match) => match[2]);
+  return {
+    title: title.replace(APPLE_REMINDER_TAG, " ").replace(/\s+/g, " ").trim(),
+    tags: normalizeAppleReminderTags(tags)
+  };
+}

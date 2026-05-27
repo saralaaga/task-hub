@@ -230,7 +230,7 @@ describe("Apple Reminders migration", () => {
     );
   });
 
-  it("adds source task tags to Apple Reminder titles when enabled", async () => {
+  it("adds source task tags to Apple Reminder titles by default", async () => {
     const file = { path: "Inbox.md", extension: "md", stat: { ctime: 1, mtime: 2, size: 3 } };
     const plugin = new TaskHubPlugin({} as never, {} as never);
     const process = jest.fn(async (_file, update) => update("- [ ] Pay invoice #work #client/acme 📅 2026-05-20\nNext"));
@@ -252,8 +252,7 @@ describe("Apple Reminders migration", () => {
         ...DEFAULT_SETTINGS.localApple,
         enabled: true,
         remindersEnabled: true,
-        remindersCreateEnabled: true,
-        remindersCreateTagsEnabled: true
+        remindersCreateEnabled: true
       }
     };
     plugin.taskIndex = {
@@ -723,6 +722,61 @@ describe("Apple Reminders migration", () => {
     expect(notices).toContain("Task updated.");
   });
 
+  it("preserves Apple Reminder title hashtags when updating other details", async () => {
+    const plugin = new TaskHubPlugin({} as never, {} as never);
+    plugin.app = { workspace: { getLeavesOfType: jest.fn(() => []) } } as never;
+    plugin.settings = {
+      ...DEFAULT_SETTINGS,
+      localApple: {
+        ...DEFAULT_SETTINGS.localApple,
+        enabled: true,
+        remindersEnabled: true,
+        remindersWritebackEnabled: true,
+        remindersCreateEnabled: true
+      }
+    };
+    plugin.syncLocalApple = jest.fn(async () => undefined) as never;
+
+    await plugin.updateCalendarTask(appleReminderTask({ tags: ["#errand", "#client-acme"] }), {
+      kind: "task",
+      title: "Send invoice",
+      date: "2026-05-21",
+      startTime: "09:30",
+      reminderListId: "list-1",
+      notes: "Bring the signed copy"
+    });
+
+    expect(setAppleReminderDetails).toHaveBeenCalledWith(expect.objectContaining({
+      title: "Send invoice #errand #client-acme"
+    }));
+  });
+
+  it("updates Apple Reminder title hashtags from edited task tags", async () => {
+    const plugin = new TaskHubPlugin({} as never, {} as never);
+    plugin.app = { workspace: { getLeavesOfType: jest.fn(() => []) } } as never;
+    plugin.settings = {
+      ...DEFAULT_SETTINGS,
+      localApple: {
+        ...DEFAULT_SETTINGS.localApple,
+        enabled: true,
+        remindersEnabled: true,
+        remindersWritebackEnabled: true
+      }
+    };
+    plugin.syncLocalApple = jest.fn(async () => undefined) as never;
+
+    await plugin.updateCalendarTask(appleReminderTask({ tags: ["#old"] }), {
+      kind: "task",
+      title: "Send invoice",
+      date: "2026-05-21",
+      tags: ["#errand", "#client-acme"]
+    });
+
+    expect(setAppleReminderDetails).toHaveBeenCalledWith(expect.objectContaining({
+      title: "Send invoice #errand #client-acme"
+    }));
+  });
+
   it("requests Reminders access and retries when updating before permission is granted", async () => {
     const notDetermined = Object.assign(new Error("Apple access has not been requested yet."), { code: "not_determined" });
     setAppleReminderDetails.mockRejectedValueOnce(notDetermined).mockResolvedValueOnce(undefined);
@@ -821,7 +875,7 @@ function task(overrides: Partial<TaskItem> = {}): TaskItem {
   };
 }
 
-function appleReminderTask(): TaskItem {
+function appleReminderTask(overrides: Partial<TaskItem> = {}): TaskItem {
   return {
     id: "apple-reminders:reminder-1",
     externalId: "reminder-1",
@@ -832,6 +886,7 @@ function appleReminderTask(): TaskItem {
     completed: false,
     tags: [],
     dueDate: "2026-05-20",
-    source: "apple-reminders"
+    source: "apple-reminders",
+    ...overrides
   };
 }
