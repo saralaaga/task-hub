@@ -160,6 +160,7 @@ export type TranslationKey =
   | "openTaskHub"
   | "opened"
   | "or"
+  | "otherCompleted"
   | "overdue"
   | "parseError"
   | "previous"
@@ -221,6 +222,7 @@ export type TranslationKey =
   | "tasksIndexed"
   | "thisWeek"
   | "today"
+  | "tomorrow"
   | "tuesday"
   | "thursday"
   | "sunday"
@@ -406,6 +408,7 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     openTaskHub: "Open Task Hub",
     opened: "Opened",
     or: "OR",
+    otherCompleted: "Other completed",
     overdue: "Overdue",
     parseError: "Parse error",
     previous: "Prev",
@@ -467,6 +470,7 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     tasksIndexed: "tasks indexed",
     thisWeek: "This week",
     today: "Today",
+    tomorrow: "Tomorrow",
     tuesday: "Tuesday",
     thursday: "Thursday",
     sunday: "Sunday",
@@ -645,6 +649,7 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     openTaskHub: "打开 Task Hub",
     opened: "已打开",
     or: "或",
+    otherCompleted: "其他已完成",
     overdue: "已逾期",
     parseError: "解析错误",
     previous: "上一页",
@@ -706,6 +711,7 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     tasksIndexed: "个任务已索引",
     thisWeek: "本周",
     today: "今天",
+    tomorrow: "明天",
     tuesday: "周二",
     thursday: "周四",
     sunday: "周日",

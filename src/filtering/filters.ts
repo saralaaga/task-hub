@@ -25,7 +25,7 @@ export function filterTasks(tasks: TaskItem[], filters: TaskFilterState, now: Da
   return sortTasksByCompletion(tasks.filter((task) => {
     if (filters.status === "open" && task.completed) return false;
     if (filters.status === "completed" && !task.completed) return false;
-    if (filters.dateBucket && getTaskDateBucket(task.dueDate, now) !== filters.dateBucket) return false;
+    if (filters.dateBucket && getTaskBucket(task, now) !== filters.dateBucket) return false;
     if (filters.tags.length > 0 && !filters.tags.every((tag) => task.tags.some((taskTag) => isTagMatch(taskTag, tag)))) return false;
     if (sourceQuery === "vault" || sourceQuery === "apple-reminders") {
       if (task.source !== sourceQuery) return false;
@@ -41,10 +41,10 @@ export function filterTasks(tasks: TaskItem[], filters: TaskFilterState, now: Da
 export function groupTasksByDateBucket(tasks: TaskItem[], now: Date): Record<DateBucket, TaskItem[]> {
   const groups = tasks.reduce<Record<DateBucket, TaskItem[]>>(
     (groups, task) => {
-      groups[getTaskDateBucket(task.dueDate, now)].push(task);
+      groups[getTaskBucket(task, now)].push(task);
       return groups;
     },
-    { overdue: [], today: [], thisWeek: [], future: [], noDate: [] }
+    { overdue: [], today: [], tomorrow: [], thisWeek: [], future: [], noDate: [], otherCompleted: [] }
   );
 
   for (const bucket of Object.keys(groups) as DateBucket[]) {
@@ -52,6 +52,11 @@ export function groupTasksByDateBucket(tasks: TaskItem[], now: Date): Record<Dat
   }
 
   return groups;
+}
+
+export function getTaskBucket(task: TaskItem, now: Date): DateBucket {
+  const bucket = getTaskDateBucket(task.dueDate, now);
+  return task.completed && bucket === "overdue" ? "otherCompleted" : bucket;
 }
 
 export function sortTasksByCompletion(tasks: TaskItem[]): TaskItem[] {
@@ -74,7 +79,7 @@ function matchesConditions(task: TaskItem, conditions: TaskConditionFilters | un
     checks.push(task.tags.some((taskTag) => isTagMatch(taskTag, tag)));
   }
   if (conditions.dateBucket) {
-    checks.push(getTaskDateBucket(task.dueDate, now) === conditions.dateBucket);
+    checks.push(getTaskBucket(task, now) === conditions.dateBucket);
   }
   if (text) {
     checks.push(task.text.toLowerCase().includes(text));

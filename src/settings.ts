@@ -15,6 +15,12 @@ export const DEFAULT_SETTINGS: TaskHubSettings = {
   calendarTaskCreationDefaultTarget: { type: "vault" },
   calendarEventCreationDefaultTarget: { type: "apple-calendar" },
   taskCreationFilePath: "Task Hub.md",
+  taskViewFilters: {
+    status: "open",
+    tags: [],
+    sourceQuery: "",
+    textQuery: ""
+  },
   ignoredPaths: ["Templates/", "Archive/"],
   tagViewOrder: [],
   calendarSources: [],
@@ -59,6 +65,7 @@ export function normalizeTaskHubSettings(loaded: Partial<TaskHubSettings> | null
     calendarEventCreationDefaultTarget:
       loaded?.calendarEventCreationDefaultTarget ?? DEFAULT_SETTINGS.calendarEventCreationDefaultTarget,
     taskCreationFilePath: loaded?.taskCreationFilePath ?? DEFAULT_SETTINGS.taskCreationFilePath,
+    taskViewFilters: normalizeTaskViewFilters(loaded?.taskViewFilters, loaded?.showCompletedByDefault),
     localApple: {
       ...DEFAULT_SETTINGS.localApple,
       ...(loadedLocalApple ?? {}),
@@ -80,6 +87,46 @@ export function normalizeTaskHubSettings(loaded: Partial<TaskHubSettings> | null
     },
     appleReminderLinks: loaded?.appleReminderLinks ?? {}
   };
+}
+
+function normalizeTaskViewFilters(
+  loaded: Partial<TaskHubSettings["taskViewFilters"]> | undefined,
+  showCompletedByDefault: boolean | undefined
+): TaskHubSettings["taskViewFilters"] {
+  const dateBucket = normalizeStoredDateBucket(loaded?.dateBucket);
+  return {
+    ...DEFAULT_SETTINGS.taskViewFilters,
+    ...(loaded ?? {}),
+    status: loaded?.status ?? (showCompletedByDefault ? "all" : DEFAULT_SETTINGS.taskViewFilters.status),
+    ...(dateBucket ? { dateBucket } : { dateBucket: undefined }),
+    tags: Array.isArray(loaded?.tags) ? loaded.tags : DEFAULT_SETTINGS.taskViewFilters.tags,
+    sourceQuery: loaded?.sourceQuery ?? DEFAULT_SETTINGS.taskViewFilters.sourceQuery,
+    textQuery: loaded?.textQuery ?? DEFAULT_SETTINGS.taskViewFilters.textQuery,
+    conditions: loaded?.conditions
+      ? {
+          operator: loaded.conditions.operator === "or" ? "or" : "and",
+          tag: loaded.conditions.tag ?? "",
+          dateBucket: normalizeStoredDateBucket(loaded.conditions.dateBucket) ?? "",
+          text: loaded.conditions.text ?? ""
+        }
+      : undefined
+  };
+}
+
+function normalizeStoredDateBucket(value: unknown): TaskHubSettings["taskViewFilters"]["dateBucket"] {
+  if (value === "completed") return "otherCompleted";
+  if (
+    value === "overdue" ||
+    value === "today" ||
+    value === "tomorrow" ||
+    value === "thisWeek" ||
+    value === "future" ||
+    value === "noDate" ||
+    value === "otherCompleted"
+  ) {
+    return value;
+  }
+  return undefined;
 }
 
 const SOFT_LOCAL_APPLE_COLORS = ["#d97757", "#c7925b", "#9aa66f", "#6f9f8f", "#6f94b8", "#8f83b5"];

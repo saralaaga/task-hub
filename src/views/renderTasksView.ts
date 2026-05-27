@@ -1,4 +1,5 @@
-import { filterTasks, groupTasksByDateBucket, sortTasksByCompletion, type TaskFilterState } from "../filtering/filters";
+import { type DateBucket } from "../calendar/dateBuckets";
+import { getTaskBucket, type TaskFilterState } from "../filtering/filters";
 import type { Translator } from "../i18n";
 import type { AppleReminderList, TaskItem } from "../types";
 
@@ -20,9 +21,10 @@ export type TaskRenderOptions = {
   taskColors?: Record<string, string>;
   appleReminderLists?: AppleReminderList[];
   taskListScrollTop?: number;
+  exitingTaskIds?: ReadonlySet<string>;
 };
 
-const BUCKETS = ["overdue", "today", "thisWeek", "future", "noDate"] as const;
+const BUCKETS = ["overdue", "today", "tomorrow", "thisWeek", "future", "noDate", "otherCompleted"] as const;
 
 export function renderTasksView(
   container: HTMLElement,
@@ -51,8 +53,8 @@ export function renderTasksView(
     return;
   }
 
-  const sortedTasks = sortTasksByCompletion(tasks);
-  let selectedTask = sortedTasks.find((task) => task.id === options.selectedTaskId) ?? sortedTasks[0];
+  const sortedTasks = sortTasksForTaskList(tasks);
+  let selectedTask = sortedTasks.find((task) => task.id === options.selectedTaskId) ?? sortedTasks.find((task) => !task.completed) ?? sortedTasks[0];
   const workbench = container.createDiv({ cls: "task-hub-task-workbench" });
   const list = workbench.createDiv({ cls: "task-hub-task-list-pane" });
 
@@ -62,7 +64,7 @@ export function renderTasksView(
     return;
   }
 
-  const groups = groupTasksByDateBucket(sortedTasks, now);
+  const groups = groupSortedTasksByDateBucket(sortedTasks, now);
   const rowsByTaskId = new Map<string, HTMLElement>();
   let detailsHost: HTMLElement | undefined;
   const selectTask = (task: TaskItem) => {
@@ -82,7 +84,7 @@ export function renderTasksView(
 
     const section = list.createDiv({ cls: "task-hub-task-section" });
     section.createEl("h3", { text: `${t(bucket)} (${bucketTasks.length})` });
-    const cards = section.createDiv({ cls: "task-hub-task-card-flow" });
+    const cards = section.createDiv({ cls: "task-hub-task-list-flow" });
 
     for (const task of bucketTasks) {
       const row = renderTaskRow(cards, task, handlers, options, task.id === selectedTask?.id, selectTask);
@@ -108,7 +110,12 @@ function renderTaskRow(
   selected: boolean,
   onSelect: (task: TaskItem) => void
 ): HTMLElement {
-  const classes = ["task-hub-task-row", selected ? "is-selected" : "", task.completed ? "is-completed" : ""].filter(Boolean).join(" ");
+  const classes = [
+    "task-hub-task-row",
+    selected ? "is-selected" : "",
+    task.completed ? "is-completed" : "",
+    options.exitingTaskIds?.has(task.id) ? "is-exiting" : ""
+  ].filter(Boolean).join(" ");
   const row = container.createDiv({ cls: classes });
   const color = taskDisplayColor(task, options);
   if (color) row.style.setProperty("--task-hub-source-color", color);
@@ -117,6 +124,7 @@ function renderTaskRow(
   checkbox.disabled = task.source !== "vault" && !(task.source === "apple-reminders" && options.allowAppleReminderWriteback);
   checkbox.addEventListener("click", (event) => {
     event.stopPropagation();
+    row.toggleClass("is-completing", true);
     handlers.onComplete(task);
   });
 
@@ -139,6 +147,36 @@ function renderTaskRow(
     handlers.onJump(task);
   });
   return row;
+}
+
+function sortTasksForTaskList(tasks: TaskItem[]): TaskItem[] {
+  return tasks
+    .map((task, index) => ({ task, index }))
+    .sort((left, right) => compareTaskListDates(left.task, right.task) || left.index - right.index)
+    .map(({ task }) => task);
+}
+
+function compareTaskListDates(left: TaskItem, right: TaskItem): number {
+  const leftDate = taskListDateKey(left);
+  const rightDate = taskListDateKey(right);
+  if (!leftDate && !rightDate) return 0;
+  if (!leftDate) return 1;
+  if (!rightDate) return -1;
+  return leftDate.localeCompare(rightDate);
+}
+
+function taskListDateKey(task: TaskItem): string | undefined {
+  return task.scheduledDate?.slice(0, 10) ?? task.dueDate ?? task.startDate?.slice(0, 10);
+}
+
+function groupSortedTasksByDateBucket(tasks: TaskItem[], now: Date): Record<DateBucket, TaskItem[]> {
+  return tasks.reduce<Record<DateBucket, TaskItem[]>>(
+    (groups, task) => {
+      groups[getTaskBucket(task, now)].push(task);
+      return groups;
+    },
+    { overdue: [], today: [], tomorrow: [], thisWeek: [], future: [], noDate: [], otherCompleted: [] }
+  );
 }
 
 function renderPlainTaskText(text: string): string {

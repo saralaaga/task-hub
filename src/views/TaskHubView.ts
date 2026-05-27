@@ -1,7 +1,7 @@
 import { ItemView, Notice, WorkspaceLeaf } from "obsidian";
 import { TASK_HUB_VIEW_TYPE } from "../constants";
 import { toLocalDateKey } from "../calendar/dateBuckets";
-import { filterTasks, sortTasksByCompletion, type TaskFilterState } from "../filtering/filters";
+import { filterTasks, type TaskFilterState } from "../filtering/filters";
 import { createTranslator } from "../i18n";
 import type TaskHubPlugin from "../main";
 import type { TaskItem } from "../types";
@@ -14,12 +14,7 @@ import { renderTasksView } from "./renderTasksView";
 
 export class TaskHubView extends ItemView {
   private view: DashboardView = this.plugin.settings.defaultView;
-  private filters: TaskFilterState = {
-    status: this.plugin.settings.showCompletedByDefault ? "all" : "open",
-    tags: [],
-    sourceQuery: "",
-    textQuery: ""
-  };
+  private filters: TaskFilterState = cloneTaskFilters(this.plugin.settings.taskViewFilters);
   private calendarMode: CalendarViewMode = "month";
   private calendarFocusDate = new Date();
   private visibleSourceIds = new Set<string>(["vault"]);
@@ -27,6 +22,8 @@ export class TaskHubView extends ItemView {
   private isRefreshing = false;
   private selectedTaskId: string | undefined;
   private taskListScrollTop = 0;
+  private contentScrollTop = 0;
+  private completingTaskIds = new Set<string>();
 
   constructor(
     leaf: WorkspaceLeaf,
@@ -51,6 +48,7 @@ export class TaskHubView extends ItemView {
   render(options: { preserveTaskListScroll?: boolean } = {}): void {
     if (options.preserveTaskListScroll) {
       this.captureTaskListScroll();
+      this.captureContentScroll();
     }
     const container = this.containerEl.children[1] as HTMLElement;
     const allTasks = this.plugin.getTasks();
@@ -82,28 +80,25 @@ export class TaskHubView extends ItemView {
         onRescan: () => void this.refreshData(),
         onCreateTask: () => this.plugin.openCreateTaskModal(toLocalDateKey(new Date())),
         onStatusChange: (status) => {
-          this.filters = { ...this.filters, status };
-          this.render();
+          this.updateFilters({ ...this.filters, status });
         },
         onConditionChange: (conditions) => {
-          this.filters = { ...this.filters, conditions };
-          this.render();
+          this.updateFilters({ ...this.filters, conditions });
         },
         onSourceFilterChange: (source) => {
-          this.filters = { ...this.filters, sourceQuery: source === "all" ? "" : source };
-          this.render();
+          this.updateFilters({ ...this.filters, sourceQuery: source === "all" ? "" : source });
         },
         onTextQueryChange: (textQuery) => {
-          this.filters = { ...this.filters, textQuery };
-          this.render();
+          this.updateFilters({ ...this.filters, textQuery });
         }
       }
     );
 
     if (this.view === "tasks") {
-      const visibleTasks = filterTasks(allTasks, this.filters, new Date());
+      const now = new Date();
+      const visibleTasks = this.taskViewVisibleTasks(allTasks, now);
       if (visibleTasks.length > 0 && !visibleTasks.some((task) => task.id === this.selectedTaskId)) {
-        this.selectedTaskId = sortTasksByCompletion(visibleTasks)[0].id;
+        this.selectedTaskId = undefined;
       }
       renderTasksView(
         main,
@@ -111,28 +106,26 @@ export class TaskHubView extends ItemView {
         allTasks,
         this.filters,
         {
-          onComplete: (task) => void this.plugin.completeTask(task),
+          onComplete: (task) => void this.completeTaskFromView(task),
           onJump: (task) => void this.plugin.jumpToTask(task),
           onSendToAppleReminders: (task) => void this.plugin.sendTaskToAppleReminders(task),
           onSelect: (task) => {
             this.selectedTaskId = task.id;
           },
           onTagSelect: (tag) => {
-            this.filters = {
+            this.updateFilters({
               ...this.filters,
               tags: this.filters.tags.includes(tag)
                 ? this.filters.tags.filter((existing) => existing !== tag)
                 : [...this.filters.tags, tag]
-            };
-            this.render({ preserveTaskListScroll: true });
+            }, { preserveTaskListScroll: true });
           },
           onSourceSelect: (source) => {
-            this.filters = { ...this.filters, sourceQuery: source === "all" ? "" : source };
-            this.render();
+            this.updateFilters({ ...this.filters, sourceQuery: source === "all" ? "" : source });
           },
           onAppleReminderListChange: (task, listId) => void this.plugin.moveAppleReminderToList(task, listId)
         },
-        new Date(),
+        now,
         t,
         {
           allowAppleReminderWriteback: this.plugin.settings.localApple.remindersWritebackEnabled,
@@ -141,9 +134,11 @@ export class TaskHubView extends ItemView {
           selectedTaskId: this.selectedTaskId,
           sourceColors,
           taskColors,
-          taskListScrollTop: this.taskListScrollTop
+          taskListScrollTop: this.taskListScrollTop,
+          exitingTaskIds: this.exitingTaskIds(allTasks)
         }
       );
+      this.restoreContentScroll(options);
       return;
     }
 
@@ -155,15 +150,13 @@ export class TaskHubView extends ItemView {
         {
           onTagSelect: (tag) => {
             this.view = "tasks";
-            this.filters = { ...this.filters, tags: [tag] };
-            this.render();
+            this.updateFilters({ ...this.filters, tags: [tag] });
           },
-          onTaskComplete: (task) => void this.plugin.completeTask(task),
+          onTaskComplete: (task) => void this.completeTaskFromView(task),
           onTaskSelect: (task) => {
             this.view = "tasks";
             this.selectedTaskId = task.id;
-            this.filters = { ...this.filters, tags: [] };
-            this.render();
+            this.updateFilters({ ...this.filters, tags: [] });
           },
           onReorderTags: (sourceTag, targetTag) => {
             void this.reorderTagCards(sourceTag, targetTag);
@@ -224,7 +217,7 @@ export class TaskHubView extends ItemView {
             this.render();
           },
           onDateCreateTask: (dateKey) => this.plugin.openCreateTaskModal(dateKey),
-          onTaskComplete: (task) => void this.plugin.completeTask(task),
+          onTaskComplete: (task) => void this.completeTaskFromView(task),
           onTaskJump: (task) => void this.plugin.jumpToTask(task),
           onTaskSelect: (task) => {
             this.selectedTaskId = task.id;
@@ -266,6 +259,70 @@ export class TaskHubView extends ItemView {
     const container = this.containerEl.children[1] as HTMLElement | undefined;
     const list = container ? findTaskListPane(container) : undefined;
     this.taskListScrollTop = list?.scrollTop ?? this.taskListScrollTop;
+  }
+
+  private taskViewVisibleTasks(allTasks: TaskItem[], now: Date): TaskItem[] {
+    const visibleTasks = filterTasks(allTasks, this.filters, now);
+    if (this.filters.status !== "open" || this.completingTaskIds.size === 0) {
+      return visibleTasks;
+    }
+
+    const visibleIds = new Set(visibleTasks.map((task) => task.id));
+    const exitingTasks = allTasks.filter((task) => {
+      if (!this.completingTaskIds.has(task.id) || visibleIds.has(task.id) || !task.completed) return false;
+      return filterTasks([task], { ...this.filters, status: "all" }, now).length > 0;
+    });
+    return [...visibleTasks, ...exitingTasks];
+  }
+
+  private exitingTaskIds(allTasks: TaskItem[]): ReadonlySet<string> {
+    if (this.filters.status !== "open" || this.completingTaskIds.size === 0) {
+      return new Set();
+    }
+    const completedIds = new Set(allTasks.filter((task) => task.completed).map((task) => task.id));
+    return new Set([...this.completingTaskIds].filter((taskId) => completedIds.has(taskId)));
+  }
+
+  private async completeTaskFromView(task: TaskItem): Promise<void> {
+    this.captureTaskListScroll();
+    this.captureContentScroll();
+    this.completingTaskIds.add(task.id);
+    let keepForExitAnimation = false;
+    try {
+      const result = await this.plugin.completeTask(task);
+      if (result.status === "updated" && !task.completed && this.filters.status === "open") {
+        keepForExitAnimation = true;
+        window.setTimeout(() => {
+          this.completingTaskIds.delete(task.id);
+          this.render({ preserveTaskListScroll: true });
+        }, 360);
+        return;
+      }
+    } finally {
+      if (!keepForExitAnimation) {
+        this.completingTaskIds.delete(task.id);
+      }
+    }
+  }
+
+  private captureContentScroll(): void {
+    const container = this.containerEl.children[1] as HTMLElement | undefined;
+    this.contentScrollTop = container?.scrollTop ?? this.contentScrollTop;
+  }
+
+  private restoreContentScroll(options: { preserveTaskListScroll?: boolean }): void {
+    if (!options.preserveTaskListScroll) return;
+    const container = this.containerEl.children[1] as HTMLElement | undefined;
+    if (container) {
+      container.scrollTop = this.contentScrollTop;
+    }
+  }
+
+  private updateFilters(filters: TaskFilterState, options: { preserveTaskListScroll?: boolean } = {}): void {
+    this.filters = cloneTaskFilters(filters);
+    this.plugin.settings.taskViewFilters = cloneTaskFilters(this.filters);
+    void this.plugin.saveSettings();
+    this.render(options);
   }
 
   private async reorderTagCards(sourceTag: string, targetTag: string): Promise<void> {
@@ -323,4 +380,12 @@ function toggleSetValue(values: Set<string>, value: string): Set<string> {
     next.add(value);
   }
   return next;
+}
+
+function cloneTaskFilters(filters: TaskFilterState): TaskFilterState {
+  return {
+    ...filters,
+    tags: [...filters.tags],
+    conditions: filters.conditions ? { ...filters.conditions } : undefined
+  };
 }

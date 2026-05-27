@@ -1,4 +1,5 @@
 import type { Language } from "./i18n";
+import type { DateBucket } from "./calendar/dateBuckets";
 
 export type TaskStatusFilter = "open" | "completed" | "all";
 export type DefaultView = "tasks" | "calendar" | "tags";
@@ -29,6 +30,23 @@ export type TaskItem = {
   createdDate?: string;
   completedDate?: string;
   externalListId?: string;
+};
+
+export type TaskConditionFilterSettings = {
+  operator: "and" | "or";
+  tag: string;
+  dateBucket: "" | DateBucket;
+  text: string;
+};
+
+export type TaskViewFilterSettings = {
+  status: TaskStatusFilter;
+  dateBucket?: DateBucket;
+  tags: string[];
+  conditions?: TaskConditionFilterSettings;
+  tagQuery?: string;
+  sourceQuery: string;
+  textQuery: string;
 };
 
 export type CalendarEvent = {
@@ -164,6 +182,7 @@ export type TaskHubSettings = {
   calendarTaskCreationDefaultTarget: CalendarTaskCreationTarget;
   calendarEventCreationDefaultTarget: CalendarEventCreationTarget;
   taskCreationFilePath: string;
+  taskViewFilters: TaskViewFilterSettings;
   ignoredPaths: string[];
   tagViewOrder: string[];
   calendarSources: CalendarSource[];

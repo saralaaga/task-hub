@@ -120,10 +120,32 @@ describe("Task Hub styles", () => {
     const chipRule = styles.match(/\.task-hub-source-filter-chip\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const activeChipRule = styles.match(/\.task-hub-source-filter-chip:hover,\s*\.task-hub-source-filter-chip:focus-visible,\s*\.task-hub-source-filter-chip\.is-active\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
 
-    expect(workbenchRule).toContain("grid-template-columns: minmax(280px, 1fr) auto");
+    expect(workbenchRule).toContain("grid-template-columns: minmax(0, 1fr) auto");
     expect(styles).not.toContain(".task-hub-task-sidebar {");
     expect(chipRule).toContain("display: inline-flex");
     expect(chipRule).toContain("border-radius: 7px");
     expect(activeChipRule).toContain("var(--interactive-accent)");
+  });
+
+  it("centers the task list at a comfortable responsive width", () => {
+    const styles = readFileSync(path.join(__dirname, "styles.css"), "utf8");
+    const paneRule = styles.match(/\.task-hub-task-list-pane\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const sectionRule = styles.match(/\.task-hub-task-section\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+
+    expect(paneRule).toContain("justify-items: center");
+    expect(paneRule).toContain("padding-inline: clamp(4px, 2vw, 24px)");
+    expect(sectionRule).toContain("margin-inline: auto");
+    expect(sectionRule).toContain("width: min(760px, 100%)");
+  });
+
+  it("animates completed task rows out when hidden by the open-task filter", () => {
+    const styles = readFileSync(path.join(__dirname, "styles.css"), "utf8");
+    const exitingRule = styles.match(/\.task-hub-task-row\.is-exiting\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const keyframes = styles.match(/@keyframes task-hub-complete-exit\s*\{(?<body>[\s\S]+?)\n\}/)?.groups?.body ?? "";
+
+    expect(exitingRule).toContain("animation: task-hub-complete-exit 360ms ease-in forwards");
+    expect(exitingRule).toContain("pointer-events: none");
+    expect(keyframes).toContain("opacity: 0");
+    expect(keyframes).toContain("max-height: 0");
   });
 });

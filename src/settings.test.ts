@@ -35,7 +35,73 @@ describe("normalizeTaskHubSettings", () => {
     expect(settings.calendarTaskCreationDefaultTarget).toEqual({ type: "vault" });
     expect(settings.calendarEventCreationDefaultTarget).toEqual({ type: "apple-calendar" });
     expect(settings.taskCreationFilePath).toBe("Task Hub.md");
+    expect(settings.taskViewFilters).toEqual({ status: "open", tags: [], sourceQuery: "", textQuery: "" });
     expect(settings.ignoredPaths).toEqual(["Archive/"]);
+  });
+
+  it("persists task view filters across settings normalization", () => {
+    const settings = normalizeTaskHubSettings({
+      taskViewFilters: {
+        status: "all",
+        tags: ["#work"],
+        sourceQuery: "apple-reminders",
+        textQuery: "invoice",
+        conditions: {
+          operator: "or",
+          tag: "#client",
+          dateBucket: "today",
+          text: "call"
+        }
+      }
+    });
+
+    expect(settings.taskViewFilters).toEqual({
+      status: "all",
+      tags: ["#work"],
+      sourceQuery: "apple-reminders",
+      textQuery: "invoice",
+      conditions: {
+        operator: "or",
+        tag: "#client",
+        dateBucket: "today",
+        text: "call"
+      }
+    });
+  });
+
+  it("migrates the previous completed date bucket to other completed", () => {
+    const settings = normalizeTaskHubSettings({
+      taskViewFilters: {
+        status: "all",
+        dateBucket: "completed" as never,
+        tags: [],
+        sourceQuery: "",
+        textQuery: "",
+        conditions: {
+          operator: "and",
+          tag: "",
+          dateBucket: "completed" as never,
+          text: ""
+        }
+      }
+    });
+
+    expect(settings.taskViewFilters.dateBucket).toBe("otherCompleted");
+    expect(settings.taskViewFilters.conditions?.dateBucket).toBe("otherCompleted");
+  });
+
+  it("keeps tomorrow as a persisted task date filter", () => {
+    const settings = normalizeTaskHubSettings({
+      taskViewFilters: {
+        status: "open",
+        dateBucket: "tomorrow",
+        tags: [],
+        sourceQuery: "",
+        textQuery: ""
+      }
+    });
+
+    expect(settings.taskViewFilters.dateBucket).toBe("tomorrow");
   });
 
   it("keeps Apple Calendar task sending behind its own explicit setting", () => {

@@ -130,7 +130,7 @@ function renderConditionMenu(container: HTMLElement, state: ShellState, handlers
   operator.value = conditions.operator;
   const date = dateRow.createEl("select", { cls: "task-hub-condition-control" });
   date.createEl("option", { text: state.t("conditionDate"), value: "" });
-  for (const bucket of ["overdue", "today", "thisWeek", "future", "noDate"] as DateBucket[]) {
+  for (const bucket of ["overdue", "today", "tomorrow", "thisWeek", "future", "noDate", "otherCompleted"] as DateBucket[]) {
     date.createEl("option", { text: state.t(bucket), value: bucket });
   }
   date.value = conditions.dateBucket;

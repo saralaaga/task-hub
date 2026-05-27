@@ -6,6 +6,7 @@ const NOW = new Date("2026-05-06T09:00:00");
 const TASKS: TaskItem[] = [
   task({ id: "overdue", text: "Call supplier", dueDate: "2026-05-01", tags: ["#work"], filePath: "Work/Suppliers.md" }),
   task({ id: "today", text: "Write proposal", dueDate: "2026-05-06", tags: ["#work", "#client/acme"], filePath: "Projects/Acme.md" }),
+  task({ id: "tomorrow", text: "Ship draft", dueDate: "2026-05-07", tags: ["#work"], filePath: "Projects/Acme.md" }),
   task({ id: "week", text: "Review calendar", dueDate: "2026-05-10", tags: ["#review"], filePath: "Reviews/Weekly.md" }),
   task({ id: "future", text: "Renew license", dueDate: "2026-06-01", tags: ["#admin"], filePath: "Admin/Licenses.md" }),
   task({ id: "nodate", text: "Collect ideas", tags: ["#inbox"], filePath: "Inbox.md" }),
@@ -125,23 +126,46 @@ describe("groupTasksByDateBucket", () => {
 
     expect(groups.overdue.map((item) => item.id)).toEqual(["overdue"]);
     expect(groups.today.map((item) => item.id)).toEqual(["today"]);
+    expect(groups.tomorrow.map((item) => item.id)).toEqual(["tomorrow"]);
     expect(groups.thisWeek.map((item) => item.id)).toEqual(["week"]);
     expect(groups.future.map((item) => item.id)).toEqual(["future"]);
     expect(groups.noDate.map((item) => item.id)).toEqual(["nodate"]);
   });
 
-  it("keeps completed tasks below open tasks inside each bucket", () => {
+  it("keeps completed current and future tasks in their original date buckets", () => {
     const groups = groupTasksByDateBucket(
       [
         task({ id: "done-first", text: "Done first", completed: true, dueDate: "2026-05-06" }),
         task({ id: "open-second", text: "Open second", dueDate: "2026-05-06" }),
         task({ id: "done-third", text: "Done third", completed: true, dueDate: "2026-05-06" }),
-        task({ id: "open-fourth", text: "Open fourth", dueDate: "2026-05-06" })
+        task({ id: "open-fourth", text: "Open fourth", dueDate: "2026-05-06" }),
+        task({ id: "done-tomorrow", text: "Done tomorrow", completed: true, dueDate: "2026-05-07" }),
+        task({ id: "done-week", text: "Done week", completed: true, dueDate: "2026-05-10" }),
+        task({ id: "done-future", text: "Done future", completed: true, dueDate: "2026-06-01" }),
+        task({ id: "done-nodate", text: "Done no date", completed: true })
       ],
       NOW
     );
 
     expect(groups.today.map((item) => item.id)).toEqual(["open-second", "open-fourth", "done-first", "done-third"]);
+    expect(groups.tomorrow.map((item) => item.id)).toEqual(["done-tomorrow"]);
+    expect(groups.thisWeek.map((item) => item.id)).toEqual(["done-week"]);
+    expect(groups.future.map((item) => item.id)).toEqual(["done-future"]);
+    expect(groups.noDate.map((item) => item.id)).toEqual(["done-nodate"]);
+    expect(groups.otherCompleted).toEqual([]);
+  });
+
+  it("groups completed overdue tasks into other completed instead of overdue", () => {
+    const groups = groupTasksByDateBucket(
+      [
+        task({ id: "done-overdue", text: "Done overdue", completed: true, dueDate: "2026-05-01" }),
+        task({ id: "open-overdue", text: "Open overdue", dueDate: "2026-05-01" })
+      ],
+      NOW
+    );
+
+    expect(groups.overdue.map((item) => item.id)).toEqual(["open-overdue"]);
+    expect(groups.otherCompleted.map((item) => item.id)).toEqual(["done-overdue"]);
   });
 });
 

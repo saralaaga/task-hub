@@ -116,6 +116,10 @@ function textValues(element: FakeElement): string[] {
   return collect(element).map((child) => child.text).filter(Boolean);
 }
 
+function taskRowTitle(row: FakeElement): string | undefined {
+  return collect(row).find((element) => element.classes.has("task-hub-task-text"))?.text;
+}
+
 describe("renderTasksView", () => {
   const handlers = () => ({
     onComplete: jest.fn(),
@@ -177,6 +181,32 @@ describe("renderTasksView", () => {
 
     const row = collect(container).find((element) => element.classes.has("task-hub-task-row"));
     expect(row?.style.setProperty).toHaveBeenCalledWith("--task-hub-source-color", "#22c55e");
+  });
+
+  it("renders tasks as a single-column list ordered by date", () => {
+    const container = new FakeElement();
+    const noDate = { ...baseTask, id: "no-date", text: "No date", dueDate: undefined };
+    const sooner = { ...baseTask, id: "soon", text: "Soon", dueDate: "2026-05-08" };
+    const tomorrow = { ...baseTask, id: "tomorrow", text: "Tomorrow", dueDate: "2026-05-09" };
+    const later = { ...baseTask, id: "later", text: "Later", dueDate: "2026-05-30" };
+
+    renderTasksView(
+      container as unknown as HTMLElement,
+      [noDate, later, tomorrow, sooner],
+      [noDate, later, tomorrow, sooner],
+      { status: "open", tags: [], sourceQuery: "", textQuery: "" },
+      handlers(),
+      new Date("2026-05-08T12:00:00Z"),
+      (key) => key,
+      { allowAppleReminderWriteback: true }
+    );
+
+    const flow = collect(container).find((element) => element.classes.has("task-hub-task-list-flow"));
+    const rows = collect(container).filter((element) => element.classes.has("task-hub-task-row"));
+
+    expect(flow).toBeDefined();
+    expect(collect(container).some((element) => element.classes.has("task-hub-task-card-flow"))).toBe(false);
+    expect(rows.map((row) => taskRowTitle(row))).toEqual(["Soon", "Tomorrow", "Later", "No date"]);
   });
 
   it("applies the Obsidian theme color to vault task rows", () => {
@@ -416,6 +446,81 @@ describe("renderTasksView", () => {
     expect(secondRow?.classes.has("is-selected")).toBe(true);
     expect(viewHandlers.onSelect).toHaveBeenCalledWith(secondTask);
     expect(collect(container).some((element) => element.classes.has("task-hub-detail-title") && element.text === "Second")).toBe(true);
+  });
+
+  it("marks a task row as completing before calling the completion handler", () => {
+    const container = new FakeElement();
+    const viewHandlers = handlers();
+
+    renderTasksView(
+      container as unknown as HTMLElement,
+      [baseTask],
+      [baseTask],
+      { status: "open", tags: [], sourceQuery: "", textQuery: "" },
+      viewHandlers,
+      new Date("2026-05-08T12:00:00Z"),
+      (key) => key,
+      { allowAppleReminderWriteback: true }
+    );
+
+    const row = collect(container).find((element) => element.classes.has("task-hub-task-row"));
+    const checkbox = findCheckbox(container);
+
+    checkbox!.click();
+
+    expect(row?.classes.has("is-completing")).toBe(true);
+    expect(viewHandlers.onComplete).toHaveBeenCalledWith(baseTask);
+  });
+
+  it("keeps completed overdue tasks in other completed while current completed tasks stay in date sections", () => {
+    const container = new FakeElement();
+    const doneOverdue = { ...baseTask, id: "done-overdue", text: "Done overdue", completed: true, dueDate: "2026-05-01" };
+    const openOverdue = { ...baseTask, id: "open-overdue", text: "Open overdue", dueDate: "2026-05-01" };
+    const doneToday = { ...baseTask, id: "done-today", text: "Done today", completed: true, dueDate: "2026-05-08" };
+    const doneTomorrow = { ...baseTask, id: "done-tomorrow", text: "Done tomorrow", completed: true, dueDate: "2026-05-09" };
+
+    renderTasksView(
+      container as unknown as HTMLElement,
+      [doneOverdue, openOverdue, doneToday, doneTomorrow],
+      [doneOverdue, openOverdue, doneToday, doneTomorrow],
+      { status: "all", tags: [], sourceQuery: "", textQuery: "" },
+      handlers(),
+      new Date("2026-05-08T12:00:00Z"),
+      (key) => key,
+      { allowAppleReminderWriteback: true }
+    );
+
+    const sections = collect(container).filter((element) => element.classes.has("task-hub-task-section"));
+    const overdueSection = sections.find((section) => collect(section).some((element) => element.text === "overdue (1)"));
+    const todaySection = sections.find((section) => collect(section).some((element) => element.text === "today (1)"));
+    const tomorrowSection = sections.find((section) => collect(section).some((element) => element.text === "tomorrow (1)"));
+    const completedSection = sections.find((section) => collect(section).some((element) => element.text === "otherCompleted (1)"));
+
+    expect(collect(overdueSection as FakeElement).some((element) => element.text === "Open overdue")).toBe(true);
+    expect(collect(overdueSection as FakeElement).some((element) => element.text === "Done overdue")).toBe(false);
+    expect(collect(todaySection as FakeElement).some((element) => element.text === "Done today")).toBe(true);
+    expect(collect(tomorrowSection as FakeElement).some((element) => element.text === "Done tomorrow")).toBe(true);
+    expect(collect(completedSection as FakeElement).some((element) => element.text === "Done overdue")).toBe(true);
+  });
+
+  it("marks hidden completed tasks as exiting while they are kept for animation", () => {
+    const container = new FakeElement();
+    const completedTask = { ...baseTask, completed: true };
+
+    renderTasksView(
+      container as unknown as HTMLElement,
+      [completedTask],
+      [completedTask],
+      { status: "open", tags: [], sourceQuery: "", textQuery: "" },
+      handlers(),
+      new Date("2026-05-08T12:00:00Z"),
+      (key) => key,
+      { allowAppleReminderWriteback: true, exitingTaskIds: new Set([completedTask.id]) }
+    );
+
+    const row = collect(container).find((element) => element.classes.has("task-hub-task-row"));
+    expect(row?.classes.has("is-completed")).toBe(true);
+    expect(row?.classes.has("is-exiting")).toBe(true);
   });
 
   it("does not render the old source filter sidebar in the task workbench", () => {

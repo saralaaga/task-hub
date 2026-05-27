@@ -1,4 +1,4 @@
-export type DateBucket = "overdue" | "today" | "thisWeek" | "future" | "noDate";
+export type DateBucket = "overdue" | "today" | "tomorrow" | "thisWeek" | "future" | "noDate" | "otherCompleted";
 
 export function toLocalDateKey(date: Date): string {
   const year = date.getFullYear();
@@ -11,10 +11,18 @@ export function getTaskDateBucket(dueDate: string | undefined, now: Date): DateB
   if (!dueDate) return "noDate";
 
   const today = toLocalDateKey(now);
+  const tomorrow = toLocalDateKey(addDays(now, 1));
   if (dueDate < today) return "overdue";
   if (dueDate === today) return "today";
+  if (dueDate === tomorrow) return "tomorrow";
   if (isWithinNextDays(dueDate, now, 7)) return "thisWeek";
   return "future";
+}
+
+function addDays(date: Date, days: number): Date {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
 }
 
 function isWithinNextDays(dateKey: string, now: Date, days: number): boolean {
