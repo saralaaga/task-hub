@@ -23,6 +23,7 @@ export type TaskRenderOptions = {
   sourceColors?: Partial<Record<TaskItem["source"], string>>;
   taskColors?: Record<string, string>;
   appleReminderLists?: AppleReminderList[];
+  bindTagInputSuggest?: (input: HTMLInputElement) => void;
   taskListScrollTop?: number;
   exitingTaskIds?: ReadonlySet<string>;
 };
@@ -238,7 +239,7 @@ function renderTaskDetails(
 
   let titleInput: HTMLInputElement | undefined;
   let dateInput: HTMLInputElement | undefined;
-  let tagsInput: HTMLInputElement | undefined;
+  let tagsEditor: TagChipEditor | undefined;
   let listSelect: HTMLSelectElement | undefined;
   if (task.source === "apple-reminders" && (canEditAppleReminder || (options.appleReminderLists?.length ?? 0) > 0)) {
     const editor = details.createDiv({ cls: "task-hub-detail-editor" });
@@ -246,9 +247,10 @@ function renderTaskDetails(
       ? detailInput(editor, t("taskCreationBody"), task.text, "text", "task-hub-detail-title-input")
       : undefined;
     dateInput = canEditAppleReminder ? detailInput(editor, t("date"), task.dueDate ?? "", "date") : undefined;
-    tagsInput = canEditAppleReminder
-      ? detailInput(editor, t("tags"), task.tags.join(" "), "text", "task-hub-detail-tags-input")
+    tagsEditor = canEditAppleReminder
+      ? tagChipEditor(editor, t("tags"), task.tags, options.bindTagInputSuggest)
       : undefined;
+    if (titleInput) options.bindTagInputSuggest?.(titleInput);
     if ((options.appleReminderLists?.length ?? 0) > 0) {
       const listRow = editor.createEl("label", { cls: "task-hub-detail-field" });
       listRow.createSpan({ text: t("appleReminderList") });
@@ -274,7 +276,7 @@ function renderTaskDetails(
       .filter(Boolean)
       .join(" ")
   });
-  if (canEditAppleReminder && titleInput && dateInput && tagsInput) {
+  if (canEditAppleReminder && titleInput && dateInput && tagsEditor) {
     const save = actions.createEl("button", { cls: "mod-cta task-hub-detail-save", text: t("save") });
     save.addEventListener("click", () => {
       handlers.onTaskUpdate?.(task, {
@@ -282,7 +284,7 @@ function renderTaskDetails(
         title: titleInput.value,
         date: dateInput.value,
         startTime: timeFromTask(task),
-        tags: splitTaskTags(tagsInput.value),
+        tags: tagsEditor.getTags(),
         reminderListId: listSelect?.value
       });
     });
@@ -319,7 +321,83 @@ function openNativeDatePicker(input: HTMLInputElement): void {
 }
 
 function splitTaskTags(value: string): string[] {
-  return value.split(/\s+/).map((tag) => tag.trim()).filter(Boolean);
+  return Array.from(new Set(value.split(/\s+/).map(normalizeTaskTag).filter(Boolean)));
+}
+
+type TagChipEditor = {
+  input: HTMLInputElement;
+  getTags: () => string[];
+};
+
+function tagChipEditor(
+  container: HTMLElement,
+  label: string,
+  initialTags: string[],
+  bindTagInputSuggest?: (input: HTMLInputElement) => void
+): TagChipEditor {
+  const row = container.createEl("label", { cls: "task-hub-detail-field task-hub-tag-editor-field" });
+  row.createSpan({ text: label });
+  const editor = row.createDiv({ cls: "task-hub-tag-editor" });
+  const tags = splitTaskTags(initialTags.join(" "));
+
+  const input = editor.createEl("input", {
+    cls: "task-hub-tag-editor-input",
+    type: "text",
+    value: ""
+  });
+
+  const render = () => {
+    for (const child of Array.from(editor.children)) {
+      if (child !== input) child.remove();
+    }
+    for (const tag of tags) {
+      const chip = editor.createEl("button", { cls: "task-hub-tag-editor-chip", text: tag });
+      chip.setAttr("type", "button");
+      chip.addEventListener("click", (event) => {
+        event.preventDefault();
+        const index = tags.indexOf(tag);
+        if (index >= 0) tags.splice(index, 1);
+        render();
+      });
+      editor.insertBefore(chip, input);
+    }
+  };
+
+  const commit = () => {
+    const nextTags = splitTaskTags(input.value);
+    if (nextTags.length === 0) return;
+    for (const tag of nextTags) {
+      if (!tags.includes(tag)) tags.push(tag);
+    }
+    input.value = "";
+    render();
+  };
+
+  input.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" && event.key !== " " && event.key !== ",") return;
+    event.preventDefault();
+    commit();
+  });
+  input.addEventListener("blur", commit);
+  input.addEventListener("input", () => {
+    if (/\s$/u.test(input.value)) commit();
+  });
+  input.addEventListener("task-hub-tag-selected", commit);
+  bindTagInputSuggest?.(input);
+  render();
+
+  return {
+    input,
+    getTags: () => {
+      commit();
+      return [...tags];
+    }
+  };
+}
+
+function normalizeTaskTag(tag: string): string {
+  const normalized = tag.trim().replace(/^#+/u, "");
+  return normalized ? `#${normalized}` : "";
 }
 
 function timeFromTask(task: TaskItem): string | undefined {

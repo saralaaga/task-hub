@@ -48,14 +48,21 @@ class FakeElement {
   text = "";
   type = "";
   value = "";
+  parent?: FakeElement;
   scrollTop = 0;
   classes = new Set<string>();
   style = { setProperty: jest.fn() };
   showPicker = jest.fn();
-  listeners = new Map<string, Array<(event: { preventDefault(): void; stopPropagation(): void }) => void>>();
+  listeners = new Map<string, Array<(event: FakeEvent) => void>>();
 
   empty(): void {
     this.children = [];
+  }
+
+  remove(): void {
+    if (!this.parent) return;
+    this.parent.children = this.parent.children.filter((child) => child !== this);
+    this.parent = undefined;
   }
 
   createDiv(options: { cls?: string; text?: string } = {}): FakeElement {
@@ -71,6 +78,17 @@ class FakeElement {
 
   createSpan(options: { cls?: string; text?: string } = {}): FakeElement {
     return this.append(options);
+  }
+
+  insertBefore(child: FakeElement, reference: FakeElement): void {
+    child.parent = this;
+    this.children = this.children.filter((existing) => existing !== child);
+    const index = this.children.indexOf(reference);
+    if (index === -1) {
+      this.children.push(child);
+      return;
+    }
+    this.children.splice(index, 0, child);
   }
 
   createSvg(tag: string, options: { attr?: Record<string, string> } = {}): FakeElement {
@@ -94,30 +112,44 @@ class FakeElement {
     }
   }
 
-  addEventListener(name: string, listener: (event: { preventDefault(): void; stopPropagation(): void }) => void): void {
+  addClass(cls: string): void {
+    this.classes.add(cls);
+  }
+
+  removeClass(cls: string): void {
+    this.classes.delete(cls);
+  }
+
+  addEventListener(name: string, listener: (event: FakeEvent) => void): void {
     this.listeners.set(name, [...(this.listeners.get(name) ?? []), listener]);
   }
 
   click(): void {
     for (const listener of this.listeners.get("click") ?? []) {
-      listener({ preventDefault: jest.fn(), stopPropagation: jest.fn() });
+      listener({ key: "", preventDefault: jest.fn(), stopPropagation: jest.fn() });
     }
   }
 
   change(): void {
     for (const listener of this.listeners.get("change") ?? []) {
-      listener({ preventDefault: jest.fn(), stopPropagation: jest.fn() });
+      listener({ key: "", preventDefault: jest.fn(), stopPropagation: jest.fn() });
+    }
+  }
+
+  input(): void {
+    for (const listener of this.listeners.get("input") ?? []) {
+      listener({ key: "", preventDefault: jest.fn(), stopPropagation: jest.fn() });
     }
   }
 
   focus(): void {
     for (const listener of this.listeners.get("focus") ?? []) {
-      listener({ preventDefault: jest.fn(), stopPropagation: jest.fn() });
+      listener({ key: "", preventDefault: jest.fn(), stopPropagation: jest.fn() });
     }
   }
 
-  dispatch(name: string): { preventDefault: jest.Mock; stopPropagation: jest.Mock } {
-    const event = { preventDefault: jest.fn(), stopPropagation: jest.fn() };
+  dispatch(name: string, eventOverrides: Partial<FakeEvent> = {}): FakeEvent {
+    const event = { key: "", preventDefault: jest.fn(), stopPropagation: jest.fn(), ...eventOverrides };
     for (const listener of this.listeners.get(name) ?? []) {
       listener(event);
     }
@@ -126,6 +158,7 @@ class FakeElement {
 
   private append(options: { cls?: string; text?: string } = {}): FakeElement {
     const child = new FakeElement();
+    child.parent = this;
     child.text = options.text ?? "";
     for (const cls of (options.cls ?? "").split(" ").filter(Boolean)) {
       child.classes.add(cls);
@@ -134,6 +167,12 @@ class FakeElement {
     return child;
   }
 }
+
+type FakeEvent = {
+  key: string;
+  preventDefault(): void;
+  stopPropagation(): void;
+};
 
 const baseTask: TaskItem = {
   id: "apple-reminders:1",
@@ -424,7 +463,7 @@ describe("renderTasksView", () => {
 
     const title = collect(container).find((element) => element.classes.has("task-hub-detail-title-input"));
     const date = collect(container).find((element) => element.type === "date");
-    const tags = collect(container).find((element) => element.classes.has("task-hub-detail-tags-input"));
+    const tags = collect(container).find((element) => element.classes.has("task-hub-tag-editor-input"));
     title!.value = "Buy oat milk";
     date!.value = "2026-05-09";
     tags!.value = "#errand #client-acme";
@@ -435,8 +474,65 @@ describe("renderTasksView", () => {
       title: "Buy oat milk",
       date: "2026-05-09",
       startTime: undefined,
-      tags: ["#errand", "#client-acme"]
+      tags: ["#home", "#errand", "#client-acme"],
+      reminderListId: undefined
     });
+  });
+
+  it("renders Apple Reminder tags as editable chips after input is committed", () => {
+    const container = new FakeElement();
+    const viewHandlers = handlers();
+    const task = { ...baseTask, tags: ["#home"] };
+
+    renderTasksView(
+      container as unknown as HTMLElement,
+      [task],
+      [task],
+      { status: "open", tags: [], sourceQuery: "", textQuery: "" },
+      viewHandlers,
+      new Date("2026-05-08T12:00:00Z"),
+      (key) => key,
+      { allowAppleReminderWriteback: true }
+    );
+
+    const editor = collect(container).find((element) => element.classes.has("task-hub-tag-editor"));
+    const input = collect(container).find((element) => element.classes.has("task-hub-tag-editor-input"));
+    expect(editor).toBeDefined();
+    expect(collect(editor!).filter((element) => element.classes.has("task-hub-tag-editor-chip")).map((chip) => chip.text)).toEqual(["#home"]);
+
+    input!.value = "#errand";
+    input!.dispatch("keydown", { key: " " });
+
+    expect(input!.value).toBe("");
+    expect(collect(editor!).filter((element) => element.classes.has("task-hub-tag-editor-chip")).map((chip) => chip.text)).toEqual(["#home", "#errand"]);
+    findElementByText(container, "save")!.click();
+    expect(viewHandlers.onTaskUpdate).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ tags: ["#home", "#errand"] }));
+  });
+
+  it("binds native Obsidian tag suggestions while editing Apple Reminder tags", () => {
+    const container = new FakeElement();
+    const task = { ...baseTask, tags: [] };
+    const bindTagInputSuggest = jest.fn();
+
+    renderTasksView(
+      container as unknown as HTMLElement,
+      [task],
+      [task],
+      { status: "open", tags: [], sourceQuery: "", textQuery: "" },
+      handlers(),
+      new Date("2026-05-08T12:00:00Z"),
+      (key) => key,
+      {
+        allowAppleReminderWriteback: true,
+        bindTagInputSuggest
+      }
+    );
+
+    const tags = collect(container).find((element) => element.classes.has("task-hub-tag-editor-input"));
+    const title = collect(container).find((element) => element.classes.has("task-hub-detail-title-input"));
+
+    expect(bindTagInputSuggest).toHaveBeenCalledWith(title);
+    expect(bindTagInputSuggest).toHaveBeenCalledWith(tags);
   });
 
   it("opens the native date picker when the Apple Reminder date field is clicked", () => {

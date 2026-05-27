@@ -85,6 +85,7 @@ function baseFilters(): TaskFilterState {
 
 function renderForTest(overrides: Partial<TaskFilterState> = {}) {
   const container = new FakeElement();
+  const bindTagInputSuggest = jest.fn();
   const handlers = {
     onViewChange: jest.fn<void, [DashboardView]>(),
     onRescan: jest.fn(),
@@ -109,14 +110,16 @@ function renderForTest(overrides: Partial<TaskFilterState> = {}) {
       stats: { taskCount: 0, indexed: 0, skipped: 0, failed: 0 },
       t: (key) => key
     },
-    handlers
+    handlers,
+    { bindTagInputSuggest }
   );
 
-  return { container, handlers };
+  return { container, handlers, bindTagInputSuggest };
 }
 
 function renderShellForState(stateOverrides: Partial<Parameters<typeof renderShell>[1]> = {}) {
   const container = new FakeElement();
+  const bindTagInputSuggest = jest.fn();
   const handlers = {
     onViewChange: jest.fn<void, [DashboardView]>(),
     onRescan: jest.fn(),
@@ -142,10 +145,11 @@ function renderShellForState(stateOverrides: Partial<Parameters<typeof renderShe
       t: (key) => key,
       ...stateOverrides
     },
-    handlers
+    handlers,
+    { bindTagInputSuggest }
   );
 
-  return { container, handlers };
+  return { container, handlers, bindTagInputSuggest };
 }
 
 describe("renderShell", () => {
@@ -169,11 +173,15 @@ describe("renderShell", () => {
   });
 
   it("applies condition filters only from the panel action", () => {
-    const { container, handlers } = renderForTest();
+    const { container, handlers, bindTagInputSuggest } = renderForTest();
     const tagInput = collect(container).find((element) => element.attrs.get("placeholder") === "#project");
+    const textInput = collect(container).find((element) => element.attrs.get("placeholder") === "conditionText");
     const applyButton = collect(container).find((element) => element.text === "applyFilters");
     expect(tagInput).toBeDefined();
+    expect(textInput).toBeDefined();
     expect(applyButton).toBeDefined();
+    expect(bindTagInputSuggest).toHaveBeenCalledWith(tagInput);
+    expect(bindTagInputSuggest).toHaveBeenCalledWith(textInput);
 
     tagInput!.value = "#work";
     tagInput!.trigger("input");

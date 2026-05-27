@@ -9,6 +9,10 @@ jest.mock(
   "obsidian",
   () => ({
     ButtonComponent: class {},
+    AbstractInputSuggest: class {
+      constructor() {}
+      close() {}
+    },
     Editor: class {},
     ItemView: class {},
     MarkdownView: class {},
@@ -37,6 +41,8 @@ jest.mock(
       registerView() {}
     },
     requestUrl: jest.fn(),
+    getAllTags: jest.fn(() => []),
+    parseFrontMatterTags: jest.fn(() => []),
     Setting: class {},
     TFile: class {},
     WorkspaceLeaf: class {}

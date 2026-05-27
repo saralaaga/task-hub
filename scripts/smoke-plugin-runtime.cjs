@@ -106,6 +106,10 @@ class TFile {}
 class MarkdownView {}
 class Setting {}
 class ButtonComponent {}
+class AbstractInputSuggest {
+  constructor() {}
+  close() {}
+}
 
 class Modal {
   constructor(app) {
@@ -145,6 +149,7 @@ const obsidian = {
   Notice,
   Setting,
   ButtonComponent,
+  AbstractInputSuggest,
   Platform: { isDesktopApp: true },
   requestUrl: async () => ({
     status: 200,
@@ -152,7 +157,13 @@ const obsidian = {
     text: "BEGIN:VCALENDAR\nVERSION:2.0\nEND:VCALENDAR"
   }),
   addIcon() {},
-  setIcon() {}
+  setIcon() {},
+  getAllTags() {
+    return [];
+  },
+  parseFrontMatterTags() {
+    return [];
+  }
 };
 
 const childProcess = {

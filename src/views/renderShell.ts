@@ -32,7 +32,11 @@ export type ShellHandlers = {
   onTextQueryChange: (query: string) => void;
 };
 
-export function renderShell(container: HTMLElement, state: ShellState, handlers: ShellHandlers): HTMLElement {
+export type ShellRenderOptions = {
+  bindTagInputSuggest?: (input: HTMLInputElement) => void;
+};
+
+export function renderShell(container: HTMLElement, state: ShellState, handlers: ShellHandlers, options: ShellRenderOptions = {}): HTMLElement {
   container.empty();
   const root = container.createDiv({ cls: "task-hub-root" });
 
@@ -53,13 +57,13 @@ export function renderShell(container: HTMLElement, state: ShellState, handlers:
     button.addEventListener("click", () => handlers.onViewChange(view));
   }
 
-  renderFilters(toolbar, state, handlers);
+  renderFilters(toolbar, state, handlers, options);
 
   const main = root.createDiv({ cls: "task-hub-main" });
   return main;
 }
 
-function renderFilters(container: HTMLElement, state: ShellState, handlers: ShellHandlers): void {
+function renderFilters(container: HTMLElement, state: ShellState, handlers: ShellHandlers, options: ShellRenderOptions): void {
   const showCompleted = container.createEl("label", { cls: "task-hub-completed-toggle" });
   const showCompletedCheckbox = showCompleted.createEl("input", { type: "checkbox" });
   showCompletedCheckbox.checked = state.filters.status !== "open";
@@ -69,7 +73,7 @@ function renderFilters(container: HTMLElement, state: ShellState, handlers: Shel
   showCompleted.createSpan({ text: state.t("showCompletedInView") });
 
   const filters = container.createDiv({ cls: "task-hub-filter-strip" });
-  renderConditionMenu(filters, state, handlers);
+  renderConditionMenu(filters, state, handlers, options);
   renderSearch(filters, state, handlers);
 
   const createTask = filters.createEl("button", { cls: "task-hub-create-task-button" });
@@ -95,7 +99,7 @@ function renderFilters(container: HTMLElement, state: ShellState, handlers: Shel
   });
 }
 
-function renderConditionMenu(container: HTMLElement, state: ShellState, handlers: ShellHandlers): void {
+function renderConditionMenu(container: HTMLElement, state: ShellState, handlers: ShellHandlers, options: ShellRenderOptions): void {
   const conditions = state.filters.conditions ?? { operator: "and" as const, tag: "", dateBucket: "" as const, text: "" };
   const sourceActive = state.filters.sourceQuery === "vault" || state.filters.sourceQuery === "apple-reminders";
   const activeConditionCount = [conditions.tag.trim(), conditions.dateBucket, conditions.text.trim(), sourceActive ? state.filters.sourceQuery : ""].filter(Boolean).length;
@@ -120,6 +124,7 @@ function renderConditionMenu(container: HTMLElement, state: ShellState, handlers
     type: "search",
     value: conditions.tag
   });
+  options.bindTagInputSuggest?.(tag);
 
   const dateRow = panel.createEl("label", { cls: "task-hub-condition-row" });
   const dateLabel = dateRow.createSpan({ cls: "task-hub-condition-label-with-operator" });
@@ -145,6 +150,7 @@ function renderConditionMenu(container: HTMLElement, state: ShellState, handlers
     type: "search",
     value: conditions.text
   });
+  options.bindTagInputSuggest?.(text);
 
   if (state.sourceFilters && handlers.onSourceFilterChange) {
     const sourceRow = panel.createDiv({ cls: "task-hub-condition-row task-hub-condition-source-row" });

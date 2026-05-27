@@ -24,6 +24,7 @@ export type CalendarViewState = {
   taskColors?: Record<string, string>;
   appleReminderLists?: AppleReminderList[];
   appleCalendars?: AppleCalendarInfo[];
+  bindTagInputSuggest?: (input: HTMLInputElement) => void;
   sources: CalendarSource[];
   t: Translator;
 };
@@ -924,6 +925,7 @@ function renderTaskDetailsPopover(
   const editable = task.source === "vault" || (task.source === "apple-reminders" && state.allowAppleReminderWriteback);
   const form = popover.createDiv({ cls: "task-hub-calendar-detail-form" });
   const title = detailInput(form, state.t("taskCreationBody"), task.text);
+  state.bindTagInputSuggest?.(title);
   const date = detailInput(form, state.t("date"), task.dueDate ?? "", "date");
   const time = detailInput(form, state.t("startTime"), timeFromTask(task), "time");
   let notes: HTMLTextAreaElement | undefined;
@@ -931,6 +933,7 @@ function renderTaskDetailsPopover(
   let list: HTMLSelectElement | undefined;
   if (task.source === "vault") {
     tags = detailInput(form, state.t("tags"), task.tags.join(" ")) as HTMLInputElement;
+    state.bindTagInputSuggest?.(tags);
   }
   if (task.source === "apple-reminders") {
     list = headerList ?? detailSelect(form, state.t("appleReminderList"), state.appleReminderLists ?? [], task.externalListId, true);

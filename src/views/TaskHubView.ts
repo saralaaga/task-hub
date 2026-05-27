@@ -11,6 +11,7 @@ import { renderShell, type DashboardView } from "./renderShell";
 import { syncVisibleSources } from "./sourceVisibility";
 import { renderTagsView } from "./renderTagsView";
 import { renderTasksView } from "./renderTasksView";
+import { bindTaskHubTagInputSuggest, collectObsidianTags } from "./tagInputSuggest";
 
 export class TaskHubView extends ItemView {
   private view: DashboardView = this.plugin.settings.defaultView;
@@ -61,6 +62,9 @@ export class TaskHubView extends ItemView {
       "apple-reminders": this.plugin.settings.localApple.remindersColor
     };
     const taskColors = this.plugin.getAppleReminderListColors();
+    const bindTagInputSuggest = (input: HTMLInputElement) => {
+      bindTaskHubTagInputSuggest(this.plugin.app, input, () => collectObsidianTags(this.plugin.app, this.plugin.getTasks()));
+    };
     const main = renderShell(
       container,
       {
@@ -91,7 +95,8 @@ export class TaskHubView extends ItemView {
         onTextQueryChange: (textQuery) => {
           this.updateFilters({ ...this.filters, textQuery });
         }
-      }
+      },
+      { bindTagInputSuggest }
     );
 
     if (this.view === "tasks") {
@@ -136,6 +141,7 @@ export class TaskHubView extends ItemView {
           selectedTaskId: this.selectedTaskId,
           sourceColors,
           taskColors,
+          bindTagInputSuggest,
           taskListScrollTop: this.taskListScrollTop,
           exitingTaskIds: this.exitingTaskIds(allTasks)
         }
@@ -194,6 +200,7 @@ export class TaskHubView extends ItemView {
           defaultTimedTaskDurationMinutes: this.plugin.settings.localApple.calendarDefaultTimedTaskDurationMinutes,
           taskDurationOverrides: this.plugin.settings.localApple.reminderDurationOverrides,
           taskColors,
+          bindTagInputSuggest,
           appleReminderLists: this.plugin.getAppleReminderLists(),
           appleCalendars: this.plugin.getAppleCalendars(),
           sources: calendarSources,

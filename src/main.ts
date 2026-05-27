@@ -50,6 +50,7 @@ import {
 } from "./settings";
 import type { AppleCalendarInfo, CalendarCreationKind, CalendarCreationTarget, CalendarEvent, CalendarItemEditDraft, CalendarSourceStatus, LocalAppleSyncStatus, TaskHubSettings, TaskItem } from "./types";
 import { TaskHubView } from "./views/TaskHubView";
+import { bindTaskHubTagInputSuggest, collectObsidianTags } from "./views/tagInputSuggest";
 
 function validCalendarEventDuration(value: number | undefined): number {
   if (!Number.isFinite(value) || value === undefined) return 60;
@@ -1516,6 +1517,7 @@ class CreateTaskModal extends Modal {
         text.setPlaceholder(this.creationKind === "event" ? t("eventCreationPlaceholder") : t("taskCreationPlaceholder")).setValue(this.taskText).onChange((value) => {
           this.taskText = value;
         });
+        bindTaskHubTagInputSuggest(this.plugin.app, text.inputEl, () => collectObsidianTags(this.plugin.app, this.plugin.getTasks()));
         text.inputEl.addEventListener("keydown", (event) => {
           if (event.key === "Enter") {
             event.preventDefault();

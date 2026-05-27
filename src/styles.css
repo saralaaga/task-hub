@@ -860,6 +860,56 @@ body .task-hub-view button.task-hub-color-swatch {
   width: 100%;
 }
 
+.task-hub-tag-editor {
+  align-items: center;
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-height: 38px;
+  padding: 5px 7px;
+}
+
+.task-hub-tag-editor:focus-within {
+  border-color: var(--interactive-accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--interactive-accent) 18%, transparent);
+}
+
+.task-hub-tag-editor-input {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  flex: 1 1 96px;
+  min-width: 78px;
+  padding: 4px 2px;
+}
+
+.task-hub-tag-editor-input:focus {
+  box-shadow: none;
+}
+
+.task-hub-tag-editor-chip {
+  appearance: none;
+  background: color-mix(in srgb, var(--task-hub-source-color, var(--interactive-accent)) 16%, var(--background-primary));
+  border: 1px solid color-mix(in srgb, var(--task-hub-source-color, var(--interactive-accent)) 36%, var(--background-modifier-border));
+  border-radius: 999px;
+  box-shadow: none;
+  color: var(--text-normal);
+  cursor: pointer;
+  font-size: var(--font-ui-smaller);
+  font-weight: 400;
+  line-height: 1.2;
+  max-width: 100%;
+  padding: 3px 8px;
+}
+
+.task-hub-tag-editor-chip:hover,
+.task-hub-tag-editor-chip:focus-visible {
+  background: color-mix(in srgb, var(--task-hub-source-color, var(--interactive-accent)) 24%, var(--background-primary));
+}
+
 .task-hub-detail-save {
   justify-self: stretch;
 }
