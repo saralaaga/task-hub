@@ -3,7 +3,7 @@ import { createHash } from "crypto";
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import * as path from "path";
 import { promisify } from "util";
-import { extractAppleReminderTitleTags } from "./appleReminderTags";
+import { appleReminderTitleWithTags, extractAppleReminderTitleTags, mergeAppleReminderTags, normalizeAppleReminderTags } from "./appleReminderTags";
 import type { AppleCalendarInfo, AppleReminderList, CalendarEvent, CalendarSourceStatus, TaskItem } from "./types";
 
 declare const TASKHUB_APPLE_HELPER_BASE64: string;
@@ -244,6 +244,7 @@ export type AppleReminderDetailsUpdate = {
   startMinutes?: number;
   listId?: string;
   notes?: string;
+  tags?: string[];
 };
 
 export type AppleCalendarEventDetailsUpdate = AppleCalendarEventDateUpdate & {
@@ -253,12 +254,14 @@ export type AppleCalendarEventDetailsUpdate = AppleCalendarEventDateUpdate & {
 };
 
 export async function setAppleReminderDetails(input: AppleReminderDetailsUpdate): Promise<void> {
-  const args = ["set-reminder-details", "--id", input.id, "--title", input.title];
+  const tags = normalizeAppleReminderTags(input.tags ?? []);
+  const args = ["set-reminder-details", "--id", input.id, "--title", appleReminderTitleWithTags(input.title, tags, true)];
   if (input.dueDate) args.push("--due", input.dueDate);
   if (input.dueDate === null) args.push("--clear-due");
   if (input.startMinutes !== undefined) args.push("--start-minutes", String(input.startMinutes));
   if (input.listId) args.push("--list-id", input.listId);
   if (input.notes !== undefined) args.push("--notes", input.notes);
+  for (const tag of tags) args.push("--tag", tag);
   parseHelperJson<{ ok: boolean }>(await runAppleHelper(args));
 }
 
@@ -316,12 +319,14 @@ export async function deleteAppleCalendarEvent(id: string): Promise<void> {
   parseHelperJson<{ ok: boolean }>(await runAppleHelper(["delete-calendar-event", "--id", id]));
 }
 
-export async function createAppleReminder(input: { title: string; notes?: string; dueDate?: string; listId?: string; startMinutes?: number }): Promise<string> {
-  const args = ["create-reminder", "--title", input.title];
+export async function createAppleReminder(input: { title: string; notes?: string; dueDate?: string; listId?: string; startMinutes?: number; tags?: string[] }): Promise<string> {
+  const tags = normalizeAppleReminderTags(input.tags ?? []);
+  const args = ["create-reminder", "--title", appleReminderTitleWithTags(input.title, tags, true)];
   if (input.notes) args.push("--notes", input.notes);
   if (input.dueDate) args.push("--due", input.dueDate);
   if (input.startMinutes !== undefined) args.push("--start-minutes", String(input.startMinutes));
   if (input.listId) args.push("--list-id", input.listId);
+  for (const tag of tags) args.push("--tag", tag);
   const parsed = parseHelperJson<AppleHelperCreateReminderResponse>(await runAppleHelper(args));
   if (!parsed.reminderId) {
     throw createLocalAppleError("eventkit_error", "Apple Reminder was created but the helper did not return its identifier.");
@@ -432,6 +437,7 @@ type AppleReminderRecord = {
   dueDate?: string;
   notes?: string;
   url?: string;
+  tags?: string[];
 };
 
 type AppleCalendarRecord = {
@@ -462,7 +468,7 @@ export function reminderToTask(record: AppleReminderRecord, index: number): Task
     rawLine: "",
     text: parsedTitle.title || "Untitled reminder",
     completed: Boolean(record.completed),
-    tags: parsedTitle.tags,
+    tags: mergeAppleReminderTags(parsedTitle.tags, Array.isArray(record.tags) ? record.tags : []),
     dueDate,
     scheduledDate,
     contextPreview: record.notes,

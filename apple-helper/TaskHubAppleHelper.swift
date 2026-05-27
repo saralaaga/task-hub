@@ -32,6 +32,7 @@ struct ReminderRecord: Encodable {
     let notes: String?
     let priority: Int
     let url: String?
+    let tags: [String]?
 }
 
 struct ReminderListRecord: Encodable {
@@ -224,6 +225,44 @@ func hasArgument(_ name: String) -> Bool {
     CommandLine.arguments.contains(name)
 }
 
+func argumentValues(_ name: String) -> [String] {
+    let args = CommandLine.arguments
+    var values: [String] = []
+    for index in args.indices where args[index] == name && args.indices.contains(index + 1) {
+        let value = args[index + 1].trimmingCharacters(in: .whitespacesAndNewlines)
+        if !value.isEmpty {
+            values.append(value)
+        }
+    }
+    return values
+}
+
+func reminderTagsFromTitle(_ title: String?) -> [String]? {
+    guard let title else {
+        return nil
+    }
+    guard let regex = try? NSRegularExpression(pattern: "(^|\\s)(#[\\p{L}\\p{N}_/-]+)") else {
+        return nil
+    }
+    let range = NSRange(title.startIndex..<title.endIndex, in: title)
+    var tags: [String] = []
+    var seen = Set<String>()
+    for match in regex.matches(in: title, range: range) {
+        guard match.numberOfRanges > 2,
+              let tagRange = Range(match.range(at: 2), in: title) else {
+            continue
+        }
+        let tag = String(title[tagRange])
+        let key = tag.lowercased()
+        if seen.contains(key) {
+            continue
+        }
+        seen.insert(key)
+        tags.append(tag)
+    }
+    return tags.isEmpty ? nil : tags
+}
+
 func parseIsoDate(_ text: String?) -> Date? {
     guard let text else {
         return nil
@@ -314,7 +353,8 @@ func readReminders(store: EKEventStore) {
                 dueDate: reminderDueString(from: reminder.dueDateComponents),
                 notes: reminder.notes,
                 priority: reminder.priority,
-                url: reminder.url?.absoluteString
+                url: reminder.url?.absoluteString,
+                tags: reminderTagsFromTitle(reminder.title)
             )
         }
         didComplete = true
@@ -530,6 +570,7 @@ func setReminderDetails(store: EKEventStore) {
     }
 
     reminder.title = title
+    let _ = argumentValues("--tag")
     if hasArgument("--notes") {
         reminder.notes = argumentValue("--notes")
     }
@@ -791,6 +832,7 @@ func createReminder(store: EKEventStore) {
 
     let reminder = EKReminder(eventStore: store)
     reminder.title = title
+    let _ = argumentValues("--tag")
     if let listId = argumentValue("--list-id"), !listId.isEmpty {
         guard let calendar = store.calendar(withIdentifier: listId), calendar.allowsContentModifications else {
             fail("not_found", "Apple Reminders list no longer exists or is not writable.", exitCode: 9)

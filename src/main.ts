@@ -2,7 +2,7 @@ import { ButtonComponent, Editor, MarkdownView, Menu, Modal, Notice, Platform, P
 import { PLUGIN_DISPLAY_NAME, TASK_HUB_VIEW_TYPE } from "./constants";
 import { appleCalendarEventToReminderInput, appleReminderToCalendarEventInput } from "./calendar/appleConversion";
 import { calendarDropTargetParts, withCalendarDropTargetDate, type CalendarDropTarget, type TimedCalendarTarget } from "./calendar/calendarDropTarget";
-import { appleReminderTitleWithTags } from "./appleReminderTags";
+import { extractAppleReminderTitleTags, normalizeAppleReminderTags } from "./appleReminderTags";
 import { fetchIcsSource } from "./calendar/icsClient";
 import { createTranslator } from "./i18n";
 import { registerTaskHubIcon, TASK_HUB_ICON_ID } from "./icons";
@@ -616,11 +616,12 @@ export default class TaskHubPlugin extends Plugin {
       const reminderTags = draft.tags ?? task.tags;
       const input = {
         id: task.externalId,
-        title: appleReminderTitleWithTags(title, reminderTags, true),
+        title,
         dueDate: draft.date || null,
         startMinutes: draft.startTime ? parseTimeInputValue(draft.startTime) : undefined,
         listId: draft.reminderListId || undefined,
-        notes: draft.notes
+        notes: draft.notes,
+        tags: reminderTags
       };
       try {
         await this.writeAppleReminderWithAccessRetry(() => setAppleReminderDetails(input));
@@ -750,11 +751,12 @@ export default class TaskHubPlugin extends Plugin {
 
     try {
       const input = {
-        title: appleReminderTitleWithTags(currentTask.text, currentTask.tags, this.settings.localApple.remindersCreateTagsEnabled),
+        title: currentTask.text,
         notes: this.appleReminderNotes(currentTask),
         dueDate: currentTask.dueDate,
         startMinutes: startMinutesFromTask(currentTask),
-        listId: this.settings.localApple.remindersDefaultListId
+        listId: this.settings.localApple.remindersDefaultListId,
+        tags: this.settings.localApple.remindersCreateTagsEnabled ? normalizeAppleReminderTags(currentTask.tags) : []
       };
       const reminderId = await this.writeAppleReminderWithAccessRetry(() => createAppleReminder(input));
       this.settings.appleReminderLinks = {
@@ -944,12 +946,15 @@ export default class TaskHubPlugin extends Plugin {
         new Notice(t("appleReminderCreateDisabled"));
         return;
       }
+      const reminderText = extractAppleReminderTitleTags(taskText);
+      const reminderTags = this.settings.localApple.remindersCreateTagsEnabled ? reminderText.tags : [];
       const input = {
-        title: taskText,
+        title: this.settings.localApple.remindersCreateTagsEnabled ? (reminderText.title || taskText) : taskText,
         ...(cleanNotes ? { notes: cleanNotes } : {}),
         dueDate: timedTarget.dateKey,
         startMinutes: timedTarget.startMinutes,
-        listId: target.listId ?? this.settings.localApple.remindersDefaultListId
+        listId: target.listId ?? this.settings.localApple.remindersDefaultListId,
+        tags: reminderTags
       };
       try {
         const reminderId = await this.writeAppleReminderWithAccessRetry(() => createAppleReminder(input));

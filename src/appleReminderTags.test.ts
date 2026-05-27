@@ -1,4 +1,4 @@
-import { appleReminderTitleWithTags, normalizeAppleReminderTags } from "./appleReminderTags";
+import { appleReminderTitleWithTags, extractAppleReminderTitleTags, mergeAppleReminderTags, normalizeAppleReminderTags } from "./appleReminderTags";
 
 describe("Apple Reminder tag helpers", () => {
   it("leaves titles unchanged when tag sync is disabled", () => {
@@ -14,6 +14,21 @@ describe("Apple Reminder tag helpers", () => {
       "#work",
       "#client-acme",
       "#a-b"
+    ]);
+  });
+
+  it("extracts tags from free-form Apple Reminder titles", () => {
+    expect(extractAppleReminderTitleTags("测试标签 #测试 #client/acme")).toEqual({
+      title: "测试标签",
+      tags: ["#测试", "#client-acme"]
+    });
+  });
+
+  it("merges Apple Reminder title and native tags without duplicates", () => {
+    expect(mergeAppleReminderTags(["#errand", "#client-acme"], ["errand", "#home"])).toEqual([
+      "#errand",
+      "#client-acme",
+      "#home"
     ]);
   });
 });

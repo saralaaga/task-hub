@@ -95,6 +95,25 @@ describe("local Apple mapping", () => {
     });
   });
 
+  it("merges Apple Reminder helper tags with title hashtags", () => {
+    expect(
+      reminderToTask(
+        {
+          id: "reminder-1",
+          name: "Buy milk #errand",
+          list: "Personal",
+          completed: false,
+          tags: ["client-acme", "#errand"]
+        },
+        0
+      )
+    ).toMatchObject({
+      text: "Buy milk",
+      tags: ["#errand", "#client-acme"],
+      source: "apple-reminders"
+    });
+  });
+
   it("preserves Apple Reminder due times for calendar placement", () => {
     expect(
       reminderToTask(
@@ -274,7 +293,8 @@ describe("local Apple mapping", () => {
         dueDate: "2026-05-20",
         startMinutes: 570,
         listId: "list-1",
-        notes: "Bring the signed copy"
+        notes: "Bring the signed copy",
+        tags: ["#finance", "#client/acme"]
       })
     );
 
@@ -283,7 +303,7 @@ describe("local Apple mapping", () => {
       "--id",
       "reminder-1",
       "--title",
-      "Send invoice",
+      "Send invoice #finance #client-acme",
       "--due",
       "2026-05-20",
       "--start-minutes",
@@ -291,7 +311,11 @@ describe("local Apple mapping", () => {
       "--list-id",
       "list-1",
       "--notes",
-      "Bring the signed copy"
+      "Bring the signed copy",
+      "--tag",
+      "#finance",
+      "--tag",
+      "#client-acme"
     ]);
   });
 
@@ -496,7 +520,8 @@ describe("local Apple mapping", () => {
         notes: "From Task Hub\nProjects/Acme.md:3",
         dueDate: "2026-05-20",
         startMinutes: 570,
-        listId: "list-1"
+        listId: "list-1",
+        tags: ["#work", "#client/acme"]
       })
     );
 
@@ -504,7 +529,7 @@ describe("local Apple mapping", () => {
     expect(execFile.mock.calls.at(-1)?.[1]).toEqual([
       "create-reminder",
       "--title",
-      "Send proposal",
+      "Send proposal #work #client-acme",
       "--notes",
       "From Task Hub\nProjects/Acme.md:3",
       "--due",
@@ -512,7 +537,11 @@ describe("local Apple mapping", () => {
       "--start-minutes",
       "570",
       "--list-id",
-      "list-1"
+      "list-1",
+      "--tag",
+      "#work",
+      "--tag",
+      "#client-acme"
     ]);
   });
 

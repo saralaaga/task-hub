@@ -136,7 +136,8 @@ describe("Apple Reminders migration", () => {
       title: "Pay invoice",
       notes: expect.stringContaining("Source: Inbox.md:1"),
       dueDate: "2026-05-20",
-      listId: undefined
+      listId: undefined,
+      tags: []
     });
     await expect(process.mock.results[0].value).resolves.toBe("Next");
     expect(Object.values(plugin.settings.appleReminderLinks)).toContain("reminder-created-1");
@@ -184,7 +185,8 @@ describe("Apple Reminders migration", () => {
       notes: expect.stringContaining("Source: Inbox.md:1"),
       dueDate: "2026-05-20",
       startMinutes: 570,
-      listId: undefined
+      listId: undefined,
+      tags: []
     });
   });
 
@@ -236,7 +238,7 @@ describe("Apple Reminders migration", () => {
     );
   });
 
-  it("adds source task tags to Apple Reminder titles by default", async () => {
+  it("sends source task tags to Apple Reminders by default", async () => {
     const file = { path: "Inbox.md", extension: "md", stat: { ctime: 1, mtime: 2, size: 3 } };
     const plugin = new TaskHubPlugin({} as never, {} as never);
     const process = jest.fn(async (_file, update) => update("- [ ] Pay invoice #work #client/acme 📅 2026-05-20\nNext"));
@@ -273,7 +275,8 @@ describe("Apple Reminders migration", () => {
     }));
 
     expect(createAppleReminder).toHaveBeenCalledWith(expect.objectContaining({
-      title: "Pay invoice #work #client-acme"
+      title: "Pay invoice",
+      tags: ["#work", "#client-acme"]
     }));
   });
 
@@ -502,9 +505,64 @@ describe("Apple Reminders migration", () => {
       dueDate: "2026-05-20",
       startMinutes: undefined,
       listId: "list-1",
-      notes: "Bring prototype notes"
+      notes: "Bring prototype notes",
+      tags: []
     });
     expect(notices).toContain("Apple Reminder created.: reminder-created-1");
+  });
+
+  it("extracts modal body hashtags into Apple Reminder tags", async () => {
+    const plugin = new TaskHubPlugin({} as never, {} as never);
+    plugin.app = {
+      workspace: {
+        getLeavesOfType: jest.fn(() => [])
+      }
+    } as never;
+    plugin.settings = {
+      ...DEFAULT_SETTINGS,
+      localApple: {
+        ...DEFAULT_SETTINGS.localApple,
+        enabled: true,
+        remindersEnabled: true,
+        remindersCreateEnabled: true,
+        remindersCreateTagsEnabled: true
+      }
+    };
+    plugin.syncLocalApple = jest.fn(async () => undefined) as never;
+
+    await plugin.createTaskForDate("2026-05-20", "测试标签 #测试 #client/acme", { type: "apple-reminders" });
+
+    expect(createAppleReminder).toHaveBeenCalledWith(expect.objectContaining({
+      title: "测试标签",
+      tags: ["#测试", "#client-acme"]
+    }));
+  });
+
+  it("keeps modal body hashtags in the Apple Reminder title when tag sync is disabled", async () => {
+    const plugin = new TaskHubPlugin({} as never, {} as never);
+    plugin.app = {
+      workspace: {
+        getLeavesOfType: jest.fn(() => [])
+      }
+    } as never;
+    plugin.settings = {
+      ...DEFAULT_SETTINGS,
+      localApple: {
+        ...DEFAULT_SETTINGS.localApple,
+        enabled: true,
+        remindersEnabled: true,
+        remindersCreateEnabled: true,
+        remindersCreateTagsEnabled: false
+      }
+    };
+    plugin.syncLocalApple = jest.fn(async () => undefined) as never;
+
+    await plugin.createTaskForDate("2026-05-20", "测试标签 #测试", { type: "apple-reminders" });
+
+    expect(createAppleReminder).toHaveBeenCalledWith(expect.objectContaining({
+      title: "测试标签 #测试",
+      tags: []
+    }));
   });
 
   it("requests Reminders access and retries when creating an Apple Reminder before permission is granted", async () => {
@@ -723,12 +781,13 @@ describe("Apple Reminders migration", () => {
       dueDate: "2026-05-21",
       startMinutes: 570,
       listId: "list-1",
-      notes: "Bring the signed copy"
+      notes: "Bring the signed copy",
+      tags: []
     });
     expect(notices).toContain("Task updated.");
   });
 
-  it("preserves Apple Reminder title hashtags when updating other details", async () => {
+  it("preserves Apple Reminder tags when updating other details", async () => {
     const plugin = new TaskHubPlugin({} as never, {} as never);
     plugin.app = { workspace: { getLeavesOfType: jest.fn(() => []) } } as never;
     plugin.settings = {
@@ -753,11 +812,12 @@ describe("Apple Reminders migration", () => {
     });
 
     expect(setAppleReminderDetails).toHaveBeenCalledWith(expect.objectContaining({
-      title: "Send invoice #errand #client-acme"
+      title: "Send invoice",
+      tags: ["#errand", "#client-acme"]
     }));
   });
 
-  it("updates Apple Reminder title hashtags from edited task tags", async () => {
+  it("updates Apple Reminder tags from edited task tags", async () => {
     const plugin = new TaskHubPlugin({} as never, {} as never);
     plugin.app = { workspace: { getLeavesOfType: jest.fn(() => []) } } as never;
     plugin.settings = {
@@ -779,7 +839,8 @@ describe("Apple Reminders migration", () => {
     });
 
     expect(setAppleReminderDetails).toHaveBeenCalledWith(expect.objectContaining({
-      title: "Send invoice #errand #client-acme"
+      title: "Send invoice",
+      tags: ["#errand", "#client-acme"]
     }));
   });
 
