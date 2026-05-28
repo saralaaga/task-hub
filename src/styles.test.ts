@@ -103,6 +103,22 @@ describe("Task Hub styles", () => {
     expect(taskListChipRule).toContain("0 1px 2px rgb(0 0 0 / 16%)");
   });
 
+  it("renders editable tag chips in one outer input frame", () => {
+    const styles = readFileSync(path.join(__dirname, "styles.css"), "utf8");
+    const editorRule = styles.match(/\.task-hub-tag-editor\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const inputRule = styles.match(/\.task-hub-tag-editor-input\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const chipRule = styles.match(/\.task-hub-tag-editor-chip\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+
+    expect(editorRule).toContain("background: var(--background-primary)");
+    expect(editorRule).toContain("border: 1px solid color-mix(in srgb, var(--task-hub-source-color, var(--interactive-accent)) 34%, var(--background-modifier-border))");
+    expect(editorRule).toContain("padding: 5px 7px");
+    expect(inputRule).toContain("background: transparent !important");
+    expect(inputRule).toContain("border: 0 !important");
+    expect(inputRule).toContain("min-width: 1ch");
+    expect(chipRule).toContain("background: var(--task-hub-source-color, var(--interactive-accent))");
+    expect(chipRule).toContain("color: white");
+  });
+
   it("keeps task content text lightweight in task and calendar cards", () => {
     const styles = readFileSync(path.join(__dirname, "styles.css"), "utf8");
     const taskTextRule = styles.match(/\.task-hub-task-text\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";

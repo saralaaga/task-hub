@@ -505,8 +505,12 @@ describe("renderTasksView", () => {
 
     expect(input!.value).toBe("");
     expect(collect(editor!).filter((element) => element.classes.has("task-hub-tag-editor-chip")).map((chip) => chip.text)).toEqual(["#home", "#errand"]);
+    collect(editor!).find((element) => element.classes.has("task-hub-tag-editor-chip") && element.text === "#home")!.click();
+    expect(collect(editor!).filter((element) => element.classes.has("task-hub-tag-editor-chip")).map((chip) => chip.text)).toEqual(["#home", "#errand"]);
+    input!.dispatch("keydown", { key: "Backspace" });
+    expect(collect(editor!).filter((element) => element.classes.has("task-hub-tag-editor-chip")).map((chip) => chip.text)).toEqual(["#home"]);
     findElementByText(container, "save")!.click();
-    expect(viewHandlers.onTaskUpdate).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ tags: ["#home", "#errand"] }));
+    expect(viewHandlers.onTaskUpdate).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ tags: ["#home"] }));
   });
 
   it("binds native Obsidian tag suggestions while editing Apple Reminder tags", () => {

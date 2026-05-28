@@ -947,9 +947,9 @@ export default class TaskHubPlugin extends Plugin {
         return;
       }
       const reminderText = extractAppleReminderTitleTags(taskText);
-      const reminderTags = this.settings.localApple.remindersCreateTagsEnabled ? reminderText.tags : [];
+      const reminderTags = reminderText.tags;
       const input = {
-        title: this.settings.localApple.remindersCreateTagsEnabled ? (reminderText.title || taskText) : taskText,
+        title: reminderText.title || taskText,
         ...(cleanNotes ? { notes: cleanNotes } : {}),
         dueDate: timedTarget.dateKey,
         startMinutes: timedTarget.startMinutes,

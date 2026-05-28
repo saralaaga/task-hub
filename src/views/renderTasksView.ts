@@ -345,20 +345,14 @@ function tagChipEditor(
     type: "text",
     value: ""
   });
+  editor.addEventListener("click", () => input.focus());
 
   const render = () => {
     for (const child of Array.from(editor.children)) {
       if (child !== input) child.remove();
     }
     for (const tag of tags) {
-      const chip = editor.createEl("button", { cls: "task-hub-tag-editor-chip", text: tag });
-      chip.setAttr("type", "button");
-      chip.addEventListener("click", (event) => {
-        event.preventDefault();
-        const index = tags.indexOf(tag);
-        if (index >= 0) tags.splice(index, 1);
-        render();
-      });
+      const chip = editor.createSpan({ cls: "task-hub-tag-editor-chip", text: tag });
       editor.insertBefore(chip, input);
     }
   };
@@ -374,6 +368,12 @@ function tagChipEditor(
   };
 
   input.addEventListener("keydown", (event) => {
+    if ((event.key === "Backspace" || event.key === "Delete") && input.value === "" && tags.length > 0) {
+      event.preventDefault();
+      tags.pop();
+      render();
+      return;
+    }
     if (event.key !== "Enter" && event.key !== " " && event.key !== ",") return;
     event.preventDefault();
     commit();

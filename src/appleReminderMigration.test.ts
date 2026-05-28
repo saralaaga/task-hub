@@ -538,7 +538,7 @@ describe("Apple Reminders migration", () => {
     }));
   });
 
-  it("keeps modal body hashtags in the Apple Reminder title when tag sync is disabled", async () => {
+  it("still extracts explicit modal body hashtags when source tag sync is disabled", async () => {
     const plugin = new TaskHubPlugin({} as never, {} as never);
     plugin.app = {
       workspace: {
@@ -560,8 +560,8 @@ describe("Apple Reminders migration", () => {
     await plugin.createTaskForDate("2026-05-20", "测试标签 #测试", { type: "apple-reminders" });
 
     expect(createAppleReminder).toHaveBeenCalledWith(expect.objectContaining({
-      title: "测试标签 #测试",
-      tags: []
+      title: "测试标签",
+      tags: ["#测试"]
     }));
   });
 

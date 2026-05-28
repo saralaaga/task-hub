@@ -863,7 +863,7 @@ body .task-hub-view button.task-hub-color-swatch {
 .task-hub-tag-editor {
   align-items: center;
   background: var(--background-primary);
-  border: 1px solid var(--background-modifier-border);
+  border: 1px solid color-mix(in srgb, var(--task-hub-source-color, var(--interactive-accent)) 34%, var(--background-modifier-border));
   border-radius: 8px;
   display: flex;
   flex-wrap: wrap;
@@ -873,33 +873,37 @@ body .task-hub-view button.task-hub-color-swatch {
 }
 
 .task-hub-tag-editor:focus-within {
-  border-color: var(--interactive-accent);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--interactive-accent) 18%, transparent);
+  border-color: color-mix(in srgb, var(--task-hub-source-color, var(--interactive-accent)) 58%, var(--background-modifier-border));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--task-hub-source-color, var(--interactive-accent)) 18%, transparent);
 }
 
 .task-hub-tag-editor-input {
-  background: transparent;
-  border: 0;
-  box-shadow: none;
-  flex: 1 1 96px;
-  min-width: 78px;
-  padding: 4px 2px;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  flex: 1 1 1ch;
+  min-width: 1ch;
+  padding: 3px 0;
 }
 
 .task-hub-tag-editor-input:focus {
-  box-shadow: none;
+  box-shadow: none !important;
 }
 
 .task-hub-tag-editor-chip {
   appearance: none;
-  background: color-mix(in srgb, var(--task-hub-source-color, var(--interactive-accent)) 16%, var(--background-primary));
-  border: 1px solid color-mix(in srgb, var(--task-hub-source-color, var(--interactive-accent)) 36%, var(--background-modifier-border));
+  background: var(--task-hub-source-color, var(--interactive-accent));
+  border: 1px solid color-mix(in srgb, var(--task-hub-source-color, var(--interactive-accent)) 74%, var(--background-modifier-border));
   border-radius: 999px;
-  box-shadow: none;
-  color: var(--text-normal);
-  cursor: pointer;
+  box-shadow:
+    0 3px 8px color-mix(in srgb, var(--task-hub-source-color, var(--interactive-accent)) 28%, transparent),
+    0 1px 2px rgb(0 0 0 / 16%);
+  color: white;
+  cursor: text;
+  display: inline-flex;
   font-size: var(--font-ui-smaller);
   font-weight: 400;
+  align-items: center;
   line-height: 1.2;
   max-width: 100%;
   padding: 3px 8px;
@@ -907,7 +911,7 @@ body .task-hub-view button.task-hub-color-swatch {
 
 .task-hub-tag-editor-chip:hover,
 .task-hub-tag-editor-chip:focus-visible {
-  background: color-mix(in srgb, var(--task-hub-source-color, var(--interactive-accent)) 24%, var(--background-primary));
+  background: color-mix(in srgb, var(--task-hub-source-color, var(--interactive-accent)) 88%, white);
 }
 
 .task-hub-detail-save {
