@@ -26,6 +26,8 @@ Task Hub is a desktop-only Obsidian plugin that brings scattered Markdown tasks 
 - Add read-only public ICS calendar sources.
 - Read iCloud-synced Apple Reminders and Apple Calendar data on macOS desktop through the local Apple helper.
 - Explicitly send a vault Markdown task to Apple Reminders from the editor context menu, the command palette, a user-assigned hotkey, or Task Hub task details when reminder creation is enabled.
+- Create local Markdown notes linked to tasks and calendar events. Linked notes are tracked with YAML frontmatter, shown in the task or event details panel, and counted on task rows when notes exist.
+- Optionally create notes that are compatible with [Thino](https://github.com/Quorafind/Obsidian-Thino) multi-file storage.
 - Switch between English and Chinese from the plugin settings.
 
 ## Usage
@@ -39,6 +41,16 @@ When Local Apple and Apple Reminders are enabled, the separate **Create Apple Re
 The calendar view combines dated tasks, public ICS events, Apple Calendar events, and dated Apple Reminders where available. You can switch between month, week, and day layouts. Drag a vault Markdown task card to another day to update its existing `📅 YYYY-MM-DD` or `due:: YYYY-MM-DD` date. When the matching writeback options are enabled, dated Apple Reminder cards and Apple Calendar event cards can also be dragged to change their date.
 
 The tag view groups indexed tasks by tag and lets you drill into a tag's related tasks.
+
+## Task Notes
+
+Task notes are optional local Markdown notes linked to Task Hub tasks or calendar events. When task notes are enabled, right-click a task or calendar item and choose **Create linked note**. Task Hub writes the relationship into the note's YAML frontmatter, then shows related note content in a separate notes container in task or event details. The task list can also show a note count in the upper-right corner of task rows.
+
+Note cards are read in place. Use the three-dot menu on a note card to delete the note, edit it in a Task Hub modal, or open it as a Thino note when the Thino multi-file option is enabled.
+
+Task Hub can create regular Task Hub notes or Thino multi-file-compatible notes. The Thino option is intentionally limited to [Thino](https://github.com/Quorafind/Obsidian-Thino) multi-file storage because that mode stores each memo as a separate Markdown file with YAML frontmatter. Thino single-file, Canvas, and diary storage are not generated or modified by Task Hub.
+
+When a vault Markdown task is sent to Apple Reminders, Task Hub updates linked note frontmatter before deleting the original task line, so the notes remain associated with the newly created Apple Reminder.
 
 ## iCloud Reminders and Calendar
 
@@ -55,6 +67,7 @@ Task Hub intentionally keeps the first releases conservative:
 - Vault Markdown tasks can be completed from Task Hub.
 - Vault Markdown tasks with an existing supported date can be rescheduled from the calendar.
 - Vault Markdown tasks can be sent to Apple Reminders only by explicit user action, and Task Hub records the created reminder id to avoid duplicate sends.
+- Task notes are local Markdown files. Thino integration is limited to Thino multi-file-compatible notes; Thino single-file, Canvas, and diary storage are outside the current scope.
 - Apple Reminders completion and date writeback are optional and must be enabled in settings.
 - Public ICS events are read-only. Apple Calendar event date writeback is available only when you explicitly enable it in Local Apple settings.
 - Full Obsidian Tasks plugin grammar is not implemented.

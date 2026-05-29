@@ -12,6 +12,16 @@ import { TaskIndex } from "./indexing/taskIndex";
 import { openExternalTaskSource } from "./externalSources";
 import { appendTaskToContent, createTaskLine, normalizeTaskCreationFilePath } from "./taskCreation";
 import {
+  TaskNoteIndex,
+  buildCalendarEventNoteKey,
+  buildTaskNoteKey,
+  createTaskNoteContent,
+  normalizeTaskNoteFolder,
+  replaceTaskNoteBody,
+  taskNoteFileName,
+  transferTaskNoteRelationship
+} from "./taskNotes";
+import {
   appleCalendarSource,
   appleCalendarsFromEvents,
   appleRemindersSource,
@@ -109,9 +119,15 @@ function durationFromInputParts(days: string, hours: string, minutes: string): n
   return validCalendarEventDuration(parsedDays * 24 * 60 + parsedHours * 60 + parsedMinutes);
 }
 
+function noteBodyFromContent(content: string): string {
+  if (!content.startsWith("---")) return content.replace(/\s+$/u, "");
+  return (content.match(/^---\n[\s\S]*?\n---\n?([\s\S]*)$/u)?.[1] ?? "").replace(/\s+$/u, "");
+}
+
 export default class TaskHubPlugin extends Plugin {
   settings: TaskHubSettings = DEFAULT_SETTINGS;
   taskIndex: TaskIndex = this.createTaskIndex();
+  taskNoteIndex: TaskNoteIndex = this.createTaskNoteIndex();
   localAppleTasks: TaskItem[] = [];
   localAppleEvents: CalendarEvent[] = [];
   localAppleStatus: LocalAppleSyncStatus = { state: "never" };
@@ -237,6 +253,7 @@ export default class TaskHubPlugin extends Plugin {
     await this.loadSettings();
     this.configureLocalAppleHelper();
     this.taskIndex = this.createTaskIndex();
+    this.taskNoteIndex = this.createTaskNoteIndex();
     registerTaskHubIcon();
 
     this.registerView(TASK_HUB_VIEW_TYPE, (leaf: WorkspaceLeaf) => new TaskHubView(leaf, this));
@@ -301,7 +318,9 @@ export default class TaskHubPlugin extends Plugin {
   }
 
   async scanVault(): Promise<void> {
-    await this.taskIndex.scanFiles(this.app.vault.getMarkdownFiles().map((file) => this.toIndexableFile(file)));
+    const files = this.app.vault.getMarkdownFiles().map((file) => this.toIndexableFile(file));
+    await this.taskIndex.scanFiles(files);
+    await this.taskNoteIndex.scanFiles(files);
     await this.syncLocalApple({ silent: true });
     this.refreshOpenViews();
   }
@@ -759,11 +778,17 @@ export default class TaskHubPlugin extends Plugin {
         tags: this.settings.localApple.remindersCreateTagsEnabled ? normalizeAppleReminderTags(currentTask.tags) : []
       };
       const reminderId = await this.writeAppleReminderWithAccessRetry(() => createAppleReminder(input));
+      const noteTransfer = await this.transferTaskNotesToAppleReminder(currentTask, reminderId);
       this.settings.appleReminderLinks = {
         ...this.settings.appleReminderLinks,
         [currentTask.id]: reminderId
       };
       await this.saveSettings();
+
+      if (!noteTransfer.ok) {
+        new Notice(noteTransfer.message);
+        return;
+      }
 
       const deletion = {
         result: {
@@ -1108,6 +1133,78 @@ export default class TaskHubPlugin extends Plugin {
     ];
   }
 
+  getTaskNotes(task: TaskItem) {
+    return this.settings.taskNotes.enabled ? this.taskNoteIndex.getNotesForKey(buildTaskNoteKey(task)) : [];
+  }
+
+  getTaskNoteCount(task: TaskItem): number {
+    return this.getTaskNotes(task).length;
+  }
+
+  getEventNotes(event: CalendarEvent) {
+    return this.settings.taskNotes.enabled ? this.taskNoteIndex.getNotesForKey(buildCalendarEventNoteKey(event)) : [];
+  }
+
+  async openTaskNote(path: string): Promise<void> {
+    const file = this.app.vault.getFileByPath(path);
+    const t = createTranslator(this.settings.language);
+    if (!file) {
+      new Notice(`${t("fileNotFound")}: ${path}`);
+      return;
+    }
+    new TaskNoteEditModal(this, file).open();
+  }
+
+  async openTaskNoteSource(path: string): Promise<void> {
+    const file = this.app.vault.getFileByPath(path);
+    const t = createTranslator(this.settings.language);
+    if (!file) {
+      new Notice(`${t("fileNotFound")}: ${path}`);
+      return;
+    }
+    const leaf = this.app.workspace.getLeaf("tab");
+    await leaf.openFile(file, { active: true });
+    void this.app.workspace.revealLeaf(leaf);
+  }
+
+  async deleteTaskNote(path: string): Promise<void> {
+    const file = this.app.vault.getFileByPath(path);
+    const t = createTranslator(this.settings.language);
+    if (!file) {
+      new Notice(`${t("fileNotFound")}: ${path}`);
+      return;
+    }
+    await this.app.vault.delete(file);
+    this.taskNoteIndex.removeFile(path);
+    this.refreshOpenViews();
+    new Notice(t("taskNoteDeleted"));
+  }
+
+  async createTaskNoteForTask(task: TaskItem): Promise<void> {
+    await this.createTaskNote(buildTaskNoteKey(task), task.text);
+  }
+
+  async createTaskNoteForEvent(event: CalendarEvent): Promise<void> {
+    await this.createTaskNote(buildCalendarEventNoteKey(event), event.title);
+  }
+
+  async saveTaskNoteBody(file: TFile, body: string): Promise<{ ok: true } | { ok: false; message: string }> {
+    const t = createTranslator(this.settings.language);
+    const update = {
+      result: { status: "conflict", message: t("taskUpdateFailed") } as ReturnType<typeof replaceTaskNoteBody>
+    };
+    await this.app.vault.process(file, (content) => {
+      update.result = replaceTaskNoteBody(content, body);
+      return update.result.status === "updated" ? update.result.content : content;
+    });
+    if (update.result.status !== "updated") {
+      return { ok: false, message: update.result.message };
+    }
+    await this.taskNoteIndex.reindexFile(this.toIndexableFile(file));
+    this.refreshOpenViews();
+    return { ok: true };
+  }
+
   getCalendarSources() {
     const appleStatus = this.localAppleSourceStatus();
     const sources = [...this.settings.calendarSources];
@@ -1392,6 +1489,96 @@ export default class TaskHubPlugin extends Plugin {
     });
   }
 
+  private createTaskNoteIndex(): TaskNoteIndex {
+    return new TaskNoteIndex({
+      ignoredPaths: this.settings.ignoredPaths,
+      readFile: (file) => {
+        const vaultFile = this.app.vault.getFileByPath(file.path);
+        if (!vaultFile) throw new Error(`File not found: ${file.path}`);
+        return this.app.vault.cachedRead(vaultFile);
+      }
+    });
+  }
+
+  private async transferTaskNotesToAppleReminder(
+    task: TaskItem,
+    reminderId: string
+  ): Promise<{ ok: true } | { ok: false; message: string }> {
+    if (!this.settings.taskNotes.enabled) return { ok: true };
+    const fromKey = buildTaskNoteKey(task);
+    const toKey = `task:apple-reminders:${reminderId}`;
+    const notes = this.taskNoteIndex.getNotesForKey(fromKey);
+    if (notes.length === 0) return { ok: true };
+
+    const updatedAt = new Date().toISOString();
+    for (const note of notes) {
+      const noteFile = this.app.vault.getFileByPath(note.path);
+      if (!noteFile) {
+        return { ok: false, message: `Task note file not found: ${note.path}` };
+      }
+      const transfer = {
+        result: { status: "conflict", message: "Task note transfer failed." } as ReturnType<
+          typeof transferTaskNoteRelationship
+        >
+      };
+      await this.app.vault.process(noteFile, (content) => {
+        transfer.result = transferTaskNoteRelationship(content, { fromKey, toKey, updatedAt });
+        return transfer.result.status === "updated" ? transfer.result.content : content;
+      });
+      if (transfer.result.status !== "updated") {
+        return { ok: false, message: transfer.result.message };
+      }
+      await this.taskNoteIndex.reindexFile(this.toIndexableFile(noteFile));
+    }
+    return { ok: true };
+  }
+
+  private async createTaskNote(relatedKey: string, title: string): Promise<void> {
+    const t = createTranslator(this.settings.language);
+    if (!this.settings.taskNotes.enabled) {
+      new Notice(t("taskNotesDisabled"));
+      return;
+    }
+    const now = new Date();
+    const mode =
+      this.settings.taskNotes.thinoIntegrationEnabled && this.settings.taskNotes.defaultMode === "thino-multi-file"
+        ? "thino-multi-file"
+        : "task-hub";
+    const folder = normalizeTaskNoteFolder(
+      mode === "thino-multi-file" ? this.settings.taskNotes.thinoFolder : this.settings.taskNotes.notesFolder,
+      mode === "thino-multi-file" ? DEFAULT_SETTINGS.taskNotes.thinoFolder : DEFAULT_SETTINGS.taskNotes.notesFolder
+    );
+    const path = await this.uniqueTaskNotePath(`${folder}/${taskNoteFileName(title, now, mode)}`);
+    await this.ensureParentFolders(path);
+    const noteId = `thn_${now.toISOString().replace(/[-:TZ.]/g, "").slice(0, 14)}_${Math.random().toString(36).slice(2, 6)}`;
+    const file = await this.app.vault.create(
+      path,
+      createTaskNoteContent({
+        noteId,
+        relatedKey,
+        title,
+        createdAt: now.toISOString(),
+        mode
+      })
+    );
+    await this.taskNoteIndex.reindexFile(this.toIndexableFile(file));
+    this.refreshOpenViews();
+    new Notice(t("taskNoteCreated"));
+    if (this.settings.taskNotes.openNoteAfterCreate) {
+      await this.openTaskNote(file.path);
+    }
+  }
+
+  private async uniqueTaskNotePath(path: string): Promise<string> {
+    if (!this.app.vault.getFileByPath(path)) return path;
+    const withoutExtension = path.replace(/\.md$/iu, "");
+    for (let index = 2; index < 1000; index += 1) {
+      const candidate = `${withoutExtension}-${index}.md`;
+      if (!this.app.vault.getFileByPath(candidate)) return candidate;
+    }
+    return `${withoutExtension}-${Date.now()}.md`;
+  }
+
   private registerVaultEvents(): void {
     this.registerEvent(
       this.app.vault.on("modify", (file) => {
@@ -1408,6 +1595,7 @@ export default class TaskHubPlugin extends Plugin {
     this.registerEvent(
       this.app.vault.on("delete", (file) => {
         this.taskIndex.removeFile(file.path);
+        this.taskNoteIndex.removeFile(file.path);
         this.refreshOpenViews();
       })
     );
@@ -1415,13 +1603,16 @@ export default class TaskHubPlugin extends Plugin {
     this.registerEvent(
       this.app.vault.on("rename", (file, oldPath) => {
         this.taskIndex.removeFile(oldPath);
+        this.taskNoteIndex.removeFile(oldPath);
         if (file instanceof TFile) void this.reindexVaultFile(file);
       })
     );
   }
 
   private async reindexVaultFile(file: TFile): Promise<void> {
-    await this.taskIndex.reindexFile(this.toIndexableFile(file));
+    const indexableFile = this.toIndexableFile(file);
+    await this.taskIndex.reindexFile(indexableFile);
+    await this.taskNoteIndex.reindexFile(indexableFile);
     this.refreshOpenViews();
   }
 
@@ -1457,6 +1648,48 @@ export default class TaskHubPlugin extends Plugin {
 
     await leaf.setViewState({ type: TASK_HUB_VIEW_TYPE, active: true });
     void this.app.workspace.revealLeaf(leaf);
+  }
+}
+
+class TaskNoteEditModal extends Modal {
+  constructor(
+    private readonly plugin: TaskHubPlugin,
+    private readonly file: TFile
+  ) {
+    super(plugin.app);
+  }
+
+  async onOpen(): Promise<void> {
+    const t = createTranslator(this.plugin.settings.language);
+    const { contentEl } = this;
+    contentEl.empty();
+    contentEl.addClass("task-hub-note-modal");
+    contentEl.createEl("h2", { text: t("notes") });
+    const content = await this.plugin.app.vault.cachedRead(this.file);
+    const textarea = contentEl.createEl("textarea", { cls: "task-hub-note-modal-editor" }) as HTMLTextAreaElement;
+    textarea.value = noteBodyFromContent(content);
+    textarea.addEventListener("keydown", (event) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      this.close();
+    });
+
+    const actions = contentEl.createDiv({ cls: "task-hub-note-modal-actions" });
+    const cancel = actions.createEl("button", { text: t("cancel") });
+    cancel.addEventListener("click", () => this.close());
+    const save = actions.createEl("button", { cls: "mod-cta", text: t("save") });
+    save.addEventListener("click", () => void this.save(textarea.value));
+  }
+
+  private async save(body: string): Promise<void> {
+    const t = createTranslator(this.plugin.settings.language);
+    const result = await this.plugin.saveTaskNoteBody(this.file, body);
+    if (!result.ok) {
+      new Notice(result.message);
+      return;
+    }
+    new Notice(t("taskUpdated"));
+    this.close();
   }
 }
 

@@ -36,6 +36,15 @@ describe("normalizeTaskHubSettings", () => {
     expect(settings.calendarTaskCreationDefaultTarget).toEqual({ type: "vault" });
     expect(settings.calendarEventCreationDefaultTarget).toEqual({ type: "apple-calendar" });
     expect(settings.taskCreationFilePath).toBe("Task Hub.md");
+    expect(settings.taskNotes).toEqual({
+      enabled: false,
+      notesFolder: "Task Hub Notes",
+      defaultMode: "task-hub",
+      thinoIntegrationEnabled: false,
+      thinoFolder: "Thino",
+      openNoteAfterCreate: true,
+      showCountsInTaskList: true
+    });
     expect(settings.taskViewFilters).toEqual({ status: "open", tags: [], sourceQuery: "", textQuery: "" });
     expect(settings.ignoredPaths).toEqual(["Archive/"]);
   });

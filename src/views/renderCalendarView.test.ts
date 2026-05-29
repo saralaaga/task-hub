@@ -1,4 +1,5 @@
 jest.mock("obsidian", () => ({
+  setIcon: jest.fn(),
   Menu: class {
     items: Array<{ title: string; icon: string; click?: () => void }> = [];
     shownAt: unknown;
@@ -959,6 +960,78 @@ describe("renderCalendarView", () => {
     expect(deleteButton?.classes.has("task-hub-calendar-detail-delete")).toBe(true);
     deleteButton?.click();
     expect(onTaskDelete).toHaveBeenCalledWith(task);
+  });
+
+  it("renders calendar detail notes with menu actions instead of card clicks", () => {
+    const container = new FakeElement();
+    const onOpenTaskNote = jest.fn();
+    const onDeleteTaskNote = jest.fn();
+    const onOpenTaskNoteInThino = jest.fn();
+
+    renderCalendarView(
+      container as unknown as HTMLElement,
+      {
+        mode: "month",
+        focusDate: new Date("2026-05-08T12:00:00Z"),
+        weekStart: "monday",
+        visibleSourceIds: new Set(["vault"]),
+        includeCompletedTasks: false,
+        allowAppleReminderWriteback: false,
+        allowTaskCreation: true,
+        taskNotesEnabled: true,
+        allowThinoNoteEdit: true,
+        getTaskNotes: () => [
+          {
+            path: "Task Hub Notes/one.md",
+            related: [],
+            history: [],
+            title: "One",
+            body: "Calendar note body #tag",
+            tags: ["#tag"],
+            createdAt: "2026-05-29T10:30:12"
+          }
+        ],
+        sources: [],
+        t: (key) => key
+      },
+      [task],
+      [],
+      {
+        onLayerToggle: jest.fn(),
+        onModeChange: jest.fn(),
+        onMove: jest.fn(),
+        onDateCreateTask: jest.fn(),
+        onTaskComplete: jest.fn(),
+        onTaskJump: jest.fn(),
+        onTaskSelect: jest.fn(),
+        onTaskUpdate: jest.fn(),
+        onTaskReschedule: jest.fn(),
+        onTaskDelete: jest.fn(),
+        onOpenTaskNote,
+        onDeleteTaskNote,
+        onOpenTaskNoteInThino,
+        onToday: jest.fn()
+      }
+    );
+
+    const item = collect(container).find((element) => element.classes.has("task-hub-calendar-item"));
+    item?.click();
+    const popover = collect(fakeDocument.body).find((element) => element.classes.has("task-hub-calendar-detail-popover"));
+    const noteCard = collect(popover as FakeElement).find((element) => element.classes.has("task-hub-task-note-card"));
+    noteCard?.click();
+    expect(onOpenTaskNote).not.toHaveBeenCalled();
+    expect(collect(popover as FakeElement).find((element) => element.classes.has("task-hub-task-note-text"))?.text).toContain("Calendar note body");
+    expect(collect(popover as FakeElement).find((element) => element.classes.has("task-hub-task-note-date"))?.text).toBe("2026-05-29");
+
+    const menuButton = collect(popover as FakeElement).find((element) => element.classes.has("task-hub-task-note-menu"));
+    menuButton?.click();
+    expect(mockMenus.at(-1)?.items.map((menuItem) => menuItem.title)).toEqual(["delete", "edit", "taskNoteEditInThino"]);
+    mockMenus.at(-1)?.items[0].click?.();
+    mockMenus.at(-1)?.items[1].click?.();
+    mockMenus.at(-1)?.items[2].click?.();
+    expect(onDeleteTaskNote).toHaveBeenCalledWith("Task Hub Notes/one.md");
+    expect(onOpenTaskNote).toHaveBeenCalledWith("Task Hub Notes/one.md");
+    expect(onOpenTaskNoteInThino).toHaveBeenCalledWith("Task Hub Notes/one.md");
   });
 
   it("edits Apple Reminder notes from the calendar task popover", () => {
@@ -3053,6 +3126,53 @@ describe("renderCalendarView", () => {
     expect(onTaskDelete).toHaveBeenCalledWith(task);
     expect(onTaskSendToAppleReminders).toHaveBeenCalledWith(task);
     expect(item?.classes.has("is-external-sending")).toBe(true);
+  });
+
+  it("adds a calendar item note action when task notes are enabled", () => {
+    const container = new FakeElement();
+    const onCreateTaskNote = jest.fn();
+
+    renderCalendarView(
+      container as unknown as HTMLElement,
+      {
+        mode: "month",
+        focusDate: new Date("2026-05-08T12:00:00Z"),
+        weekStart: "monday",
+        visibleSourceIds: new Set(["vault"]),
+        includeCompletedTasks: false,
+        allowAppleReminderWriteback: false,
+        allowAppleReminderCreate: true,
+        allowAppleCalendarWriteback: false,
+        allowTaskCreation: false,
+        taskNotesEnabled: true,
+        sources: [remindersSource],
+        t: (key) => key
+      },
+      [task],
+      [],
+      {
+        onLayerToggle: jest.fn(),
+        onModeChange: jest.fn(),
+        onMove: jest.fn(),
+        onDateCreateTask: jest.fn(),
+        onTaskComplete: jest.fn(),
+        onTaskJump: jest.fn(),
+        onTaskSelect: jest.fn(),
+        onTaskReschedule: jest.fn(),
+        onTaskDelete: jest.fn(),
+        onTaskSendToAppleReminders: jest.fn(),
+        onCreateTaskNote,
+        onToday: jest.fn()
+      }
+    );
+
+    const item = collect(container).find((element) => element.classes.has("task-hub-calendar-item"));
+    item!.dispatch("contextmenu");
+    mockMenus[0].items[0].click?.();
+
+    expect(mockMenus[0].items[0].title).toBe("createTaskNote");
+    expect(mockMenus[0].items[0].icon).toBe("sticky-note");
+    expect(onCreateTaskNote).toHaveBeenCalledWith(task);
   });
 
   it("selects every rendered span of a multi-day event when one span is clicked", () => {

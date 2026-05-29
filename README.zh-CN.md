@@ -26,6 +26,8 @@ Task Hub 是一个仅支持 Obsidian 桌面端的任务聚合插件。它会把�
 - 支持只读公共 ICS 日历源。
 - 在本地 helper 可用时，支持 macOS 桌面端读取已通过 iCloud 同步到本机的 Apple Reminders 和 Apple Calendar。
 - 开启创建权限后，可通过编辑器右键菜单、命令面板、用户自定义快捷键或 Task Hub 任务详情，把某条 vault Markdown 任务显式发送到 Apple 提醒事项。
+- 支持为任务和日历事件创建本地 Markdown 关联笔记；关联关系写入 YAML frontmatter，在任务/事件详情中展示，有笔记的任务行可显示笔记数。
+- 可选创建兼容 [Thino](https://github.com/Quorafind/Obsidian-Thino) multi-file 存储的笔记。
 - 支持在插件设置中切换英文和中文界面。
 
 ## 使用方式
@@ -39,6 +41,16 @@ Task Hub 是一个仅支持 Obsidian 桌面端的任务聚合插件。它会把�
 日历视图会合并有日期的任务、公共 ICS 事件、Apple Calendar 事件，以及可用的有日期 Apple Reminders。你可以在月、周、日布局之间切换。把 vault Markdown 任务卡片拖到另一天，会更新该任务现有的 `📅 YYYY-MM-DD` 或 `due:: YYYY-MM-DD` 日期。开启对应写回后，也可以拖动有日期的 Apple Reminder 卡片和 Apple Calendar 事件卡片来修改日期。
 
 标签视图会按标签聚合索引到的任务，并支持查看某个标签下的具体任务。
+
+## 任务笔记
+
+任务笔记是可选的本地 Markdown 笔记，可以关联到 Task Hub 中的任务或日历事件。开启任务笔记后，右键任务或日历项，选择 **创建关联笔记** 即可新建笔记。Task Hub 会把关联关系写入笔记的 YAML frontmatter，并在任务或事件详情里用单独的笔记容器展示相关笔记正文。任务列表也可以在有笔记的任务行右上角显示笔记数。
+
+笔记卡片本身只负责展示，不会点击跳转。使用笔记右上角的三点菜单，可以删除笔记、在 Task Hub 弹窗中编辑笔记，或在开启 Thino multi-file 选项时打开为 Thino 笔记。
+
+Task Hub 可以创建普通 Task Hub 笔记，也可以创建兼容 Thino multi-file 的笔记。Thino 选项只支持 [Thino](https://github.com/Quorafind/Obsidian-Thino) multi-file 存储，因为这个模式会把每条 memo 保存成带 YAML frontmatter 的独立 Markdown 文件。Task Hub 不生成也不修改 Thino single-file、Canvas 或日记存储内容。
+
+当 vault Markdown 任务被发送到 Apple Reminders 时，Task Hub 会先更新相关笔记的 frontmatter，再删除原任务行，确保笔记继续关联到新创建的 Apple Reminder。
 
 ## iCloud 提醒事项和日历
 
@@ -55,6 +67,7 @@ Apple Calendar 支持把本地/iCloud 日历事件读入 Task Hub 日历，包�
 - vault 内 Markdown 任务可以在 Task Hub 中完成。
 - 已有支持日期语法的 vault Markdown 任务可以在日历中拖动改期。
 - vault 内 Markdown 任务只有在用户明确触发时才会发送到 Apple 提醒事项；Task Hub 会记录已创建的提醒事项 id，避免重复发送。
+- 任务笔记是本地 Markdown 文件。Thino 集成仅限兼容 Thino multi-file 的笔记；Thino single-file、Canvas 和日记存储不在当前支持范围内。
 - Apple Reminders 完成状态/日期写回，以及 Apple Calendar 事件日期写回，都是可选能力，需要在设置中单独开启。
 - 公共 ICS 事件只读。
 - 暂不支持 Obsidian Tasks 插件完整语法。

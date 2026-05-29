@@ -1,7 +1,8 @@
-import { Menu } from "obsidian";
+import { Menu, setIcon } from "obsidian";
 import { type DateBucket } from "../calendar/dateBuckets";
 import { getTaskBucket, type TaskFilterState } from "../filtering/filters";
 import type { Translator } from "../i18n";
+import type { TaskNote } from "../taskNotes";
 import type { AppleReminderList, CalendarItemEditDraft, TaskItem } from "../types";
 
 export type TaskRowHandlers = {
@@ -14,6 +15,10 @@ export type TaskRowHandlers = {
   onAppleReminderListChange: (task: TaskItem, listId: string) => void;
   onTaskUpdate?: (task: TaskItem, draft: Extract<CalendarItemEditDraft, { kind: "task" }>) => void;
   onTaskDelete?: (task: TaskItem) => void;
+  onCreateTaskNote?: (task: TaskItem) => void;
+  onOpenTaskNote?: (path: string) => void;
+  onDeleteTaskNote?: (path: string) => void;
+  onOpenTaskNoteInThino?: (path: string) => void;
 };
 
 export type TaskRenderOptions = {
@@ -26,6 +31,10 @@ export type TaskRenderOptions = {
   bindTagInputSuggest?: (input: HTMLInputElement) => void;
   taskListScrollTop?: number;
   exitingTaskIds?: ReadonlySet<string>;
+  taskNotesEnabled?: boolean;
+  allowThinoNoteEdit?: boolean;
+  getTaskNoteCount?: (task: TaskItem) => number;
+  getTaskNotes?: (task: TaskItem) => TaskNote[];
 };
 
 const BUCKETS = ["overdue", "today", "tomorrow", "thisWeek", "future", "noDate", "otherCompleted"] as const;
@@ -135,6 +144,9 @@ function renderTaskRow(
 
   const body = row.createDiv({ cls: "task-hub-task-body" });
   body.createDiv({ cls: "task-hub-task-text", text: renderPlainTaskText(task.text) });
+  if (options.taskNotesEnabled && options.getTaskNoteCount && options.getTaskNoteCount(task) > 0) {
+    body.createSpan({ cls: "task-hub-task-note-count", text: String(options.getTaskNoteCount(task)) });
+  }
 
   const meta = body.createDiv({ cls: "task-hub-task-meta" });
   if (task.dueDate) meta.createSpan({ text: task.dueDate });
@@ -156,6 +168,14 @@ function renderTaskRow(
     event.stopPropagation();
     onSelect(task);
     const menu = new Menu();
+    if (options.taskNotesEnabled) {
+      menu.addItem((item) => {
+        item
+          .setTitle(t("createTaskNote"))
+          .setIcon("sticky-note")
+          .onClick(() => handlers.onCreateTaskNote?.(task));
+      });
+    }
     menu.addItem((item) => {
       item
         .setTitle(t("deleteCalendarItem"))
@@ -303,6 +323,78 @@ function renderTaskDetails(
   if (!canToggle && task.source !== "vault") {
     details.createDiv({ cls: "task-hub-detail-note", text: t("externalTaskReadOnly") });
   }
+  renderTaskNotes(container, task, handlers, options, t);
+}
+
+function renderTaskNotes(
+  container: HTMLElement,
+  task: TaskItem,
+  handlers: TaskRowHandlers,
+  options: TaskRenderOptions,
+  t: Translator
+): void {
+  if (!options.taskNotesEnabled || !options.getTaskNotes) return;
+  const notes = options.getTaskNotes(task);
+  if (notes.length === 0) return;
+  const notesContainer = container.createDiv({ cls: "task-hub-task-notes" });
+  const color = taskDisplayColor(task, options);
+  if (color) notesContainer.style.setProperty("--task-hub-source-color", color);
+  notesContainer.createEl("h4", { text: t("notes") });
+  for (const note of notes) {
+    const text = note.body.trim() || note.title;
+    const card = notesContainer.createDiv({ cls: "task-hub-task-note-card" });
+    const menuButton = card.createEl("button", { cls: "task-hub-task-note-menu" });
+    menuButton.setAttr("aria-label", t("more"));
+    setIcon(menuButton, "more-horizontal");
+    menuButton.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const menu = new Menu();
+      menu.addItem((item) => {
+        item
+          .setTitle(t("delete"))
+          .setIcon("trash")
+          .onClick(() => handlers.onDeleteTaskNote?.(note.path));
+      });
+      menu.addItem((item) => {
+        item
+          .setTitle(t("edit"))
+          .setIcon("pencil")
+          .onClick(() => handlers.onOpenTaskNote?.(note.path));
+      });
+      if (options.allowThinoNoteEdit) {
+        menu.addItem((item) => {
+          item
+            .setTitle(t("taskNoteEditInThino"))
+            .setIcon("external-link")
+            .onClick(() => handlers.onOpenTaskNoteInThino?.(note.path));
+        });
+      }
+      menu.showAtMouseEvent(event as MouseEvent);
+    });
+    renderNoteBody(card.createDiv({ cls: "task-hub-task-note-body" }), text);
+    if (note.createdAt) card.createDiv({ cls: "task-hub-task-note-date", text: note.createdAt.slice(0, 10) });
+  }
+}
+
+function renderNoteBody(container: HTMLElement, body: string): void {
+  const tagPattern = /(^|\s)(#[\p{L}\p{N}_/-]+)/gu;
+  let cursor = 0;
+  for (const match of body.matchAll(tagPattern)) {
+    const start = match.index ?? 0;
+    const prefix = match[1] ?? "";
+    const tag = match[2] ?? "";
+    const tagStart = start + prefix.length;
+    appendNoteText(container, body.slice(cursor, tagStart));
+    container.createSpan({ cls: "task-hub-task-tag", text: tag });
+    cursor = tagStart + tag.length;
+  }
+  appendNoteText(container, body.slice(cursor));
+}
+
+function appendNoteText(container: HTMLElement, text: string): void {
+  if (!text) return;
+  container.createSpan({ cls: "task-hub-task-note-text", text });
 }
 
 function detailInput(container: HTMLElement, label: string, value: string, type = "text", inputClass?: string): HTMLInputElement {

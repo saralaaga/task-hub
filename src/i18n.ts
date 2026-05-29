@@ -42,11 +42,13 @@ export type TranslationKey =
   | "conditionMatch"
   | "conditionTag"
   | "conditionText"
+  | "createTaskNote"
   | "day"
   | "defaultView"
   | "defaultViewDesc"
   | "delete"
   | "deleteCalendarItem"
+  | "edit"
   | "event"
   | "eventCreationDefaultTarget"
   | "eventCreationDefaultTargetDesc"
@@ -216,6 +218,25 @@ export type TranslationKey =
   | "taskCreationTarget"
   | "taskDetails"
   | "taskHub"
+  | "taskNoteCreated"
+  | "taskNotesDefaultMode"
+  | "taskNotesDefaultModeDesc"
+  | "taskNotesDisabled"
+  | "taskNotesEnable"
+  | "taskNotesEnableDesc"
+  | "taskNotesFolder"
+  | "taskNotesFolderDesc"
+  | "taskNotesOpenAfterCreate"
+  | "taskNotesOpenAfterCreateDesc"
+  | "taskNotesSection"
+  | "taskNotesShowCounts"
+  | "taskNotesShowCountsDesc"
+  | "taskNotesThino"
+  | "taskNotesThinoDesc"
+  | "taskNotesThinoFolder"
+  | "taskNotesThinoFolderDesc"
+  | "taskNoteEditInThino"
+  | "taskNoteDeleted"
   | "taskReopened"
   | "taskUpdateFailed"
   | "tasks"
@@ -277,11 +298,13 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     conditionMatch: "Match",
     conditionTag: "Tag",
     conditionText: "Text",
+    createTaskNote: "Create linked note",
     day: "Day",
     defaultView: "Default view",
     defaultViewDesc: "View shown when Task Hub opens.",
     delete: "Delete",
     deleteCalendarItem: "Delete from calendar",
+    edit: "Edit",
     event: "Event",
     eventCreationDefaultTarget: "Default event destination",
     eventCreationDefaultTargetDesc: "Default Apple Calendar selected when you create an event from the calendar.",
@@ -464,6 +487,25 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     taskCreationTarget: "Create in",
     taskDetails: "Task details",
     taskHub: "Task Hub",
+    taskNoteCreated: "Task note created.",
+    taskNotesDefaultMode: "Default note format",
+    taskNotesDefaultModeDesc: "Create plain Task Hub notes or notes compatible only with Thino multi-file storage.",
+    taskNotesDisabled: "Turn on task notes in Task Hub settings first.",
+    taskNotesEnable: "Task notes",
+    taskNotesEnableDesc: "Create Markdown notes linked to tasks and calendar events.",
+    taskNotesFolder: "Task Hub notes folder",
+    taskNotesFolderDesc: "Folder for regular Task Hub linked notes.",
+    taskNotesOpenAfterCreate: "Open note after creation",
+    taskNotesOpenAfterCreateDesc: "Open the created Markdown note in a new tab.",
+    taskNotesSection: "Task notes",
+    taskNotesShowCounts: "Show note counts",
+    taskNotesShowCountsDesc: "Show note counts on task list rows when notes exist.",
+    taskNotesThino: "Create Thino multi-file notes only",
+    taskNotesThinoDesc: "Use Thino multi-file frontmatter for newly created notes. Thino single-file, Canvas, and diary storage are not generated.",
+    taskNotesThinoFolder: "Thino notes folder",
+    taskNotesThinoFolderDesc: "Folder used by Thino multi-file storage.",
+    taskNoteEditInThino: "Edit in Thino",
+    taskNoteDeleted: "Task note deleted.",
     taskReopened: "Task reopened.",
     taskUpdateFailed: "Task Hub could not update the task.",
     tasks: "Tasks",
@@ -524,11 +566,13 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     conditionMatch: "条件匹配",
     conditionTag: "标签",
     conditionText: "文本",
+    createTaskNote: "创建关联笔记",
     day: "日",
     defaultView: "默认视图",
     defaultViewDesc: "打开 Task Hub 时默认显示的视图。",
     delete: "Delete",
     deleteCalendarItem: "从日历删除",
+    edit: "编辑",
     event: "事件",
     eventCreationDefaultTarget: "默认事件创建位置",
     eventCreationDefaultTargetDesc: "从日历新建事件时默认选中的 Apple 日历。",
@@ -638,7 +682,7 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     neverSynced: "从未同步",
     networkError: "网络错误",
     next: "下一页",
-    notes: "备注",
+    notes: "笔记",
     noMatchingTasks: "没有符合当前筛选条件的任务。",
     noOpenTasks: "当前索引的仓库中没有未完成任务。",
     noTags: "索引任务中没有标签。",
@@ -705,6 +749,25 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     taskCreationTarget: "创建到",
     taskDetails: "任务详情",
     taskHub: "Task Hub",
+    taskNoteCreated: "任务笔记已创建。",
+    taskNotesDefaultMode: "默认笔记格式",
+    taskNotesDefaultModeDesc: "创建普通 Task Hub 笔记，或仅兼容 Thino multi-file 存储的笔记。",
+    taskNotesDisabled: "请先在 Task Hub 设置中开启任务笔记。",
+    taskNotesEnable: "任务笔记",
+    taskNotesEnableDesc: "创建与任务和日历事件关联的 Markdown 笔记。",
+    taskNotesFolder: "Task Hub 笔记文件夹",
+    taskNotesFolderDesc: "普通 Task Hub 关联笔记保存到这个文件夹。",
+    taskNotesOpenAfterCreate: "创建后打开笔记",
+    taskNotesOpenAfterCreateDesc: "创建 Markdown 笔记后在新标签页打开。",
+    taskNotesSection: "任务笔记",
+    taskNotesShowCounts: "显示笔记数",
+    taskNotesShowCountsDesc: "任务有关联笔记时，在任务列表行显示数量。",
+    taskNotesThino: "仅创建 Thino multi-file 笔记",
+    taskNotesThinoDesc: "为新笔记写入 Thino multi-file frontmatter；不生成 Thino single-file、Canvas 或日记存储内容。",
+    taskNotesThinoFolder: "Thino 笔记文件夹",
+    taskNotesThinoFolderDesc: "Thino multi-file 存储使用的文件夹。",
+    taskNoteEditInThino: "在 Thino 中编辑",
+    taskNoteDeleted: "任务笔记已删除。",
     taskReopened: "任务已重新打开。",
     taskUpdateFailed: "Task Hub 无法更新该任务。",
     tasks: "任务",

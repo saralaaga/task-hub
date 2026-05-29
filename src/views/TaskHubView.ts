@@ -130,7 +130,11 @@ export class TaskHubView extends ItemView {
           },
           onAppleReminderListChange: (task, listId) => void this.plugin.moveAppleReminderToList(task, listId),
           onTaskUpdate: (task, draft) => void this.plugin.updateCalendarTask(task, draft),
-          onTaskDelete: (task) => void this.plugin.deleteCalendarTask(task)
+          onTaskDelete: (task) => void this.plugin.deleteCalendarTask(task),
+          onCreateTaskNote: (task) => void this.plugin.createTaskNoteForTask(task),
+          onOpenTaskNote: (path) => void this.plugin.openTaskNote(path),
+          onDeleteTaskNote: (path) => void this.plugin.deleteTaskNote(path),
+          onOpenTaskNoteInThino: (path) => void this.plugin.openTaskNoteSource(path)
         },
         now,
         t,
@@ -143,7 +147,12 @@ export class TaskHubView extends ItemView {
           taskColors,
           bindTagInputSuggest,
           taskListScrollTop: this.taskListScrollTop,
-          exitingTaskIds: this.exitingTaskIds(allTasks)
+          exitingTaskIds: this.exitingTaskIds(allTasks),
+          taskNotesEnabled: this.plugin.settings.taskNotes.enabled,
+          allowThinoNoteEdit: this.plugin.settings.taskNotes.thinoIntegrationEnabled,
+          getTaskNoteCount: (task) =>
+            this.plugin.settings.taskNotes.showCountsInTaskList ? this.plugin.getTaskNoteCount(task) : 0,
+          getTaskNotes: (task) => this.plugin.getTaskNotes(task)
         }
       );
       this.restoreContentScroll(options);
@@ -204,6 +213,10 @@ export class TaskHubView extends ItemView {
           appleReminderLists: this.plugin.getAppleReminderLists(),
           appleCalendars: this.plugin.getAppleCalendars(),
           sources: calendarSources,
+          taskNotesEnabled: this.plugin.settings.taskNotes.enabled,
+          allowThinoNoteEdit: this.plugin.settings.taskNotes.thinoIntegrationEnabled,
+          getTaskNotes: (task) => this.plugin.getTaskNotes(task),
+          getEventNotes: (event) => this.plugin.getEventNotes(event),
           t
         },
         allTasks,
@@ -240,7 +253,12 @@ export class TaskHubView extends ItemView {
           onEventReschedule: (event, dateKey) => void this.plugin.rescheduleCalendarEvent(event, dateKey),
           onEventUpdate: (event, draft) => void this.plugin.updateCalendarEvent(event, draft),
           onEventDelete: (event) => void this.plugin.deleteCalendarEvent(event),
-          onEventSendToAppleReminders: (event) => void this.plugin.convertAppleCalendarEventToReminder(event)
+          onEventSendToAppleReminders: (event) => void this.plugin.convertAppleCalendarEventToReminder(event),
+          onCreateTaskNote: (task) => void this.plugin.createTaskNoteForTask(task),
+          onCreateEventNote: (event) => void this.plugin.createTaskNoteForEvent(event),
+          onOpenTaskNote: (path) => void this.plugin.openTaskNote(path),
+          onDeleteTaskNote: (path) => void this.plugin.deleteTaskNote(path),
+          onOpenTaskNoteInThino: (path) => void this.plugin.openTaskNoteSource(path)
         }
       );
       return;

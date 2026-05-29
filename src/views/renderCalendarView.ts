@@ -1,9 +1,10 @@
-import { Menu } from "obsidian";
+import { Menu, setIcon } from "obsidian";
 import { buildCalendarItems, calendarEventLayerId, getCalendarRange, type CalendarItem, type CalendarViewMode } from "../calendar/calendarModel";
 import type { CalendarDropTarget } from "../calendar/calendarDropTarget";
 import { toLocalDateKey } from "../calendar/dateBuckets";
 import { formatLunarDayLabel, formatLunarMonthTitle } from "../calendar/lunarCalendar";
 import type { TranslationKey, Translator } from "../i18n";
+import type { TaskNote } from "../taskNotes";
 import type { AppleCalendarInfo, AppleReminderList, CalendarEvent, CalendarItemEditDraft, CalendarSource, CalendarSourceStatus, TaskItem, WeekStart } from "../types";
 
 export type CalendarViewState = {
@@ -25,6 +26,10 @@ export type CalendarViewState = {
   appleReminderLists?: AppleReminderList[];
   appleCalendars?: AppleCalendarInfo[];
   bindTagInputSuggest?: (input: HTMLInputElement) => void;
+  taskNotesEnabled?: boolean;
+  allowThinoNoteEdit?: boolean;
+  getTaskNotes?: (task: TaskItem) => TaskNote[];
+  getEventNotes?: (event: CalendarEvent) => TaskNote[];
   sources: CalendarSource[];
   t: Translator;
 };
@@ -42,10 +47,15 @@ export type CalendarViewHandlers = {
   onTaskReschedule: (task: TaskItem, target: CalendarDropTarget) => void;
   onTaskDelete?: (task: TaskItem) => void;
   onTaskSendToAppleReminders?: (task: TaskItem) => void;
+  onCreateTaskNote?: (task: TaskItem) => void;
   onEventReschedule?: (event: CalendarEvent, target: CalendarDropTarget) => void;
   onEventUpdate?: (event: CalendarEvent, draft: Extract<CalendarItemEditDraft, { kind: "event" }>) => void;
   onEventDelete?: (event: CalendarEvent) => void;
   onEventSendToAppleReminders?: (event: CalendarEvent) => void;
+  onCreateEventNote?: (event: CalendarEvent) => void;
+  onOpenTaskNote?: (path: string) => void;
+  onDeleteTaskNote?: (path: string) => void;
+  onOpenTaskNoteInThino?: (path: string) => void;
   onTaskSendToAppleCalendar?: (task: TaskItem) => void;
 };
 
@@ -978,6 +988,7 @@ function renderTaskDetailsPopover(
   if (!editable) {
     popover.createDiv({ cls: "task-hub-detail-note", text: state.t("externalTaskReadOnly") });
   }
+  renderCalendarNotes(popover, state.getTaskNotes?.(task) ?? [], handlers, state);
 }
 
 function renderEventDetailsPopover(
@@ -1056,6 +1067,72 @@ function renderEventDetailsPopover(
   if (!editable) {
     popover.createDiv({ cls: "task-hub-detail-note", text: state.t("readOnly") });
   }
+  renderCalendarNotes(popover, state.getEventNotes?.(event) ?? [], handlers, state);
+}
+
+function renderCalendarNotes(
+  container: HTMLElement,
+  notes: TaskNote[],
+  handlers: CalendarViewHandlers,
+  state: CalendarViewState
+): void {
+  if (!state.taskNotesEnabled || notes.length === 0) return;
+  const notesContainer = container.createDiv({ cls: "task-hub-task-notes" });
+  notesContainer.createEl("h4", { text: state.t("notes") });
+  for (const note of notes) {
+    const card = notesContainer.createDiv({ cls: "task-hub-task-note-card" });
+    const menuButton = card.createEl("button", { cls: "task-hub-task-note-menu" });
+    menuButton.setAttr("aria-label", state.t("more"));
+    setIcon(menuButton, "more-horizontal");
+    menuButton.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const menu = new Menu();
+      menu.addItem((menuItem) => {
+        menuItem
+          .setTitle(state.t("delete"))
+          .setIcon("trash")
+          .onClick(() => handlers.onDeleteTaskNote?.(note.path));
+      });
+      menu.addItem((menuItem) => {
+        menuItem
+          .setTitle(state.t("edit"))
+          .setIcon("pencil")
+          .onClick(() => handlers.onOpenTaskNote?.(note.path));
+      });
+      if (state.allowThinoNoteEdit) {
+        menu.addItem((menuItem) => {
+          menuItem
+            .setTitle(state.t("taskNoteEditInThino"))
+            .setIcon("external-link")
+            .onClick(() => handlers.onOpenTaskNoteInThino?.(note.path));
+        });
+      }
+      menu.showAtMouseEvent(event as MouseEvent);
+    });
+    renderNoteBody(card.createDiv({ cls: "task-hub-task-note-body" }), note.body.trim() || note.title);
+    if (note.createdAt) card.createDiv({ cls: "task-hub-task-note-date", text: note.createdAt.slice(0, 10) });
+  }
+}
+
+function renderNoteBody(container: HTMLElement, body: string): void {
+  const tagPattern = /(^|\s)(#[\p{L}\p{N}_/-]+)/gu;
+  let cursor = 0;
+  for (const match of body.matchAll(tagPattern)) {
+    const start = match.index ?? 0;
+    const prefix = match[1] ?? "";
+    const tag = match[2] ?? "";
+    const tagStart = start + prefix.length;
+    appendNoteText(container, body.slice(cursor, tagStart));
+    container.createSpan({ cls: "task-hub-task-tag", text: tag });
+    cursor = tagStart + tag.length;
+  }
+  appendNoteText(container, body.slice(cursor));
+}
+
+function appendNoteText(container: HTMLElement, text: string): void {
+  if (!text) return;
+  container.createSpan({ cls: "task-hub-task-note-text", text });
 }
 
 function renderDetailDeleteButton(actions: HTMLElement, state: CalendarViewState, canDelete: boolean, onDelete: () => void): void {
@@ -1165,6 +1242,28 @@ function bindCalendarItemContextMenu(
     selectCalendarItem(element, item);
     const menu = new Menu();
     let itemCount = 0;
+    if (state.taskNotesEnabled && item.task) {
+      menu.addItem((menuItem) => {
+        itemCount += 1;
+        menuItem
+          .setTitle(state.t("createTaskNote"))
+          .setIcon("sticky-note")
+          .onClick(() => {
+            if (item.task) handlers.onCreateTaskNote?.(item.task);
+          });
+      });
+    }
+    if (state.taskNotesEnabled && item.event) {
+      menu.addItem((menuItem) => {
+        itemCount += 1;
+        menuItem
+          .setTitle(state.t("createTaskNote"))
+          .setIcon("sticky-note")
+          .onClick(() => {
+            if (item.event) handlers.onCreateEventNote?.(item.event);
+          });
+      });
+    }
     if (item.task) {
       menu.addItem((menuItem) => {
         itemCount += 1;

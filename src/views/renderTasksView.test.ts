@@ -1,4 +1,5 @@
 jest.mock("obsidian", () => ({
+  setIcon: jest.fn(),
   Menu: class {
     items: Array<{ title: string; icon: string; click?: () => void }> = [];
     shownAt: unknown;
@@ -227,7 +228,11 @@ describe("renderTasksView", () => {
     onSourceSelect: jest.fn(),
     onAppleReminderListChange: jest.fn(),
     onTaskUpdate: jest.fn(),
-    onTaskDelete: jest.fn()
+    onTaskDelete: jest.fn(),
+    onCreateTaskNote: jest.fn(),
+    onOpenTaskNote: jest.fn(),
+    onDeleteTaskNote: jest.fn(),
+    onOpenTaskNoteInThino: jest.fn()
   });
 
   it("disables Apple Reminders checkboxes when writeback is disabled", () => {
@@ -443,6 +448,164 @@ describe("renderTasksView", () => {
     expect(mockMenus[0].items[0].title).toBe("deleteCalendarItem");
     expect(mockMenus[0].items[0].icon).toBe("trash");
     expect(viewHandlers.onTaskDelete).toHaveBeenCalledWith(baseTask);
+  });
+
+  it("shows task note counts and note links when task notes are enabled", () => {
+    const container = new FakeElement();
+    const viewHandlers = handlers();
+
+    renderTasksView(
+      container as unknown as HTMLElement,
+      [baseTask],
+      [baseTask],
+      { status: "open", tags: [], sourceQuery: "", textQuery: "" },
+      viewHandlers,
+      new Date("2026-05-08T12:00:00Z"),
+      (key) => key,
+      {
+        allowAppleReminderWriteback: true,
+        taskNotesEnabled: true,
+        getTaskNoteCount: () => 2,
+        getTaskNotes: () => [
+          {
+            path: "Task Hub Notes/one.md",
+            related: [],
+            history: [],
+            title: "One",
+            body: "Remember to attach the receipt. #比赛 #client/acme",
+            tags: ["#比赛", "#client/acme"],
+            createdAt: "2026-05-29T10:30:12"
+          },
+          {
+            path: "Task Hub Notes/two.md",
+            related: [],
+            history: [],
+            title: "Two",
+            body: "Call vendor after payment.",
+            tags: [],
+            createdAt: "2026-05-28T09:00:00"
+          }
+        ]
+      }
+    );
+
+    expect(collect(container).find((element) => element.classes.has("task-hub-task-note-count"))?.text).toBe("2");
+    expect(textValues(container)).toContain("notes");
+    expect(collect(container).filter((element) => element.classes.has("task-hub-task-details"))).toHaveLength(1);
+    expect(collect(container).filter((element) => element.classes.has("task-hub-task-notes"))).toHaveLength(1);
+    const noteCard = collect(container).find((element) => element.classes.has("task-hub-task-note-card"));
+    noteCard?.click();
+    expect(viewHandlers.onOpenTaskNote).not.toHaveBeenCalled();
+    expect(collect(container).find((element) => element.classes.has("task-hub-task-note-text"))?.text).toContain("Remember to attach");
+    expect(collect(container).find((element) => element.classes.has("task-hub-task-note-date"))?.text).toBe("2026-05-29");
+    expect(collect(container).filter((element) => element.classes.has("task-hub-task-tag")).map((element) => element.text)).toEqual([
+      "#比赛",
+      "#client/acme"
+    ]);
+    const menu = collect(container).find((element) => element.classes.has("task-hub-task-note-menu"));
+    menu?.click();
+    expect(mockMenus.at(-1)?.items.map((item) => item.title)).toEqual(["delete", "edit"]);
+    mockMenus.at(-1)?.items[1].click?.();
+    expect(viewHandlers.onOpenTaskNote).toHaveBeenCalledWith("Task Hub Notes/one.md");
+  });
+
+  it("shows delete, edit, and Thino edit note menu actions", () => {
+    const container = new FakeElement();
+    const viewHandlers = handlers();
+
+    renderTasksView(
+      container as unknown as HTMLElement,
+      [baseTask],
+      [baseTask],
+      { status: "open", tags: [], sourceQuery: "", textQuery: "" },
+      viewHandlers,
+      new Date("2026-05-08T12:00:00Z"),
+      (key) => key,
+      {
+        allowAppleReminderWriteback: true,
+        taskNotesEnabled: true,
+        allowThinoNoteEdit: true,
+        getTaskNoteCount: () => 1,
+        getTaskNotes: () => [
+          {
+            path: "Task Hub Notes/one.md",
+            related: [],
+            history: [],
+            title: "One",
+            body: "Body",
+            tags: [],
+            createdAt: "2026-05-29T10:30:12"
+          }
+        ]
+      }
+    );
+
+    collect(container).find((element) => element.classes.has("task-hub-task-note-menu"))?.click();
+    expect(mockMenus.at(-1)?.items.map((item) => item.title)).toEqual(["delete", "edit", "taskNoteEditInThino"]);
+    mockMenus.at(-1)?.items[0].click?.();
+    mockMenus.at(-1)?.items[1].click?.();
+    mockMenus.at(-1)?.items[2].click?.();
+    expect(viewHandlers.onDeleteTaskNote).toHaveBeenCalledWith("Task Hub Notes/one.md");
+    expect(viewHandlers.onOpenTaskNote).toHaveBeenCalledWith("Task Hub Notes/one.md");
+    expect(viewHandlers.onOpenTaskNoteInThino).toHaveBeenCalledWith("Task Hub Notes/one.md");
+  });
+
+  it("renders note tags inline instead of duplicating them below the note body", () => {
+    const container = new FakeElement();
+
+    renderTasksView(
+      container as unknown as HTMLElement,
+      [baseTask],
+      [baseTask],
+      { status: "open", tags: [], sourceQuery: "", textQuery: "" },
+      handlers(),
+      new Date("2026-05-08T12:00:00Z"),
+      (key) => key,
+      {
+        allowAppleReminderWriteback: true,
+        taskNotesEnabled: true,
+        getTaskNoteCount: () => 1,
+        getTaskNotes: () => [
+          {
+            path: "Task Hub Notes/one.md",
+            related: [],
+            history: [],
+            title: "One",
+            body: "测试一下 #标签",
+            tags: ["#标签"],
+            createdAt: "2026-05-29T10:30:12"
+          }
+        ]
+      }
+    );
+
+    expect(collect(container).filter((element) => element.classes.has("task-hub-task-note-tags"))).toHaveLength(0);
+    expect(collect(container).filter((element) => element.classes.has("task-hub-task-tag")).map((element) => element.text)).toEqual(["#标签"]);
+    expect(collect(container).find((element) => element.classes.has("task-hub-task-note-date"))?.text).toBe("2026-05-29");
+  });
+
+  it("adds a right-click task note action only when task notes are enabled", () => {
+    const container = new FakeElement();
+    const viewHandlers = handlers();
+
+    renderTasksView(
+      container as unknown as HTMLElement,
+      [baseTask],
+      [baseTask],
+      { status: "open", tags: [], sourceQuery: "", textQuery: "" },
+      viewHandlers,
+      new Date("2026-05-08T12:00:00Z"),
+      (key) => key,
+      { allowAppleReminderWriteback: true, taskNotesEnabled: true }
+    );
+
+    const row = collect(container).find((element) => element.classes.has("task-hub-task-row"));
+    row!.dispatch("contextmenu");
+    mockMenus[0].items[0].click?.();
+
+    expect(mockMenus[0].items[0].title).toBe("createTaskNote");
+    expect(mockMenus[0].items[0].icon).toBe("sticky-note");
+    expect(viewHandlers.onCreateTaskNote).toHaveBeenCalledWith(baseTask);
   });
 
   it("edits Apple Reminder title, date, and tags from the task details pane", () => {

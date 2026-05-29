@@ -1,5 +1,6 @@
 import TaskHubPlugin from "./main";
 import { DEFAULT_SETTINGS } from "./settings";
+import { buildTaskNoteKey, createTaskNoteContent, parseTaskNoteFrontmatter } from "./taskNotes";
 import type { TaskItem } from "./types";
 
 const notices: string[] = [];
@@ -142,6 +143,67 @@ describe("Apple Reminders migration", () => {
     await expect(process.mock.results[0].value).resolves.toBe("Next");
     expect(Object.values(plugin.settings.appleReminderLinks)).toContain("reminder-created-1");
     expect(notices).toContain("Apple Reminder created and source task removed.");
+  });
+
+  it("transfers linked note YAML before removing a sent vault task", async () => {
+    const taskFile = { path: "Inbox.md", extension: "md", stat: { ctime: 1, mtime: 2, size: 3 } };
+    const noteFile = { path: "Task Hub Notes/pay.md", extension: "md", stat: { ctime: 4, mtime: 5, size: 6 } };
+    const plugin = new TaskHubPlugin({} as never, {} as never);
+    const currentTask = task();
+    const oldKey = buildTaskNoteKey(currentTask);
+    const noteContent = createTaskNoteContent({
+      noteId: "thn_1",
+      relatedKey: oldKey,
+      title: "Pay invoice",
+      createdAt: "2026-05-29T10:30:12"
+    });
+    const writes: Array<{ path: string; content: string }> = [];
+    const process = jest.fn(async (file, update) => {
+      const content = file.path === noteFile.path ? noteContent : "- [ ] Pay invoice 📅 2026-05-20\nNext";
+      const next = update(content);
+      writes.push({ path: file.path, content: next });
+      return next;
+    });
+    plugin.app = {
+      vault: {
+        adapter: {},
+        getFileByPath: jest.fn((path: string) => (path === noteFile.path ? noteFile : taskFile)),
+        read: jest.fn(async () => "- [ ] Pay invoice 📅 2026-05-20\nNext"),
+        process,
+        cachedRead: jest.fn(async () => "Next")
+      },
+      workspace: {
+        getLeavesOfType: jest.fn(() => [])
+      }
+    } as never;
+    plugin.settings = {
+      ...DEFAULT_SETTINGS,
+      taskNotes: {
+        ...DEFAULT_SETTINGS.taskNotes,
+        enabled: true
+      },
+      localApple: {
+        ...DEFAULT_SETTINGS.localApple,
+        enabled: true,
+        remindersEnabled: true,
+        remindersCreateEnabled: true
+      }
+    };
+    plugin.taskIndex = {
+      reindexFile: jest.fn(async () => undefined)
+    } as never;
+    plugin.taskNoteIndex = {
+      getNotesForKey: jest.fn(() => [{ path: noteFile.path, related: [oldKey], history: [], title: "pay" }]),
+      reindexFile: jest.fn(async () => undefined)
+    } as never;
+    plugin.syncLocalApple = jest.fn(async () => undefined) as never;
+
+    await plugin.sendTaskToAppleReminders(currentTask);
+
+    expect(writes.map((write) => write.path)).toEqual([noteFile.path, taskFile.path]);
+    const parsed = parseTaskNoteFrontmatter(writes[0].content);
+    expect(parsed?.related).toEqual(["task:apple-reminders:reminder-created-1"]);
+    expect(parsed?.history).toContain(oldKey);
   });
 
   it("preserves a timed Markdown task start time when sending it to Apple Reminders", async () => {

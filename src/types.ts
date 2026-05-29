@@ -1,5 +1,6 @@
 import type { Language } from "./i18n";
 import type { DateBucket } from "./calendar/dateBuckets";
+import type { TaskNoteSettings } from "./taskNotes";
 
 export type TaskStatusFilter = "open" | "completed" | "all";
 export type DefaultView = "tasks" | "calendar" | "tags";
@@ -183,6 +184,7 @@ export type TaskHubSettings = {
   calendarTaskCreationDefaultTarget: CalendarTaskCreationTarget;
   calendarEventCreationDefaultTarget: CalendarEventCreationTarget;
   taskCreationFilePath: string;
+  taskNotes: TaskNoteSettings;
   taskViewFilters: TaskViewFilterSettings;
   ignoredPaths: string[];
   tagViewOrder: string[];

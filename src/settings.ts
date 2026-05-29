@@ -18,6 +18,15 @@ export const DEFAULT_SETTINGS: TaskHubSettings = {
   calendarTaskCreationDefaultTarget: { type: "vault" },
   calendarEventCreationDefaultTarget: { type: "apple-calendar" },
   taskCreationFilePath: "Task Hub.md",
+  taskNotes: {
+    enabled: false,
+    notesFolder: "Task Hub Notes",
+    defaultMode: "task-hub",
+    thinoIntegrationEnabled: false,
+    thinoFolder: "Thino",
+    openNoteAfterCreate: true,
+    showCountsInTaskList: true
+  },
   taskViewFilters: {
     status: "open",
     tags: [],
@@ -74,6 +83,7 @@ export function normalizeTaskHubSettings(loaded: Partial<TaskHubSettings> | null
     calendarEventCreationDefaultTarget:
       loaded?.calendarEventCreationDefaultTarget ?? DEFAULT_SETTINGS.calendarEventCreationDefaultTarget,
     taskCreationFilePath: loaded?.taskCreationFilePath ?? DEFAULT_SETTINGS.taskCreationFilePath,
+    taskNotes: normalizeTaskNotesSettings(loaded?.taskNotes),
     taskViewFilters: normalizeTaskViewFilters(loaded?.taskViewFilters, loaded?.showCompletedByDefault),
     localApple: {
       ...DEFAULT_SETTINGS.localApple,
@@ -94,6 +104,16 @@ export function normalizeTaskHubSettings(loaded: Partial<TaskHubSettings> | null
         DEFAULT_SETTINGS.localApple.calendarDefaultTimedTaskDurationMinutes
     },
     appleReminderLinks: loaded?.appleReminderLinks ?? {}
+  };
+}
+
+function normalizeTaskNotesSettings(loaded: Partial<TaskHubSettings["taskNotes"]> | undefined): TaskHubSettings["taskNotes"] {
+  return {
+    ...DEFAULT_SETTINGS.taskNotes,
+    ...(loaded ?? {}),
+    defaultMode: loaded?.defaultMode === "thino-multi-file" ? "thino-multi-file" : DEFAULT_SETTINGS.taskNotes.defaultMode,
+    notesFolder: loaded?.notesFolder ?? DEFAULT_SETTINGS.taskNotes.notesFolder,
+    thinoFolder: loaded?.thinoFolder ?? DEFAULT_SETTINGS.taskNotes.thinoFolder
   };
 }
 
@@ -302,6 +322,95 @@ export class TaskHubSettingTab extends PluginSettingTab {
         .addText((text) => {
           text.setPlaceholder(DEFAULT_SETTINGS.taskCreationFilePath).setValue(this.plugin.settings.taskCreationFilePath).onChange(async (value) => {
             this.plugin.settings.taskCreationFilePath = value;
+            await this.plugin.saveSettings();
+          });
+        });
+    }
+
+    new Setting(containerEl).setName(t("taskNotesSection")).setHeading();
+
+    new Setting(containerEl)
+      .setName(t("taskNotesEnable"))
+      .setDesc(t("taskNotesEnableDesc"))
+      .addToggle((toggle) => {
+        toggle.setValue(this.plugin.settings.taskNotes.enabled).onChange(async (value) => {
+          this.plugin.settings.taskNotes.enabled = value;
+          await this.plugin.saveSettings();
+          this.display({ preserveScroll: true });
+        });
+      });
+
+    if (this.plugin.settings.taskNotes.enabled) {
+      const taskNotesGrid = containerEl.createDiv({ cls: "task-hub-settings-grid" });
+      new Setting(taskNotesGrid)
+        .setName(t("taskNotesFolder"))
+        .setDesc(t("taskNotesFolderDesc"))
+        .addText((text) => {
+          text.setPlaceholder(DEFAULT_SETTINGS.taskNotes.notesFolder).setValue(this.plugin.settings.taskNotes.notesFolder).onChange(async (value) => {
+            this.plugin.settings.taskNotes.notesFolder = value;
+            await this.plugin.saveSettings();
+          });
+        });
+
+      new Setting(taskNotesGrid)
+        .setName(t("taskNotesThino"))
+        .setDesc(t("taskNotesThinoDesc"))
+        .addToggle((toggle) => {
+          toggle.setValue(this.plugin.settings.taskNotes.thinoIntegrationEnabled).onChange(async (value) => {
+            this.plugin.settings.taskNotes.thinoIntegrationEnabled = value;
+            if (!value && this.plugin.settings.taskNotes.defaultMode === "thino-multi-file") {
+              this.plugin.settings.taskNotes.defaultMode = "task-hub";
+            }
+            await this.plugin.saveSettings();
+            this.display({ preserveScroll: true });
+          });
+        });
+
+      new Setting(taskNotesGrid)
+        .setName(t("taskNotesDefaultMode"))
+        .setDesc(t("taskNotesDefaultModeDesc"))
+        .addDropdown((dropdown) => {
+          dropdown
+            .addOption("task-hub", "Task Hub")
+            .addOption("thino-multi-file", "Thino multi-file")
+            .setValue(this.plugin.settings.taskNotes.defaultMode)
+            .onChange(async (value) => {
+              this.plugin.settings.taskNotes.defaultMode =
+                value === "thino-multi-file" && this.plugin.settings.taskNotes.thinoIntegrationEnabled
+                  ? "thino-multi-file"
+                  : "task-hub";
+              await this.plugin.saveSettings();
+            });
+        });
+
+      if (this.plugin.settings.taskNotes.thinoIntegrationEnabled) {
+        new Setting(taskNotesGrid)
+          .setName(t("taskNotesThinoFolder"))
+          .setDesc(t("taskNotesThinoFolderDesc"))
+          .addText((text) => {
+            text.setPlaceholder(DEFAULT_SETTINGS.taskNotes.thinoFolder).setValue(this.plugin.settings.taskNotes.thinoFolder).onChange(async (value) => {
+              this.plugin.settings.taskNotes.thinoFolder = value;
+              await this.plugin.saveSettings();
+            });
+          });
+      }
+
+      new Setting(taskNotesGrid)
+        .setName(t("taskNotesOpenAfterCreate"))
+        .setDesc(t("taskNotesOpenAfterCreateDesc"))
+        .addToggle((toggle) => {
+          toggle.setValue(this.plugin.settings.taskNotes.openNoteAfterCreate).onChange(async (value) => {
+            this.plugin.settings.taskNotes.openNoteAfterCreate = value;
+            await this.plugin.saveSettings();
+          });
+        });
+
+      new Setting(taskNotesGrid)
+        .setName(t("taskNotesShowCounts"))
+        .setDesc(t("taskNotesShowCountsDesc"))
+        .addToggle((toggle) => {
+          toggle.setValue(this.plugin.settings.taskNotes.showCountsInTaskList).onChange(async (value) => {
+            this.plugin.settings.taskNotes.showCountsInTaskList = value;
             await this.plugin.saveSettings();
           });
         });
