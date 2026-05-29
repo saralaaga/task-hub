@@ -584,6 +584,43 @@ describe("renderTasksView", () => {
     expect(collect(container).find((element) => element.classes.has("task-hub-task-note-date"))?.text).toBe("2026-05-29");
   });
 
+  it("uses the supplied Markdown renderer for note bodies", () => {
+    const container = new FakeElement();
+    const renderNoteMarkdown = jest.fn((target: HTMLElement, markdown: string) => {
+      target.createEl("ul", { text: markdown });
+    });
+
+    renderTasksView(
+      container as unknown as HTMLElement,
+      [baseTask],
+      [baseTask],
+      { status: "open", tags: [], sourceQuery: "", textQuery: "" },
+      handlers(),
+      new Date("2026-05-08T12:00:00Z"),
+      (key) => key,
+      {
+        allowAppleReminderWriteback: true,
+        taskNotesEnabled: true,
+        renderNoteMarkdown,
+        getTaskNoteCount: () => 1,
+        getTaskNotes: () => [
+          {
+            path: "Task Hub Notes/list.md",
+            related: [],
+            history: [],
+            title: "List",
+            body: "- item one\n- item two",
+            tags: [],
+            createdAt: "2026-05-29T10:30:12"
+          }
+        ]
+      }
+    );
+
+    expect(renderNoteMarkdown).toHaveBeenCalledWith(expect.anything(), "- item one\n- item two", "Task Hub Notes/list.md");
+    expect(collect(container).find((element) => element.type === "ul")?.text).toBe("- item one\n- item two");
+  });
+
   it("adds a right-click task note action only when task notes are enabled", () => {
     const container = new FakeElement();
     const viewHandlers = handlers();

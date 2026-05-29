@@ -829,13 +829,6 @@ body .task-hub-view button.task-hub-color-swatch {
   margin-top: 6px;
 }
 
-.task-hub-task-note-body {
-  align-items: baseline;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 6px;
-}
-
 .task-hub-task-note-menu {
   align-items: center;
   appearance: none;
@@ -867,6 +860,21 @@ body .task-hub-view button.task-hub-color-swatch {
   white-space: pre-wrap;
 }
 
+.task-hub-task-note-body p,
+.task-hub-task-note-body ul,
+.task-hub-task-note-body ol {
+  margin-block: 0 6px;
+}
+
+.task-hub-task-note-body ul,
+.task-hub-task-note-body ol {
+  padding-inline-start: 1.35em;
+}
+
+.task-hub-task-note-body > :last-child {
+  margin-bottom: 0;
+}
+
 .task-hub-note-modal {
   display: grid;
   gap: 12px;
@@ -883,6 +891,7 @@ body .task-hub-view button.task-hub-color-swatch {
   gap: 8px;
   justify-content: flex-end;
 }
+
 
 .task-hub-task-list-pane {
   justify-items: center;

@@ -4,6 +4,7 @@ import { getTaskBucket, type TaskFilterState } from "../filtering/filters";
 import type { Translator } from "../i18n";
 import type { TaskNote } from "../taskNotes";
 import type { AppleReminderList, CalendarItemEditDraft, TaskItem } from "../types";
+import { renderTaskNoteBody, type TaskNoteMarkdownRenderer } from "./renderTaskNoteBody";
 
 export type TaskRowHandlers = {
   onComplete: (task: TaskItem) => void;
@@ -35,6 +36,7 @@ export type TaskRenderOptions = {
   allowThinoNoteEdit?: boolean;
   getTaskNoteCount?: (task: TaskItem) => number;
   getTaskNotes?: (task: TaskItem) => TaskNote[];
+  renderNoteMarkdown?: TaskNoteMarkdownRenderer;
 };
 
 const BUCKETS = ["overdue", "today", "tomorrow", "thisWeek", "future", "noDate", "otherCompleted"] as const;
@@ -341,7 +343,7 @@ function renderTaskNotes(
   if (color) notesContainer.style.setProperty("--task-hub-source-color", color);
   notesContainer.createEl("h4", { text: t("notes") });
   for (const note of notes) {
-    const text = note.body.trim() || note.title;
+    const text = note.body.trim();
     const card = notesContainer.createDiv({ cls: "task-hub-task-note-card" });
     const menuButton = card.createEl("button", { cls: "task-hub-task-note-menu" });
     menuButton.setAttr("aria-label", t("more"));
@@ -372,29 +374,9 @@ function renderTaskNotes(
       }
       menu.showAtMouseEvent(event as MouseEvent);
     });
-    renderNoteBody(card.createDiv({ cls: "task-hub-task-note-body" }), text);
+    renderTaskNoteBody(card.createDiv({ cls: "task-hub-task-note-body" }), text, note.path, options.renderNoteMarkdown);
     if (note.createdAt) card.createDiv({ cls: "task-hub-task-note-date", text: note.createdAt.slice(0, 10) });
   }
-}
-
-function renderNoteBody(container: HTMLElement, body: string): void {
-  const tagPattern = /(^|\s)(#[\p{L}\p{N}_/-]+)/gu;
-  let cursor = 0;
-  for (const match of body.matchAll(tagPattern)) {
-    const start = match.index ?? 0;
-    const prefix = match[1] ?? "";
-    const tag = match[2] ?? "";
-    const tagStart = start + prefix.length;
-    appendNoteText(container, body.slice(cursor, tagStart));
-    container.createSpan({ cls: "task-hub-task-tag", text: tag });
-    cursor = tagStart + tag.length;
-  }
-  appendNoteText(container, body.slice(cursor));
-}
-
-function appendNoteText(container: HTMLElement, text: string): void {
-  if (!text) return;
-  container.createSpan({ cls: "task-hub-task-note-text", text });
 }
 
 function detailInput(container: HTMLElement, label: string, value: string, type = "text", inputClass?: string): HTMLInputElement {

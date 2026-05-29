@@ -1,4 +1,4 @@
-import { ItemView, Notice, WorkspaceLeaf } from "obsidian";
+import { ItemView, MarkdownRenderer, Notice, WorkspaceLeaf } from "obsidian";
 import { TASK_HUB_VIEW_TYPE } from "../constants";
 import { toLocalDateKey } from "../calendar/dateBuckets";
 import { filterTasks, type TaskFilterState } from "../filtering/filters";
@@ -11,6 +11,7 @@ import { renderShell, type DashboardView } from "./renderShell";
 import { syncVisibleSources } from "./sourceVisibility";
 import { renderTagsView } from "./renderTagsView";
 import { renderTasksView } from "./renderTasksView";
+import { decorateRenderedTaskNoteTags, renderPlainTaskNoteBody } from "./renderTaskNoteBody";
 import { bindTaskHubTagInputSuggest, collectObsidianTags } from "./tagInputSuggest";
 
 export class TaskHubView extends ItemView {
@@ -152,7 +153,8 @@ export class TaskHubView extends ItemView {
           allowThinoNoteEdit: this.plugin.settings.taskNotes.thinoIntegrationEnabled,
           getTaskNoteCount: (task) =>
             this.plugin.settings.taskNotes.showCountsInTaskList ? this.plugin.getTaskNoteCount(task) : 0,
-          getTaskNotes: (task) => this.plugin.getTaskNotes(task)
+          getTaskNotes: (task) => this.plugin.getTaskNotes(task),
+          renderNoteMarkdown: (noteContainer, body, sourcePath) => this.renderNoteMarkdown(noteContainer, body, sourcePath)
         }
       );
       this.restoreContentScroll(options);
@@ -217,6 +219,7 @@ export class TaskHubView extends ItemView {
           allowThinoNoteEdit: this.plugin.settings.taskNotes.thinoIntegrationEnabled,
           getTaskNotes: (task) => this.plugin.getTaskNotes(task),
           getEventNotes: (event) => this.plugin.getEventNotes(event),
+          renderNoteMarkdown: (noteContainer, body, sourcePath) => this.renderNoteMarkdown(noteContainer, body, sourcePath),
           t
         },
         allTasks,
@@ -279,6 +282,16 @@ export class TaskHubView extends ItemView {
       this.isRefreshing = false;
       this.render({ preserveTaskListScroll: true });
     }
+  }
+
+  private renderNoteMarkdown(container: HTMLElement, body: string, sourcePath: string): void {
+    container.empty();
+    void MarkdownRenderer.render(this.app, body, container, sourcePath, this)
+      .then(() => decorateRenderedTaskNoteTags(container))
+      .catch(() => {
+        container.empty();
+        renderPlainTaskNoteBody(container, body);
+      });
   }
 
   private captureTaskListScroll(): void {

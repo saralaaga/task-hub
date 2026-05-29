@@ -6,6 +6,7 @@ import { formatLunarDayLabel, formatLunarMonthTitle } from "../calendar/lunarCal
 import type { TranslationKey, Translator } from "../i18n";
 import type { TaskNote } from "../taskNotes";
 import type { AppleCalendarInfo, AppleReminderList, CalendarEvent, CalendarItemEditDraft, CalendarSource, CalendarSourceStatus, TaskItem, WeekStart } from "../types";
+import { renderTaskNoteBody, type TaskNoteMarkdownRenderer } from "./renderTaskNoteBody";
 
 export type CalendarViewState = {
   mode: CalendarViewMode;
@@ -30,6 +31,7 @@ export type CalendarViewState = {
   allowThinoNoteEdit?: boolean;
   getTaskNotes?: (task: TaskItem) => TaskNote[];
   getEventNotes?: (event: CalendarEvent) => TaskNote[];
+  renderNoteMarkdown?: TaskNoteMarkdownRenderer;
   sources: CalendarSource[];
   t: Translator;
 };
@@ -1110,29 +1112,9 @@ function renderCalendarNotes(
       }
       menu.showAtMouseEvent(event as MouseEvent);
     });
-    renderNoteBody(card.createDiv({ cls: "task-hub-task-note-body" }), note.body.trim() || note.title);
+    renderTaskNoteBody(card.createDiv({ cls: "task-hub-task-note-body" }), note.body.trim(), note.path, state.renderNoteMarkdown);
     if (note.createdAt) card.createDiv({ cls: "task-hub-task-note-date", text: note.createdAt.slice(0, 10) });
   }
-}
-
-function renderNoteBody(container: HTMLElement, body: string): void {
-  const tagPattern = /(^|\s)(#[\p{L}\p{N}_/-]+)/gu;
-  let cursor = 0;
-  for (const match of body.matchAll(tagPattern)) {
-    const start = match.index ?? 0;
-    const prefix = match[1] ?? "";
-    const tag = match[2] ?? "";
-    const tagStart = start + prefix.length;
-    appendNoteText(container, body.slice(cursor, tagStart));
-    container.createSpan({ cls: "task-hub-task-tag", text: tag });
-    cursor = tagStart + tag.length;
-  }
-  appendNoteText(container, body.slice(cursor));
-}
-
-function appendNoteText(container: HTMLElement, text: string): void {
-  if (!text) return;
-  container.createSpan({ cls: "task-hub-task-note-text", text });
 }
 
 function renderDetailDeleteButton(actions: HTMLElement, state: CalendarViewState, canDelete: boolean, onDelete: () => void): void {

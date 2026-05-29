@@ -64,7 +64,7 @@ describe("task note frontmatter", () => {
     expect(content).toContain("taskhub-note: true");
     expect(content).toContain('taskhub-note-id: "thn_1"');
     expect(content).toContain("taskhub-related:");
-    expect(content).toContain(`# Pay invoice`);
+    expect(parseTaskNoteFrontmatter(content)?.body).toBe("");
   });
 
   it("updates existing frontmatter while preserving unrelated properties and body", () => {
