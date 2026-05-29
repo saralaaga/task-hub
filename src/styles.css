@@ -1060,8 +1060,14 @@ body .task-hub-view button.task-hub-color-swatch {
 }
 
 .task-hub-tag-editor-chip:hover,
-.task-hub-tag-editor-chip:focus-visible {
+.task-hub-tag-editor-chip:focus-visible,
+.task-hub-tag-editor-chip.is-selected {
   background: color-mix(in srgb, var(--task-hub-source-color, var(--interactive-accent)) 88%, white);
+}
+
+.task-hub-tag-editor-chip.is-selected {
+  outline: 2px solid color-mix(in srgb, var(--task-hub-source-color, var(--interactive-accent)) 46%, white);
+  outline-offset: 2px;
 }
 
 .task-hub-detail-save {

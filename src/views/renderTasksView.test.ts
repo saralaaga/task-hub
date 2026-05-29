@@ -49,7 +49,10 @@ class FakeElement {
   text = "";
   type = "";
   value = "";
+  selectionStart: number | null = 0;
+  selectionEnd: number | null = 0;
   parent?: FakeElement;
+  focused = false;
   scrollTop = 0;
   classes = new Set<string>();
   style = { setProperty: jest.fn() };
@@ -144,6 +147,7 @@ class FakeElement {
   }
 
   focus(): void {
+    this.focused = true;
     for (const listener of this.listeners.get("focus") ?? []) {
       listener({ key: "", preventDefault: jest.fn(), stopPropagation: jest.fn() });
     }
@@ -171,6 +175,7 @@ class FakeElement {
 
 type FakeEvent = {
   key: string;
+  isComposing?: boolean;
   preventDefault(): void;
   stopPropagation(): void;
 };
@@ -706,11 +711,78 @@ describe("renderTasksView", () => {
     expect(input!.value).toBe("");
     expect(collect(editor!).filter((element) => element.classes.has("task-hub-tag-editor-chip")).map((chip) => chip.text)).toEqual(["#home", "#errand"]);
     collect(editor!).find((element) => element.classes.has("task-hub-tag-editor-chip") && element.text === "#home")!.click();
-    expect(collect(editor!).filter((element) => element.classes.has("task-hub-tag-editor-chip")).map((chip) => chip.text)).toEqual(["#home", "#errand"]);
+    expect(collect(editor!).find((element) => element.classes.has("is-selected"))?.text).toBe("#home");
     input!.dispatch("keydown", { key: "Backspace" });
-    expect(collect(editor!).filter((element) => element.classes.has("task-hub-tag-editor-chip")).map((chip) => chip.text)).toEqual(["#home"]);
+    expect(collect(editor!).filter((element) => element.classes.has("task-hub-tag-editor-chip")).map((chip) => chip.text)).toEqual(["#errand"]);
     findElementByText(container, "save")!.click();
-    expect(viewHandlers.onTaskUpdate).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ tags: ["#home"] }));
+    expect(viewHandlers.onTaskUpdate).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ tags: ["#errand"] }));
+  });
+
+  it("does not commit partial pinyin tag text while IME composition is active", () => {
+    const container = new FakeElement();
+    const task = { ...baseTask, tags: ["#home"] };
+
+    renderTasksView(
+      container as unknown as HTMLElement,
+      [task],
+      [task],
+      { status: "open", tags: [], sourceQuery: "", textQuery: "" },
+      handlers(),
+      new Date("2026-05-08T12:00:00Z"),
+      (key) => key,
+      { allowAppleReminderWriteback: true }
+    );
+
+    const editor = collect(container).find((element) => element.classes.has("task-hub-tag-editor"));
+    const input = collect(container).find((element) => element.classes.has("task-hub-tag-editor-input"));
+
+    input!.dispatch("compositionstart");
+    input!.value = "#bi ";
+    input!.input();
+
+    expect(collect(editor!).filter((element) => element.classes.has("task-hub-tag-editor-chip")).map((chip) => chip.text)).toEqual(["#home"]);
+
+    input!.value = "#比赛 ";
+    input!.dispatch("compositionend");
+
+    expect(input!.value).toBe("");
+    expect(collect(editor!).filter((element) => element.classes.has("task-hub-tag-editor-chip")).map((chip) => chip.text)).toEqual(["#home", "#比赛"]);
+  });
+
+  it("allows keyboard selection and deletion of earlier tag chips", () => {
+    const container = new FakeElement();
+    const viewHandlers = handlers();
+    const task = { ...baseTask, tags: ["#home", "#errand", "#比赛"] };
+
+    renderTasksView(
+      container as unknown as HTMLElement,
+      [task],
+      [task],
+      { status: "open", tags: [], sourceQuery: "", textQuery: "" },
+      viewHandlers,
+      new Date("2026-05-08T12:00:00Z"),
+      (key) => key,
+      { allowAppleReminderWriteback: true }
+    );
+
+    const editor = collect(container).find((element) => element.classes.has("task-hub-tag-editor"));
+    const input = collect(container).find((element) => element.classes.has("task-hub-tag-editor-input"));
+    input!.selectionStart = 0;
+    input!.selectionEnd = 0;
+
+    input!.dispatch("keydown", { key: "ArrowLeft" });
+    input!.dispatch("keydown", { key: "ArrowLeft" });
+    expect(collect(editor!).find((element) => element.classes.has("is-selected"))?.text).toBe("#errand");
+
+    input!.dispatch("keydown", { key: "Backspace" });
+    expect(collect(editor!).filter((element) => element.classes.has("task-hub-tag-editor-chip")).map((chip) => chip.text)).toEqual(["#home", "#比赛"]);
+
+    input!.dispatch("keydown", { key: "ArrowLeft" });
+    input!.dispatch("keydown", { key: "Backspace" });
+    expect(collect(editor!).filter((element) => element.classes.has("task-hub-tag-editor-chip")).map((chip) => chip.text)).toEqual(["#比赛"]);
+
+    findElementByText(container, "save")!.click();
+    expect(viewHandlers.onTaskUpdate).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ tags: ["#比赛"] }));
   });
 
   it("binds native Obsidian tag suggestions while editing Apple Reminder tags", () => {
