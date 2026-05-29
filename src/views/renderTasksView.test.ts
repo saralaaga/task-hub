@@ -95,6 +95,17 @@ class FakeElement {
     this.children.splice(index, 0, child);
   }
 
+  appendChild(child: FakeElement): FakeElement {
+    child.parent = this;
+    this.children = this.children.filter((existing) => existing !== child);
+    this.children.push(child);
+    return child;
+  }
+
+  get parentElement(): FakeElement | undefined {
+    return this.parent;
+  }
+
   createSvg(tag: string, options: { attr?: Record<string, string> } = {}): FakeElement {
     const child = this.append();
     child.type = tag;
@@ -773,6 +784,12 @@ describe("renderTasksView", () => {
     input!.dispatch("keydown", { key: "ArrowLeft" });
     input!.dispatch("keydown", { key: "ArrowLeft" });
     expect(collect(editor!).find((element) => element.classes.has("is-selected"))?.text).toBe("#errand");
+    expect(editor!.children.map((child) => child.classes.has("task-hub-tag-editor-input") ? "input" : child.text)).toEqual([
+      "#home",
+      "input",
+      "#errand",
+      "#比赛"
+    ]);
 
     input!.dispatch("keydown", { key: "Backspace" });
     expect(collect(editor!).filter((element) => element.classes.has("task-hub-tag-editor-chip")).map((chip) => chip.text)).toEqual(["#home", "#比赛"]);

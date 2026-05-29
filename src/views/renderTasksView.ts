@@ -433,7 +433,9 @@ function tagChipEditor(
     for (const child of Array.from(editor.children)) {
       if (child !== input) child.remove();
     }
+    if (input.parentElement === editor) input.remove();
     for (const [index, tag] of tags.entries()) {
+      if (index === selectedIndex) editor.appendChild(input);
       const chip = editor.createSpan({ cls: "task-hub-tag-editor-chip", text: tag });
       chip.toggleClass("is-selected", index === selectedIndex);
       chip.setAttr("tabindex", "0");
@@ -444,8 +446,8 @@ function tagChipEditor(
         render();
         input.focus();
       });
-      editor.insertBefore(chip, input);
     }
+    if (input.parentElement !== editor) editor.appendChild(input);
   };
 
   const commit = () => {
