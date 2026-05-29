@@ -120,7 +120,7 @@ export function createTaskNoteContent(input: {
     "  - task-hub-note",
     "---"
   ].join("\n");
-  return `${frontmatter}\n\n# ${input.title.trim() || "Task note"}\n`;
+  return `${frontmatter}\n`;
 }
 
 export function parseTaskNoteFrontmatter(content: string): TaskNoteFrontmatter | undefined {

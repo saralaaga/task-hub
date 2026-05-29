@@ -11,6 +11,7 @@ import { completeTaskInContent, deleteTaskInContent, rescheduleTaskInContent, up
 import { TaskIndex } from "./indexing/taskIndex";
 import { openExternalTaskSource } from "./externalSources";
 import { appendTaskToContent, createTaskLine, normalizeTaskCreationFilePath } from "./taskCreation";
+import { bindTaskHubTagInputSuggest, collectObsidianTags } from "./views/tagInputSuggest";
 import {
   TaskNoteIndex,
   buildCalendarEventNoteKey,
@@ -60,7 +61,6 @@ import {
 } from "./settings";
 import type { AppleCalendarInfo, CalendarCreationKind, CalendarCreationTarget, CalendarEvent, CalendarItemEditDraft, CalendarSourceStatus, LocalAppleSyncStatus, TaskHubSettings, TaskItem } from "./types";
 import { TaskHubView } from "./views/TaskHubView";
-import { bindTaskHubTagInputSuggest, collectObsidianTags } from "./views/tagInputSuggest";
 
 function validCalendarEventDuration(value: number | undefined): number {
   if (!Number.isFinite(value) || value === undefined) return 60;
@@ -1188,8 +1188,12 @@ export default class TaskHubPlugin extends Plugin {
     await this.createTaskNote(buildCalendarEventNoteKey(event), event.title);
   }
 
-  async saveTaskNoteBody(file: TFile, body: string): Promise<{ ok: true } | { ok: false; message: string }> {
+  async saveTaskNoteBody(file: TFile, body: string): Promise<{ ok: true; deleted?: boolean } | { ok: false; message: string }> {
     const t = createTranslator(this.settings.language);
+    if (!body.trim()) {
+      await this.deleteTaskNoteFile(file);
+      return { ok: true, deleted: true };
+    }
     const update = {
       result: { status: "conflict", message: t("taskUpdateFailed") } as ReturnType<typeof replaceTaskNoteBody>
     };
@@ -1203,6 +1207,16 @@ export default class TaskHubPlugin extends Plugin {
     await this.taskNoteIndex.reindexFile(this.toIndexableFile(file));
     this.refreshOpenViews();
     return { ok: true };
+  }
+
+  async deleteTaskNoteIfEmpty(file: TFile): Promise<void> {
+    try {
+      const content = await this.app.vault.cachedRead(file);
+      if (noteBodyFromContent(content).trim()) return;
+      await this.deleteTaskNoteFile(file);
+    } catch {
+      // The note may already have been deleted while the modal was closing.
+    }
   }
 
   getCalendarSources() {
@@ -1564,9 +1578,13 @@ export default class TaskHubPlugin extends Plugin {
     await this.taskNoteIndex.reindexFile(this.toIndexableFile(file));
     this.refreshOpenViews();
     new Notice(t("taskNoteCreated"));
-    if (this.settings.taskNotes.openNoteAfterCreate) {
-      await this.openTaskNote(file.path);
-    }
+    await this.openTaskNote(file.path);
+  }
+
+  private async deleteTaskNoteFile(file: TFile): Promise<void> {
+    await this.app.vault.delete(file);
+    this.taskNoteIndex.removeFile(file.path);
+    this.refreshOpenViews();
   }
 
   private async uniqueTaskNotePath(path: string): Promise<string> {
@@ -1652,6 +1670,9 @@ export default class TaskHubPlugin extends Plugin {
 }
 
 class TaskNoteEditModal extends Modal {
+  private tagSuggest?: ReturnType<typeof bindTaskHubTagInputSuggest>;
+  private savedOrDeleted = false;
+
   constructor(
     private readonly plugin: TaskHubPlugin,
     private readonly file: TFile
@@ -1668,6 +1689,7 @@ class TaskNoteEditModal extends Modal {
     const content = await this.plugin.app.vault.cachedRead(this.file);
     const textarea = contentEl.createEl("textarea", { cls: "task-hub-note-modal-editor" }) as HTMLTextAreaElement;
     textarea.value = noteBodyFromContent(content);
+    this.tagSuggest = bindTaskHubTagInputSuggest(this.plugin.app, textarea, () => collectObsidianTags(this.plugin.app, this.plugin.getTasks()));
     textarea.addEventListener("keydown", (event) => {
       if (event.key !== "Escape") return;
       event.preventDefault();
@@ -1681,11 +1703,24 @@ class TaskNoteEditModal extends Modal {
     save.addEventListener("click", () => void this.save(textarea.value));
   }
 
+  onClose(): void {
+    this.tagSuggest?.destroy();
+    this.tagSuggest = undefined;
+    if (!this.savedOrDeleted) {
+      void this.plugin.deleteTaskNoteIfEmpty(this.file);
+    }
+  }
+
   private async save(body: string): Promise<void> {
     const t = createTranslator(this.plugin.settings.language);
     const result = await this.plugin.saveTaskNoteBody(this.file, body);
     if (!result.ok) {
       new Notice(result.message);
+      return;
+    }
+    this.savedOrDeleted = true;
+    if (result.deleted) {
+      this.close();
       return;
     }
     new Notice(t("taskUpdated"));

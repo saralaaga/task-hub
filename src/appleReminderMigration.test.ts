@@ -206,6 +206,65 @@ describe("Apple Reminders migration", () => {
     expect(parsed?.history).toContain(oldKey);
   });
 
+  it("deletes a task note instead of saving an empty body", async () => {
+    const noteFile = { path: "Task Hub Notes/empty.md", extension: "md", stat: { ctime: 1, mtime: 2, size: 3 } };
+    const plugin = new TaskHubPlugin({} as never, {} as never);
+    const deleteFile = jest.fn(async () => undefined);
+    const process = jest.fn();
+    const removeFile = jest.fn();
+    plugin.app = {
+      vault: {
+        delete: deleteFile,
+        process
+      },
+      workspace: {
+        getLeavesOfType: jest.fn(() => [])
+      }
+    } as never;
+    plugin.settings = DEFAULT_SETTINGS;
+    plugin.taskNoteIndex = {
+      removeFile
+    } as never;
+
+    const result = await plugin.saveTaskNoteBody(noteFile as never, "  \n\t");
+
+    expect(result).toEqual({ ok: true, deleted: true });
+    expect(deleteFile).toHaveBeenCalledWith(noteFile);
+    expect(removeFile).toHaveBeenCalledWith(noteFile.path);
+    expect(process).not.toHaveBeenCalled();
+  });
+
+  it("cleans up an already-created note when its body is still empty", async () => {
+    const noteFile = { path: "Task Hub Notes/empty.md", extension: "md", stat: { ctime: 1, mtime: 2, size: 3 } };
+    const plugin = new TaskHubPlugin({} as never, {} as never);
+    const deleteFile = jest.fn(async () => undefined);
+    const removeFile = jest.fn();
+    plugin.app = {
+      vault: {
+        cachedRead: jest.fn(async () =>
+          createTaskNoteContent({
+            noteId: "thn_1",
+            relatedKey: "task:vault:Inbox.md:0:abc",
+            title: "Empty",
+            createdAt: "2026-05-29T10:30:12"
+          })
+        ),
+        delete: deleteFile
+      },
+      workspace: {
+        getLeavesOfType: jest.fn(() => [])
+      }
+    } as never;
+    plugin.taskNoteIndex = {
+      removeFile
+    } as never;
+
+    await plugin.deleteTaskNoteIfEmpty(noteFile as never);
+
+    expect(deleteFile).toHaveBeenCalledWith(noteFile);
+    expect(removeFile).toHaveBeenCalledWith(noteFile.path);
+  });
+
   it("preserves a timed Markdown task start time when sending it to Apple Reminders", async () => {
     const file = { path: "Inbox.md", extension: "md", stat: { ctime: 1, mtime: 2, size: 3 } };
     const plugin = new TaskHubPlugin({} as never, {} as never);

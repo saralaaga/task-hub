@@ -1,6 +1,6 @@
 jest.mock("obsidian", () => ({
   AbstractInputSuggest: class {
-    constructor(public app: unknown, public inputEl: HTMLInputElement) {}
+    constructor(public app: unknown, public inputEl: HTMLInputElement | HTMLTextAreaElement) {}
     close(): void {}
   },
   getAllTags: jest.fn(() => ["#vault", "#project/acme"]),
@@ -99,6 +99,21 @@ describe("tagInputSuggest", () => {
     suggest.selectSuggestion("#比赛", { preventDefault: jest.fn() } as never);
 
     expect(onTagSelected).toHaveBeenCalledTimes(1);
+  });
+
+  it("supports textarea note editors", () => {
+    const textarea = fakeInput() as unknown as HTMLTextAreaElement;
+    const onInput = jest.fn();
+    textarea.value = "写一点 #项";
+    textarea.setSelectionRange(5, 5);
+    textarea.addEventListener("input", onInput);
+    const suggest = new TaskHubTagInputSuggest({} as never, textarea, () => ["#项目/灯光"]);
+
+    expect(suggest.getSuggestions("")).toEqual(["#项目/灯光"]);
+    suggest.selectSuggestion("#项目/灯光", { preventDefault: jest.fn() } as never);
+
+    expect(textarea.value).toBe("写一点 #项目/灯光");
+    expect(onInput).toHaveBeenCalledTimes(1);
   });
 });
 

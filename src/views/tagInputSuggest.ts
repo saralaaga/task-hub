@@ -1,17 +1,30 @@
 import { AbstractInputSuggest, type App, getAllTags, parseFrontMatterTags } from "obsidian";
 import type { TaskItem } from "../types";
 
+export type TaskHubTagInputElement = HTMLInputElement | HTMLTextAreaElement;
+
 export class TaskHubTagInputSuggest extends AbstractInputSuggest<string> {
+  private readonly sourceEl: TaskHubTagInputElement;
+  private readonly originalGetBoundingClientRect?: () => DOMRect;
+
   constructor(
     app: App,
-    private readonly inputEl: HTMLInputElement,
+    inputEl: TaskHubTagInputElement,
     private readonly getTags: () => string[]
   ) {
-    super(app, inputEl);
+    const originalGetBoundingClientRect = isTextareaElement(inputEl)
+      ? inputEl.getBoundingClientRect.bind(inputEl)
+      : undefined;
+    if (originalGetBoundingClientRect) {
+      inputEl.getBoundingClientRect = () => textareaCaretViewportRect(inputEl as HTMLTextAreaElement, originalGetBoundingClientRect);
+    }
+    super(app, inputEl as HTMLInputElement);
+    this.sourceEl = inputEl;
+    this.originalGetBoundingClientRect = originalGetBoundingClientRect;
   }
 
   getSuggestions(query: string): string[] {
-    const token = tagTokenAtCursor(this.inputEl.value, this.inputEl.selectionStart ?? this.inputEl.value.length) ?? tagTokenFromQuery(query);
+    const token = tagTokenAtCursor(this.sourceEl.value, this.sourceEl.selectionStart ?? this.sourceEl.value.length) ?? tagTokenFromQuery(query);
     if (!token) return [];
     const needle = normalizeTag(token.text).toLocaleLowerCase();
     return uniqueSortedTags(this.getTags())
@@ -26,17 +39,24 @@ export class TaskHubTagInputSuggest extends AbstractInputSuggest<string> {
 
   selectSuggestion(value: string, evt: MouseEvent | KeyboardEvent): void {
     evt.preventDefault();
-    const cursor = this.inputEl.selectionStart ?? this.inputEl.value.length;
-    const next = replaceTagToken(this.inputEl.value, cursor, value);
-    this.inputEl.value = next.value;
-    this.inputEl.setSelectionRange?.(next.cursor, next.cursor);
-    this.inputEl.dispatchEvent(new Event("input", { bubbles: true }));
-    this.inputEl.dispatchEvent(new CustomEvent("task-hub-tag-selected", { bubbles: true }));
+    const cursor = this.sourceEl.selectionStart ?? this.sourceEl.value.length;
+    const next = replaceTagToken(this.sourceEl.value, cursor, value);
+    this.sourceEl.value = next.value;
+    this.sourceEl.setSelectionRange?.(next.cursor, next.cursor);
+    this.sourceEl.dispatchEvent(new Event("input", { bubbles: true }));
+    this.sourceEl.dispatchEvent(new CustomEvent("task-hub-tag-selected", { bubbles: true }));
     this.close();
+  }
+
+  destroy(): void {
+    super.close();
+    if (this.originalGetBoundingClientRect) {
+      this.sourceEl.getBoundingClientRect = this.originalGetBoundingClientRect;
+    }
   }
 }
 
-export function bindTaskHubTagInputSuggest(app: App, inputEl: HTMLInputElement, getTags: () => string[]): TaskHubTagInputSuggest {
+export function bindTaskHubTagInputSuggest(app: App, inputEl: TaskHubTagInputElement, getTags: () => string[]): TaskHubTagInputSuggest {
   return new TaskHubTagInputSuggest(app, inputEl, getTags);
 }
 
@@ -94,4 +114,66 @@ function withHash(tag: string): string {
 
 function normalizeTag(tag: string): string {
   return tag.trim().replace(/^#+/u, "");
+}
+
+function isTextareaElement(inputEl: TaskHubTagInputElement): inputEl is HTMLTextAreaElement {
+  return (inputEl as HTMLElement).tagName === "TEXTAREA";
+}
+
+function textareaCaretViewportRect(textarea: HTMLTextAreaElement, originalRect: () => DOMRect): DOMRect {
+  const style = window.getComputedStyle(textarea);
+  const mirror = document.createElement("div");
+  mirror.className = "task-hub-textarea-caret-mirror";
+  const properties = [
+    "borderBottomWidth",
+    "borderLeftWidth",
+    "borderRightWidth",
+    "borderTopWidth",
+    "boxSizing",
+    "fontFamily",
+    "fontSize",
+    "fontStyle",
+    "fontWeight",
+    "letterSpacing",
+    "lineHeight",
+    "paddingBottom",
+    "paddingLeft",
+    "paddingRight",
+    "paddingTop",
+    "textTransform",
+    "whiteSpace",
+    "wordBreak",
+    "wordSpacing",
+    "wordWrap"
+  ] as const;
+  for (const property of properties) {
+    mirror.style[property] = style[property];
+  }
+  mirror.style.left = "-9999px";
+  mirror.style.overflow = "hidden";
+  mirror.style.position = "fixed";
+  mirror.style.top = "0";
+  mirror.style.width = `${textarea.clientWidth}px`;
+  mirror.textContent = textarea.value.slice(0, textarea.selectionStart ?? textarea.value.length);
+  const marker = document.createElement("span");
+  marker.textContent = "\u200b";
+  mirror.append(marker);
+  document.body.append(mirror);
+  const markerRect = marker.getBoundingClientRect();
+  const textareaRect = originalRect();
+  const lineHeight = parseFloat(style.lineHeight) || parseFloat(style.fontSize) * 1.4 || 20;
+  const left = Math.min(Math.max(markerRect.left - textarea.scrollLeft, textareaRect.left), textareaRect.right - 8);
+  const top = Math.min(Math.max(markerRect.top - textarea.scrollTop, textareaRect.top), textareaRect.bottom - lineHeight);
+  mirror.remove();
+  return {
+    x: left,
+    y: top,
+    left,
+    top,
+    right: left + 1,
+    bottom: top + lineHeight,
+    width: 1,
+    height: lineHeight,
+    toJSON: () => ({})
+  } as DOMRect;
 }
