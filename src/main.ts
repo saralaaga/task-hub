@@ -124,6 +124,12 @@ function noteBodyFromContent(content: string): string {
   return (content.match(/^---\n[\s\S]*?\n---\n?([\s\S]*)$/u)?.[1] ?? "").replace(/\s+$/u, "");
 }
 
+function noteBodyStartLine(content: string): number {
+  if (!content.startsWith("---")) return 0;
+  const match = content.match(/^---\n[\s\S]*?\n---\n?/u);
+  return match ? match[0].split("\n").length - 1 : 0;
+}
+
 export default class TaskHubPlugin extends Plugin {
   settings: TaskHubSettings = DEFAULT_SETTINGS;
   taskIndex: TaskIndex = this.createTaskIndex();
@@ -1152,7 +1158,27 @@ export default class TaskHubPlugin extends Plugin {
       new Notice(`${t("fileNotFound")}: ${path}`);
       return;
     }
-    new TaskNoteEditModal(this, file).open();
+    const content = await this.app.vault.cachedRead(file);
+    const bodyLine = noteBodyStartLine(content);
+    const leaf = this.app.workspace.getLeaf("tab");
+    await leaf.openFile(file, {
+      active: true,
+      state: { mode: "source" },
+      eState: { line: bodyLine }
+    });
+    void this.app.workspace.revealLeaf(leaf);
+
+    if (leaf.view instanceof MarkdownView) {
+      leaf.view.editor.setCursor({ line: bodyLine, ch: 0 });
+      leaf.view.editor.focus();
+      leaf.view.editor.scrollIntoView(
+        {
+          from: { line: bodyLine, ch: 0 },
+          to: { line: bodyLine, ch: 0 }
+        },
+        true
+      );
+    }
   }
 
   async openTaskNoteSource(path: string): Promise<void> {
@@ -1666,65 +1692,6 @@ export default class TaskHubPlugin extends Plugin {
 
     await leaf.setViewState({ type: TASK_HUB_VIEW_TYPE, active: true });
     void this.app.workspace.revealLeaf(leaf);
-  }
-}
-
-class TaskNoteEditModal extends Modal {
-  private tagSuggest?: ReturnType<typeof bindTaskHubTagInputSuggest>;
-  private savedOrDeleted = false;
-
-  constructor(
-    private readonly plugin: TaskHubPlugin,
-    private readonly file: TFile
-  ) {
-    super(plugin.app);
-  }
-
-  async onOpen(): Promise<void> {
-    const t = createTranslator(this.plugin.settings.language);
-    const { contentEl } = this;
-    contentEl.empty();
-    contentEl.addClass("task-hub-note-modal");
-    contentEl.createEl("h2", { text: t("notes") });
-    const content = await this.plugin.app.vault.cachedRead(this.file);
-    const textarea = contentEl.createEl("textarea", { cls: "task-hub-note-modal-editor" }) as HTMLTextAreaElement;
-    textarea.value = noteBodyFromContent(content);
-    this.tagSuggest = bindTaskHubTagInputSuggest(this.plugin.app, textarea, () => collectObsidianTags(this.plugin.app, this.plugin.getTasks()));
-    textarea.addEventListener("keydown", (event) => {
-      if (event.key !== "Escape") return;
-      event.preventDefault();
-      this.close();
-    });
-
-    const actions = contentEl.createDiv({ cls: "task-hub-note-modal-actions" });
-    const cancel = actions.createEl("button", { text: t("cancel") });
-    cancel.addEventListener("click", () => this.close());
-    const save = actions.createEl("button", { cls: "mod-cta", text: t("save") });
-    save.addEventListener("click", () => void this.save(textarea.value));
-  }
-
-  onClose(): void {
-    this.tagSuggest?.destroy();
-    this.tagSuggest = undefined;
-    if (!this.savedOrDeleted) {
-      void this.plugin.deleteTaskNoteIfEmpty(this.file);
-    }
-  }
-
-  private async save(body: string): Promise<void> {
-    const t = createTranslator(this.plugin.settings.language);
-    const result = await this.plugin.saveTaskNoteBody(this.file, body);
-    if (!result.ok) {
-      new Notice(result.message);
-      return;
-    }
-    this.savedOrDeleted = true;
-    if (result.deleted) {
-      this.close();
-      return;
-    }
-    new Notice(t("taskUpdated"));
-    this.close();
   }
 }
 

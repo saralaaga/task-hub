@@ -67,6 +67,7 @@ class FakeElement {
     if (!this.parent) return;
     this.parent.children = this.parent.children.filter((child) => child !== this);
     this.parent = undefined;
+    this.focused = false;
   }
 
   createDiv(options: { cls?: string; text?: string } = {}): FakeElement {
@@ -96,9 +97,11 @@ class FakeElement {
   }
 
   appendChild(child: FakeElement): FakeElement {
+    const wasFocusedMove = child.parent === this && child.focused;
     child.parent = this;
     this.children = this.children.filter((existing) => existing !== child);
     this.children.push(child);
+    if (wasFocusedMove) child.focused = false;
     return child;
   }
 
@@ -159,13 +162,39 @@ class FakeElement {
 
   focus(): void {
     this.focused = true;
+    const root = rootOf(this);
+    for (const element of collect(root)) {
+      if (element !== this) element.focused = false;
+    }
     for (const listener of this.listeners.get("focus") ?? []) {
       listener({ key: "", preventDefault: jest.fn(), stopPropagation: jest.fn() });
     }
   }
 
   dispatch(name: string, eventOverrides: Partial<FakeEvent> = {}): FakeEvent {
-    const event = { key: "", preventDefault: jest.fn(), stopPropagation: jest.fn(), ...eventOverrides };
+    const event = {
+      key: "",
+      target: this,
+      preventDefault: jest.fn(),
+      stopped: false,
+      stopPropagation: jest.fn(function (this: FakeEvent & { stopped?: boolean }) {
+        this.stopped = true;
+      }),
+      ...eventOverrides
+    } as FakeEvent & { stopped?: boolean; target?: FakeElement };
+    let current: FakeElement | undefined = this;
+    while (current) {
+      for (const listener of current.listeners.get(name) ?? []) {
+        listener(event);
+      }
+      if (event.stopped) break;
+      current = current.parent;
+    }
+    return event;
+  }
+
+  dispatchSelf(name: string, eventOverrides: Partial<FakeEvent> = {}): FakeEvent {
+    const event = { key: "", target: this, preventDefault: jest.fn(), stopPropagation: jest.fn(), ...eventOverrides } as FakeEvent;
     for (const listener of this.listeners.get(name) ?? []) {
       listener(event);
     }
@@ -187,6 +216,8 @@ class FakeElement {
 type FakeEvent = {
   key: string;
   isComposing?: boolean;
+  target?: FakeElement;
+  stopped?: boolean;
   preventDefault(): void;
   stopPropagation(): void;
 };
@@ -216,6 +247,12 @@ function findCheckbox(element: FakeElement): FakeElement | undefined {
 
 function collect(element: FakeElement): FakeElement[] {
   return [element, ...element.children.flatMap(collect)];
+}
+
+function rootOf(element: FakeElement): FakeElement {
+  let root = element;
+  while (root.parent) root = root.parent;
+  return root;
 }
 
 function findElementByText(element: FakeElement, text: string): FakeElement | undefined {
@@ -778,24 +815,29 @@ describe("renderTasksView", () => {
 
     const editor = collect(container).find((element) => element.classes.has("task-hub-tag-editor"));
     const input = collect(container).find((element) => element.classes.has("task-hub-tag-editor-input"));
+    input!.focus();
     input!.selectionStart = 0;
     input!.selectionEnd = 0;
 
     input!.dispatch("keydown", { key: "ArrowLeft" });
-    input!.dispatch("keydown", { key: "ArrowLeft" });
+    expect(input!.focused).toBe(false);
+    expect(collect(editor!).find((element) => element.classes.has("is-selected") && element.focused)?.text).toBe("#比赛");
+    collect(editor!).find((element) => element.classes.has("is-selected"))!.dispatch("keydown", { key: "ArrowLeft" });
     expect(collect(editor!).find((element) => element.classes.has("is-selected"))?.text).toBe("#errand");
+    expect(collect(editor!).find((element) => element.classes.has("is-selected") && element.focused)?.text).toBe("#errand");
     expect(editor!.children.map((child) => child.classes.has("task-hub-tag-editor-input") ? "input" : child.text)).toEqual([
       "#home",
-      "input",
       "#errand",
-      "#比赛"
+      "#比赛",
+      "input"
     ]);
 
-    input!.dispatch("keydown", { key: "Backspace" });
+    collect(editor!).find((element) => element.classes.has("is-selected"))!.dispatch("keydown", { key: "Backspace" });
     expect(collect(editor!).filter((element) => element.classes.has("task-hub-tag-editor-chip")).map((chip) => chip.text)).toEqual(["#home", "#比赛"]);
 
-    input!.dispatch("keydown", { key: "ArrowLeft" });
-    input!.dispatch("keydown", { key: "Backspace" });
+    collect(editor!).find((element) => element.classes.has("is-selected"))!.dispatch("keydown", { key: "ArrowLeft" });
+    expect(collect(editor!).find((element) => element.classes.has("is-selected"))?.text).toBe("#home");
+    collect(editor!).find((element) => element.classes.has("is-selected"))!.dispatch("keydown", { key: "Delete" });
     expect(collect(editor!).filter((element) => element.classes.has("task-hub-tag-editor-chip")).map((chip) => chip.text)).toEqual(["#比赛"]);
 
     findElementByText(container, "save")!.click();

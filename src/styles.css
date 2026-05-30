@@ -875,24 +875,6 @@ body .task-hub-view button.task-hub-color-swatch {
   margin-bottom: 0;
 }
 
-.task-hub-note-modal {
-  display: grid;
-  gap: 12px;
-}
-
-.task-hub-note-modal-editor {
-  min-height: 220px;
-  resize: vertical;
-  width: 100%;
-}
-
-.task-hub-note-modal-actions {
-  display: flex;
-  gap: 8px;
-  justify-content: flex-end;
-}
-
-
 .task-hub-task-list-pane {
   justify-items: center;
   max-height: calc(100vh - 190px);

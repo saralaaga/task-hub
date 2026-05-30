@@ -425,29 +425,29 @@ function tagChipEditor(
     const target = event.target as { classList?: { contains(cls: string): boolean } } | null;
     if (event.target !== input && target?.classList?.contains("task-hub-tag-editor-chip")) return;
     selectedIndex = -1;
-    render();
-    input.focus();
+    render({ focusInput: true });
   });
 
-  const render = () => {
+  const render = (options: { focusInput?: boolean; focusSelectedChip?: boolean } = {}) => {
+    let selectedChip: HTMLElement | undefined;
     for (const child of Array.from(editor.children)) {
       if (child !== input) child.remove();
     }
-    if (input.parentElement === editor) input.remove();
     for (const [index, tag] of tags.entries()) {
-      if (index === selectedIndex) editor.appendChild(input);
       const chip = editor.createSpan({ cls: "task-hub-tag-editor-chip", text: tag });
       chip.toggleClass("is-selected", index === selectedIndex);
-      chip.setAttr("tabindex", "0");
+      chip.setAttr("tabindex", index === selectedIndex ? "0" : "-1");
+      if (index === selectedIndex) selectedChip = chip;
       chip.addEventListener("click", (event) => {
         event.preventDefault();
         event.stopPropagation();
         selectedIndex = index;
-        render();
-        input.focus();
+        render({ focusSelectedChip: true });
       });
     }
-    if (input.parentElement !== editor) editor.appendChild(input);
+    editor.appendChild(input);
+    if (options.focusSelectedChip && selectedChip) selectedChip.focus();
+    else if (options.focusInput) input.focus();
   };
 
   const commit = () => {
@@ -459,49 +459,51 @@ function tagChipEditor(
     }
     input.value = "";
     selectedIndex = -1;
-    render();
+    render({ focusInput: true });
   };
 
   const removeSelectedTag = () => {
     if (selectedIndex < 0 || selectedIndex >= tags.length) return false;
     tags.splice(selectedIndex, 1);
     selectedIndex = tags.length === 0 ? -1 : Math.min(selectedIndex, tags.length - 1);
-    render();
+    render(selectedIndex === -1 ? { focusInput: true } : { focusSelectedChip: true });
     return true;
   };
 
   const inputCursorAtStart = () => (input.selectionStart ?? 0) === 0 && (input.selectionEnd ?? 0) === 0;
+  const targetIsInput = (target: EventTarget | null) => target === input;
 
-  input.addEventListener("keydown", (event) => {
+  editor.addEventListener("keydown", (event) => {
     if (event.isComposing || composing) return;
     if ((event.key === "Backspace" || event.key === "Delete") && selectedIndex !== -1) {
       event.preventDefault();
       removeSelectedTag();
       return;
     }
-    if (event.key === "ArrowLeft" && inputCursorAtStart() && tags.length > 0) {
+    if (event.key === "ArrowLeft" && (!targetIsInput(event.target) || inputCursorAtStart()) && tags.length > 0) {
       event.preventDefault();
       selectedIndex = selectedIndex === -1 ? tags.length - 1 : Math.max(0, selectedIndex - 1);
-      render();
+      render({ focusSelectedChip: true });
       return;
     }
     if (event.key === "ArrowRight" && selectedIndex !== -1) {
       event.preventDefault();
       selectedIndex = selectedIndex >= tags.length - 1 ? -1 : selectedIndex + 1;
-      render();
+      render(selectedIndex === -1 ? { focusInput: true } : { focusSelectedChip: true });
       return;
     }
-    if ((event.key === "Backspace" || event.key === "Delete") && input.value === "" && tags.length > 0) {
+    if (targetIsInput(event.target) && (event.key === "Backspace" || event.key === "Delete") && input.value === "" && tags.length > 0) {
       event.preventDefault();
       selectedIndex = tags.length - 1;
       removeSelectedTag();
       return;
     }
+    if (!targetIsInput(event.target)) return;
     selectedIndex = -1;
     if (event.key !== "Enter" && event.key !== " " && event.key !== ",") return;
     event.preventDefault();
     commit();
-  });
+  }, { capture: true });
   input.addEventListener("blur", commit);
   input.addEventListener("input", (event) => {
     if ((event as InputEvent).isComposing || composing) return;

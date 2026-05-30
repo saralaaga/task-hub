@@ -1,4 +1,5 @@
 import TaskHubPlugin from "./main";
+import { MarkdownView } from "obsidian";
 import { DEFAULT_SETTINGS } from "./settings";
 import { buildTaskNoteKey, createTaskNoteContent, parseTaskNoteFrontmatter } from "./taskNotes";
 import type { TaskItem } from "./types";
@@ -263,6 +264,48 @@ describe("Apple Reminders migration", () => {
 
     expect(deleteFile).toHaveBeenCalledWith(noteFile);
     expect(removeFile).toHaveBeenCalledWith(noteFile.path);
+  });
+
+  it("opens task notes in a Markdown editor so editor plugins can run", async () => {
+    const noteFile = { path: "Task Hub Notes/edit.md", extension: "md", stat: { ctime: 1, mtime: 2, size: 3 } };
+    const plugin = new TaskHubPlugin({} as never, {} as never);
+    const leaf = {
+      view: Object.assign(new MarkdownView({} as never), {
+        editor: {
+          focus: jest.fn(),
+          setCursor: jest.fn(),
+          scrollIntoView: jest.fn()
+        }
+      }),
+      openFile: jest.fn(async () => undefined)
+    };
+    const revealLeaf = jest.fn(async () => undefined);
+    plugin.app = {
+      vault: {
+        getFileByPath: jest.fn(() => noteFile),
+        cachedRead: jest.fn(async () =>
+          createTaskNoteContent({
+            noteId: "thn_1",
+            relatedKey: "task:vault:Inbox.md:0:abc",
+            title: "Edit",
+            createdAt: "2026-05-29T10:30:12"
+          })
+        )
+      },
+      workspace: {
+        getLeaf: jest.fn(() => leaf),
+        revealLeaf
+      }
+    } as never;
+    plugin.settings = DEFAULT_SETTINGS;
+
+    await plugin.openTaskNote(noteFile.path);
+
+    expect(plugin.app.workspace.getLeaf).toHaveBeenCalledWith("tab");
+    expect(leaf.openFile).toHaveBeenCalledWith(noteFile, { active: true, state: { mode: "source" }, eState: { line: 10 } });
+    expect(revealLeaf).toHaveBeenCalledWith(leaf);
+    expect(leaf.view.editor.setCursor).toHaveBeenCalledWith({ line: 10, ch: 0 });
+    expect(leaf.view.editor.focus).toHaveBeenCalled();
   });
 
   it("preserves a timed Markdown task start time when sending it to Apple Reminders", async () => {
