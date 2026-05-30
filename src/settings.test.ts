@@ -35,6 +35,9 @@ describe("normalizeTaskHubSettings", () => {
     expect(settings.calendarCreationDefaultKind).toBe("task");
     expect(settings.calendarTaskCreationDefaultTarget).toEqual({ type: "vault" });
     expect(settings.calendarEventCreationDefaultTarget).toEqual({ type: "apple-calendar" });
+    expect(settings.calendarTimeScale).toBe("hour");
+    expect(settings.calendarDayStartHour).toBe(6);
+    expect(settings.calendarDayEndHour).toBe(22);
     expect(settings.taskCreationFilePath).toBe("Task Hub.md");
     expect(settings.taskNotes).toEqual({
       enabled: false,
@@ -47,6 +50,18 @@ describe("normalizeTaskHubSettings", () => {
     });
     expect(settings.taskViewFilters).toEqual({ status: "open", tags: [], sourceQuery: "", textQuery: "" });
     expect(settings.ignoredPaths).toEqual(["Archive/"]);
+  });
+
+  it("normalizes invalid calendar time scale and visible hour settings", () => {
+    const settings = normalizeTaskHubSettings({
+      calendarTimeScale: "wide" as never,
+      calendarDayStartHour: 25,
+      calendarDayEndHour: 4
+    });
+
+    expect(settings.calendarTimeScale).toBe("hour");
+    expect(settings.calendarDayStartHour).toBe(6);
+    expect(settings.calendarDayEndHour).toBe(22);
   });
 
   it("persists task view filters across settings normalization", () => {

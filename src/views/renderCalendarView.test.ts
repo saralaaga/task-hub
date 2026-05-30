@@ -58,6 +58,8 @@ class FakeDocument {
       dataTransfer: event.dataTransfer ?? new FakeDataTransfer(),
       clientX: event.clientX ?? 0,
       clientY: event.clientY ?? 0,
+      deltaY: event.deltaY ?? 0,
+      metaKey: event.metaKey ?? false,
       key: event.key,
       pointerId: event.pointerId,
       target: event.target,
@@ -95,7 +97,11 @@ class FakeElement {
   value = "";
   attributes = new Map<string, string>();
   classes = new Set<string>();
-  style = new Proxy({ setProperty: jest.fn() }, {
+  style = new Proxy({
+    setProperty: jest.fn(function(this: Record<string, unknown>, name: string, value: string) {
+      this[name] = value;
+    })
+  }, {
     set(target, property, value) {
       (target as Record<string, unknown>)[String(property)] = value;
       return true;
@@ -206,6 +212,8 @@ class FakeElement {
       dataTransfer: new FakeDataTransfer(),
       clientX: 0,
       clientY: 0,
+      deltaY: 0,
+      metaKey: false,
       preventDefault: jest.fn(),
       stopPropagation: jest.fn(() => { stopped = true; })
     };
@@ -222,6 +230,8 @@ class FakeElement {
       dataTransfer: event.dataTransfer ?? new FakeDataTransfer(),
       clientX: event.clientX ?? 0,
       clientY: event.clientY ?? 0,
+      deltaY: event.deltaY ?? 0,
+      metaKey: event.metaKey ?? false,
       key: event.key,
       pointerId: event.pointerId,
       target: event.target,
@@ -256,6 +266,8 @@ type FakeEvent = {
   dataTransfer: FakeDataTransfer;
   clientX: number;
   clientY: number;
+  deltaY: number;
+  metaKey: boolean;
   key?: string;
   preventDefault(): void;
   stopPropagation(): void;
@@ -405,6 +417,403 @@ describe("renderCalendarView", () => {
     const elements = collect(container);
     expect(elements.some((element) => element.classes.has("task-hub-calendar-title") && element.text.includes("丙午年四月"))).toBe(true);
     expect(elements.some((element) => element.classes.has("task-hub-calendar-lunar-day") && element.text === "初七")).toBe(true);
+  });
+
+  it("changes the day and week time scale after two command wheel steps only", () => {
+    const dayContainer = new FakeElement();
+    const onDayTimeScaleChange = jest.fn();
+
+    renderCalendarView(
+      dayContainer as unknown as HTMLElement,
+      {
+        mode: "day",
+        focusDate: new Date("2026-05-08T12:00:00Z"),
+        weekStart: "monday",
+        visibleSourceIds: new Set(["vault"]),
+        includeCompletedTasks: false,
+        allowAppleReminderWriteback: false,
+        allowTaskCreation: false,
+        calendarTimeScale: "hour",
+        calendarDayStartHour: 6,
+        calendarDayEndHour: 22,
+        sources: [],
+        t: (key) => key
+      },
+      [],
+      [],
+      {
+        onLayerToggle: jest.fn(),
+        onModeChange: jest.fn(),
+        onMove: jest.fn(),
+        onDateCreateTask: jest.fn(),
+        onTaskComplete: jest.fn(),
+        onTaskJump: jest.fn(),
+        onTaskSelect: jest.fn(),
+        onTaskReschedule: jest.fn(),
+        onToday: jest.fn(),
+        onTimeScaleChange: onDayTimeScaleChange
+      }
+    );
+
+    const dayAgenda = collect(dayContainer).find((element) => element.classes.has("task-hub-agenda"));
+    const normalWheel = dayAgenda!.dispatch("wheel", { deltaY: -100 });
+    const firstCommandWheel = dayAgenda!.dispatch("wheel", { deltaY: -100, metaKey: true });
+    const secondCommandWheel = dayAgenda!.dispatch("wheel", { deltaY: -100, metaKey: true });
+
+    expect(onDayTimeScaleChange).toHaveBeenCalledTimes(1);
+    expect(onDayTimeScaleChange).toHaveBeenCalledWith("half");
+    expect(normalWheel.preventDefault).not.toHaveBeenCalled();
+    expect(firstCommandWheel.preventDefault).toHaveBeenCalled();
+    expect(secondCommandWheel.preventDefault).toHaveBeenCalled();
+
+    const weekContainer = new FakeElement();
+    const onWeekTimeScaleChange = jest.fn();
+
+    renderCalendarView(
+      weekContainer as unknown as HTMLElement,
+      {
+        mode: "week",
+        focusDate: new Date("2026-05-08T12:00:00Z"),
+        weekStart: "monday",
+        visibleSourceIds: new Set(["vault"]),
+        includeCompletedTasks: false,
+        allowAppleReminderWriteback: false,
+        allowTaskCreation: false,
+        calendarTimeScale: "hour",
+        calendarDayStartHour: 6,
+        calendarDayEndHour: 22,
+        sources: [],
+        t: (key) => key
+      },
+      [],
+      [],
+      {
+        onLayerToggle: jest.fn(),
+        onModeChange: jest.fn(),
+        onMove: jest.fn(),
+        onDateCreateTask: jest.fn(),
+        onTaskComplete: jest.fn(),
+        onTaskJump: jest.fn(),
+        onTaskSelect: jest.fn(),
+        onTaskReschedule: jest.fn(),
+        onToday: jest.fn(),
+        onTimeScaleChange: onWeekTimeScaleChange
+      }
+    );
+
+    const weekAgenda = collect(weekContainer).find((element) => element.classes.has("task-hub-agenda"));
+    weekAgenda!.dispatch("wheel", { deltaY: 100, metaKey: true });
+    weekAgenda!.dispatch("wheel", { deltaY: 100, metaKey: true });
+
+    expect(onWeekTimeScaleChange).toHaveBeenCalledWith("fit");
+  });
+
+  it("resets command wheel scale steps when the wheel direction changes", () => {
+    const container = new FakeElement();
+    const onTimeScaleChange = jest.fn();
+
+    renderCalendarView(
+      container as unknown as HTMLElement,
+      {
+        mode: "day",
+        focusDate: new Date("2026-05-08T12:00:00Z"),
+        weekStart: "monday",
+        visibleSourceIds: new Set(["vault"]),
+        includeCompletedTasks: false,
+        allowAppleReminderWriteback: false,
+        allowTaskCreation: false,
+        calendarTimeScale: "hour",
+        calendarDayStartHour: 6,
+        calendarDayEndHour: 22,
+        sources: [],
+        t: (key) => key
+      },
+      [],
+      [],
+      {
+        onLayerToggle: jest.fn(),
+        onModeChange: jest.fn(),
+        onMove: jest.fn(),
+        onDateCreateTask: jest.fn(),
+        onTaskComplete: jest.fn(),
+        onTaskJump: jest.fn(),
+        onTaskSelect: jest.fn(),
+        onTaskReschedule: jest.fn(),
+        onToday: jest.fn(),
+        onTimeScaleChange
+      }
+    );
+
+    const agenda = collect(container).find((element) => element.classes.has("task-hub-agenda"));
+    agenda!.dispatch("wheel", { deltaY: -100, metaKey: true });
+    agenda!.dispatch("wheel", { deltaY: 100, metaKey: true });
+    agenda!.dispatch("wheel", { deltaY: 100, metaKey: true });
+
+    expect(onTimeScaleChange).toHaveBeenCalledTimes(1);
+    expect(onTimeScaleChange).toHaveBeenCalledWith("fit");
+  });
+
+  it("ignores command wheel in month view", () => {
+    const container = new FakeElement();
+    const onTimeScaleChange = jest.fn();
+
+    renderCalendarView(
+      container as unknown as HTMLElement,
+      {
+        mode: "month",
+        focusDate: new Date("2026-05-22T12:00:00Z"),
+        weekStart: "monday",
+        visibleSourceIds: new Set(["vault"]),
+        includeCompletedTasks: false,
+        allowAppleReminderWriteback: false,
+        allowTaskCreation: false,
+        calendarTimeScale: "hour",
+        calendarDayStartHour: 6,
+        calendarDayEndHour: 22,
+        sources: [],
+        t: (key) => key
+      },
+      [],
+      [],
+      {
+        onLayerToggle: jest.fn(),
+        onModeChange: jest.fn(),
+        onMove: jest.fn(),
+        onDateCreateTask: jest.fn(),
+        onTaskComplete: jest.fn(),
+        onTaskJump: jest.fn(),
+        onTaskSelect: jest.fn(),
+        onTaskReschedule: jest.fn(),
+        onToday: jest.fn(),
+        onTimeScaleChange
+      }
+    );
+
+    container.dispatch("wheel", { deltaY: -100, metaKey: true });
+
+    expect(onTimeScaleChange).not.toHaveBeenCalled();
+  });
+
+  it("uses discrete time scale heights and minor grid lines in day view", () => {
+    const halfContainer = new FakeElement();
+
+    renderCalendarView(
+      halfContainer as unknown as HTMLElement,
+      {
+        mode: "day",
+        focusDate: new Date("2026-05-08T12:00:00Z"),
+        weekStart: "monday",
+        visibleSourceIds: new Set(["vault"]),
+        includeCompletedTasks: false,
+        allowAppleReminderWriteback: false,
+        allowTaskCreation: false,
+        calendarTimeScale: "half",
+        calendarDayStartHour: 6,
+        calendarDayEndHour: 22,
+        sources: [],
+        t: (key) => key
+      },
+      [],
+      [],
+      {
+        onLayerToggle: jest.fn(),
+        onModeChange: jest.fn(),
+        onMove: jest.fn(),
+        onDateCreateTask: jest.fn(),
+        onTaskComplete: jest.fn(),
+        onTaskJump: jest.fn(),
+        onTaskSelect: jest.fn(),
+        onTaskReschedule: jest.fn(),
+        onToday: jest.fn()
+      }
+    );
+
+    const halfAgenda = collect(halfContainer).find((element) => element.classes.has("task-hub-agenda"));
+    const halfLines = collect(halfContainer).filter((element) => element.classes.has("task-hub-agenda-hour-line"));
+
+    expect((halfAgenda!.style as unknown as Record<string, string>)["--task-hub-hour-height"]).toBe("84px");
+    expect(halfLines).toHaveLength(32);
+    expect(halfLines.filter((line) => line.classes.has("is-minor"))).toHaveLength(16);
+
+    const quarterContainer = new FakeElement();
+    renderCalendarView(
+      quarterContainer as unknown as HTMLElement,
+      {
+        mode: "day",
+        focusDate: new Date("2026-05-08T12:00:00Z"),
+        weekStart: "monday",
+        visibleSourceIds: new Set(["vault"]),
+        includeCompletedTasks: false,
+        allowAppleReminderWriteback: false,
+        allowTaskCreation: false,
+        calendarTimeScale: "quarter",
+        calendarDayStartHour: 6,
+        calendarDayEndHour: 22,
+        sources: [],
+        t: (key) => key
+      },
+      [],
+      [],
+      {
+        onLayerToggle: jest.fn(),
+        onModeChange: jest.fn(),
+        onMove: jest.fn(),
+        onDateCreateTask: jest.fn(),
+        onTaskComplete: jest.fn(),
+        onTaskJump: jest.fn(),
+        onTaskSelect: jest.fn(),
+        onTaskReschedule: jest.fn(),
+        onToday: jest.fn()
+      }
+    );
+
+    const quarterAgenda = collect(quarterContainer).find((element) => element.classes.has("task-hub-agenda"));
+    const quarterLines = collect(quarterContainer).filter((element) => element.classes.has("task-hub-agenda-hour-line"));
+
+    expect((quarterAgenda!.style as unknown as Record<string, string>)["--task-hub-hour-height"]).toBe("112px");
+    expect(quarterLines).toHaveLength(64);
+    expect(quarterLines.filter((line) => line.classes.has("is-minor"))).toHaveLength(48);
+  });
+
+  it("fits the configured day range into the available pane height at the coarsest scale", () => {
+    const container = new FakeElement();
+    container.boundingRect.height = 640;
+
+    renderCalendarView(
+      container as unknown as HTMLElement,
+      {
+        mode: "day",
+        focusDate: new Date("2026-05-08T12:00:00Z"),
+        weekStart: "monday",
+        visibleSourceIds: new Set(["vault"]),
+        includeCompletedTasks: false,
+        allowAppleReminderWriteback: false,
+        allowTaskCreation: false,
+        calendarTimeScale: "fit",
+        calendarDayStartHour: 6,
+        calendarDayEndHour: 22,
+        sources: [],
+        t: (key) => key
+      },
+      [],
+      [],
+      {
+        onLayerToggle: jest.fn(),
+        onModeChange: jest.fn(),
+        onMove: jest.fn(),
+        onDateCreateTask: jest.fn(),
+        onTaskComplete: jest.fn(),
+        onTaskJump: jest.fn(),
+        onTaskSelect: jest.fn(),
+        onTaskReschedule: jest.fn(),
+        onToday: jest.fn()
+      }
+    );
+
+    const agenda = collect(container).find((element) => element.classes.has("task-hub-agenda"));
+    const lines = collect(container).filter((element) => element.classes.has("task-hub-agenda-hour-line"));
+
+    expect((agenda!.style as unknown as Record<string, string>)["--task-hub-hour-height"]).toBe("28px");
+    expect(lines).toHaveLength(8);
+  });
+
+  it("marks the coarsest agenda scale and hides timed item time labels", () => {
+    const container = new FakeElement();
+    const timedEvent = {
+      ...event,
+      id: "timed-event",
+      allDay: false,
+      start: "2026-05-08T09:00:00",
+      end: "2026-05-08T10:00:00"
+    };
+
+    renderCalendarView(
+      container as unknown as HTMLElement,
+      {
+        mode: "day",
+        focusDate: new Date("2026-05-08T12:00:00Z"),
+        weekStart: "monday",
+        visibleSourceIds: new Set(["apple-calendar"]),
+        includeCompletedTasks: false,
+        allowAppleReminderWriteback: false,
+        allowTaskCreation: false,
+        calendarTimeScale: "fit",
+        calendarDayStartHour: 6,
+        calendarDayEndHour: 22,
+        sources: [source],
+        t: (key) => key
+      },
+      [],
+      [timedEvent],
+      {
+        onLayerToggle: jest.fn(),
+        onModeChange: jest.fn(),
+        onMove: jest.fn(),
+        onDateCreateTask: jest.fn(),
+        onTaskComplete: jest.fn(),
+        onTaskJump: jest.fn(),
+        onTaskSelect: jest.fn(),
+        onTaskReschedule: jest.fn(),
+        onToday: jest.fn()
+      }
+    );
+
+    const agenda = collect(container).find((element) => element.classes.has("task-hub-agenda"));
+    const item = collect(container).find((element) => element.classes.has("task-hub-calendar-timed-item"));
+    const timeLabels = collect(item!).filter((element) => element.classes.has("task-hub-calendar-item-time"));
+    const title = collect(item!).find((element) => element.classes.has("task-hub-calendar-item-title"));
+
+    expect(agenda?.classes.has("is-scale-fit")).toBe(true);
+    expect(timeLabels).toHaveLength(0);
+    expect(title?.text).toBe("Event");
+  });
+
+  it("uses the configured visible hour range and auto-extends for out-of-range timed items", () => {
+    const container = new FakeElement();
+    const earlyTask = {
+      ...task,
+      id: "early",
+      text: "Early",
+      scheduledDate: "2026-05-08T05:30"
+    };
+
+    renderCalendarView(
+      container as unknown as HTMLElement,
+      {
+        mode: "day",
+        focusDate: new Date("2026-05-08T12:00:00Z"),
+        weekStart: "monday",
+        visibleSourceIds: new Set(["vault"]),
+        includeCompletedTasks: false,
+        allowAppleReminderWriteback: false,
+        allowTaskCreation: false,
+        calendarTimeScale: "hour",
+        calendarDayStartHour: 8,
+        calendarDayEndHour: 12,
+        sources: [],
+        t: (key) => key
+      },
+      [earlyTask],
+      [],
+      {
+        onLayerToggle: jest.fn(),
+        onModeChange: jest.fn(),
+        onMove: jest.fn(),
+        onDateCreateTask: jest.fn(),
+        onTaskComplete: jest.fn(),
+        onTaskJump: jest.fn(),
+        onTaskSelect: jest.fn(),
+        onTaskReschedule: jest.fn(),
+        onToday: jest.fn()
+      }
+    );
+
+    const labels = collect(container).filter((element) => element.classes.has("task-hub-agenda-time-label")).map((element) => element.text);
+    const row = collect(container).find((element) => element.classes.has("task-hub-calendar-timed-item"));
+
+    expect(labels[0]).toBe("05:00");
+    expect(labels.at(-1)).toBe("12:00");
+    expect((row!.style as unknown as { top: string }).top).toBe("28px");
   });
 
   it("renders calendar tasks with checkboxes and without task/event kind labels", () => {
@@ -2234,6 +2643,7 @@ describe("renderCalendarView", () => {
     expect(rows).toHaveLength(1);
     expect(rowTops).toEqual(["196px"]);
     expect(rows[0].classes.has("is-overlap-stack")).toBe(true);
+    expect(rows[0].draggable).toBe(false);
     expect(count?.text).toBe("+1");
   });
 

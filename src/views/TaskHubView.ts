@@ -208,6 +208,9 @@ export class TaskHubView extends ItemView {
             this.plugin.settings.localApple.calendarReminderConversionEnabled && this.plugin.canConvertAppleCalendarAndReminders(),
           allowTaskCreation: this.plugin.settings.calendarTaskCreationEnabled,
           showLunarCalendar: this.plugin.settings.language === "zh" && this.plugin.settings.showLunarCalendar,
+          calendarTimeScale: this.plugin.settings.calendarTimeScale,
+          calendarDayStartHour: this.plugin.settings.calendarDayStartHour,
+          calendarDayEndHour: this.plugin.settings.calendarDayEndHour,
           defaultTimedTaskDurationMinutes: this.plugin.settings.localApple.calendarDefaultTimedTaskDurationMinutes,
           taskDurationOverrides: this.plugin.settings.localApple.reminderDurationOverrides,
           taskColors,
@@ -236,6 +239,10 @@ export class TaskHubView extends ItemView {
           onToday: () => {
             this.calendarFocusDate = new Date();
             this.render();
+          },
+          onTimeScaleChange: (scale) => {
+            this.plugin.settings.calendarTimeScale = scale;
+            void this.plugin.saveSettings().then(() => this.render());
           },
           onLayerToggle: (sourceId) => {
             this.visibleSourceIds = toggleSetValue(this.visibleSourceIds, sourceId);

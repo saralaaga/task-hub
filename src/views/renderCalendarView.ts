@@ -5,7 +5,7 @@ import { toLocalDateKey } from "../calendar/dateBuckets";
 import { formatLunarDayLabel, formatLunarMonthTitle } from "../calendar/lunarCalendar";
 import type { TranslationKey, Translator } from "../i18n";
 import type { TaskNote } from "../taskNotes";
-import type { AppleCalendarInfo, AppleReminderList, CalendarEvent, CalendarItemEditDraft, CalendarSource, CalendarSourceStatus, TaskItem, WeekStart } from "../types";
+import type { AppleCalendarInfo, AppleReminderList, CalendarEvent, CalendarItemEditDraft, CalendarSource, CalendarSourceStatus, CalendarTimeScale, TaskItem, WeekStart } from "../types";
 import { renderTaskNoteBody, type TaskNoteMarkdownRenderer } from "./renderTaskNoteBody";
 
 export type CalendarViewState = {
@@ -20,6 +20,9 @@ export type CalendarViewState = {
   allowAppleCalendarReminderConversion?: boolean;
   allowTaskCreation: boolean;
   showLunarCalendar?: boolean;
+  calendarTimeScale?: CalendarTimeScale;
+  calendarDayStartHour?: number;
+  calendarDayEndHour?: number;
   today?: Date;
   defaultTimedTaskDurationMinutes?: number;
   taskDurationOverrides?: Record<string, number>;
@@ -59,6 +62,7 @@ export type CalendarViewHandlers = {
   onDeleteTaskNote?: (path: string) => void;
   onOpenTaskNoteInThino?: (path: string) => void;
   onTaskSendToAppleCalendar?: (task: TaskItem) => void;
+  onTimeScaleChange?: (scale: CalendarTimeScale) => void;
 };
 
 const MODE_LABEL_KEYS: Record<CalendarViewMode, TranslationKey> = {
@@ -69,11 +73,18 @@ const MODE_LABEL_KEYS: Record<CalendarViewMode, TranslationKey> = {
 const HOUR_HEIGHT = 56;
 const DEFAULT_START_HOUR = 6;
 const DEFAULT_END_HOUR = 22;
+const CALENDAR_TIME_SCALES: CalendarTimeScale[] = ["fit", "hour", "half", "quarter"];
+const HOUR_HEIGHT_BY_SCALE: Record<Exclude<CalendarTimeScale, "fit">, number> = {
+  hour: HOUR_HEIGHT,
+  half: 84,
+  quarter: 112
+};
 const DEFAULT_TIMED_TASK_DURATION_MINUTES = 60;
 const DEFAULT_MONTH_CREATION_START_MINUTES = 9 * 60;
 const TASK_TIME_POINT_HEIGHT = 28;
 const TASK_TIME_POINT_GAP = 4;
 const MIN_TIMED_ITEM_DURATION_MINUTES = 15;
+const TIME_SCALE_WHEEL_STEP_THRESHOLD = 2;
 const CALENDAR_ITEM_DRAG_MIME = "application/x-task-hub-calendar-item-id";
 const TASK_DRAG_MIME = "application/x-task-hub-task-id";
 let activeDraggedCalendarItemId: string | undefined;
@@ -111,6 +122,11 @@ type TimedLayoutCandidate = {
   visualEnd: number;
   overlapIndex: number;
   overlapCount: number;
+};
+
+type AgendaTimeMetrics = {
+  hourHeight: number;
+  minorStepMinutes: 120 | 60 | 30 | 15;
 };
 
 export function renderCalendarView(
@@ -251,16 +267,21 @@ function renderAgendaGrid(
   today: string
 ): void {
   const timedItems = visibleItems.filter((item) => !item.allDay && item.startMinutes !== undefined);
-  const startHour = Math.min(DEFAULT_START_HOUR, ...timedItems.map((item) => Math.floor((item.startMinutes ?? 0) / 60)));
+  const configuredStartHour = validCalendarDayStartHour(state.calendarDayStartHour);
+  const configuredEndHour = validCalendarDayEndHour(state.calendarDayEndHour, configuredStartHour);
+  const startHour = Math.min(configuredStartHour, ...timedItems.map((item) => Math.floor((item.startMinutes ?? 0) / 60)));
   const endHour = Math.max(
-    DEFAULT_END_HOUR,
+    configuredEndHour,
     ...timedItems.map((item) => Math.ceil(((item.endMinutes ?? (item.startMinutes ?? 0) + 60) || 60) / 60))
   );
   const hourCount = Math.max(1, endHour - startHour);
-  const agenda = container.createDiv({ cls: `task-hub-agenda task-hub-agenda-${state.mode}` });
+  const timeScale = state.calendarTimeScale ?? "hour";
+  const agenda = container.createDiv({ cls: `task-hub-agenda task-hub-agenda-${state.mode} is-scale-${timeScale}` });
+  const metrics = agendaTimeMetrics(state, hourCount, container);
   agenda.style.setProperty("--task-hub-agenda-days", String(days.length));
   agenda.style.setProperty("--task-hub-agenda-hours", String(hourCount));
-  agenda.style.setProperty("--task-hub-hour-height", `${HOUR_HEIGHT}px`);
+  agenda.style.setProperty("--task-hub-hour-height", `${metrics.hourHeight}px`);
+  bindAgendaTimeScaleWheel(agenda, state, handlers);
 
   const corner = agenda.createDiv({ cls: "task-hub-agenda-corner" });
   corner.createSpan({ text: state.t("today") });
@@ -287,22 +308,70 @@ function renderAgendaGrid(
   }
 
   const grid = agenda.createDiv({ cls: "task-hub-agenda-time-grid" });
-  grid.style.setProperty("--task-hub-agenda-rows", String(hourCount));
-  for (let index = 0; index < hourCount; index += 1) {
-    grid.createDiv({ cls: "task-hub-agenda-hour-line" });
+  const gridLineCount = Math.max(1, (hourCount * 60) / metrics.minorStepMinutes);
+  grid.style.setProperty("--task-hub-agenda-rows", String(gridLineCount));
+  for (let index = 0; index < gridLineCount; index += 1) {
+    grid.createDiv({ cls: `task-hub-agenda-hour-line ${metrics.minorStepMinutes < 60 && index % (60 / metrics.minorStepMinutes) !== 0 ? "is-minor" : ""}` });
   }
 
   const columns = agenda.createDiv({ cls: "task-hub-agenda-columns" });
   for (const day of days) {
     const column = columns.createDiv({ cls: `task-hub-agenda-column ${day === today ? "is-today" : ""}` });
-    bindTimedTaskCreation(column, day, startHour, state, handlers);
-    bindCalendarTimedDropTarget(column, day, startHour, visibleItems, handlers, state);
+    bindTimedTaskCreation(column, day, startHour, metrics.hourHeight, state, handlers);
+    bindCalendarTimedDropTarget(column, day, startHour, metrics.hourHeight, visibleItems, handlers, state);
     const dayTimedItems = timedItems.filter((item) => item.date === day);
-    const itemLayouts = layoutTimedItems(dayTimedItems);
+    const itemLayouts = layoutTimedItems(dayTimedItems, metrics.hourHeight);
     for (const item of dayTimedItems) {
-      renderTimedCalendarItem(column, item, startHour, handlers, state, itemLayouts.get(item.id));
+      renderTimedCalendarItem(column, item, startHour, metrics.hourHeight, handlers, state, itemLayouts.get(item.id));
     }
   }
+}
+
+function validCalendarDayStartHour(value: number | undefined): number {
+  return Number.isInteger(value) && value !== undefined && value >= 0 && value <= 23 ? value : DEFAULT_START_HOUR;
+}
+
+function validCalendarDayEndHour(value: number | undefined, startHour: number): number {
+  if (Number.isInteger(value) && value !== undefined && value >= 1 && value <= 24 && value > startHour) return value;
+  return DEFAULT_END_HOUR;
+}
+
+function agendaTimeMetrics(state: CalendarViewState, hourCount: number, container: HTMLElement): AgendaTimeMetrics {
+  const scale = state.calendarTimeScale ?? "hour";
+  if (scale !== "fit") {
+    return {
+      hourHeight: HOUR_HEIGHT_BY_SCALE[scale],
+      minorStepMinutes: scale === "quarter" ? 15 : scale === "half" ? 30 : 60
+    };
+  }
+  const containerHeight = container.getBoundingClientRect().height;
+  const availableHeight = Number.isFinite(containerHeight) && containerHeight > 0 ? Math.max(120, containerHeight - 190) : hourCount * 36;
+  return {
+    hourHeight: Math.max(24, Math.min(HOUR_HEIGHT, Math.floor(availableHeight / Math.max(1, hourCount)))),
+    minorStepMinutes: 120
+  };
+}
+
+function bindAgendaTimeScaleWheel(agenda: HTMLElement, state: CalendarViewState, handlers: CalendarViewHandlers): void {
+  let pendingWheelSteps = 0;
+  agenda.addEventListener("wheel", (event) => {
+    if (!event.metaKey || !handlers.onTimeScaleChange) return;
+    const currentScale = state.calendarTimeScale ?? "hour";
+    const currentIndex = CALENDAR_TIME_SCALES.indexOf(currentScale);
+    const direction = event.deltaY < 0 ? 1 : -1;
+    const nextIndex = Math.max(0, Math.min(CALENDAR_TIME_SCALES.length - 1, currentIndex + direction));
+    const nextScale = CALENDAR_TIME_SCALES[nextIndex];
+    event.preventDefault();
+    if (nextScale === currentScale) {
+      pendingWheelSteps = 0;
+      return;
+    }
+    if (Math.sign(pendingWheelSteps) !== direction) pendingWheelSteps = 0;
+    pendingWheelSteps += direction;
+    if (Math.abs(pendingWheelSteps) < TIME_SCALE_WHEEL_STEP_THRESHOLD) return;
+    pendingWheelSteps = 0;
+    handlers.onTimeScaleChange(nextScale);
+  });
 }
 
 function renderAgendaDayHeader(
@@ -326,9 +395,9 @@ function renderAgendaDayHeader(
   }
 }
 
-function layoutTimedItems(items: CalendarItem[]): Map<string, TimedItemLayout> {
+function layoutTimedItems(items: CalendarItem[], hourHeight: number): Map<string, TimedItemLayout> {
   const layouts = new Map<string, TimedItemLayout>();
-  const sortedItems = layoutTimedTaskPoints(items.filter((item) => item.kind === "task"))
+  const sortedItems = layoutTimedTaskPoints(items.filter((item) => item.kind === "task"), hourHeight)
     .concat(items.filter((item) => item.kind === "event").map(timedEventLayoutCandidate))
     .sort((left, right) => left.visualStart - right.visualStart || left.visualEnd - right.visualEnd || left.item.title.localeCompare(right.item.title));
   let group: TimedLayoutCandidate[] = [];
@@ -355,7 +424,7 @@ function layoutTimedItems(items: CalendarItem[]): Map<string, TimedItemLayout> {
   return layouts;
 }
 
-function layoutTimedTaskPoints(items: CalendarItem[]): TimedLayoutCandidate[] {
+function layoutTimedTaskPoints(items: CalendarItem[], hourHeight: number): TimedLayoutCandidate[] {
   const candidates: TimedLayoutCandidate[] = [];
   const sortedItems = [...items].sort(
     (left, right) =>
@@ -368,12 +437,12 @@ function layoutTimedTaskPoints(items: CalendarItem[]): TimedLayoutCandidate[] {
   for (let index = 0; index < sortedItems.length; index += 1) {
     const item = sortedItems[index];
     const startMinutes = item.startMinutes ?? 0;
-    const overlapping = sortedItems.filter((candidate) => taskPointsOverlap(item, candidate));
+    const overlapping = sortedItems.filter((candidate) => taskPointsOverlap(item, candidate, hourHeight));
     candidates.push({
       item,
       startMinutes,
       visualStart: startMinutes,
-      visualEnd: visualMinutesForPixels(taskPointTopPixels(startMinutes) + TASK_TIME_POINT_HEIGHT),
+      visualEnd: visualMinutesForPixels(taskPointTopPixels(startMinutes, hourHeight) + TASK_TIME_POINT_HEIGHT, hourHeight),
       overlapIndex: overlapping.findIndex((candidate) => candidate.id === item.id),
       overlapCount: overlapping.length
     });
@@ -385,9 +454,9 @@ function taskCompletionRank(item: CalendarItem): number {
   return item.task?.completed ? 1 : 0;
 }
 
-function taskPointsOverlap(left: CalendarItem, right: CalendarItem): boolean {
-  const leftTop = taskPointTopPixels(left.startMinutes ?? 0);
-  const rightTop = taskPointTopPixels(right.startMinutes ?? 0);
+function taskPointsOverlap(left: CalendarItem, right: CalendarItem, hourHeight: number): boolean {
+  const leftTop = taskPointTopPixels(left.startMinutes ?? 0, hourHeight);
+  const rightTop = taskPointTopPixels(right.startMinutes ?? 0, hourHeight);
   return Math.abs(leftTop - rightTop) < TASK_TIME_POINT_HEIGHT + TASK_TIME_POINT_GAP;
 }
 
@@ -445,8 +514,12 @@ function layoutOverlapGroup(items: TimedLayoutCandidate[]): Map<CalendarItem, Ti
 function overlappingTaskItems(candidate: TimedLayoutCandidate, items: TimedLayoutCandidate[]): CalendarItem[] | undefined {
   if (candidate.item.kind !== "task" || candidate.overlapCount <= 1) return undefined;
   return items
-    .filter((other) => other.item.kind === "task" && taskPointsOverlap(candidate.item, other.item))
+    .filter((other) => other.item.kind === "task" && timeRangesOverlap(candidate.visualStart, candidate.visualEnd, other.visualStart, other.visualEnd))
     .map((other) => other.item);
+}
+
+function timeRangesOverlap(leftStart: number, leftEnd: number, rightStart: number, rightEnd: number): boolean {
+  return leftStart < rightEnd && rightStart < leftEnd;
 }
 
 function itemEndMinutes(item: CalendarItem): number {
@@ -458,6 +531,7 @@ function renderTimedCalendarItem(
   container: HTMLElement,
   item: CalendarItem,
   startHour: number,
+  hourHeight: number,
   handlers: CalendarViewHandlers,
   state: CalendarViewState,
   layout?: TimedItemLayout
@@ -465,16 +539,15 @@ function renderTimedCalendarItem(
   if (item.kind === "task" && isTaskPointHiddenByOverlap(layout)) return;
   const row = container.createDiv({ cls: calendarItemClass(item, "task-hub-calendar-timed-item") });
   registerCalendarItemElement(row, item);
-  bindCalendarItemDrag(row, item, state);
   bindCalendarItemContextMenu(row, item, state, handlers);
   if (item.color) row.style.setProperty("--task-hub-item-color", item.color);
   const startMinutes = item.startMinutes ?? startHour * 60;
   const endMinutes = itemEndMinutes(item);
   const isTaskPoint = item.kind === "task";
   if (isTaskPoint) row.addClass("is-time-point");
-  const baseTop = ((startMinutes - startHour * 60) / 60) * HOUR_HEIGHT;
+  const baseTop = ((startMinutes - startHour * 60) / 60) * hourHeight;
   row.style.top = `${baseTop}px`;
-  row.style.height = isTaskPoint ? `${TASK_TIME_POINT_HEIGHT}px` : `${Math.max(30, ((endMinutes - startMinutes) / 60) * HOUR_HEIGHT - 4)}px`;
+  row.style.height = isTaskPoint ? `${TASK_TIME_POINT_HEIGHT}px` : `${Math.max(30, ((endMinutes - startMinutes) / 60) * hourHeight - 4)}px`;
   if (isTaskPoint && (layout?.overlapCount ?? 1) > 1) {
     row.addClass(layout?.isOverlapRepresentative ? "is-overlap-stack" : "is-overlap-hidden");
     row.style.zIndex = String(10 + (layout?.overlapCount ?? 1));
@@ -484,11 +557,13 @@ function renderTimedCalendarItem(
     row.style.left = `calc(${(100 * layout.columnIndex) / layout.columnCount}% + 6px)`;
     row.style.right = `calc(${100 - (100 * (layout.columnIndex + 1)) / layout.columnCount}% + 6px)`;
   }
-  renderCalendarItemContent(row, item, handlers, state, isTaskPoint ? undefined : formatTimeRange(startMinutes, endMinutes));
+  const timeLabel = isTaskPoint || state.calendarTimeScale === "fit" ? undefined : formatTimeRange(startMinutes, endMinutes);
+  renderCalendarItemContent(row, item, handlers, state, timeLabel);
   if (isTaskPoint && layout?.isOverlapRepresentative && (layout.overlapCount ?? 1) > 1) {
     row.createSpan({ cls: "task-hub-calendar-overlap-count", text: `+${(layout.overlapCount ?? 1) - 1}` });
   }
-  bindCalendarItemResize(row, container, item, startHour, handlers, state);
+  if (!isOverlapStackSummary(layout)) bindCalendarItemDrag(row, item, state, hourHeight);
+  bindCalendarItemResize(row, container, item, startHour, hourHeight, handlers, state);
   const task = item.task;
   if (task) {
     row.addEventListener("click", (event) => {
@@ -513,11 +588,16 @@ function isTaskPointHiddenByOverlap(layout: TimedItemLayout | undefined): boolea
   return Boolean(layout && (layout.overlapCount ?? 1) > 1 && !layout.isOverlapRepresentative);
 }
 
+function isOverlapStackSummary(layout: TimedItemLayout | undefined): boolean {
+  return Boolean(layout && (layout.overlapCount ?? 1) > 1 && layout.isOverlapRepresentative);
+}
+
 function bindCalendarItemResize(
   row: HTMLElement,
   column: HTMLElement,
   item: CalendarItem,
   startHour: number,
+  hourHeight: number,
   handlers: CalendarViewHandlers,
   state: CalendarViewState
 ): void {
@@ -536,14 +616,14 @@ function bindCalendarItemResize(
       event.preventDefault();
       event.stopPropagation();
       const ownerDocument = handle.ownerDocument;
-      lastTarget = resizeDropTarget(column, event, item, startHour, edge);
+      lastTarget = resizeDropTarget(column, event, item, startHour, hourHeight, edge);
       row.removeClass("is-resizing");
       row.addClass("is-resizing");
       updateResizeFeedback(feedback, row, lastTarget ? resizeDeltaMinutes(item, lastTarget, edge) : 0);
 
       const onPointerMove = (moveEvent: PointerEvent) => {
         moveEvent.preventDefault();
-        const target = resizeDropTarget(column, moveEvent, item, startHour, edge);
+        const target = resizeDropTarget(column, moveEvent, item, startHour, hourHeight, edge);
         if (!target) return;
         lastTarget = target;
         updateResizeFeedback(feedback, row, resizeDeltaMinutes(item, target, edge));
@@ -559,7 +639,7 @@ function bindCalendarItemResize(
         upEvent.preventDefault();
         upEvent.stopPropagation();
         suppressNextTimedCreationClick = true;
-        const target = lastTarget ?? resizeDropTarget(column, upEvent, item, startHour, edge);
+        const target = lastTarget ?? resizeDropTarget(column, upEvent, item, startHour, hourHeight, edge);
         lastTarget = undefined;
         finishResize();
         if (!target) return;
@@ -610,12 +690,13 @@ function resizeDropTarget(
   event: { clientY: number },
   item: CalendarItem,
   startHour: number,
+  hourHeight: number,
   edge: "start" | "end"
 ): CalendarDropTarget | undefined {
   if (item.startMinutes === undefined) return undefined;
   const currentStart = item.startMinutes;
   const currentEnd = Math.max(item.endMinutes ?? currentStart + DEFAULT_TIMED_TASK_DURATION_MINUTES, currentStart + MIN_TIMED_ITEM_DURATION_MINUTES);
-  const draggedMinutes = minutesFromColumnEvent(column, event, startHour);
+  const draggedMinutes = minutesFromColumnEvent(column, event, startHour, hourHeight);
   const startMinutes =
     edge === "start"
       ? Math.min(draggedMinutes, currentEnd - MIN_TIMED_ITEM_DURATION_MINUTES)
@@ -652,6 +733,7 @@ function bindTimedTaskCreation(
   element: HTMLElement,
   dateKey: string,
   startHour: number,
+  hourHeight: number,
   state: CalendarViewState,
   handlers: CalendarViewHandlers
 ): void {
@@ -663,7 +745,7 @@ function bindTimedTaskCreation(
       event.stopPropagation();
       return;
     }
-    handlers.onDateCreateTask(timedCreationTarget(element, event, dateKey, startHour, state));
+    handlers.onDateCreateTask(timedCreationTarget(element, event, dateKey, startHour, hourHeight, state));
   });
 }
 
@@ -672,11 +754,12 @@ function timedCreationTarget(
   event: MouseEvent,
   dateKey: string,
   startHour: number,
+  hourHeight: number,
   state: CalendarViewState
 ): CalendarDropTarget {
   return {
     dateKey,
-    startMinutes: minutesFromColumnEvent(element, event, startHour),
+    startMinutes: minutesFromColumnEvent(element, event, startHour, hourHeight),
     durationMinutes: validDurationMinutes(state.defaultTimedTaskDurationMinutes)
   };
 }
@@ -1343,14 +1426,14 @@ function markCalendarItemExternalSending(item: CalendarItem): void {
   }
 }
 
-function bindCalendarItemDrag(element: HTMLElement, item: CalendarItem, state: CalendarViewState): void {
+function bindCalendarItemDrag(element: HTMLElement, item: CalendarItem, state: CalendarViewState, hourHeight = HOUR_HEIGHT): void {
   if (!canDragCalendarItem(item, state)) return;
 
   element.draggable = true;
   element.setAttr("draggable", "true");
   element.setAttr("aria-grabbed", "false");
   element.addEventListener("pointerdown", (event) => {
-    const grabOffset = dragGrabOffset(element, event, item);
+    const grabOffset = dragGrabOffset(element, event, item, hourHeight);
     activeDragGrabOffsetMinutes = grabOffset?.minutes ?? 0;
     activeDragGrabOffsetXPixels = grabOffset?.xPixels ?? 0;
     activeDragGrabOffsetYPixels = grabOffset?.yPixels ?? 0;
@@ -1358,7 +1441,7 @@ function bindCalendarItemDrag(element: HTMLElement, item: CalendarItem, state: C
   element.addEventListener("dragstart", (event) => {
     event.stopPropagation();
     activeDraggedCalendarItemId = item.id;
-    const grabOffset = dragGrabOffset(element, event, item);
+    const grabOffset = dragGrabOffset(element, event, item, hourHeight);
     activeDragGrabOffsetMinutes = grabOffset?.minutes ?? activeDragGrabOffsetMinutes;
     activeDragGrabOffsetXPixels = grabOffset?.xPixels ?? activeDragGrabOffsetXPixels;
     activeDragGrabOffsetYPixels = grabOffset?.yPixels ?? activeDragGrabOffsetYPixels;
@@ -1422,6 +1505,7 @@ function bindCalendarTimedDropTarget(
   element: HTMLElement,
   dateKey: string,
   startHour: number,
+  hourHeight: number,
   visibleItems: CalendarItem[],
   handlers: CalendarViewHandlers,
   state: CalendarViewState
@@ -1433,7 +1517,7 @@ function bindCalendarTimedDropTarget(
     element.addClass("is-drop-hover");
     const item = calendarItemFromDragEvent(event, visibleItems, state);
     if (item) {
-      const target = timedDropTarget(element, event, item, dateKey, startHour, state);
+      const target = timedDropTarget(element, event, item, dateKey, startHour, hourHeight, state);
       updateDragMoveFeedback(item, target, event);
     }
     if (event.dataTransfer) {
@@ -1450,7 +1534,7 @@ function bindCalendarTimedDropTarget(
     event.preventDefault();
     event.stopPropagation();
     element.removeClass("is-drop-hover");
-    const target = timedDropTarget(element, event, item, dateKey, startHour, state);
+    const target = timedDropTarget(element, event, item, dateKey, startHour, hourHeight, state);
     clearDragMoveFeedback();
     if (item.task) {
       handlers.onTaskReschedule(item.task, target);
@@ -1468,9 +1552,10 @@ function timedDropTarget(
   item: CalendarItem,
   dateKey: string,
   startHour: number,
+  hourHeight: number,
   state: CalendarViewState
 ): CalendarDropTarget {
-  const startMinutes = adjustedDraggedStartMinutes(element, event, item, startHour);
+  const startMinutes = adjustedDraggedStartMinutes(element, event, item, startHour, hourHeight);
   if (item.kind === "task") {
     return {
       dateKey,
@@ -1484,8 +1569,8 @@ function timedDropTarget(
   };
 }
 
-function adjustedDraggedStartMinutes(element: HTMLElement, event: DragEvent, item: CalendarItem, startHour: number): number {
-  const pointerMinutes = minutesFromColumnEvent(element, event, startHour);
+function adjustedDraggedStartMinutes(element: HTMLElement, event: DragEvent, item: CalendarItem, startHour: number, hourHeight: number): number {
+  const pointerMinutes = minutesFromColumnEvent(element, event, startHour, hourHeight);
   const offsetMinutes = item.startMinutes === undefined ? 0 : activeDragGrabOffsetMinutes;
   return snapDayQuarterHour(pointerMinutes - offsetMinutes);
 }
@@ -1546,14 +1631,14 @@ function itemDurationMinutes(item: CalendarItem, state: CalendarViewState): numb
   return validDurationMinutes(state.defaultTimedTaskDurationMinutes);
 }
 
-function minutesFromColumnEvent(element: HTMLElement, event: { clientY: number }, startHour: number): number {
+function minutesFromColumnEvent(element: HTMLElement, event: { clientY: number }, startHour: number, hourHeight: number): number {
   const rect = element.getBoundingClientRect();
   const offset = Math.max(0, event.clientY - rect.top);
-  const rawMinutes = startHour * 60 + (offset / HOUR_HEIGHT) * 60;
+  const rawMinutes = startHour * 60 + (offset / hourHeight) * 60;
   return snapDayQuarterHour(rawMinutes);
 }
 
-function dragGrabOffset(element: HTMLElement, event: { clientX: number; clientY: number }, item: CalendarItem): { minutes: number; xPixels: number; yPixels: number } | undefined {
+function dragGrabOffset(element: HTMLElement, event: { clientX: number; clientY: number }, item: CalendarItem, hourHeight: number): { minutes: number; xPixels: number; yPixels: number } | undefined {
   if (item.startMinutes === undefined) return { minutes: 0, xPixels: 0, yPixels: 0 };
   const rect = element.getBoundingClientRect();
   const offsetYPixels = event.clientY - rect.top;
@@ -1561,7 +1646,7 @@ function dragGrabOffset(element: HTMLElement, event: { clientX: number; clientY:
   if (!Number.isFinite(offsetYPixels) || offsetYPixels < 0) return undefined;
   const durationMinutes = Math.max(MIN_TIMED_ITEM_DURATION_MINUTES, itemEndMinutes(item) - item.startMinutes);
   return {
-    minutes: Math.max(0, Math.min(durationMinutes, Math.round((offsetYPixels / HOUR_HEIGHT) * 60 / 15) * 15)),
+    minutes: Math.max(0, Math.min(durationMinutes, Math.round((offsetYPixels / hourHeight) * 60 / 15) * 15)),
     xPixels: Number.isFinite(offsetXPixels) && offsetXPixels > 0 ? offsetXPixels : 0,
     yPixels: offsetYPixels
   };
@@ -1639,12 +1724,12 @@ function isWritableAppleCalendarEvent(item: CalendarItem, state: CalendarViewSta
   return state.appleCalendars?.find((calendar) => calendar.id === event.calendarId)?.writable !== false;
 }
 
-function taskPointTopPixels(startMinutes: number): number {
-  return (startMinutes / 60) * HOUR_HEIGHT;
+function taskPointTopPixels(startMinutes: number, hourHeight: number): number {
+  return (startMinutes / 60) * hourHeight;
 }
 
-function visualMinutesForPixels(pixels: number): number {
-  return (pixels / HOUR_HEIGHT) * 60;
+function visualMinutesForPixels(pixels: number, hourHeight: number): number {
+  return (pixels / hourHeight) * 60;
 }
 
 function calendarItemClass(item: CalendarItem, extraClass = ""): string {

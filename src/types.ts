@@ -6,6 +6,7 @@ export type TaskStatusFilter = "open" | "completed" | "all";
 export type DefaultView = "tasks" | "calendar" | "tags";
 export type WeekStart = "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday" | "sunday";
 export type TaskSource = "vault" | "apple-reminders";
+export type CalendarTimeScale = "fit" | "hour" | "half" | "quarter";
 
 export type TaskItem = {
   id: string;
@@ -183,6 +184,9 @@ export type TaskHubSettings = {
   calendarCreationDefaultKind: CalendarCreationKind;
   calendarTaskCreationDefaultTarget: CalendarTaskCreationTarget;
   calendarEventCreationDefaultTarget: CalendarEventCreationTarget;
+  calendarTimeScale: CalendarTimeScale;
+  calendarDayStartHour: number;
+  calendarDayEndHour: number;
   taskCreationFilePath: string;
   taskNotes: TaskNoteSettings;
   taskViewFilters: TaskViewFilterSettings;

@@ -33,6 +33,10 @@ export type TranslationKey =
   | "calendarTaskCreation"
   | "calendarTaskCreationDesc"
   | "calendarDetails"
+  | "calendarDayEndHour"
+  | "calendarDayEndHourDesc"
+  | "calendarDayStartHour"
+  | "calendarDayStartHourDesc"
   | "changed"
   | "clearFilters"
   | "cancel"
@@ -289,6 +293,10 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     calendarTaskCreation: "Create from calendar",
     calendarTaskCreationDesc: "Click empty calendar space to create a task or an Apple Calendar event.",
     calendarDetails: "Calendar details",
+    calendarDayEndHour: "Day/week end time",
+    calendarDayEndHourDesc: "Latest hour shown by default in day and week views. Later items still extend the range.",
+    calendarDayStartHour: "Day/week start time",
+    calendarDayStartHourDesc: "Earliest hour shown by default in day and week views. Earlier items still extend the range.",
     changed: "changed",
     clearFilters: "Clear",
     cancel: "Cancel",
@@ -557,6 +565,10 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     calendarTaskCreation: "允许从日历创建",
     calendarTaskCreationDesc: "点击日历空白区域创建任务或 Apple 日历事件。",
     calendarDetails: "日历详情",
+    calendarDayEndHour: "日/周视图结束时间",
+    calendarDayEndHourDesc: "日视图和周视图默认显示到几点；更晚的项目会自动扩展范围。",
+    calendarDayStartHour: "日/周视图开始时间",
+    calendarDayStartHourDesc: "日视图和周视图默认从几点开始；更早的项目会自动扩展范围。",
     changed: "已变化",
     clearFilters: "清空",
     cancel: "取消",

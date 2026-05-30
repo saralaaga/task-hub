@@ -6,12 +6,48 @@ describe("Task Hub styles", () => {
     const styles = readFileSync(path.join(__dirname, "styles.css"), "utf8");
     const monthRule = styles.match(/\.task-hub-calendar-day-items\s*>\s*\.task-hub-calendar-item\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const allDaySlotRule = styles.match(/\.task-hub-agenda-all-day-slot\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const fitAllDaySlotRule = styles.match(/\.task-hub-agenda\.is-scale-fit\s+\.task-hub-agenda-all-day-slot\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const allDayRule = styles.match(/\.task-hub-agenda-all-day-slot\s*>\s*\.task-hub-calendar-item\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
 
     expect(monthRule).toContain("flex: 0 0 auto");
     expect(allDaySlotRule).toContain("grid-auto-rows: max-content");
+    expect(fitAllDaySlotRule).toContain("max-height: 86px");
     expect(allDayRule).toContain("flex: 0 0 auto");
     expect(allDayRule).toContain("min-height: max-content");
+  });
+
+  it("uses content-only calendar rows in month view and the coarsest agenda scale", () => {
+    const styles = readFileSync(path.join(__dirname, "styles.css"), "utf8");
+    const compactItemRule = styles.match(/\.task-hub-calendar-month\s+\.task-hub-calendar-item,\s*\.task-hub-agenda\.is-scale-fit\s+\.task-hub-calendar-item\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const compactCompletedRule = styles.match(/\.task-hub-calendar-month\s+\.task-hub-calendar-item\.is-completed,\s*\.task-hub-agenda\.is-scale-fit\s+\.task-hub-calendar-item\.is-completed\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const compactSelectedRule = styles.match(/\.task-hub-calendar-month\s+\.task-hub-calendar-item\.is-selected,\s*\.task-hub-agenda\.is-scale-fit\s+\.task-hub-calendar-item\.is-selected\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const compactTitleRule = styles.match(/\.task-hub-calendar-month\s+\.task-hub-calendar-item\.is-selected\s+\.task-hub-calendar-item-title,\s*\.task-hub-agenda\.is-scale-fit\s+\.task-hub-calendar-item\.is-selected\s+\.task-hub-calendar-item-title\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const compactItemListRule = styles.match(/\.task-hub-calendar-month\s+\.task-hub-calendar-day-items\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const compactFitAllDayRule = styles.match(/\.task-hub-agenda\.is-scale-fit\s+\.task-hub-agenda-all-day-slot\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+
+    const compactBodyRule = styles.match(/\.task-hub-calendar-month\s+\.task-hub-calendar-item-body,\s*\.task-hub-agenda\.is-scale-fit\s+\.task-hub-calendar-item-body\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const compactAccentRule = styles.match(/\.task-hub-calendar-month\s+\.task-hub-calendar-item-body::before,\s*\.task-hub-agenda\.is-scale-fit\s+\.task-hub-calendar-item-body::before\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+
+    expect(compactItemRule).toContain("background: transparent");
+    expect(compactItemRule).toContain("border-left: 0");
+    expect(compactItemRule).toContain("border-radius: 0");
+    expect(compactItemRule).toContain("box-shadow: none");
+    expect(compactItemRule).toContain("padding: 0");
+    expect(compactBodyRule).toContain("padding-left: 9px");
+    expect(compactBodyRule).toContain("position: relative");
+    expect(compactAccentRule).toContain("border-radius: 999px");
+    expect(compactAccentRule).toContain("height: 0.85em");
+    expect(compactAccentRule).toContain("top: 0.2em");
+    expect(compactAccentRule).toContain("width: 4px");
+    expect(compactAccentRule).toContain("box-shadow: 0 1px 2px color-mix(in srgb, var(--task-hub-item-color) 34%, transparent)");
+    expect(compactCompletedRule).toContain("background: transparent");
+    expect(compactCompletedRule).toContain("border-left-color: transparent");
+    expect(compactSelectedRule).toContain("background: transparent");
+    expect(compactSelectedRule).toContain("box-shadow: none");
+    expect(compactSelectedRule).toContain("border-left-color: transparent");
+    expect(compactTitleRule).toContain("color: var(--text-normal)");
+    expect(compactItemListRule).toContain("gap: 2px");
+    expect(compactFitAllDayRule).toContain("gap: 2px");
   });
 
   it("places drag time feedback near the dragged card content instead of centered below it", () => {

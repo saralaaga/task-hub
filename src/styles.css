@@ -1512,6 +1512,10 @@ body .task-hub-view button.task-hub-color-swatch {
   scrollbar-gutter: stable;
 }
 
+.task-hub-calendar-month .task-hub-calendar-day-items {
+  gap: 2px;
+}
+
 .task-hub-calendar-day-items > .task-hub-calendar-item {
   flex: 0 0 auto;
 }
@@ -1543,6 +1547,41 @@ body .task-hub-view button.task-hub-color-swatch {
   right: -40%;
   top: 0;
   transform: translateX(-42%);
+}
+
+.task-hub-calendar-month .task-hub-calendar-item,
+.task-hub-agenda.is-scale-fit .task-hub-calendar-item {
+  background: transparent;
+  border-left: 0;
+  border-radius: 0;
+  box-shadow: none;
+  min-height: 0;
+  padding: 0;
+}
+
+.task-hub-calendar-month .task-hub-calendar-item::after,
+.task-hub-agenda.is-scale-fit .task-hub-calendar-item::after {
+  display: none;
+}
+
+.task-hub-calendar-month .task-hub-calendar-item-body,
+.task-hub-agenda.is-scale-fit .task-hub-calendar-item-body {
+  padding-left: 9px;
+  position: relative;
+}
+
+.task-hub-calendar-month .task-hub-calendar-item-body::before,
+.task-hub-agenda.is-scale-fit .task-hub-calendar-item-body::before {
+  background: var(--task-hub-item-color);
+  border-radius: 999px;
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--task-hub-item-color) 34%, transparent);
+  content: "";
+  height: 0.85em;
+  left: 0;
+  pointer-events: none;
+  position: absolute;
+  top: 0.2em;
+  width: 4px;
 }
 
 .task-hub-calendar-item.is-external-sending {
@@ -1589,11 +1628,24 @@ body .task-hub-view button.task-hub-color-swatch {
   opacity: 0.72;
 }
 
+.task-hub-calendar-month .task-hub-calendar-item.is-completed,
+.task-hub-agenda.is-scale-fit .task-hub-calendar-item.is-completed {
+  background: transparent;
+  border-left-color: transparent;
+}
+
 .task-hub-calendar-item.is-selected {
   background: color-mix(in srgb, var(--task-hub-item-color) 76%, black);
   border-left-color: color-mix(in srgb, var(--task-hub-item-color) 88%, white);
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--task-hub-item-color) 72%, white), 0 4px 14px rgb(0 0 0 / 18%);
   opacity: 1;
+}
+
+.task-hub-calendar-month .task-hub-calendar-item.is-selected,
+.task-hub-agenda.is-scale-fit .task-hub-calendar-item.is-selected {
+  background: transparent;
+  border-left-color: transparent;
+  box-shadow: none;
 }
 
 .task-hub-calendar-item-body {
@@ -1630,6 +1682,11 @@ body .task-hub-view button.task-hub-color-swatch {
   color: white;
 }
 
+.task-hub-calendar-month .task-hub-calendar-item.is-selected .task-hub-calendar-item-title,
+.task-hub-agenda.is-scale-fit .task-hub-calendar-item.is-selected .task-hub-calendar-item-title {
+  color: var(--text-normal);
+}
+
 .task-hub-calendar-item.is-selected input[type="checkbox"] {
   accent-color: white;
 }
@@ -1643,6 +1700,7 @@ body .task-hub-view button.task-hub-color-swatch {
 .task-hub-agenda {
   --task-hub-agenda-days: 7;
   --task-hub-agenda-hours: 16;
+  --task-hub-agenda-rows: 16;
   --task-hub-hour-height: 56px;
   border: 1px solid var(--background-modifier-border);
   border-radius: 8px;
@@ -1712,6 +1770,11 @@ body .task-hub-view button.task-hub-color-swatch {
   scrollbar-gutter: stable;
 }
 
+.task-hub-agenda.is-scale-fit .task-hub-agenda-all-day-slot {
+  gap: 2px;
+  max-height: 86px;
+}
+
 .task-hub-agenda-all-day-slot > .task-hub-calendar-item {
   flex: 0 0 auto;
   min-height: max-content;
@@ -1751,12 +1814,16 @@ body .task-hub-view button.task-hub-color-swatch {
 
 .task-hub-agenda-time-grid {
   display: grid;
-  grid-template-rows: repeat(var(--task-hub-agenda-rows), var(--task-hub-hour-height));
+  grid-template-rows: repeat(var(--task-hub-agenda-rows), calc((var(--task-hub-agenda-hours) * var(--task-hub-hour-height)) / var(--task-hub-agenda-rows)));
   pointer-events: none;
 }
 
 .task-hub-agenda-hour-line {
   border-top: 1px solid color-mix(in srgb, var(--background-modifier-border) 72%, transparent);
+}
+
+.task-hub-agenda-hour-line.is-minor {
+  border-top-color: color-mix(in srgb, var(--background-modifier-border) 38%, transparent);
 }
 
 .task-hub-agenda-columns {

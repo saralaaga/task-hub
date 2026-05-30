@@ -17,6 +17,9 @@ export const DEFAULT_SETTINGS: TaskHubSettings = {
   calendarCreationDefaultKind: "task",
   calendarTaskCreationDefaultTarget: { type: "vault" },
   calendarEventCreationDefaultTarget: { type: "apple-calendar" },
+  calendarTimeScale: "hour",
+  calendarDayStartHour: 6,
+  calendarDayEndHour: 22,
   taskCreationFilePath: "Task Hub.md",
   taskNotes: {
     enabled: false,
@@ -77,6 +80,8 @@ export function normalizeTaskHubSettings(loaded: Partial<TaskHubSettings> | null
     settingsSchemaVersion: TASK_HUB_SETTINGS_SCHEMA_VERSION,
     calendarTaskCreationEnabled: loaded?.calendarTaskCreationEnabled ?? DEFAULT_SETTINGS.calendarTaskCreationEnabled,
     calendarCreationDefaultKind: loaded?.calendarCreationDefaultKind ?? DEFAULT_SETTINGS.calendarCreationDefaultKind,
+    calendarTimeScale: normalizeCalendarTimeScale(loaded?.calendarTimeScale),
+    ...normalizeCalendarDayHours(loaded?.calendarDayStartHour, loaded?.calendarDayEndHour),
     showLunarCalendar: loaded?.showLunarCalendar ?? DEFAULT_SETTINGS.showLunarCalendar,
     calendarTaskCreationDefaultTarget:
       loaded?.calendarTaskCreationDefaultTarget ?? DEFAULT_SETTINGS.calendarTaskCreationDefaultTarget,
@@ -105,6 +110,39 @@ export function normalizeTaskHubSettings(loaded: Partial<TaskHubSettings> | null
     },
     appleReminderLinks: loaded?.appleReminderLinks ?? {}
   };
+}
+
+function normalizeCalendarTimeScale(value: unknown): TaskHubSettings["calendarTimeScale"] {
+  return value === "fit" || value === "hour" || value === "half" || value === "quarter"
+    ? value
+    : DEFAULT_SETTINGS.calendarTimeScale;
+}
+
+function normalizeCalendarDayHours(start: unknown, end: unknown): Pick<TaskHubSettings, "calendarDayStartHour" | "calendarDayEndHour"> {
+  const startHour = typeof start === "number" && Number.isInteger(start) && start >= 0 && start <= 23
+    ? start
+    : DEFAULT_SETTINGS.calendarDayStartHour;
+  const endHour = typeof end === "number" && Number.isInteger(end) && end >= 1 && end <= 24
+    ? end
+    : DEFAULT_SETTINGS.calendarDayEndHour;
+  if (endHour <= startHour) {
+    return {
+      calendarDayStartHour: DEFAULT_SETTINGS.calendarDayStartHour,
+      calendarDayEndHour: DEFAULT_SETTINGS.calendarDayEndHour
+    };
+  }
+  return {
+    calendarDayStartHour: startHour,
+    calendarDayEndHour: endHour
+  };
+}
+
+function populateHourDropdown(selectEl: HTMLSelectElement, startHour: number, endHour: number): void {
+  selectEl.empty();
+  for (let hour = startHour; hour <= endHour; hour += 1) {
+    const label = `${String(hour).padStart(2, "0")}:00`;
+    selectEl.createEl("option", { value: String(hour), text: label });
+  }
 }
 
 function normalizeTaskNotesSettings(loaded: Partial<TaskHubSettings["taskNotes"]> | undefined): TaskHubSettings["taskNotes"] {
@@ -237,6 +275,32 @@ export class TaskHubSettingTab extends PluginSettingTab {
             this.plugin.settings.weekStart = value as TaskHubSettings["weekStart"];
             await this.plugin.saveSettings();
           });
+      });
+
+    new Setting(basicSettingsGrid)
+      .setName(t("calendarDayStartHour"))
+      .setDesc(t("calendarDayStartHourDesc"))
+      .addDropdown((dropdown) => {
+        populateHourDropdown(dropdown.selectEl, 0, 23);
+        dropdown.setValue(String(this.plugin.settings.calendarDayStartHour)).onChange(async (value) => {
+          this.plugin.settings.calendarDayStartHour = Number(value);
+          this.plugin.settings = normalizeTaskHubSettings(this.plugin.settings);
+          await this.plugin.saveSettings();
+          this.display({ preserveScroll: true });
+        });
+      });
+
+    new Setting(basicSettingsGrid)
+      .setName(t("calendarDayEndHour"))
+      .setDesc(t("calendarDayEndHourDesc"))
+      .addDropdown((dropdown) => {
+        populateHourDropdown(dropdown.selectEl, 1, 24);
+        dropdown.setValue(String(this.plugin.settings.calendarDayEndHour)).onChange(async (value) => {
+          this.plugin.settings.calendarDayEndHour = Number(value);
+          this.plugin.settings = normalizeTaskHubSettings(this.plugin.settings);
+          await this.plugin.saveSettings();
+          this.display({ preserveScroll: true });
+        });
       });
 
     new Setting(basicSettingsGrid)
