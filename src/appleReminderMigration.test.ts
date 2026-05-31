@@ -1,5 +1,5 @@
 import TaskHubPlugin from "./main";
-import { MarkdownView } from "obsidian";
+import { MarkdownView, WorkspaceLeaf } from "obsidian";
 import { DEFAULT_SETTINGS } from "./settings";
 import { buildTaskNoteKey, createTaskNoteContent, parseTaskNoteFrontmatter } from "./taskNotes";
 import type { TaskItem } from "./types";
@@ -7,10 +7,55 @@ import type { TaskItem } from "./types";
 const notices: string[] = [];
 const savedData: unknown[] = [];
 
+type FakeElement = {
+  addClass: jest.Mock;
+  appendChild: jest.Mock;
+  createDiv: jest.Mock<FakeElement, []>;
+  empty: jest.Mock;
+  setText: jest.Mock;
+};
+
+type FakeButton = {
+  onClickHandler?: () => void;
+  setButtonText: jest.Mock;
+  setCta: jest.Mock;
+  onClick: jest.Mock;
+};
+
+const buttons: FakeButton[] = [];
+
+function fakeEl(): FakeElement {
+  return {
+    addClass: jest.fn(),
+    appendChild: jest.fn(),
+    createDiv: jest.fn(() => fakeEl()),
+    empty: jest.fn(),
+    setText: jest.fn()
+  };
+}
+
+function flushAsync(): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, 0);
+  });
+}
+
 jest.mock(
   "obsidian",
   () => ({
-    ButtonComponent: class {},
+    ButtonComponent: class {
+      onClickHandler?: () => void;
+      setButtonText = jest.fn(() => this);
+      setCta = jest.fn(() => this);
+      onClick = jest.fn((handler: () => void) => {
+        this.onClickHandler = handler;
+        return this;
+      });
+
+      constructor() {
+        buttons.push(this as FakeButton);
+      }
+    },
     AbstractInputSuggest: class {
       constructor() {}
       close() {}
@@ -19,7 +64,24 @@ jest.mock(
     ItemView: class {},
     MarkdownView: class {},
     Menu: class {},
-    Modal: class {},
+    Modal: class {
+      app: unknown;
+      modalEl = fakeEl();
+      titleEl = fakeEl();
+      contentEl = fakeEl();
+
+      constructor(app: unknown) {
+        this.app = app;
+      }
+
+      open() {
+        void (this as { onOpen?: () => void | Promise<void> }).onOpen?.();
+      }
+
+      close() {
+        void (this as { onClose?: () => void | Promise<void> }).onClose?.();
+      }
+    },
     Notice: class {
       constructor(message: string) {
         notices.push(message);
@@ -47,7 +109,33 @@ jest.mock(
     parseFrontMatterTags: jest.fn(() => []),
     Setting: class {},
     TFile: class {},
-    WorkspaceLeaf: class {}
+    WorkspaceLeaf: class {
+      containerEl = { tag: "workspace-leaf" };
+      view: unknown;
+      static instances: Array<unknown> = [];
+
+      constructor() {
+        (this.constructor as unknown as { instances: Array<unknown> }).instances.push(this);
+      }
+
+      setViewState = jest.fn(async () => {
+        this.view = Object.assign(new MarkdownView({} as never), {
+          getViewData: jest.fn(() => createTaskNoteContent({
+            noteId: "thn_1",
+            relatedKey: "task:vault:Inbox.md:0:abc",
+            title: "Edit",
+            createdAt: "2026-05-29T10:30:12"
+          })),
+          editor: {
+            focus: jest.fn(),
+            setCursor: jest.fn(),
+            scrollIntoView: jest.fn()
+          },
+          save: jest.fn(async () => undefined)
+        });
+      });
+      detach() {}
+    }
   }),
   { virtual: true }
 );
@@ -94,6 +182,7 @@ describe("Apple Reminders migration", () => {
   beforeEach(() => {
     notices.length = 0;
     savedData.length = 0;
+    buttons.length = 0;
     jest.clearAllMocks();
     jest.spyOn(TaskHubPlugin.prototype, "isLocalAppleSupported").mockReturnValue(true);
   });
@@ -266,46 +355,166 @@ describe("Apple Reminders migration", () => {
     expect(removeFile).toHaveBeenCalledWith(noteFile.path);
   });
 
-  it("opens task notes in a Markdown editor so editor plugins can run", async () => {
+  it("opens task notes in a native Markdown modal without creating a new tab", async () => {
     const noteFile = { path: "Task Hub Notes/edit.md", extension: "md", stat: { ctime: 1, mtime: 2, size: 3 } };
     const plugin = new TaskHubPlugin({} as never, {} as never);
-    const leaf = {
-      view: Object.assign(new MarkdownView({} as never), {
-        editor: {
-          focus: jest.fn(),
-          setCursor: jest.fn(),
-          scrollIntoView: jest.fn()
-        }
-      }),
-      openFile: jest.fn(async () => undefined)
-    };
-    const revealLeaf = jest.fn(async () => undefined);
+    const getLeaf = jest.fn();
     plugin.app = {
       vault: {
         getFileByPath: jest.fn(() => noteFile),
-        cachedRead: jest.fn(async () =>
-          createTaskNoteContent({
-            noteId: "thn_1",
-            relatedKey: "task:vault:Inbox.md:0:abc",
-            title: "Edit",
-            createdAt: "2026-05-29T10:30:12"
-          })
-        )
+        on: jest.fn(),
+        offref: jest.fn()
       },
       workspace: {
-        getLeaf: jest.fn(() => leaf),
-        revealLeaf
+        getLeaf,
+        getLeavesOfType: jest.fn(() => [])
       }
     } as never;
     plugin.settings = DEFAULT_SETTINGS;
 
     await plugin.openTaskNote(noteFile.path);
+    await Promise.resolve();
 
-    expect(plugin.app.workspace.getLeaf).toHaveBeenCalledWith("tab");
-    expect(leaf.openFile).toHaveBeenCalledWith(noteFile, { active: true, state: { mode: "source" }, eState: { line: 10 } });
-    expect(revealLeaf).toHaveBeenCalledWith(leaf);
-    expect(leaf.view.editor.setCursor).toHaveBeenCalledWith({ line: 10, ch: 0 });
-    expect(leaf.view.editor.focus).toHaveBeenCalled();
+    expect(getLeaf).not.toHaveBeenCalled();
+    const leaf = ((WorkspaceLeaf as unknown as { instances: Array<{ setViewState: jest.Mock }> }).instances).at(-1);
+    expect(leaf?.setViewState).toHaveBeenCalledWith({
+      type: "markdown",
+      state: {
+        file: noteFile.path,
+        mode: "source",
+        source: false,
+        properties: {
+          visible: false
+        }
+      },
+      active: true
+    });
+  });
+
+  it("uses the setting to show task note frontmatter in the native modal", async () => {
+    const noteFile = { path: "Task Hub Notes/edit.md", extension: "md", stat: { ctime: 1, mtime: 2, size: 3 } };
+    const plugin = new TaskHubPlugin({} as never, {} as never);
+    plugin.app = {
+      vault: {
+        getFileByPath: jest.fn(() => noteFile),
+        on: jest.fn(),
+        offref: jest.fn()
+      },
+      workspace: {
+        getLeavesOfType: jest.fn(() => [])
+      }
+    } as never;
+    plugin.settings = {
+      ...DEFAULT_SETTINGS,
+      taskNotes: {
+        ...DEFAULT_SETTINGS.taskNotes,
+        showFrontmatterInNoteModal: true
+      }
+    };
+
+    await plugin.openTaskNote(noteFile.path);
+    await Promise.resolve();
+
+    const leaf = ((WorkspaceLeaf as unknown as { instances: Array<{ setViewState: jest.Mock }> }).instances).at(-1);
+    expect(leaf?.setViewState).toHaveBeenCalledWith(expect.objectContaining({
+      state: expect.objectContaining({
+        properties: {
+          visible: true
+        }
+      })
+    }));
+  });
+
+  it("deletes a newly created task note when creation is cancelled", async () => {
+    const createdFile = { path: "Thino/20260529103012.md", extension: "md", stat: { ctime: 1, mtime: 2, size: 3 } };
+    const plugin = new TaskHubPlugin({} as never, {} as never);
+    const deleteFile = jest.fn(async () => undefined);
+    const create = jest.fn(async () => createdFile);
+    plugin.app = {
+      vault: {
+        createFolder: jest.fn(),
+        create,
+        delete: deleteFile,
+        getFileByPath: jest.fn(() => null),
+        getFolderByPath: jest.fn(() => ({ path: "Thino" })),
+        on: jest.fn(),
+        offref: jest.fn()
+      },
+      workspace: {
+        getLeavesOfType: jest.fn(() => [])
+      }
+    } as never;
+    plugin.settings = {
+      ...DEFAULT_SETTINGS,
+      taskNotes: {
+        ...DEFAULT_SETTINGS.taskNotes,
+        enabled: true,
+        thinoIntegrationEnabled: true,
+        defaultMode: "thino-multi-file"
+      }
+    };
+    plugin.taskNoteIndex = {
+      reindexFile: jest.fn(async () => undefined),
+      removeFile: jest.fn()
+    } as never;
+
+    await plugin.createTaskNoteForTask(task());
+    await flushAsync();
+    buttons[0].onClickHandler?.();
+    await flushAsync();
+
+    expect(deleteFile).toHaveBeenCalledWith(createdFile);
+    const [path, content] = create.mock.calls[0] as unknown as [string, string];
+    const id = path.match(/^Thino\/(\d{14})\.md$/u)?.[1];
+    expect(id).toBeTruthy();
+    expect(content).toContain(`id: "${id}"`);
+  });
+
+  it("keeps a newly created task note when creation is saved", async () => {
+    const createdFile = { path: "Thino/20260529103012.md", extension: "md", stat: { ctime: 1, mtime: 2, size: 3 } };
+    const plugin = new TaskHubPlugin({} as never, {} as never);
+    const deleteFile = jest.fn(async () => undefined);
+    const create = jest.fn(async () => createdFile);
+    plugin.app = {
+      vault: {
+        createFolder: jest.fn(),
+        create,
+        cachedRead: jest.fn(async () => "Body"),
+        delete: deleteFile,
+        getFileByPath: jest.fn(() => null),
+        getFolderByPath: jest.fn(() => ({ path: "Thino" })),
+        on: jest.fn(),
+        offref: jest.fn()
+      },
+      workspace: {
+        getLeavesOfType: jest.fn(() => [])
+      }
+    } as never;
+    plugin.settings = {
+      ...DEFAULT_SETTINGS,
+      taskNotes: {
+        ...DEFAULT_SETTINGS.taskNotes,
+        enabled: true,
+        thinoIntegrationEnabled: true,
+        defaultMode: "thino-multi-file"
+      }
+    };
+    plugin.taskNoteIndex = {
+      reindexFile: jest.fn(async () => undefined),
+      removeFile: jest.fn()
+    } as never;
+
+    await plugin.createTaskNoteForTask(task());
+    await flushAsync();
+    buttons[1].onClickHandler?.();
+    await flushAsync();
+
+    expect(deleteFile).not.toHaveBeenCalled();
+    const [path, content] = create.mock.calls[0] as unknown as [string, string];
+    const id = path.match(/^Thino\/(\d{14})\.md$/u)?.[1];
+    expect(id).toBeTruthy();
+    expect(content).toContain(`id: "${id}"`);
+    expect(notices).toContain("Task note created.");
   });
 
   it("preserves a timed Markdown task start time when sending it to Apple Reminders", async () => {

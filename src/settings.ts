@@ -28,7 +28,8 @@ export const DEFAULT_SETTINGS: TaskHubSettings = {
     thinoIntegrationEnabled: false,
     thinoFolder: "Thino",
     openNoteAfterCreate: true,
-    showCountsInTaskList: true
+    showCountsInTaskList: true,
+    showFrontmatterInNoteModal: false
   },
   taskViewFilters: {
     status: "open",
@@ -151,7 +152,8 @@ function normalizeTaskNotesSettings(loaded: Partial<TaskHubSettings["taskNotes"]
     ...(loaded ?? {}),
     defaultMode: loaded?.defaultMode === "thino-multi-file" ? "thino-multi-file" : DEFAULT_SETTINGS.taskNotes.defaultMode,
     notesFolder: loaded?.notesFolder ?? DEFAULT_SETTINGS.taskNotes.notesFolder,
-    thinoFolder: loaded?.thinoFolder ?? DEFAULT_SETTINGS.taskNotes.thinoFolder
+    thinoFolder: loaded?.thinoFolder ?? DEFAULT_SETTINGS.taskNotes.thinoFolder,
+    showFrontmatterInNoteModal: loaded?.showFrontmatterInNoteModal ?? DEFAULT_SETTINGS.taskNotes.showFrontmatterInNoteModal
   };
 }
 
@@ -475,6 +477,16 @@ export class TaskHubSettingTab extends PluginSettingTab {
         .addToggle((toggle) => {
           toggle.setValue(this.plugin.settings.taskNotes.showCountsInTaskList).onChange(async (value) => {
             this.plugin.settings.taskNotes.showCountsInTaskList = value;
+            await this.plugin.saveSettings();
+          });
+        });
+
+      new Setting(taskNotesGrid)
+        .setName(t("taskNotesShowFrontmatter"))
+        .setDesc(t("taskNotesShowFrontmatterDesc"))
+        .addToggle((toggle) => {
+          toggle.setValue(this.plugin.settings.taskNotes.showFrontmatterInNoteModal).onChange(async (value) => {
+            this.plugin.settings.taskNotes.showFrontmatterInNoteModal = value;
             await this.plugin.saveSettings();
           });
         });

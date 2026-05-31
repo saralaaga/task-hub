@@ -235,12 +235,16 @@ export type TranslationKey =
   | "taskNotesSection"
   | "taskNotesShowCounts"
   | "taskNotesShowCountsDesc"
+  | "taskNotesShowFrontmatter"
+  | "taskNotesShowFrontmatterDesc"
   | "taskNotesThino"
   | "taskNotesThinoDesc"
   | "taskNotesThinoFolder"
   | "taskNotesThinoFolderDesc"
   | "taskNoteEditInThino"
   | "taskNoteDeleted"
+  | "taskNoteSave"
+  | "taskNoteSaved"
   | "taskReopened"
   | "taskUpdateFailed"
   | "tasks"
@@ -508,12 +512,16 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     taskNotesSection: "Task notes",
     taskNotesShowCounts: "Show note counts",
     taskNotesShowCountsDesc: "Show note counts on task list rows when notes exist.",
+    taskNotesShowFrontmatter: "Show note metadata in editor",
+    taskNotesShowFrontmatterDesc: "Show YAML/frontmatter properties when opening linked note pop-ups. Off by default so the editor starts at the note body.",
     taskNotesThino: "Create Thino multi-file notes only",
     taskNotesThinoDesc: "Use Thino multi-file frontmatter for newly created notes. Thino single-file, Canvas, and diary storage are not generated.",
     taskNotesThinoFolder: "Thino notes folder",
     taskNotesThinoFolderDesc: "Folder used by Thino multi-file storage.",
     taskNoteEditInThino: "Edit in Thino",
     taskNoteDeleted: "Task note deleted.",
+    taskNoteSave: "Save note",
+    taskNoteSaved: "Task note saved.",
     taskReopened: "Task reopened.",
     taskUpdateFailed: "Task Hub could not update the task.",
     tasks: "Tasks",
@@ -774,12 +782,16 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     taskNotesSection: "任务笔记",
     taskNotesShowCounts: "显示笔记数",
     taskNotesShowCountsDesc: "任务有关联笔记时，在任务列表行显示数量。",
+    taskNotesShowFrontmatter: "编辑器中显示笔记元数据",
+    taskNotesShowFrontmatterDesc: "打开关联笔记弹窗时显示 YAML/frontmatter 属性。默认关闭，编辑器会从正文开始。",
     taskNotesThino: "仅创建 Thino multi-file 笔记",
     taskNotesThinoDesc: "为新笔记写入 Thino multi-file frontmatter；不生成 Thino single-file、Canvas 或日记存储内容。",
     taskNotesThinoFolder: "Thino 笔记文件夹",
     taskNotesThinoFolderDesc: "Thino multi-file 存储使用的文件夹。",
     taskNoteEditInThino: "在 Thino 中编辑",
     taskNoteDeleted: "任务笔记已删除。",
+    taskNoteSave: "保存笔记",
+    taskNoteSaved: "任务笔记已保存。",
     taskReopened: "任务已重新打开。",
     taskUpdateFailed: "Task Hub 无法更新该任务。",
     tasks: "任务",

@@ -875,6 +875,45 @@ body .task-hub-view button.task-hub-color-swatch {
   margin-bottom: 0;
 }
 
+.task-hub-note-modal {
+  width: min(920px, 92vw);
+}
+
+.task-hub-note-modal .modal-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: min(680px, 78vh);
+}
+
+.task-hub-note-modal-editor {
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 420px;
+  overflow: hidden;
+}
+
+.task-hub-note-modal-editor > .workspace-leaf {
+  height: auto;
+  min-height: 0;
+  width: 100%;
+}
+
+.task-hub-note-modal-editor .workspace-leaf-content,
+.task-hub-note-modal-editor .view-content,
+.task-hub-note-modal-editor .markdown-source-view,
+.task-hub-note-modal-editor .cm-editor {
+  height: 100%;
+}
+
+.task-hub-note-modal-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
 .task-hub-task-list-pane {
   justify-items: center;
   max-height: calc(100vh - 190px);

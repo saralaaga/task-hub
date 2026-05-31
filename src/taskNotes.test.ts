@@ -67,6 +67,21 @@ describe("task note frontmatter", () => {
     expect(parseTaskNoteFrontmatter(content)?.body).toBe("");
   });
 
+  it("creates Thino multi-file metadata when requested", () => {
+    const content = createTaskNoteContent({
+      noteId: "thn_1",
+      relatedKey: buildTaskNoteKey(vaultTask),
+      title: "Pay invoice",
+      createdAt: "2026-05-29T10:30:12.345Z",
+      mode: "thino-multi-file"
+    });
+
+    expect(content).toContain('id: "20260529103012"');
+    expect(content).toContain("createdAt: 2026-05-29T10:30:12.345Z");
+    expect(content).toContain("updatedAt: 2026-05-29T10:30:12.345Z");
+    expect(content).toContain('taskhub-note-id: "thn_1"');
+  });
+
   it("updates existing frontmatter while preserving unrelated properties and body", () => {
     const content = [
       "---",

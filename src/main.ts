@@ -1,4 +1,4 @@
-import { ButtonComponent, Editor, MarkdownView, Menu, Modal, Notice, Platform, Plugin, requestUrl, Setting, TFile, WorkspaceLeaf } from "obsidian";
+import { ButtonComponent, Editor, EventRef, MarkdownView, Menu, Modal, Notice, Platform, Plugin, requestUrl, Setting, TFile, WorkspaceLeaf } from "obsidian";
 import { PLUGIN_DISPLAY_NAME, TASK_HUB_VIEW_TYPE } from "./constants";
 import { appleCalendarEventToReminderInput, appleReminderToCalendarEventInput } from "./calendar/appleConversion";
 import { calendarDropTargetParts, withCalendarDropTargetDate, type CalendarDropTarget, type TimedCalendarTarget } from "./calendar/calendarDropTarget";
@@ -1158,27 +1158,7 @@ export default class TaskHubPlugin extends Plugin {
       new Notice(`${t("fileNotFound")}: ${path}`);
       return;
     }
-    const content = await this.app.vault.cachedRead(file);
-    const bodyLine = noteBodyStartLine(content);
-    const leaf = this.app.workspace.getLeaf("tab");
-    await leaf.openFile(file, {
-      active: true,
-      state: { mode: "source" },
-      eState: { line: bodyLine }
-    });
-    void this.app.workspace.revealLeaf(leaf);
-
-    if (leaf.view instanceof MarkdownView) {
-      leaf.view.editor.setCursor({ line: bodyLine, ch: 0 });
-      leaf.view.editor.focus();
-      leaf.view.editor.scrollIntoView(
-        {
-          from: { line: bodyLine, ch: 0 },
-          to: { line: bodyLine, ch: 0 }
-        },
-        true
-      );
-    }
+    new TaskNoteModal(this, file, "edit").open();
   }
 
   async openTaskNoteSource(path: string): Promise<void> {
@@ -1243,6 +1223,15 @@ export default class TaskHubPlugin extends Plugin {
     } catch {
       // The note may already have been deleted while the modal was closing.
     }
+  }
+
+  async reindexTaskNoteFile(file: TFile): Promise<void> {
+    await this.taskNoteIndex.reindexFile(this.toIndexableFile(file));
+    this.refreshOpenViews();
+  }
+
+  refreshTaskHubViews(): void {
+    this.refreshOpenViews();
   }
 
   getCalendarSources() {
@@ -1603,11 +1592,14 @@ export default class TaskHubPlugin extends Plugin {
     );
     await this.taskNoteIndex.reindexFile(this.toIndexableFile(file));
     this.refreshOpenViews();
-    new Notice(t("taskNoteCreated"));
-    await this.openTaskNote(file.path);
+    if (this.settings.taskNotes.openNoteAfterCreate) {
+      new TaskNoteModal(this, file, "create").open();
+    } else {
+      new Notice(t("taskNoteCreated"));
+    }
   }
 
-  private async deleteTaskNoteFile(file: TFile): Promise<void> {
+  async deleteTaskNoteFile(file: TFile): Promise<void> {
     await this.app.vault.delete(file);
     this.taskNoteIndex.removeFile(file.path);
     this.refreshOpenViews();
@@ -1693,6 +1685,136 @@ export default class TaskHubPlugin extends Plugin {
     await leaf.setViewState({ type: TASK_HUB_VIEW_TYPE, active: true });
     void this.app.workspace.revealLeaf(leaf);
   }
+}
+
+class TaskNoteModal extends Modal {
+  private leaf?: WorkspaceLeaf;
+  private fileChangeRef?: EventRef;
+  private isClosed = false;
+  private saved = false;
+  private cancelled = false;
+  private busy = false;
+
+  constructor(
+    private readonly plugin: TaskHubPlugin,
+    private readonly file: TFile,
+    private readonly mode: "create" | "edit"
+  ) {
+    super(plugin.app);
+  }
+
+  async onOpen(): Promise<void> {
+    this.modalEl.addClass("task-hub-note-modal");
+    this.titleEl.setText(createTranslator(this.plugin.settings.language)("notes"));
+    this.contentEl.empty();
+
+    const editorHost = this.contentEl.createDiv({ cls: "task-hub-note-modal-editor" });
+    const leaf = createDetachedWorkspaceLeaf(this.app);
+    this.leaf = leaf;
+    editorHost.appendChild(getWorkspaceLeafContainer(leaf));
+
+    this.fileChangeRef = this.app.vault.on("modify", (changed) => {
+      if (changed === this.file) void this.plugin.reindexTaskNoteFile(this.file);
+    });
+
+    await leaf.setViewState({
+      type: "markdown",
+      state: {
+        file: this.file.path,
+        mode: "source",
+        source: false,
+        properties: {
+          visible: this.plugin.settings.taskNotes.showFrontmatterInNoteModal
+        }
+      },
+      active: true
+    });
+
+    this.renderActions();
+    this.focusBodyStart();
+  }
+
+  async onClose(): Promise<void> {
+    this.isClosed = true;
+    const leaf = this.leaf;
+    this.leaf = undefined;
+    if (this.fileChangeRef) {
+      this.app.vault.offref(this.fileChangeRef);
+      this.fileChangeRef = undefined;
+    }
+    if (leaf?.view instanceof MarkdownView && !this.cancelled) {
+      await leaf.view.save();
+    }
+    leaf?.detach();
+    if (this.cancelled && this.mode === "create") {
+      await this.plugin.deleteTaskNoteFile(this.file);
+    } else if (this.saved || this.mode === "edit") {
+      await this.plugin.deleteTaskNoteIfEmpty(this.file);
+    } else if (this.mode === "create") {
+      await this.plugin.deleteTaskNoteFile(this.file);
+    }
+    this.plugin.refreshTaskHubViews();
+    this.contentEl.empty();
+  }
+
+  private renderActions(): void {
+    const t = createTranslator(this.plugin.settings.language);
+    const actions = this.contentEl.createDiv({ cls: "task-hub-note-modal-actions" });
+    new ButtonComponent(actions)
+      .setButtonText(t("cancel"))
+      .onClick(() => {
+        if (this.busy) return;
+        this.cancelled = true;
+        this.close();
+      });
+    new ButtonComponent(actions)
+      .setButtonText(t("taskNoteSave"))
+      .setCta()
+      .onClick(() => {
+        void this.saveAndClose();
+      });
+  }
+
+  private async saveAndClose(): Promise<void> {
+    if (this.busy) return;
+    this.busy = true;
+    try {
+      if (this.leaf?.view instanceof MarkdownView) {
+        await this.leaf.view.save();
+      }
+      this.saved = true;
+      await this.plugin.reindexTaskNoteFile(this.file);
+      new Notice(createTranslator(this.plugin.settings.language)(this.mode === "create" ? "taskNoteCreated" : "taskNoteSaved"));
+      this.close();
+    } catch (error) {
+      this.busy = false;
+      new Notice(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  private focusBodyStart(): void {
+    const view = this.leaf?.view;
+    if (!(view instanceof MarkdownView) || this.isClosed) return;
+    const bodyLine = noteBodyStartLine(view.getViewData());
+    view.editor.setCursor({ line: bodyLine, ch: 0 });
+    view.editor.focus();
+    view.editor.scrollIntoView(
+      {
+        from: { line: bodyLine, ch: 0 },
+        to: { line: bodyLine, ch: 0 }
+      },
+      true
+    );
+  }
+}
+
+function createDetachedWorkspaceLeaf(app: TaskHubPlugin["app"]): WorkspaceLeaf {
+  type DetachedWorkspaceLeafConstructor = new (app: TaskHubPlugin["app"]) => WorkspaceLeaf;
+  return new (WorkspaceLeaf as unknown as DetachedWorkspaceLeafConstructor)(app);
+}
+
+function getWorkspaceLeafContainer(leaf: WorkspaceLeaf): HTMLElement {
+  return (leaf as WorkspaceLeaf & { containerEl: HTMLElement }).containerEl;
 }
 
 class CreateTaskModal extends Modal {
