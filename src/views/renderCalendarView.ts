@@ -8,6 +8,7 @@ import { normalizeReminderAlertMinutes, populateReminderAlertSelect, type Remind
 import type { TaskNote } from "../taskNotes";
 import type { AppleCalendarInfo, AppleReminderList, CalendarEvent, CalendarItemEditDraft, CalendarSource, CalendarSourceStatus, CalendarTimeScale, DidaProject, TaskItem, WeekStart } from "../types";
 import { renderTaskNoteBody, type TaskNoteMarkdownRenderer } from "./renderTaskNoteBody";
+import { resolveTaskBulkActions, type TaskBulkActionId } from "./taskSelection";
 
 export type CalendarViewState = {
   mode: CalendarViewMode;
@@ -41,6 +42,7 @@ export type CalendarViewState = {
   getTaskNotes?: (task: TaskItem) => TaskNote[];
   getEventNotes?: (event: CalendarEvent) => TaskNote[];
   renderNoteMarkdown?: TaskNoteMarkdownRenderer;
+  selectedTaskIds?: ReadonlySet<string>;
   sources: CalendarSource[];
   t: Translator;
 };
@@ -54,6 +56,7 @@ export type CalendarViewHandlers = {
   onTaskComplete: (task: TaskItem) => void;
   onTaskJump: (task: TaskItem) => void;
   onTaskSelect: (task: TaskItem) => void;
+  onTaskSelectionChange?: (task: TaskItem, taskIds: string[]) => void;
   onTaskUpdate?: (task: TaskItem, draft: Extract<CalendarItemEditDraft, { kind: "task" }>) => void;
   onTaskReschedule: (task: TaskItem, target: CalendarDropTarget) => void;
   onTaskDelete?: (task: TaskItem) => void;
@@ -99,8 +102,12 @@ let activeDragGrabOffsetMinutes = 0;
 let activeDragGrabOffsetXPixels = 0;
 let activeDragGrabOffsetYPixels = 0;
 let activeDragFeedbackElement: HTMLElement | undefined;
+let activeDragStackElement: HTMLElement | undefined;
+let activeMutedDragElements: HTMLElement[] = [];
 let activeDetailsElement: HTMLElement | undefined;
 let activeSelectedCalendarItemKey: string | undefined;
+let activeSelectedTaskIds = new Set<string>();
+let activeSelectedCalendarItemKeys = new Set<string>();
 let activeCalendarItemElements = new Map<string, Set<HTMLElement>>();
 let suppressNextTimedCreationClick = false;
 const WEEK_START_DAY_INDEX: Record<WeekStart, number> = {
@@ -146,6 +153,8 @@ export function renderCalendarView(
   activeDetailsElement?.remove();
   activeDetailsElement = undefined;
   activeCalendarItemElements = new Map();
+  activeSelectedTaskIds = new Set(state.selectedTaskIds ?? []);
+  activeSelectedCalendarItemKeys = new Set([...activeSelectedTaskIds].map((taskId) => `task:${taskId}`));
   container.empty();
   const today = toLocalDateKey(state.today ?? new Date());
   const range = getCalendarRange(state.mode, state.focusDate, state.weekStart);
@@ -575,7 +584,7 @@ function renderTimedCalendarItem(
   if (task) {
     row.addEventListener("click", (event) => {
       event.stopPropagation();
-      selectCalendarItem(row, item);
+      selectCalendarItem(row, item, event, handlers);
       if (layout?.overlapItems && layout.overlapItems.length > 1) {
         renderTimedTaskOverlapPopover(row, layout.overlapItems, handlers, state);
         return;
@@ -585,7 +594,7 @@ function renderTimedCalendarItem(
   } else {
     row.addEventListener("click", (event) => {
       event.stopPropagation();
-      selectCalendarItem(row, item);
+      selectCalendarItem(row, item, event, handlers);
       renderCalendarDetailsPopover(row, item, handlers, state);
     });
   }
@@ -815,19 +824,20 @@ function renderCalendarItem(container: HTMLElement, item: CalendarItem, handlers
   if (task) {
     row.addEventListener("click", (event) => {
       event.stopPropagation();
-      selectCalendarItem(row, item);
+      selectCalendarItem(row, item, event, handlers);
       renderCalendarDetailsPopover(row, item, handlers, state);
     });
   } else {
     row.addEventListener("click", (event) => {
       event.stopPropagation();
-      selectCalendarItem(row, item);
+      selectCalendarItem(row, item, event, handlers);
       renderCalendarDetailsPopover(row, item, handlers, state);
     });
   }
 }
 
 function registerCalendarItemElement(element: HTMLElement, item: CalendarItem): void {
+  (element as HTMLElement & { taskHubCalendarItem?: CalendarItem }).taskHubCalendarItem = item;
   const key = calendarItemSelectionKey(item);
   element.setAttr("data-task-hub-calendar-selection", key);
   const elements = activeCalendarItemElements.get(key) ?? new Set<HTMLElement>();
@@ -836,17 +846,58 @@ function registerCalendarItemElement(element: HTMLElement, item: CalendarItem): 
   if (key === activeSelectedCalendarItemKey) {
     element.addClass("is-selected");
   }
+  if (activeSelectedCalendarItemKeys.has(key)) {
+    element.addClass("is-multi-selected");
+  }
 }
 
-function selectCalendarItem(element: HTMLElement, item: CalendarItem): void {
-  activeSelectedCalendarItemKey = calendarItemSelectionKey(item);
+function selectCalendarItem(element: HTMLElement, item: CalendarItem, event?: MouseEvent, handlers?: CalendarViewHandlers): void {
+  const key = calendarItemSelectionKey(item);
+  activeSelectedCalendarItemKey = key;
+  if (event?.metaKey || event?.ctrlKey) {
+    if (activeSelectedCalendarItemKeys.has(key)) {
+      activeSelectedCalendarItemKeys.delete(key);
+    } else {
+      activeSelectedCalendarItemKeys.add(key);
+    }
+    if (activeSelectedCalendarItemKeys.size === 0) activeSelectedCalendarItemKeys.add(key);
+  } else {
+    activeSelectedCalendarItemKeys = new Set([key]);
+  }
+  activeSelectedTaskIds = taskIdsFromCalendarSelection();
+  if (item.task) handlers?.onTaskSelectionChange?.(item.task, [...activeSelectedTaskIds]);
+  syncCalendarSelectionClasses(element);
+}
+
+function taskIdsFromCalendarSelection(): Set<string> {
+  const taskIds = new Set<string>();
+  for (const key of activeSelectedCalendarItemKeys) {
+    if (key.startsWith("task:")) taskIds.add(key.slice("task:".length));
+  }
+  return taskIds;
+}
+
+function syncCalendarSelectionClasses(element: HTMLElement): void {
   for (const elements of activeCalendarItemElements.values()) {
     for (const candidate of elements) {
       candidate.removeClass("is-selected");
+      candidate.removeClass("is-multi-selected");
     }
   }
-  for (const selected of activeCalendarItemElements.get(activeSelectedCalendarItemKey) ?? [element]) {
-    selected.addClass("is-selected");
+  if (activeSelectedCalendarItemKey) {
+    for (const selected of activeCalendarItemElements.get(activeSelectedCalendarItemKey) ?? [element]) {
+      selected.addClass("is-selected");
+    }
+  }
+  for (const taskId of activeSelectedTaskIds) {
+    for (const selected of activeCalendarItemElements.get(`task:${taskId}`) ?? []) {
+      selected.addClass("is-multi-selected");
+    }
+  }
+  for (const key of activeSelectedCalendarItemKeys) {
+    for (const selected of activeCalendarItemElements.get(key) ?? []) {
+      selected.addClass("is-multi-selected");
+    }
   }
 }
 
@@ -940,7 +991,7 @@ function renderTimedTaskOverlapPopover(anchor: HTMLElement, items: CalendarItem[
     row.addEventListener("click", (event) => {
       event.stopPropagation();
       closePopover();
-      selectCalendarItem(anchor, item);
+      selectCalendarItem(anchor, item, event, handlers);
       renderCalendarDetailsPopover(anchor, item, handlers, state);
     });
   }
@@ -1381,8 +1432,28 @@ function bindCalendarItemContextMenu(
   element.addEventListener("contextmenu", (event) => {
     event.preventDefault();
     event.stopPropagation();
-    selectCalendarItem(element, item);
+    const key = calendarItemSelectionKey(item);
+    const keepSelection = activeSelectedCalendarItemKeys.has(key);
+    if (keepSelection) {
+      activeSelectedCalendarItemKey = calendarItemSelectionKey(item);
+      syncCalendarSelectionClasses(element);
+      if (item.task) handlers.onTaskSelectionChange?.(item.task, [...activeSelectedTaskIds]);
+    } else {
+      selectCalendarItem(element, item, event, handlers);
+    }
     const menu = new Menu();
+    const selectedItems = selectedCalendarItems(item);
+    if (selectedItems.length > 1) {
+      const selectedTasks = selectedItems.flatMap((selected) => selected.task ? [selected.task] : []);
+      if (selectedTasks.length === selectedItems.length) {
+        addCalendarTaskBulkMenuItems(menu, selectedTasks, state, handlers);
+        menu.showAtMouseEvent(event);
+        return;
+      }
+      addCalendarItemBulkMenuItems(menu, selectedItems, state, handlers);
+      menu.showAtMouseEvent(event);
+      return;
+    }
     let itemCount = 0;
     if (state.taskNotesEnabled && item.task) {
       menu.addItem((menuItem) => {
@@ -1511,6 +1582,92 @@ function bindCalendarItemContextMenu(
   });
 }
 
+function selectedCalendarItems(anchorItem: CalendarItem): CalendarItem[] {
+  const anchorKey = calendarItemSelectionKey(anchorItem);
+  if (!activeSelectedCalendarItemKeys.has(anchorKey)) {
+    activeSelectedCalendarItemKeys = new Set([anchorKey]);
+  }
+  const items = new Map<string, CalendarItem>();
+  for (const key of activeSelectedCalendarItemKeys) {
+    const elements = activeCalendarItemElements.get(key) ?? [];
+    for (const element of elements) {
+      const item = calendarItemByElement(element);
+      if (item) items.set(calendarItemSelectionKey(item), item);
+    }
+  }
+  items.set(anchorKey, anchorItem);
+  return [...items.values()];
+}
+
+function calendarItemByElement(element: HTMLElement): CalendarItem | undefined {
+  return (element as HTMLElement & { taskHubCalendarItem?: CalendarItem }).taskHubCalendarItem;
+}
+
+function addCalendarTaskBulkMenuItems(
+  menu: Menu,
+  tasks: TaskItem[],
+  state: CalendarViewState,
+  handlers: CalendarViewHandlers
+): void {
+  const actions = resolveTaskBulkActions(tasks, {
+    allowAppleReminderWriteback: state.allowAppleReminderWriteback,
+    allowAppleReminderCreate: state.allowAppleReminderCreate,
+    allowAppleCalendarReminderConversion: state.allowAppleCalendarReminderConversion,
+    taskNotesEnabled: state.taskNotesEnabled
+  });
+
+  for (const action of actions) {
+    menu.addItem((menuItem) => {
+      const spec = calendarTaskBulkMenuSpec(action.id, state);
+      menuItem
+        .setTitle(spec.title)
+        .setIcon(spec.icon)
+        .onClick(() => runCalendarTaskBulkAction(action.id, tasks, handlers));
+    });
+  }
+}
+
+function addCalendarItemBulkMenuItems(
+  menu: Menu,
+  items: CalendarItem[],
+  state: CalendarViewState,
+  handlers: CalendarViewHandlers
+): void {
+  if (!items.every((item) => canDeleteCalendarItem(item, state))) return;
+  menu.addItem((menuItem) => {
+    menuItem
+      .setTitle(state.t("deleteCalendarItem"))
+      .setIcon("trash")
+      .onClick(() => {
+        for (const item of items) {
+          if (item.task) handlers.onTaskDelete?.(item.task);
+          if (item.event) handlers.onEventDelete?.(item.event);
+        }
+      });
+  });
+}
+
+function calendarTaskBulkMenuSpec(action: TaskBulkActionId, state: CalendarViewState): { title: string; icon: string } {
+  if (action === "create-note") return { title: state.t("createTaskNote"), icon: "sticky-note" };
+  if (action === "mark-complete") return { title: state.t("markComplete"), icon: "check-square" };
+  if (action === "mark-open") return { title: state.t("markOpen"), icon: "square" };
+  if (action === "open-source") return { title: state.t("openSource"), icon: "external-link" };
+  if (action === "send-to-apple-reminders") return { title: state.t("sendToAppleReminders"), icon: "bell-plus" };
+  if (action === "send-to-apple-calendar") return { title: state.t("sendToAppleCalendar"), icon: "calendar-plus" };
+  return { title: state.t("deleteCalendarItem"), icon: "trash" };
+}
+
+function runCalendarTaskBulkAction(action: TaskBulkActionId, tasks: TaskItem[], handlers: CalendarViewHandlers): void {
+  for (const task of tasks) {
+    if (action === "create-note") handlers.onCreateTaskNote?.(task);
+    else if (action === "mark-complete" || action === "mark-open") handlers.onTaskComplete(task);
+    else if (action === "open-source") handlers.onTaskJump(task);
+    else if (action === "delete") handlers.onTaskDelete?.(task);
+    else if (action === "send-to-apple-reminders") handlers.onTaskSendToAppleReminders?.(task);
+    else if (action === "send-to-apple-calendar") handlers.onTaskSendToAppleCalendar?.(task);
+  }
+}
+
 function markCalendarItemExternalSending(item: CalendarItem): void {
   const key = calendarItemSelectionKey(item);
   for (const element of activeCalendarItemElements.get(key) ?? []) {
@@ -1537,19 +1694,24 @@ function bindCalendarItemDrag(element: HTMLElement, item: CalendarItem, state: C
     activeDragGrabOffsetMinutes = grabOffset?.minutes ?? activeDragGrabOffsetMinutes;
     activeDragGrabOffsetXPixels = grabOffset?.xPixels ?? activeDragGrabOffsetXPixels;
     activeDragGrabOffsetYPixels = grabOffset?.yPixels ?? activeDragGrabOffsetYPixels;
+    activeDetailsElement?.remove();
+    activeDetailsElement = undefined;
     element.addClass("is-dragging");
     element.setAttr("aria-grabbed", "true");
+    const selectedItems = selectedDraggableCalendarItems(item, currentVisibleCalendarItems(), state);
+    const usingCustomDragStack = startCalendarStackDragFeedback(element, item, selectedItems, event);
     if (event.dataTransfer) {
       event.dataTransfer.effectAllowed = "move";
       event.dataTransfer.setData(CALENDAR_ITEM_DRAG_MIME, item.id);
       if (item.kind === "task") {
         event.dataTransfer.setData(TASK_DRAG_MIME, item.id);
       }
+      if (usingCustomDragStack) setNativeDragGhost(event.dataTransfer, element);
     }
   });
   element.addEventListener("dragend", () => {
     element.removeClass("is-dragging");
-    clearDragMoveFeedback();
+    clearCalendarDragFeedback();
     activeDraggedCalendarItemId = undefined;
     activeDragGrabOffsetMinutes = 0;
     activeDragGrabOffsetXPixels = 0;
@@ -1570,6 +1732,7 @@ function bindCalendarDropTarget(
     event.preventDefault();
     event.stopPropagation();
     element.addClass("is-drop-hover");
+    updateCalendarDragStack(event);
     if (event.dataTransfer) {
       event.dataTransfer.dropEffect = "move";
     }
@@ -1583,13 +1746,8 @@ function bindCalendarDropTarget(
     event.preventDefault();
     event.stopPropagation();
     element.removeClass("is-drop-hover");
-    if (item.task) {
-      handlers.onTaskReschedule(item.task, dateKey);
-      return;
-    }
-    if (item.event) {
-      handlers.onEventReschedule?.(item.event, dateKey);
-    }
+    playCalendarDropScatter(element, selectedDraggableCalendarItems(item, visibleItems, state));
+    rescheduleCalendarItemSelection(item, dateKey, visibleItems, handlers, state);
   });
 }
 
@@ -1607,6 +1765,7 @@ function bindCalendarTimedDropTarget(
     event.preventDefault();
     event.stopPropagation();
     element.addClass("is-drop-hover");
+    updateCalendarDragStack(event);
     const item = calendarItemFromDragEvent(event, visibleItems, state);
     if (item) {
       const target = timedDropTarget(element, event, item, dateKey, startHour, hourHeight, state);
@@ -1627,15 +1786,197 @@ function bindCalendarTimedDropTarget(
     event.stopPropagation();
     element.removeClass("is-drop-hover");
     const target = timedDropTarget(element, event, item, dateKey, startHour, hourHeight, state);
+    playCalendarDropScatter(element, selectedDraggableCalendarItems(item, visibleItems, state), event);
     clearDragMoveFeedback();
-    if (item.task) {
-      handlers.onTaskReschedule(item.task, target);
-      return;
-    }
-    if (item.event) {
-      handlers.onEventReschedule?.(item.event, target);
-    }
+    rescheduleCalendarItemSelection(item, target, visibleItems, handlers, state);
   });
+}
+
+function rescheduleCalendarItemSelection(
+  draggedItem: CalendarItem,
+  target: CalendarDropTarget,
+  visibleItems: CalendarItem[],
+  handlers: CalendarViewHandlers,
+  state: CalendarViewState
+): void {
+  const selectedItems = selectedDraggableCalendarItems(draggedItem, visibleItems, state);
+  if (selectedItems.length <= 1) {
+    rescheduleCalendarItem(draggedItem, target, handlers);
+    return;
+  }
+
+  for (const item of selectedItems) {
+    rescheduleCalendarItem(item, sharedCalendarDropTarget(item, target, state), handlers);
+  }
+}
+
+function selectedDraggableCalendarItems(draggedItem: CalendarItem, visibleItems: CalendarItem[], state: CalendarViewState): CalendarItem[] {
+  const draggedKey = calendarItemSelectionKey(draggedItem);
+  if (!activeSelectedCalendarItemKeys.has(draggedKey)) return [draggedItem];
+  const selectedKeys = new Set(activeSelectedCalendarItemKeys);
+  const selectedItems = visibleItems.filter((item) => selectedKeys.has(calendarItemSelectionKey(item)) && canDragCalendarItem(item, state));
+  return selectedItems.some((item) => calendarItemSelectionKey(item) === draggedKey) ? selectedItems : [draggedItem];
+}
+
+function currentVisibleCalendarItems(): CalendarItem[] {
+  const items = new Map<string, CalendarItem>();
+  for (const elements of activeCalendarItemElements.values()) {
+    for (const element of elements) {
+      const item = calendarItemByElement(element);
+      if (item) items.set(calendarItemSelectionKey(item), item);
+    }
+  }
+  return [...items.values()];
+}
+
+function startCalendarStackDragFeedback(
+  draggedElement: HTMLElement,
+  draggedItem: CalendarItem,
+  selectedItems: CalendarItem[],
+  event: DragEvent
+): boolean {
+  clearCalendarDragStack();
+  const items = orderedDragStackItems(draggedItem, selectedItems).slice(0, 6);
+  if (items.length <= 1) return false;
+  muteSelectedCalendarElements(draggedElement, items);
+  const ownerDocument = draggedElement.ownerDocument ?? document;
+  const body = ownerDocument.body;
+  if (!body) return false;
+  const stack = ownerDocument.createElement("div");
+  stack.addClass("task-hub-calendar-drag-stack");
+  stack.setAttr("aria-hidden", "true");
+  stack.style.setProperty("--task-hub-drag-stack-count", String(items.length));
+  items.forEach((item, index) => {
+    const card = stack.createDiv({ cls: `task-hub-calendar-drag-stack-card ${item.kind === "task" ? "is-task" : "is-event"}` });
+    card.style.setProperty("--task-hub-drag-stack-x", `${index * 9}px`);
+    card.style.setProperty("--task-hub-drag-stack-y", `${index * 7}px`);
+    card.style.setProperty("--task-hub-drag-stack-rotate", `${(index - 1) * -1.5}deg`);
+    card.style.setProperty("--task-hub-drag-stack-from-x", `${(index - 2) * -18}px`);
+    card.style.setProperty("--task-hub-drag-stack-from-y", `${(index - 1) * 20}px`);
+    card.style.setProperty("--task-hub-drag-stack-color", item.color ?? "var(--interactive-accent)");
+    if (item.startMinutes !== undefined && item.endMinutes !== undefined) {
+      card.createSpan({ cls: "task-hub-calendar-drag-stack-time", text: formatTimeRange(item.startMinutes, item.endMinutes) });
+    }
+    card.createSpan({ cls: "task-hub-calendar-drag-stack-title", text: item.title });
+  });
+  if (selectedItems.length > items.length) {
+    stack.createDiv({ cls: "task-hub-calendar-drag-stack-more", text: `+${selectedItems.length - items.length}` });
+  }
+  body.appendChild(stack);
+  activeDragStackElement = stack;
+  positionCalendarDragStack(stack, event);
+  return true;
+}
+
+function orderedDragStackItems(draggedItem: CalendarItem, selectedItems: CalendarItem[]): CalendarItem[] {
+  const draggedKey = calendarItemSelectionKey(draggedItem);
+  return [
+    draggedItem,
+    ...selectedItems.filter((item) => calendarItemSelectionKey(item) !== draggedKey)
+  ];
+}
+
+function muteSelectedCalendarElements(draggedElement: HTMLElement, items: CalendarItem[]): void {
+  activeMutedDragElements = [];
+  for (const item of items) {
+    for (const element of activeCalendarItemElements.get(calendarItemSelectionKey(item)) ?? []) {
+      if (element === draggedElement) continue;
+      element.addClass("is-drag-muted");
+      activeMutedDragElements.push(element);
+    }
+  }
+}
+
+function positionCalendarDragStack(stack: HTMLElement, event: DragEvent): void {
+  const x = event.clientX - activeDragGrabOffsetXPixels + 16;
+  const y = event.clientY - activeDragGrabOffsetYPixels + 16;
+  stack.style.left = `${Math.max(8, x)}px`;
+  stack.style.top = `${Math.max(8, y)}px`;
+}
+
+function updateCalendarDragStack(event: DragEvent): void {
+  if (!activeDragStackElement) return;
+  positionCalendarDragStack(activeDragStackElement, event);
+}
+
+function setNativeDragGhost(dataTransfer: DataTransfer, element: HTMLElement): void {
+  const ownerDocument = element.ownerDocument ?? document;
+  const ghost = ownerDocument.createElement("div");
+  ghost.addClass("task-hub-calendar-native-drag-ghost");
+  ownerDocument.body.appendChild(ghost);
+  dataTransfer.setDragImage?.(ghost, 0, 0);
+  deferredCleanup(() => ghost.remove(), 0);
+}
+
+function playCalendarDropScatter(targetElement: HTMLElement, selectedItems: CalendarItem[], event?: DragEvent): void {
+  if (selectedItems.length <= 1) {
+    clearCalendarDragStack();
+    return;
+  }
+  const ownerDocument = targetElement.ownerDocument ?? document;
+  const body = ownerDocument.body;
+  if (!body) {
+    clearCalendarDragStack();
+    return;
+  }
+  const rect = targetElement.getBoundingClientRect();
+  const x = event?.clientX ?? rect.left + rect.width / 2;
+  const y = event?.clientY ?? rect.top + Math.min(72, Math.max(24, rect.height / 2));
+  const burst = ownerDocument.createElement("div");
+  burst.addClass("task-hub-calendar-drop-scatter");
+  burst.style.left = `${Math.max(8, x)}px`;
+  burst.style.top = `${Math.max(8, y)}px`;
+  selectedItems.slice(0, 5).forEach((item, index) => {
+    const chip = burst.createDiv({ cls: "task-hub-calendar-drop-scatter-chip" });
+    const offsetIndex = index - Math.floor(Math.min(5, selectedItems.length) / 2);
+    chip.style.setProperty("--task-hub-drop-scatter-x", `${offsetIndex * 24}px`);
+    chip.style.setProperty("--task-hub-drop-scatter-y", `${Math.abs(offsetIndex) * 12}px`);
+    chip.style.setProperty("--task-hub-drop-scatter-mid-x", `${offsetIndex * 18}px`);
+    chip.style.setProperty("--task-hub-drop-scatter-mid-y", `${Math.abs(offsetIndex) * 9}px`);
+    chip.style.setProperty("--task-hub-drop-scatter-color", item.color ?? "var(--interactive-accent)");
+  });
+  body.appendChild(burst);
+  deferredCleanup(() => burst.remove(), 520);
+  clearCalendarDragStack();
+}
+
+function deferredCleanup(callback: () => void, delay: number): void {
+  const scheduler = window.setTimeout ?? setTimeout;
+  scheduler(callback, delay);
+}
+
+function sharedCalendarDropTarget(
+  item: CalendarItem,
+  target: CalendarDropTarget,
+  state: CalendarViewState
+): CalendarDropTarget {
+  if (typeof target === "string") return target;
+  if (target.startMinutes === undefined) {
+    return item.kind === "event"
+      ? { dateKey: target.dateKey, durationMinutes: itemDurationMinutes(item, state) }
+      : target.dateKey;
+  }
+  if (item.kind === "event") {
+    return {
+      dateKey: target.dateKey,
+      startMinutes: target.startMinutes,
+      durationMinutes: itemDurationMinutes(item, state)
+    };
+  }
+  return {
+    dateKey: target.dateKey,
+    startMinutes: target.startMinutes
+  };
+}
+
+function rescheduleCalendarItem(item: CalendarItem, target: CalendarDropTarget, handlers: CalendarViewHandlers): void {
+  if (item.task) {
+    handlers.onTaskReschedule(item.task, target);
+    return;
+  }
+  if (item.event) {
+    handlers.onEventReschedule?.(item.event, target);
+  }
 }
 
 function timedDropTarget(
@@ -1687,8 +2028,22 @@ function clearDragMoveFeedback(): void {
   activeDragFeedbackElement = undefined;
 }
 
+function clearCalendarDragFeedback(): void {
+  clearDragMoveFeedback();
+  clearCalendarDragStack();
+}
+
+function clearCalendarDragStack(): void {
+  activeDragStackElement?.remove();
+  activeDragStackElement = undefined;
+  for (const element of activeMutedDragElements) {
+    element.removeClass("is-drag-muted");
+  }
+  activeMutedDragElements = [];
+}
+
 function activeDraggedElement(): HTMLElement | undefined {
-  return document.querySelector(".task-hub-calendar-timed-item.is-dragging") as HTMLElement | null ?? undefined;
+  return document.querySelector(".task-hub-calendar-item.is-dragging") as HTMLElement | null ?? undefined;
 }
 
 function dragFeedbackElement(): HTMLElement | undefined {
@@ -1789,6 +2144,12 @@ function canDeleteTask(item: CalendarItem, state: CalendarViewState): boolean {
 
 function canDeleteEvent(item: CalendarItem, state: CalendarViewState): boolean {
   return isWritableAppleCalendarEvent(item, state) && Boolean(state.allowAppleCalendarWriteback);
+}
+
+function canDeleteCalendarItem(item: CalendarItem, state: CalendarViewState): boolean {
+  if (item.task) return canDeleteTask(item, state);
+  if (item.event) return canDeleteEvent(item, state);
+  return false;
 }
 
 function canSendTaskToAppleReminders(item: CalendarItem, state: CalendarViewState): boolean {

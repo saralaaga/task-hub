@@ -2044,7 +2044,9 @@ class TaskNoteModal extends Modal {
   }
 
   async onOpen(): Promise<void> {
+    const showFrontmatter = this.plugin.settings.taskNotes.showFrontmatterInNoteModal;
     this.modalEl.addClass("task-hub-note-modal");
+    this.modalEl.toggleClass("task-hub-note-modal-hide-frontmatter", !showFrontmatter);
     this.titleEl.setText(createTranslator(this.plugin.settings.language)("notes"));
     this.contentEl.empty();
 
@@ -2064,12 +2066,13 @@ class TaskNoteModal extends Modal {
         mode: "source",
         source: false,
         properties: {
-          visible: this.plugin.settings.taskNotes.showFrontmatterInNoteModal
+          visible: showFrontmatter
         }
       },
       active: true
     });
 
+    this.syncFrontmatterVisibility(showFrontmatter);
     this.renderActions();
     this.focusBodyStart();
   }
@@ -2145,6 +2148,20 @@ class TaskNoteModal extends Modal {
       },
       true
     );
+  }
+
+  private syncFrontmatterVisibility(visible: boolean): void {
+    const view = this.leaf?.view;
+    if (!(view instanceof MarkdownView)) return;
+    const currentEphemeralState =
+      typeof view.getEphemeralState === "function" ? view.getEphemeralState() : {};
+    view.setEphemeralState({
+      ...currentEphemeralState,
+      properties: {
+        ...((currentEphemeralState.properties as Record<string, unknown> | undefined) ?? {}),
+        visible
+      }
+    });
   }
 }
 

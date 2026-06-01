@@ -26,6 +26,7 @@ export class TaskHubView extends ItemView {
   private taskListScrollTop = 0;
   private contentScrollTop = 0;
   private completingTaskIds = new Set<string>();
+  private selectedTaskIds = new Set<string>();
 
   constructor(
     leaf: WorkspaceLeaf,
@@ -110,6 +111,7 @@ export class TaskHubView extends ItemView {
       if (visibleTasks.length > 0 && !visibleTasks.some((task) => task.id === this.selectedTaskId)) {
         this.selectedTaskId = undefined;
       }
+      this.pruneSelectedTaskIds(visibleTasks);
       renderTasksView(
         main,
         visibleTasks,
@@ -120,9 +122,8 @@ export class TaskHubView extends ItemView {
           onJump: (task) => void this.plugin.jumpToTask(task),
           onSendToAppleReminders: (task) => void this.plugin.sendTaskToAppleReminders(task),
           onSendToDida: (task) => void this.plugin.sendTaskToDida(task),
-          onSelect: (task) => {
-            this.selectedTaskId = task.id;
-          },
+          onSendToAppleCalendar: (task) => void this.plugin.convertAppleReminderToCalendarEvent(task),
+          onSelect: (task, intent) => this.updateTaskSelection(task, intent?.selectedTaskIds),
           onTagSelect: (tag) => {
             this.updateFilters({
               ...this.filters,
@@ -147,13 +148,16 @@ export class TaskHubView extends ItemView {
         t,
         {
           allowAppleReminderWriteback: this.plugin.settings.localApple.remindersWritebackEnabled,
-          allowAppleReminderCreate: this.plugin.settings.localApple.remindersCreateEnabled,
+          allowAppleReminderCreate: this.plugin.canCreateAppleReminders(),
           allowDidaWriteback: this.plugin.settings.dida.tasksWritebackEnabled,
           allowDidaCreate: this.plugin.settings.dida.tasksCreateEnabled,
           allowDidaDelete: this.plugin.settings.dida.tasksDeleteEnabled,
+          allowAppleCalendarReminderConversion:
+            this.plugin.settings.localApple.calendarReminderConversionEnabled && this.plugin.canConvertAppleCalendarAndReminders(),
           appleReminderLists: this.plugin.getAppleReminderLists(),
           didaProjects: this.plugin.getDidaProjects(),
           selectedTaskId: this.selectedTaskId,
+          selectedTaskIds: this.selectedTaskIds,
           sourceColors,
           taskColors,
           bindTagInputSuggest,
@@ -185,6 +189,7 @@ export class TaskHubView extends ItemView {
           onTaskSelect: (task) => {
             this.view = "tasks";
             this.selectedTaskId = task.id;
+            this.selectedTaskIds = new Set([task.id]);
             this.updateFilters({ ...this.filters, tags: [] });
           },
           onReorderTags: (sourceTag, targetTag) => {
@@ -235,6 +240,7 @@ export class TaskHubView extends ItemView {
           appleCalendars: this.plugin.getAppleCalendars(),
           sources: calendarSources,
           taskNotesEnabled: this.plugin.settings.taskNotes.enabled,
+          selectedTaskIds: this.selectedTaskIds,
           allowThinoNoteEdit: this.plugin.settings.taskNotes.thinoIntegrationEnabled,
           getTaskNotes: (task) => this.plugin.getTaskNotes(task),
           getEventNotes: (event) => this.plugin.getEventNotes(event),
@@ -268,8 +274,11 @@ export class TaskHubView extends ItemView {
           onTaskComplete: (task) => void this.completeTaskFromView(task),
           onTaskJump: (task) => void this.plugin.jumpToTask(task),
           onTaskSelect: (task) => {
-            this.selectedTaskId = task.id;
+            this.updateTaskSelection(task);
             this.render();
+          },
+          onTaskSelectionChange: (task, taskIds) => {
+            this.updateTaskSelection(task, taskIds);
           },
           onTaskUpdate: (task, draft) => void this.plugin.updateCalendarTask(task, draft),
           onTaskReschedule: (task, dateKey) => void this.plugin.rescheduleTask(task, dateKey),
@@ -337,6 +346,19 @@ export class TaskHubView extends ItemView {
       return filterTasks([task], { ...this.filters, status: "all" }, now).length > 0;
     });
     return [...visibleTasks, ...exitingTasks];
+  }
+
+  private pruneSelectedTaskIds(visibleTasks: TaskItem[]): void {
+    const visibleIds = new Set(visibleTasks.map((task) => task.id));
+    this.selectedTaskIds = new Set([...this.selectedTaskIds].filter((taskId) => visibleIds.has(taskId)));
+    if (this.selectedTaskId && !visibleIds.has(this.selectedTaskId)) {
+      this.selectedTaskId = undefined;
+    }
+  }
+
+  private updateTaskSelection(task: TaskItem, taskIds?: string[]): void {
+    this.selectedTaskId = task.id;
+    this.selectedTaskIds = new Set(taskIds && taskIds.length > 0 ? taskIds : [task.id]);
   }
 
   private exitingTaskIds(allTasks: TaskItem[]): ReadonlySet<string> {

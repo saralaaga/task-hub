@@ -216,6 +216,8 @@ class FakeElement {
 type FakeEvent = {
   key: string;
   isComposing?: boolean;
+  ctrlKey?: boolean;
+  metaKey?: boolean;
   target?: FakeElement;
   stopped?: boolean;
   preventDefault(): void;
@@ -493,14 +495,54 @@ describe("renderTasksView", () => {
 
     const row = collect(container).find((element) => element.classes.has("task-hub-task-row"));
     const event = row!.dispatch("contextmenu");
-    mockMenus[0].items[0].click?.();
+    mockMenus[0].items.find((item) => item.title === "deleteCalendarItem")?.click?.();
 
     expect(event.preventDefault).toHaveBeenCalled();
     expect(event.stopPropagation).toHaveBeenCalled();
     expect(row?.classes.has("is-selected")).toBe(true);
-    expect(mockMenus[0].items[0].title).toBe("deleteCalendarItem");
-    expect(mockMenus[0].items[0].icon).toBe("trash");
+    expect(mockMenus[0].items.map((item) => item.title)).toEqual(["markComplete", "openSource", "deleteCalendarItem"]);
+    expect(mockMenus[0].items.find((item) => item.title === "deleteCalendarItem")?.icon).toBe("trash");
     expect(viewHandlers.onTaskDelete).toHaveBeenCalledWith(baseTask);
+  });
+
+  it("uses command or control clicks to build a multi-task context menu", () => {
+    const container = new FakeElement();
+    const viewHandlers = handlers();
+    const vaultTask = { ...baseTask, id: "vault-1", source: "vault" as const, filePath: "Inbox.md", externalSourceName: undefined };
+    const appleTask = { ...baseTask, id: "apple-1" };
+
+    renderTasksView(
+      container as unknown as HTMLElement,
+      [vaultTask, appleTask],
+      [vaultTask, appleTask],
+      { status: "open", tags: [], sourceQuery: "", textQuery: "" },
+      viewHandlers,
+      new Date("2026-05-08T12:00:00Z"),
+      (key) => key,
+      {
+        allowAppleReminderWriteback: true,
+        allowAppleReminderCreate: true,
+        taskNotesEnabled: true,
+        selectedTaskId: "vault-1"
+      }
+    );
+
+    const rows = collect(container).filter((element) => element.classes.has("task-hub-task-row"));
+    rows[1].dispatch("click", { ctrlKey: true } as Partial<FakeEvent>);
+    rows[1].dispatch("contextmenu");
+
+    expect(rows[0].classes.has("is-multi-selected")).toBe(true);
+    expect(rows[1].classes.has("is-multi-selected")).toBe(true);
+    expect(viewHandlers.onSelect).toHaveBeenLastCalledWith(appleTask, {
+      additive: true,
+      selectedTaskIds: ["vault-1", "apple-1"]
+    });
+    expect(mockMenus.at(-1)?.items.map((item) => item.title)).toEqual(["createTaskNote", "markComplete", "deleteCalendarItem"]);
+
+    mockMenus.at(-1)?.items[1].click?.();
+    expect(viewHandlers.onComplete).toHaveBeenCalledWith(vaultTask);
+    expect(viewHandlers.onComplete).toHaveBeenCalledWith(appleTask);
+    expect(viewHandlers.onSendToAppleReminders).not.toHaveBeenCalled();
   });
 
   it("shows task note counts and note links when task notes are enabled", () => {
@@ -1113,7 +1155,10 @@ describe("renderTasksView", () => {
     expect(list?.scrollTop).toBe(240);
     expect(firstRow?.classes.has("is-selected")).toBe(false);
     expect(secondRow?.classes.has("is-selected")).toBe(true);
-    expect(viewHandlers.onSelect).toHaveBeenCalledWith(secondTask);
+    expect(viewHandlers.onSelect).toHaveBeenCalledWith(secondTask, {
+      additive: false,
+      selectedTaskIds: ["second"]
+    });
     expect(collect(container).some((element) => element.classes.has("task-hub-detail-title-input") && element.value === "Second")).toBe(true);
   });
 

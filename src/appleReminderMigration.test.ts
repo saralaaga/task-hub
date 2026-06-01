@@ -257,6 +257,7 @@ jest.mock(
 
       setViewState = jest.fn(async () => {
         this.view = Object.assign(new MarkdownView({} as never), {
+          getEphemeralState: jest.fn(() => ({ existing: true, properties: { collapsed: false } })),
           getViewData: jest.fn(() => createTaskNoteContent({
             noteId: "thn_1",
             relatedKey: "task:vault:Inbox.md:0:abc",
@@ -268,6 +269,7 @@ jest.mock(
             setCursor: jest.fn(),
             scrollIntoView: jest.fn()
           },
+          setEphemeralState: jest.fn(),
           save: jest.fn(async () => undefined)
         });
       });
@@ -516,7 +518,7 @@ describe("Apple Reminders migration", () => {
     await Promise.resolve();
 
     expect(getLeaf).not.toHaveBeenCalled();
-    const leaf = ((WorkspaceLeaf as unknown as { instances: Array<{ setViewState: jest.Mock }> }).instances).at(-1);
+    const leaf = ((WorkspaceLeaf as unknown as { instances: Array<{ setViewState: jest.Mock; view?: unknown }> }).instances).at(-1);
     expect(leaf?.setViewState).toHaveBeenCalledWith({
       type: "markdown",
       state: {
@@ -529,6 +531,15 @@ describe("Apple Reminders migration", () => {
       },
       active: true
     });
+    const view = leaf?.view as { setEphemeralState: jest.Mock } | undefined;
+    expect(view?.setEphemeralState).toHaveBeenCalledWith({
+      existing: true,
+      properties: {
+        collapsed: false,
+        visible: false
+      }
+    });
+    expect(modals.at(-1)?.modalEl.toggleClass).toHaveBeenCalledWith("task-hub-note-modal-hide-frontmatter", true);
   });
 
   it("uses the setting to show task note frontmatter in the native modal", async () => {
@@ -555,7 +566,7 @@ describe("Apple Reminders migration", () => {
     await plugin.openTaskNote(noteFile.path);
     await Promise.resolve();
 
-    const leaf = ((WorkspaceLeaf as unknown as { instances: Array<{ setViewState: jest.Mock }> }).instances).at(-1);
+    const leaf = ((WorkspaceLeaf as unknown as { instances: Array<{ setViewState: jest.Mock; view?: unknown }> }).instances).at(-1);
     expect(leaf?.setViewState).toHaveBeenCalledWith(expect.objectContaining({
       state: expect.objectContaining({
         properties: {
@@ -563,6 +574,15 @@ describe("Apple Reminders migration", () => {
         }
       })
     }));
+    const view = leaf?.view as { setEphemeralState: jest.Mock } | undefined;
+    expect(view?.setEphemeralState).toHaveBeenCalledWith({
+      existing: true,
+      properties: {
+        collapsed: false,
+        visible: true
+      }
+    });
+    expect(modals.at(-1)?.modalEl.toggleClass).toHaveBeenCalledWith("task-hub-note-modal-hide-frontmatter", false);
   });
 
   it("deletes a newly created task note when creation is cancelled", async () => {

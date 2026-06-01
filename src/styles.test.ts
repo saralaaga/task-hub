@@ -133,6 +133,19 @@ describe("Task Hub styles", () => {
     expect(textareaRule).toContain("min-height: 96px");
   });
 
+  it("hides Obsidian metadata containers inside task note modals when frontmatter is disabled", () => {
+    const styles = readFileSync(path.join(__dirname, "styles.css"), "utf8");
+    const modalRule = styles.match(/\.task-hub-note-modal-hide-frontmatter\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+
+    expect(modalRule).toContain("--metadata-display-editing: none");
+    expect(modalRule).toContain("--metadata-display-reading: none");
+    expect(styles).toContain(".task-hub-note-modal-hide-frontmatter .metadata-container");
+    expect(styles).toContain(".task-hub-note-modal-hide-frontmatter .metadata-properties");
+    expect(styles).toContain(".task-hub-note-modal-hide-frontmatter .metadata-add-button");
+    expect(styles).toContain(".task-hub-note-modal-hide-frontmatter .frontmatter-container");
+    expect(styles).toContain("display: none !important");
+  });
+
   it("renders tag view chips with white lightweight text and lifted shadows", () => {
     const styles = readFileSync(path.join(__dirname, "styles.css"), "utf8");
     const tagViewChipRule = styles.match(/\.task-hub-tag-task\s+\.task-hub-task-tag\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";

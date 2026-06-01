@@ -6,13 +6,15 @@ import { normalizeReminderAlertMinutes, populateReminderAlertSelect, type Remind
 import type { TaskNote } from "../taskNotes";
 import type { AppleReminderList, CalendarItemEditDraft, DidaProject, TaskItem } from "../types";
 import { renderTaskNoteBody, type TaskNoteMarkdownRenderer } from "./renderTaskNoteBody";
+import { resolveTaskBulkActions, type TaskBulkActionId } from "./taskSelection";
 
 export type TaskRowHandlers = {
   onComplete: (task: TaskItem) => void;
   onJump: (task: TaskItem) => void;
   onSendToAppleReminders: (task: TaskItem) => void;
   onSendToDida?: (task: TaskItem) => void;
-  onSelect: (task: TaskItem) => void;
+  onSendToAppleCalendar?: (task: TaskItem) => void;
+  onSelect: (task: TaskItem, intent?: TaskSelectionIntent) => void;
   onTagSelect: (tag: string) => void;
   onSourceSelect: (source: "all" | "vault" | "apple-reminders" | "dida") => void;
   onAppleReminderListChange: (task: TaskItem, listId: string) => void;
@@ -25,13 +27,20 @@ export type TaskRowHandlers = {
   onOpenTaskNoteInThino?: (path: string) => void;
 };
 
+export type TaskSelectionIntent = {
+  additive: boolean;
+  selectedTaskIds: string[];
+};
+
 export type TaskRenderOptions = {
   allowAppleReminderCreate?: boolean;
   allowAppleReminderWriteback: boolean;
   allowDidaCreate?: boolean;
   allowDidaWriteback?: boolean;
   allowDidaDelete?: boolean;
+  allowAppleCalendarReminderConversion?: boolean;
   selectedTaskId?: string;
+  selectedTaskIds?: ReadonlySet<string>;
   sourceColors?: Partial<Record<TaskItem["source"], string>>;
   taskColors?: Record<string, string>;
   appleReminderLists?: AppleReminderList[];
@@ -77,6 +86,7 @@ export function renderTasksView(
 
   const sortedTasks = sortTasksForTaskList(tasks);
   let selectedTask = sortedTasks.find((task) => task.id === options.selectedTaskId) ?? sortedTasks.find((task) => !task.completed) ?? sortedTasks[0];
+  const selectedTaskIds = normalizedSelectedTaskIds(options, selectedTask);
   const workbench = container.createDiv({ cls: "task-hub-task-workbench" });
   const list = workbench.createDiv({ cls: "task-hub-task-list-pane" });
 
@@ -89,15 +99,44 @@ export function renderTasksView(
   const groups = groupSortedTasksByDateBucket(sortedTasks, now);
   const rowsByTaskId = new Map<string, HTMLElement>();
   let detailsHost: HTMLElement | undefined;
-  const selectTask = (task: TaskItem) => {
+  const selectTask = (task: TaskItem, event?: MouseEvent) => {
+    const additive = Boolean(event?.metaKey || event?.ctrlKey);
+    if (additive) {
+      if (selectedTaskIds.has(task.id)) {
+        selectedTaskIds.delete(task.id);
+      } else {
+        selectedTaskIds.add(task.id);
+      }
+      if (selectedTaskIds.size === 0) selectedTaskIds.add(task.id);
+    } else {
+      selectedTaskIds.clear();
+      selectedTaskIds.add(task.id);
+    }
     selectedTask = task;
     for (const [taskId, row] of rowsByTaskId) {
       row.toggleClass("is-selected", taskId === task.id);
+      row.toggleClass("is-multi-selected", selectedTaskIds.has(taskId));
     }
     if (detailsHost) {
       renderTaskDetails(detailsHost, selectedTask, handlers, options, t);
     }
-    handlers.onSelect(task);
+    handlers.onSelect(task, { additive, selectedTaskIds: [...selectedTaskIds] });
+  };
+  const selectContextTasks = (task: TaskItem) => {
+    if (!selectedTaskIds.has(task.id)) {
+      selectedTaskIds.clear();
+      selectedTaskIds.add(task.id);
+    }
+    selectedTask = task;
+    for (const [taskId, row] of rowsByTaskId) {
+      row.toggleClass("is-selected", taskId === task.id);
+      row.toggleClass("is-multi-selected", selectedTaskIds.has(taskId));
+    }
+    if (detailsHost) {
+      renderTaskDetails(detailsHost, selectedTask, handlers, options, t);
+    }
+    handlers.onSelect(task, { additive: selectedTaskIds.size > 1, selectedTaskIds: [...selectedTaskIds] });
+    return sortedTasks.filter((candidate) => selectedTaskIds.has(candidate.id));
   };
 
   for (const bucket of BUCKETS) {
@@ -109,13 +148,29 @@ export function renderTasksView(
     const cards = section.createDiv({ cls: "task-hub-task-list-flow" });
 
     for (const task of bucketTasks) {
-      const row = renderTaskRow(cards, task, handlers, options, t, task.id === selectedTask?.id, selectTask);
+      const row = renderTaskRow(
+        cards,
+        task,
+        handlers,
+        options,
+        t,
+        task.id === selectedTask?.id,
+        selectedTaskIds.has(task.id),
+        selectTask,
+        selectContextTasks
+      );
       rowsByTaskId.set(task.id, row);
     }
   }
   restoreTaskListScroll(list, options);
   detailsHost = workbench.createDiv({ cls: "task-hub-task-details-host" });
   renderTaskDetails(detailsHost, selectedTask, handlers, options, t);
+}
+
+function normalizedSelectedTaskIds(options: TaskRenderOptions, selectedTask: TaskItem | undefined): Set<string> {
+  const selectedTaskIds = new Set(options.selectedTaskIds ?? []);
+  if (selectedTaskIds.size === 0 && selectedTask) selectedTaskIds.add(selectedTask.id);
+  return selectedTaskIds;
 }
 
 function restoreTaskListScroll(list: HTMLElement, options: TaskRenderOptions): void {
@@ -131,11 +186,14 @@ function renderTaskRow(
   options: TaskRenderOptions,
   t: Translator,
   selected: boolean,
-  onSelect: (task: TaskItem) => void
+  multiSelected: boolean,
+  onSelect: (task: TaskItem, event?: MouseEvent) => void,
+  contextTasks: (task: TaskItem) => TaskItem[]
 ): HTMLElement {
   const classes = [
     "task-hub-task-row",
     selected ? "is-selected" : "",
+    multiSelected ? "is-multi-selected" : "",
     task.completed ? "is-completed" : "",
     options.exitingTaskIds?.has(task.id) ? "is-exiting" : ""
   ].filter(Boolean).join(" ");
@@ -168,32 +226,70 @@ function renderTaskRow(
   }
   meta.createSpan({ cls: "task-hub-task-source", text: task.externalSourceName ?? task.filePath });
 
-  row.addEventListener("click", () => onSelect(task));
+  row.addEventListener("click", (event) => onSelect(task, event));
   row.addEventListener("dblclick", () => {
     handlers.onJump(task);
   });
   row.addEventListener("contextmenu", (event) => {
     event.preventDefault();
     event.stopPropagation();
-    onSelect(task);
+    const selectedTasks = contextTasks(task);
     const menu = new Menu();
-    if (options.taskNotesEnabled) {
-      menu.addItem((item) => {
-        item
-          .setTitle(t("createTaskNote"))
-          .setIcon("sticky-note")
-          .onClick(() => handlers.onCreateTaskNote?.(task));
-      });
-    }
-    menu.addItem((item) => {
-      item
-        .setTitle(t("deleteCalendarItem"))
-        .setIcon("trash")
-        .onClick(() => handlers.onTaskDelete?.(task));
-    });
+    addTaskBulkMenuItems(menu, selectedTasks, handlers, options, t);
     menu.showAtMouseEvent(event);
   });
   return row;
+}
+
+function addTaskBulkMenuItems(
+  menu: Menu,
+  tasks: TaskItem[],
+  handlers: TaskRowHandlers,
+  options: TaskRenderOptions,
+  t: Translator
+): void {
+  const actions = resolveTaskBulkActions(tasks, {
+    allowAppleReminderWriteback: options.allowAppleReminderWriteback,
+    allowAppleReminderCreate: options.allowAppleReminderCreate,
+    allowAppleCalendarReminderConversion: options.allowAppleCalendarReminderConversion,
+    allowDidaCreate: options.allowDidaCreate,
+    allowDidaWriteback: options.allowDidaWriteback,
+    allowDidaDelete: options.allowDidaDelete,
+    taskNotesEnabled: options.taskNotesEnabled
+  });
+
+  for (const action of actions) {
+    menu.addItem((item) => {
+      const spec = taskBulkMenuSpec(action.id, t);
+      item
+        .setTitle(spec.title)
+        .setIcon(spec.icon)
+        .onClick(() => runTaskBulkAction(action.id, tasks, handlers));
+    });
+  }
+}
+
+function taskBulkMenuSpec(action: TaskBulkActionId, t: Translator): { title: string; icon: string } {
+  if (action === "create-note") return { title: t("createTaskNote"), icon: "sticky-note" };
+  if (action === "mark-complete") return { title: t("markComplete"), icon: "check-square" };
+  if (action === "mark-open") return { title: t("markOpen"), icon: "square" };
+  if (action === "open-source") return { title: t("openSource"), icon: "external-link" };
+  if (action === "send-to-apple-reminders") return { title: t("sendToAppleReminders"), icon: "bell-plus" };
+  if (action === "send-to-apple-calendar") return { title: t("sendToAppleCalendar"), icon: "calendar-plus" };
+  if (action === "send-to-dida") return { title: t("sendToDida"), icon: "check-circle-2" };
+  return { title: t("deleteCalendarItem"), icon: "trash" };
+}
+
+function runTaskBulkAction(action: TaskBulkActionId, tasks: TaskItem[], handlers: TaskRowHandlers): void {
+  for (const task of tasks) {
+    if (action === "create-note") handlers.onCreateTaskNote?.(task);
+    else if (action === "mark-complete" || action === "mark-open") handlers.onComplete(task);
+    else if (action === "open-source") handlers.onJump(task);
+    else if (action === "delete") handlers.onTaskDelete?.(task);
+    else if (action === "send-to-apple-reminders") handlers.onSendToAppleReminders(task);
+    else if (action === "send-to-apple-calendar") handlers.onSendToAppleCalendar?.(task);
+    else if (action === "send-to-dida") handlers.onSendToDida?.(task);
+  }
 }
 
 function sortTasksForTaskList(tasks: TaskItem[]): TaskItem[] {
