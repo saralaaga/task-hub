@@ -2,7 +2,7 @@
 
 [中文文档](README.zh-CN.md)
 
-Task Hub is a desktop-only Obsidian plugin that brings scattered Markdown tasks into one focused workspace. It indexes tasks across your vault and presents them in task, calendar, and tag views, so you can review commitments without leaving your notes.
+Task Hub is a desktop-only Obsidian plugin that brings vault tasks, Apple Reminders, Apple Calendar events, and Dida/TickTick tasks into one focused workspace. It indexes Markdown tasks across your vault and presents supported external sources in task, calendar, and tag views, so you can review and update commitments without leaving your notes.
 
 ![Task Hub calendar overview](assets/task-hub-calendar-overview.png)
 

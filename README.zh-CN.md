@@ -2,7 +2,7 @@
 
 [English](README.md)
 
-Task Hub 是一个仅支持 Obsidian 桌面端的任务聚合插件。它会把散落在 vault 各个 Markdown 笔记里的任务集中到任务、日历和标签视图里，让你既保留纯文本笔记的自由，又能有一个统一的任务工作台。
+Task Hub 是一个仅支持 Obsidian 桌面端的任务聚合插件。它会把 vault 里的 Markdown 任务、Apple Reminders、Apple Calendar 事件和滴答清单 / TickTick 任务集中到一个工作台中，并在任务、日历和标签视图里统一查看和更新。
 
 ![Task Hub 日历总览](assets/task-hub-calendar-overview.png)
 
@@ -23,6 +23,7 @@ Task Hub 是一个仅支持 Obsidian 桌面端的任务聚合插件。它会把�
 - 支持日期语法：`📅 YYYY-MM-DD` 和 `due:: YYYY-MM-DD`。
 - 支持按日、周、月查看有日期的任务和外部日历事件。
 - 支持在日历中拖动 vault Markdown 任务卡片改期；开启对应写回后，也支持拖动 Apple Reminders 和 Apple Calendar 事件改到另一天。
+- 支持通过 Open API 同步滴答清单 / TickTick 任务，并可按设置开启创建、编辑、完成、删除、拖动改期、清单颜色和原生标签同步。
 - 支持只读公共 ICS 日历源。
 - 在本地 helper 可用时，支持 macOS 桌面端读取已通过 iCloud 同步到本机的 Apple Reminders 和 Apple Calendar。
 - 开启创建权限后，可通过编辑器右键菜单、命令面板、用户自定义快捷键或 Task Hub 任务详情，把某条 vault Markdown 任务显式发送到 Apple 提醒事项。

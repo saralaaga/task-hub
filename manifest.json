@@ -1,9 +1,9 @@
 {
   "id": "task-hub",
   "name": "Task Hub",
-  "version": "0.3.8",
+  "version": "0.3.9",
   "minAppVersion": "1.5.0",
-  "description": "Gather vault tasks into task, calendar, and tag views.",
+  "description": "Manage vault, Apple Reminders, Apple Calendar, and Dida/TickTick tasks in one workspace.",
   "author": "Carlos",
   "isDesktopOnly": true
 }
