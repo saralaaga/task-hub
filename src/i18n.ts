@@ -52,6 +52,44 @@ export type TranslationKey =
   | "defaultViewDesc"
   | "delete"
   | "deleteCalendarItem"
+  | "dida"
+  | "didaApiBase"
+  | "didaApiBaseDesc"
+  | "didaApiBaseDida"
+  | "didaApiBaseTickTick"
+  | "didaApiToken"
+  | "didaApiTokenDesc"
+  | "didaCreate"
+  | "didaCreateDesc"
+  | "didaCreateDisabled"
+  | "didaCreateTags"
+  | "didaCreateTagsDesc"
+  | "didaDefaultProject"
+  | "didaDefaultProjectDesc"
+  | "didaDefaultProjectInbox"
+  | "didaDefaultReminder"
+  | "didaDefaultReminderDesc"
+  | "didaDelete"
+  | "didaDeleteDesc"
+  | "didaDesc"
+  | "didaDisabledDesc"
+  | "didaDragReschedule"
+  | "didaDragRescheduleDesc"
+  | "didaEnable"
+  | "didaProject"
+  | "didaProjectColorNoProjects"
+  | "didaProjectColors"
+  | "didaProjectColorsDesc"
+  | "didaTaskCreated"
+  | "didaTaskCreatedAndTaskRemoved"
+  | "didaTasks"
+  | "didaTasksColor"
+  | "didaTasksColorDesc"
+  | "didaTasksDesc"
+  | "didaTestConnection"
+  | "didaVaultOnly"
+  | "didaWriteback"
+  | "didaWritebackDesc"
   | "edit"
   | "event"
   | "eventCreationDefaultTarget"
@@ -68,6 +106,9 @@ export type TranslationKey =
   | "externalTaskReadOnly"
   | "externalSourceOpenUnavailable"
   | "externalCalendars"
+  | "externalTaskSources"
+  | "externalTaskSourcesDesc"
+  | "externalTaskSourcesEmpty"
   | "feedbackButton"
   | "feedbackDesc"
   | "feedbackTitle"
@@ -185,6 +226,7 @@ export type TranslationKey =
   | "sendToAppleCalendar"
   | "sendToAppleReminders"
   | "sendToAppleRemindersDisabled"
+  | "sendToDida"
   | "showCompletedByDefault"
   | "showCompletedByDefaultDesc"
   | "showCompletedInView"
@@ -316,6 +358,44 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     defaultViewDesc: "View shown when Task Hub opens.",
     delete: "Delete",
     deleteCalendarItem: "Delete from calendar",
+    dida: "Dida",
+    didaApiBase: "API service",
+    didaApiBaseDesc: "Choose Dida for China or TickTick for the international service.",
+    didaApiBaseDida: "Dida (China)",
+    didaApiBaseTickTick: "TickTick (International)",
+    didaApiToken: "API token",
+    didaApiTokenDesc: "Stored in Obsidian plugin data. Use a test account or rotate this token after development.",
+    didaCreate: "Create Dida tasks",
+    didaCreateDesc: "Allow Task Hub to create Dida tasks and send vault tasks to Dida.",
+    didaCreateDisabled: "Turn on Dida, Dida tasks, and Dida task creation in Task Hub settings first.",
+    didaCreateTags: "Sync native Dida tags",
+    didaCreateTagsDesc: "Write Task Hub tags to Dida native task tags when creating or editing Dida tasks.",
+    didaDefaultProject: "Default Dida list",
+    didaDefaultProjectDesc: "Default list used when creating Dida tasks.",
+    didaDefaultProjectInbox: "Default Dida inbox",
+    didaDefaultReminder: "Default reminder offset",
+    didaDefaultReminderDesc: "Minutes before the due time. Use 0 for due-time reminders.",
+    didaDelete: "Delete Dida tasks",
+    didaDeleteDesc: "Allow Task Hub to delete Dida tasks from the external source.",
+    didaDesc: "Sync and write Dida/TickTick tasks through the Open API.",
+    didaDisabledDesc: "Dida sync is off.",
+    didaDragReschedule: "Drag Dida tasks",
+    didaDragRescheduleDesc: "Allow dragging Dida tasks in the calendar to change date or time.",
+    didaEnable: "Dida integration",
+    didaProject: "Dida list",
+    didaProjectColorNoProjects: "Sync Dida once to load list colors.",
+    didaProjectColors: "Dida list colors",
+    didaProjectColorsDesc: "Override the display color for each Dida list.",
+    didaTaskCreated: "Dida task created.",
+    didaTaskCreatedAndTaskRemoved: "Dida task created and source task removed.",
+    didaTasks: "Dida tasks",
+    didaTasksColor: "Dida task color",
+    didaTasksColorDesc: "Fallback color for Dida tasks.",
+    didaTasksDesc: "Read Dida tasks into Task Hub.",
+    didaTestConnection: "Test / sync",
+    didaVaultOnly: "Only vault Markdown tasks can be sent to Dida.",
+    didaWriteback: "Edit and complete Dida tasks",
+    didaWritebackDesc: "Allow Task Hub to update Dida titles, notes, list, dates, times, and completion state.",
     edit: "Edit",
     event: "Event",
     eventCreationDefaultTarget: "Default event destination",
@@ -332,6 +412,9 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     externalTaskReadOnly: "External items are read-only unless the matching Apple writeback option is enabled.",
     externalSourceOpenUnavailable: "Task Hub could not open this external source.",
     externalCalendars: "External calendars",
+    externalTaskSources: "External task sources",
+    externalTaskSourcesDesc: "Enable Apple Calendar, Apple Reminders, and Dida/TickTick; drag the tabs to choose their default order.",
+    externalTaskSourcesEmpty: "Enable an external task source above to configure it.",
     feedbackButton: "Report bug / suggest",
     feedbackDesc: "Open the GitHub issue page to report bugs, share ideas, or leave feedback.",
     feedbackTitle: "Feedback",
@@ -466,6 +549,7 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     sendToAppleCalendar: "Convert to Apple Calendar",
     sendToAppleReminders: "Send to Apple Reminders",
     sendToAppleRemindersDisabled: "Enable Apple Reminders creation in settings first",
+    sendToDida: "Send to Dida",
     showCompletedByDefault: "Show completed tasks by default",
     showCompletedByDefaultDesc: "Completed tasks remain indexed but hidden unless this is enabled.",
     showCompletedInView: "Show completed",
@@ -592,6 +676,44 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     defaultViewDesc: "打开 Task Hub 时默认显示的视图。",
     delete: "Delete",
     deleteCalendarItem: "从日历删除",
+    dida: "滴答清单",
+    didaApiBase: "API 服务",
+    didaApiBaseDesc: "国内账号选择滴答清单，国际账号选择 TickTick。",
+    didaApiBaseDida: "滴答清单（国内）",
+    didaApiBaseTickTick: "TickTick（国际）",
+    didaApiToken: "API 口令",
+    didaApiTokenDesc: "口令会保存在 Obsidian 插件数据中。建议使用测试账号，开发后轮换口令。",
+    didaCreate: "创建滴答任务",
+    didaCreateDesc: "允许 Task Hub 创建滴答任务，并把仓库任务发送到滴答清单。",
+    didaCreateDisabled: "请先在 Task Hub 设置中开启滴答清单、滴答任务和创建滴答任务。",
+    didaCreateTags: "同步滴答原生标签",
+    didaCreateTagsDesc: "创建或编辑滴答任务时，把 Task Hub 标签写入滴答原生任务标签。",
+    didaDefaultProject: "默认滴答清单",
+    didaDefaultProjectDesc: "创建滴答任务时默认使用的清单。",
+    didaDefaultProjectInbox: "默认滴答收集箱",
+    didaDefaultReminder: "默认提醒提前量",
+    didaDefaultReminderDesc: "到期前多少分钟提醒。填 0 表示到期时提醒。",
+    didaDelete: "删除滴答任务",
+    didaDeleteDesc: "允许 Task Hub 从外部来源删除滴答任务。",
+    didaDesc: "通过 Open API 同步和写回滴答清单 / TickTick 任务。",
+    didaDisabledDesc: "滴答清单同步已关闭。",
+    didaDragReschedule: "拖动滴答任务",
+    didaDragRescheduleDesc: "允许在日历中拖动滴答任务来修改日期或时间。",
+    didaEnable: "滴答清单集成",
+    didaProject: "滴答清单",
+    didaProjectColorNoProjects: "先同步一次滴答清单以加载清单颜色。",
+    didaProjectColors: "滴答清单颜色",
+    didaProjectColorsDesc: "为每个滴答清单覆盖显示颜色。",
+    didaTaskCreated: "已创建滴答任务。",
+    didaTaskCreatedAndTaskRemoved: "已创建滴答任务，并删除源任务。",
+    didaTasks: "滴答任务",
+    didaTasksColor: "滴答任务颜色",
+    didaTasksColorDesc: "滴答任务的默认显示颜色。",
+    didaTasksDesc: "把滴答任务读取到 Task Hub。",
+    didaTestConnection: "测试 / 同步",
+    didaVaultOnly: "只有 vault 中的 Markdown 任务可以发送到滴答清单。",
+    didaWriteback: "编辑和完成滴答任务",
+    didaWritebackDesc: "允许 Task Hub 更新滴答标题、备注、清单、日期、时间和完成状态。",
     edit: "编辑",
     event: "事件",
     eventCreationDefaultTarget: "默认事件创建位置",
@@ -608,6 +730,9 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     externalTaskReadOnly: "外部项目默认只读；Apple 提醒事项和 Apple 日历的部分写入能力需要在设置中显式开启。",
     externalSourceOpenUnavailable: "Task Hub 无法打开这个外部来源。",
     externalCalendars: "外部日历",
+    externalTaskSources: "外部任务源",
+    externalTaskSourcesDesc: "开启 Apple 日历、Apple 提醒事项和滴答清单 / TickTick；拖动标签可调整默认顺序。",
+    externalTaskSourcesEmpty: "先在上方开启一个外部任务源，然后在这里配置。",
     feedbackButton: "报 bug / 提建议",
     feedbackDesc: "打开 GitHub issue 页面，反馈问题、想法或使用建议。",
     feedbackTitle: "反馈",
@@ -736,6 +861,7 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     sendToAppleCalendar: "转换为 Apple 日历",
     sendToAppleReminders: "发送到 Apple 提醒事项",
     sendToAppleRemindersDisabled: "请先在设置中开启创建 Apple 提醒事项",
+    sendToDida: "发送到滴答清单",
     showCompletedByDefault: "默认显示已完成任务",
     showCompletedByDefaultDesc: "已完成任务仍会被索引；关闭时默认隐藏。",
     showCompletedInView: "显示已完成",

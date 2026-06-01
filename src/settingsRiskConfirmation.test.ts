@@ -274,7 +274,7 @@ describe("TaskHubSettingTab risky Apple Reminders setting", () => {
     plugin.settings.localApple.remindersEnabled = true;
     const tab = new TaskHubSettingTab({} as never, plugin as never);
 
-    (tab as unknown as { localAppleTab: "calendar" }).localAppleTab = "calendar";
+    (tab as unknown as { externalTaskSourceTab: "apple-calendar" }).externalTaskSourceTab = "apple-calendar";
     tab.display();
     const calendarWriteback = findToggle("Reschedule Apple Calendar events");
     expect(calendarWriteback).toBeDefined();
@@ -285,7 +285,7 @@ describe("TaskHubSettingTab risky Apple Reminders setting", () => {
     expect(calendarSend).toBeDefined();
     await calendarSend?.onChangeHandler?.(true);
 
-    (tab as unknown as { localAppleTab: "reminders" }).localAppleTab = "reminders";
+    (tab as unknown as { externalTaskSourceTab: "apple-reminders" }).externalTaskSourceTab = "apple-reminders";
     settings.length = 0;
     tab.display();
     const remindersWriteback = findToggle("Write completion status to Apple Reminders");

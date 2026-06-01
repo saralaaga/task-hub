@@ -10,6 +10,7 @@ export type TagViewHandlers = {
 
 export type TagRenderOptions = {
   allowAppleReminderWriteback: boolean;
+  allowDidaWriteback?: boolean;
   orderedTags?: string[];
   sourceColors?: Partial<Record<TaskItem["source"], string>>;
   taskColors?: Record<string, string>;
@@ -96,7 +97,7 @@ function renderTagTask(
   item.style.setProperty("--task-hub-task-indent", String(task.indent ?? 0));
   const checkbox = item.createEl("input", { type: "checkbox" });
   checkbox.checked = task.completed;
-  checkbox.disabled = task.source !== "vault" && !(task.source === "apple-reminders" && options.allowAppleReminderWriteback);
+  checkbox.disabled = task.source !== "vault" && !(task.source === "apple-reminders" && options.allowAppleReminderWriteback) && !(task.source === "dida" && options.allowDidaWriteback);
   checkbox.addEventListener("click", (event) => {
     event.stopPropagation();
     handlers.onTaskComplete(task);

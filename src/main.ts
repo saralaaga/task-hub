@@ -4,6 +4,9 @@ import { appleCalendarEventToReminderInput, appleReminderToCalendarEventInput } 
 import { calendarDropTargetParts, withCalendarDropTargetDate, type CalendarDropTarget, type TimedCalendarTarget } from "./calendar/calendarDropTarget";
 import { extractAppleReminderTitleTags, normalizeAppleReminderTags } from "./appleReminderTags";
 import { fetchIcsSource } from "./calendar/icsClient";
+import { DidaClient } from "./dida/didaClient";
+import { DIDA_INBOX_PROJECT_NAME, didaProjectsFromRecords, didaSource, didaTaskToTaskItem, taskItemToDidaPayload } from "./dida/didaMapping";
+import { extractDidaTitleTags } from "./dida/didaTags";
 import { createTranslator } from "./i18n";
 import { registerTaskHubIcon, TASK_HUB_ICON_ID } from "./icons";
 import { parseTaskAtLine } from "./indexing/editorTask";
@@ -137,6 +140,7 @@ export default class TaskHubPlugin extends Plugin {
   localAppleTasks: TaskItem[] = [];
   localAppleEvents: CalendarEvent[] = [];
   localAppleStatus: LocalAppleSyncStatus = { state: "never" };
+  didaTasks: TaskItem[] = [];
 
   isLocalAppleSupported(): boolean {
     return Platform.isDesktopApp && process.platform === "darwin";
@@ -255,6 +259,23 @@ export default class TaskHubPlugin extends Plugin {
     return this.settings.localApple.calendars;
   }
 
+  canCreateDidaTasks(): boolean {
+    return this.settings.dida.enabled && this.settings.dida.tasksEnabled && this.settings.dida.tasksCreateEnabled && Boolean(this.settings.dida.apiToken.trim());
+  }
+
+  getDidaProjects() {
+    return this.settings.dida.projects;
+  }
+
+  getDidaProjectColors(): Record<string, string> {
+    return Object.fromEntries(
+      this.settings.dida.projects.map((project) => [
+        project.id,
+        this.settings.dida.taskColorOverrides[project.id] ?? this.settings.dida.tasksColor
+      ])
+    );
+  }
+
   async onload(): Promise<void> {
     await this.loadSettings();
     this.configureLocalAppleHelper();
@@ -296,10 +317,12 @@ export default class TaskHubPlugin extends Plugin {
       this.app.workspace.onLayoutReady(() => {
         void this.scanVault();
         void this.syncLocalApple();
+        void this.syncDida();
       });
     } else {
       this.app.workspace.onLayoutReady(() => {
         void this.syncLocalApple();
+        void this.syncDida();
       });
     }
   }
@@ -327,12 +350,36 @@ export default class TaskHubPlugin extends Plugin {
     const files = this.app.vault.getMarkdownFiles().map((file) => this.toIndexableFile(file));
     await this.taskIndex.scanFiles(files);
     await this.taskNoteIndex.scanFiles(files);
-    await this.syncLocalApple({ silent: true });
+    await Promise.all([this.syncLocalApple({ silent: true }), this.syncDida({ silent: true })]);
     this.refreshOpenViews();
   }
 
   async completeTask(task: TaskItem): Promise<CompletionResult> {
     const t = createTranslator(this.settings.language);
+
+    if (task.source === "dida") {
+      if (!this.settings.dida.tasksWritebackEnabled || !task.externalId || !task.externalListId) {
+        const result: CompletionResult = { status: "conflict", message: t("externalTaskReadOnly") };
+        new Notice(result.message);
+        return result;
+      }
+      try {
+        const client = this.createDidaClient();
+        if (task.completed) {
+          await client.reopenTask(task.externalListId, task.externalId, task.text);
+        } else {
+          await client.completeTask(task.externalListId, task.externalId);
+        }
+        await this.syncDida({ silent: true });
+        new Notice(task.completed ? t("taskReopened") : t("taskCompleted"));
+        this.refreshOpenViews();
+        return { status: "updated", content: "", line: 0 };
+      } catch (error) {
+        const result: CompletionResult = { status: "conflict", message: error instanceof Error ? error.message : String(error) };
+        new Notice(result.message);
+        return result;
+      }
+    }
 
     if (task.source === "apple-reminders") {
       if (!this.isLocalAppleSupported()) {
@@ -411,6 +458,46 @@ export default class TaskHubPlugin extends Plugin {
   async rescheduleTask(task: TaskItem, target: CalendarDropTarget): Promise<CompletionResult> {
     const t = createTranslator(this.settings.language);
     const timedTarget = calendarDropTargetParts(target);
+
+    if (task.source === "dida") {
+      if (
+        !this.settings.dida.tasksWritebackEnabled ||
+        !this.settings.dida.tasksDragRescheduleEnabled ||
+        !task.externalId ||
+        !task.externalListId
+      ) {
+        const result: CompletionResult = { status: "conflict", message: t("externalTaskReadOnly") };
+        new Notice(result.message);
+        return result;
+      }
+      if (timedTarget.startMinutes === undefined && task.dueDate === timedTarget.dateKey && startMinutesFromTask(task) === undefined) {
+        new Notice(t("taskDateAlreadySet"));
+        return { status: "already_in_state" };
+      }
+      try {
+        await this.createDidaClient().updateTask(
+          task.externalListId,
+          task.externalId,
+          taskItemToDidaPayload({
+            title: task.text,
+            projectId: task.externalListId,
+            notes: task.contextPreview,
+            date: timedTarget.dateKey,
+            startMinutes: timedTarget.startMinutes,
+            tags: this.settings.dida.tasksCreateTagsEnabled ? task.tags : [],
+            reminderOffsetMinutes: this.settings.dida.defaultReminderOffsetMinutes
+          })
+        );
+        await this.syncDida({ silent: true });
+        new Notice(t("taskDateUpdated"));
+        this.refreshOpenViews();
+        return { status: "updated", content: "", line: 0 };
+      } catch (error) {
+        const result: CompletionResult = { status: "conflict", message: error instanceof Error ? error.message : String(error) };
+        new Notice(result.message);
+        return result;
+      }
+    }
 
     if (task.source === "apple-reminders") {
       if (!this.isLocalAppleSupported()) {
@@ -496,6 +583,25 @@ export default class TaskHubPlugin extends Plugin {
 
   async deleteCalendarTask(task: TaskItem): Promise<CompletionResult> {
     const t = createTranslator(this.settings.language);
+    if (task.source === "dida") {
+      if (!this.settings.dida.tasksDeleteEnabled || !task.externalId || !task.externalListId) {
+        const result: CompletionResult = { status: "conflict", message: t("externalTaskReadOnly") };
+        new Notice(result.message);
+        return result;
+      }
+      try {
+        await this.createDidaClient().deleteTask(task.externalListId, task.externalId);
+        await this.syncDida({ silent: true });
+        new Notice(t("calendarItemDeleted"));
+        this.refreshOpenViews();
+        return { status: "updated", content: "", line: 0 };
+      } catch (error) {
+        const result: CompletionResult = { status: "conflict", message: error instanceof Error ? error.message : String(error) };
+        new Notice(result.message);
+        return result;
+      }
+    }
+
     if (task.source === "apple-reminders") {
       if (!this.isLocalAppleSupported() || !this.settings.localApple.remindersWritebackEnabled || !task.externalId) {
         const result: CompletionResult = { status: "conflict", message: t("externalTaskReadOnly") };
@@ -625,6 +731,38 @@ export default class TaskHubPlugin extends Plugin {
       const result: CompletionResult = { status: "conflict", message: t("taskUpdateFailed") };
       new Notice(result.message);
       return result;
+    }
+
+    if (task.source === "dida") {
+      if (!this.settings.dida.tasksWritebackEnabled || !task.externalId || !task.externalListId) {
+        const result: CompletionResult = { status: "conflict", message: t("externalTaskReadOnly") };
+        new Notice(result.message);
+        return result;
+      }
+      const projectId = draft.reminderListId || task.externalListId;
+      try {
+        await this.createDidaClient().updateTask(
+          task.externalListId,
+          task.externalId,
+          taskItemToDidaPayload({
+            title,
+            projectId,
+            notes: draft.notes,
+            date: draft.date || null,
+            startMinutes: draft.startTime ? parseTimeInputValue(draft.startTime) : undefined,
+            tags: this.settings.dida.tasksCreateTagsEnabled ? (draft.tags ?? task.tags) : [],
+            reminderOffsetMinutes: this.settings.dida.defaultReminderOffsetMinutes
+          })
+        );
+        await this.syncDida({ silent: true });
+        new Notice(t("taskUpdated"));
+        this.refreshOpenViews();
+        return { status: "updated", content: "", line: 0 };
+      } catch (error) {
+        const result: CompletionResult = { status: "conflict", message: error instanceof Error ? error.message : String(error) };
+        new Notice(result.message);
+        return result;
+      }
     }
 
     if (task.source === "apple-reminders") {
@@ -826,6 +964,70 @@ export default class TaskHubPlugin extends Plugin {
     }
   }
 
+  async sendTaskToDida(task: TaskItem): Promise<void> {
+    const t = createTranslator(this.settings.language);
+    if (!this.canCreateDidaTasks()) {
+      new Notice(t("didaCreateDisabled"));
+      return;
+    }
+    if (task.source !== "vault") {
+      new Notice(t("didaVaultOnly"));
+      return;
+    }
+    const existingId = this.settings.didaTaskLinks[task.id];
+    if (existingId) {
+      new Notice(`${t("didaTaskCreated")}: ${existingId}`);
+      return;
+    }
+    const file = this.app.vault.getFileByPath(task.filePath);
+    if (!file) {
+      new Notice(`${t("fileNotFound")}: ${task.filePath}`);
+      return;
+    }
+    const content = await this.app.vault.read(file);
+    const currentTask = parseTaskAtLine({ filePath: task.filePath, content, line: task.line });
+    if (!currentTask || currentTask.rawLine !== task.rawLine) {
+      new Notice(t("lineChangedConflict"));
+      return;
+    }
+    try {
+      const created = await this.createDidaClient().createTask(
+        taskItemToDidaPayload({
+          title: currentTask.text,
+          projectId: this.settings.dida.defaultProjectId,
+          notes: this.appleReminderNotes(currentTask),
+          date: currentTask.dueDate,
+          startMinutes: startMinutesFromTask(currentTask),
+          tags: this.settings.dida.tasksCreateTagsEnabled ? currentTask.tags : [],
+          reminderOffsetMinutes: this.settings.dida.defaultReminderOffsetMinutes
+        })
+      );
+      this.settings.didaTaskLinks = {
+        ...this.settings.didaTaskLinks,
+        [currentTask.id]: created.id
+      };
+      await this.saveSettings();
+
+      const deletion = { result: { status: "conflict", message: t("taskUpdateFailed") } as CompletionResult };
+      await this.app.vault.process(file, (latestContent) => {
+        deletion.result = deleteTaskInContent(latestContent, currentTask, {
+          lineChangedConflict: t("lineChangedConflict"),
+          lineMismatchConflict: t("lineMismatchConflict"),
+          lineNoLongerOpen: t("lineNoLongerOpen"),
+          lineOutsideFile: t("lineOutsideFile")
+        });
+        return deletion.result.status === "updated" ? deletion.result.content : latestContent;
+      });
+      if (deletion.result.status === "updated") {
+        await this.reindexVaultFile(file);
+      }
+      await this.syncDida({ silent: true });
+      new Notice(deletion.result.status === "updated" ? t("didaTaskCreatedAndTaskRemoved") : t("didaTaskCreated"));
+    } catch (error) {
+      new Notice(error instanceof Error ? error.message : String(error));
+    }
+  }
+
   async convertAppleCalendarEventToReminder(event: CalendarEvent): Promise<void> {
     const t = createTranslator(this.settings.language);
     if (
@@ -961,6 +1163,34 @@ export default class TaskHubPlugin extends Plugin {
     }
   }
 
+  async moveDidaTaskToProject(task: TaskItem, projectId: string): Promise<void> {
+    const t = createTranslator(this.settings.language);
+    if (task.source !== "dida" || !task.externalId || !task.externalListId || !this.settings.dida.tasksWritebackEnabled) {
+      new Notice(t("externalTaskReadOnly"));
+      return;
+    }
+    if (!projectId || task.externalListId === projectId) return;
+    try {
+      await this.createDidaClient().updateTask(
+        task.externalListId,
+        task.externalId,
+        taskItemToDidaPayload({
+          title: task.text,
+          projectId,
+          notes: task.contextPreview,
+          date: task.dueDate ?? null,
+          startMinutes: startMinutesFromTask(task),
+          tags: this.settings.dida.tasksCreateTagsEnabled ? task.tags : [],
+          reminderOffsetMinutes: this.settings.dida.defaultReminderOffsetMinutes
+        })
+      );
+      await this.syncDida({ silent: true });
+      new Notice(t("taskUpdated"));
+    } catch (error) {
+      new Notice(error instanceof Error ? error.message : String(error));
+    }
+  }
+
   openCreateTaskModal(target: CalendarDropTarget): void {
     new CreateTaskModal(this, target).open();
   }
@@ -993,6 +1223,32 @@ export default class TaskHubPlugin extends Plugin {
         new Notice(`${t("appleReminderCreated")}: ${reminderId}`);
       } catch (error) {
         new Notice(this.localAppleErrorMessage(error, "reminders"));
+      }
+      return;
+    }
+
+    if (target.type === "dida") {
+      if (!this.canCreateDidaTasks()) {
+        new Notice(t("didaCreateDisabled"));
+        return;
+      }
+      const didaText = extractDidaTitleTags(taskText);
+      try {
+        const created = await this.createDidaClient().createTask(
+          taskItemToDidaPayload({
+            title: didaText.title || taskText,
+            projectId: target.projectId ?? this.settings.dida.defaultProjectId,
+            notes: cleanNotes,
+            date: timedTarget.dateKey,
+            startMinutes: timedTarget.startMinutes,
+            tags: this.settings.dida.tasksCreateTagsEnabled ? didaText.tags : [],
+            reminderOffsetMinutes: this.settings.dida.defaultReminderOffsetMinutes
+          })
+        );
+        await this.syncDida({ silent: true });
+        new Notice(`${t("didaTaskCreated")}: ${created.id}`);
+      } catch (error) {
+        new Notice(error instanceof Error ? error.message : String(error));
       }
       return;
     }
@@ -1135,7 +1391,8 @@ export default class TaskHubPlugin extends Plugin {
   getTasks(): TaskItem[] {
     return [
       ...this.taskIndex.getTasks(),
-      ...(this.isLocalAppleSupported() && this.settings.localApple.enabled && this.settings.localApple.remindersEnabled ? this.localAppleTasks : [])
+      ...(this.isLocalAppleSupported() && this.settings.localApple.enabled && this.settings.localApple.remindersEnabled ? this.localAppleTasks : []),
+      ...(this.settings.dida.enabled && this.settings.dida.tasksEnabled ? this.didaTasks : [])
     ];
   }
 
@@ -1257,7 +1514,81 @@ export default class TaskHubPlugin extends Plugin {
     if (this.isLocalAppleSupported() && this.settings.localApple.enabled && this.settings.localApple.remindersEnabled) {
       sources.push(appleRemindersSource(this.settings.localApple.remindersColor, appleStatus.reminders));
     }
+    if (this.settings.dida.enabled && this.settings.dida.tasksEnabled) {
+      sources.push(didaSource(this.settings.dida.tasksColor, this.settings.dida.syncStatus));
+    }
     return sources;
+  }
+
+  async syncDida(options: { silent?: boolean } = {}): Promise<void> {
+    const t = createTranslator(this.settings.language);
+    const enabled = this.settings.dida.enabled && this.settings.dida.tasksEnabled;
+    if (!enabled) {
+      this.didaTasks = [];
+      this.settings.dida.syncStatus = { state: "never" };
+      this.refreshOpenViews();
+      return;
+    }
+    const attemptedAt = new Date().toISOString();
+    if (!this.settings.dida.apiToken.trim()) {
+      const message = t("didaApiTokenDesc");
+      this.didaTasks = [];
+      this.settings.dida.syncStatus = { state: "error", errorType: "local_error", message, lastAttemptAt: attemptedAt };
+      if (!options.silent) new Notice(`${t("failedSync")} ${t("dida")}: ${message}`);
+      this.refreshOpenViews();
+      return;
+    }
+    try {
+      const client = this.createDidaClient();
+      const projects = didaProjectsFromRecords(await client.listProjects());
+      const [inboxData, ...data] = await Promise.all([
+        client.getInboxData(),
+        ...projects.map((project) => client.getProjectData(project.id))
+      ]);
+      const inboxProjectId = inboxData.tasks?.find((task) => task.projectId)?.projectId ?? "inbox";
+      const allProjects = [{ id: inboxProjectId, name: DIDA_INBOX_PROJECT_NAME }, ...projects];
+      this.settings.dida.projects = allProjects;
+      this.didaTasks = data.flatMap((projectData) => {
+        const projectId = projectData.project?.id ?? projectData.tasks?.find((task) => task.projectId)?.projectId;
+        const project = allProjects.find((candidate) => candidate.id === projectId) ?? { id: projectId ?? "unknown", name: DIDA_INBOX_PROJECT_NAME };
+        return (projectData.tasks ?? []).map((task, index) => didaTaskToTaskItem({ ...task, projectId: task.projectId || project.id }, project, index));
+      });
+      this.didaTasks = [
+        ...(inboxData.tasks ?? []).map((task, index) => didaTaskToTaskItem({ ...task, projectId: task.projectId || inboxProjectId }, allProjects[0], index)),
+        ...this.didaTasks
+      ];
+      this.settings.dida.syncStatus = { state: "ok", lastSyncedAt: attemptedAt, eventCount: this.didaTasks.length };
+      await this.saveSettings();
+      if (!options.silent) new Notice(`${t("synced")} ${t("dida")}: ${this.didaTasks.length} ${t("tasks")}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.didaTasks = [];
+      this.settings.dida.syncStatus = { state: "error", errorType: "local_error", message, lastAttemptAt: attemptedAt };
+      await this.saveSettings();
+      if (!options.silent) new Notice(`${t("failedSync")} ${t("dida")}: ${message}`);
+    }
+    this.refreshOpenViews();
+  }
+
+  private createDidaClient(): DidaClient {
+    return new DidaClient({
+      apiBase: this.settings.dida.apiBase,
+      apiToken: this.settings.dida.apiToken,
+      request: async (request) => {
+        const response = await requestUrl({
+          url: request.url,
+          method: request.method,
+          headers: request.headers,
+          body: request.body,
+          throw: false
+        });
+        return {
+          status: response.status,
+          json: response.json,
+          text: response.text
+        };
+      }
+    });
   }
 
   async syncLocalApple(options: { silent?: boolean } = {}): Promise<void> {

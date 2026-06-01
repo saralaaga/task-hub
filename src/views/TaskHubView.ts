@@ -60,9 +60,13 @@ export class TaskHubView extends ItemView {
     const t = createTranslator(this.plugin.settings.language);
     const sourceColors = {
       vault: "var(--interactive-accent)",
-      "apple-reminders": this.plugin.settings.localApple.remindersColor
+      "apple-reminders": this.plugin.settings.localApple.remindersColor,
+      dida: this.plugin.settings.dida.tasksColor
     };
-    const taskColors = this.plugin.getAppleReminderListColors();
+    const taskColors = {
+      ...this.plugin.getAppleReminderListColors(),
+      ...this.plugin.getDidaProjectColors()
+    };
     const bindTagInputSuggest = (input: HTMLInputElement) => {
       bindTaskHubTagInputSuggest(this.plugin.app, input, () => collectObsidianTags(this.plugin.app, this.plugin.getTasks()));
     };
@@ -115,6 +119,7 @@ export class TaskHubView extends ItemView {
           onComplete: (task) => void this.completeTaskFromView(task),
           onJump: (task) => void this.plugin.jumpToTask(task),
           onSendToAppleReminders: (task) => void this.plugin.sendTaskToAppleReminders(task),
+          onSendToDida: (task) => void this.plugin.sendTaskToDida(task),
           onSelect: (task) => {
             this.selectedTaskId = task.id;
           },
@@ -130,6 +135,7 @@ export class TaskHubView extends ItemView {
             this.updateFilters({ ...this.filters, sourceQuery: source === "all" ? "" : source });
           },
           onAppleReminderListChange: (task, listId) => void this.plugin.moveAppleReminderToList(task, listId),
+          onDidaProjectChange: (task, projectId) => void this.plugin.moveDidaTaskToProject(task, projectId),
           onTaskUpdate: (task, draft) => void this.plugin.updateCalendarTask(task, draft),
           onTaskDelete: (task) => void this.plugin.deleteCalendarTask(task),
           onCreateTaskNote: (task) => void this.plugin.createTaskNoteForTask(task),
@@ -142,7 +148,11 @@ export class TaskHubView extends ItemView {
         {
           allowAppleReminderWriteback: this.plugin.settings.localApple.remindersWritebackEnabled,
           allowAppleReminderCreate: this.plugin.settings.localApple.remindersCreateEnabled,
+          allowDidaWriteback: this.plugin.settings.dida.tasksWritebackEnabled,
+          allowDidaCreate: this.plugin.settings.dida.tasksCreateEnabled,
+          allowDidaDelete: this.plugin.settings.dida.tasksDeleteEnabled,
           appleReminderLists: this.plugin.getAppleReminderLists(),
+          didaProjects: this.plugin.getDidaProjects(),
           selectedTaskId: this.selectedTaskId,
           sourceColors,
           taskColors,
@@ -184,6 +194,7 @@ export class TaskHubView extends ItemView {
         t,
         {
           allowAppleReminderWriteback: this.plugin.settings.localApple.remindersWritebackEnabled,
+          allowDidaWriteback: this.plugin.settings.dida.tasksWritebackEnabled,
           orderedTags: this.plugin.settings.tagViewOrder,
           sourceColors,
           taskColors
@@ -203,6 +214,10 @@ export class TaskHubView extends ItemView {
           includeCompletedTasks: this.filters.status !== "open",
           allowAppleReminderWriteback: this.plugin.settings.localApple.remindersWritebackEnabled,
           allowAppleReminderCreate: this.plugin.canCreateAppleReminders(),
+          allowDidaWriteback: this.plugin.settings.dida.tasksWritebackEnabled,
+          allowDidaDragReschedule: this.plugin.settings.dida.tasksDragRescheduleEnabled,
+          allowDidaDelete: this.plugin.settings.dida.tasksDeleteEnabled,
+          allowDidaCreate: this.plugin.canCreateDidaTasks(),
           allowAppleCalendarWriteback: this.plugin.settings.localApple.calendarWritebackEnabled,
           allowAppleCalendarReminderConversion:
             this.plugin.settings.localApple.calendarReminderConversionEnabled && this.plugin.canConvertAppleCalendarAndReminders(),
@@ -216,6 +231,7 @@ export class TaskHubView extends ItemView {
           taskColors,
           bindTagInputSuggest,
           appleReminderLists: this.plugin.getAppleReminderLists(),
+          didaProjects: this.plugin.getDidaProjects(),
           appleCalendars: this.plugin.getAppleCalendars(),
           sources: calendarSources,
           taskNotesEnabled: this.plugin.settings.taskNotes.enabled,
@@ -259,6 +275,7 @@ export class TaskHubView extends ItemView {
           onTaskReschedule: (task, dateKey) => void this.plugin.rescheduleTask(task, dateKey),
           onTaskDelete: (task) => void this.plugin.deleteCalendarTask(task),
           onTaskSendToAppleReminders: (task) => void this.plugin.sendTaskToAppleReminders(task),
+          onTaskSendToDida: (task) => void this.plugin.sendTaskToDida(task),
           onTaskSendToAppleCalendar: (task) => void this.plugin.convertAppleReminderToCalendarEvent(task),
           onEventReschedule: (event, dateKey) => void this.plugin.rescheduleCalendarEvent(event, dateKey),
           onEventUpdate: (event, draft) => void this.plugin.updateCalendarEvent(event, draft),
@@ -397,7 +414,8 @@ function taskSourceFilterOptions(tasks: TaskItem[], filters: TaskFilterState, no
   return [
     { id: "all" as const, label: t("all"), count: sourceCountTasks.length },
     { id: "vault" as const, label: t("vaultTasks"), count: sourceCountTasks.filter((task) => task.source === "vault").length },
-    { id: "apple-reminders" as const, label: "Apple Reminders", count: sourceCountTasks.filter((task) => task.source === "apple-reminders").length }
+    { id: "apple-reminders" as const, label: "Apple Reminders", count: sourceCountTasks.filter((task) => task.source === "apple-reminders").length },
+    { id: "dida" as const, label: t("dida"), count: sourceCountTasks.filter((task) => task.source === "dida").length }
   ];
 }
 

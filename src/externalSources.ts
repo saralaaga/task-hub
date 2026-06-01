@@ -19,5 +19,10 @@ export function openExternalTaskSource(task: TaskItem, openUrl: (url: string) =>
     return "opened";
   }
 
+  if (task.source === "dida") {
+    openUrl("https://dida365.com/webapp");
+    return "opened";
+  }
+
   return "no-source";
 }

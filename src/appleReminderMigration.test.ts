@@ -938,6 +938,34 @@ describe("Apple Reminders migration", () => {
     }));
   });
 
+  it("creates Dida tasks with native tags separate from Apple Reminder tags", async () => {
+    const plugin = new TaskHubPlugin({} as never, {} as never);
+    const createTask = jest.fn(async () => ({ id: "dida-created-1" }));
+    jest.spyOn(plugin as never, "createDidaClient").mockReturnValue({ createTask } as never);
+    plugin.app = { workspace: { getLeavesOfType: jest.fn(() => []) } } as never;
+    plugin.settings = {
+      ...DEFAULT_SETTINGS,
+      dida: {
+        ...DEFAULT_SETTINGS.dida,
+        enabled: true,
+        tasksEnabled: true,
+        tasksCreateEnabled: true,
+        tasksCreateTagsEnabled: true,
+        apiToken: "token",
+        defaultProjectId: "project-1"
+      }
+    };
+    plugin.syncDida = jest.fn(async () => undefined) as never;
+
+    await plugin.createTaskForDate("2026-05-20", "RPA 学习 #比赛 #p/自习室", { type: "dida" });
+
+    expect(createTask).toHaveBeenCalledWith(expect.objectContaining({
+      title: "RPA 学习",
+      projectId: "project-1",
+      tags: ["比赛", "p/自习室"]
+    }));
+  });
+
   it("requests Reminders access and retries when creating an Apple Reminder before permission is granted", async () => {
     const notDetermined = Object.assign(new Error("Apple access has not been requested yet."), { code: "not_determined" });
     createAppleReminder.mockRejectedValueOnce(notDetermined).mockResolvedValueOnce("reminder-created-after-access");

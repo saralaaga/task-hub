@@ -5,3 +5,4 @@ apple-helper/build/
 taskhub-apple-helper
 
 dist/
+.local-*.env

@@ -5,8 +5,9 @@ import type { TaskNoteSettings } from "./taskNotes";
 export type TaskStatusFilter = "open" | "completed" | "all";
 export type DefaultView = "tasks" | "calendar" | "tags";
 export type WeekStart = "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday" | "sunday";
-export type TaskSource = "vault" | "apple-reminders";
+export type TaskSource = "vault" | "apple-reminders" | "dida";
 export type CalendarTimeScale = "fit" | "hour" | "half" | "quarter";
+export type ExternalTaskSourceTab = "apple-calendar" | "apple-reminders" | "dida";
 
 export type TaskItem = {
   id: string;
@@ -102,7 +103,7 @@ export type CalendarSourceStatus =
 export type CalendarSource = {
   id: string;
   name: string;
-  type: "ics" | "apple-calendar" | "apple-reminders";
+  type: "ics" | "apple-calendar" | "apple-reminders" | "dida";
   url: string;
   color: string;
   enabled: boolean;
@@ -112,6 +113,11 @@ export type CalendarSource = {
 };
 
 export type AppleReminderList = {
+  id: string;
+  name: string;
+};
+
+export type DidaProject = {
   id: string;
   name: string;
 };
@@ -127,7 +133,8 @@ export type CalendarCreationKind = "task" | "event";
 
 export type CalendarTaskCreationTarget =
   | { type: "vault" }
-  | { type: "apple-reminders"; listId?: string };
+  | { type: "apple-reminders"; listId?: string }
+  | { type: "dida"; projectId?: string };
 
 export type CalendarEventCreationTarget =
   | { type: "apple-calendar"; calendarId?: string };
@@ -162,6 +169,24 @@ export type LocalAppleSyncStatus =
   | { state: "error"; lastAttemptAt: string; message: string; reminders: CalendarSourceStatus; calendar: CalendarSourceStatus }
   | { state: "never"; reminders?: CalendarSourceStatus; calendar?: CalendarSourceStatus };
 
+export type DidaIntegrationSettings = {
+  enabled: boolean;
+  tasksEnabled: boolean;
+  tasksColor: string;
+  taskColorOverrides: Record<string, string>;
+  tasksWritebackEnabled: boolean;
+  tasksCreateEnabled: boolean;
+  tasksDragRescheduleEnabled: boolean;
+  tasksDeleteEnabled: boolean;
+  tasksCreateTagsEnabled: boolean;
+  defaultProjectId?: string;
+  projects: DidaProject[];
+  apiBase: string;
+  apiToken: string;
+  syncStatus: CalendarSourceStatus;
+  defaultReminderOffsetMinutes?: number;
+};
+
 export type IndexedFileState = {
   path: string;
   ctime: number;
@@ -193,6 +218,9 @@ export type TaskHubSettings = {
   ignoredPaths: string[];
   tagViewOrder: string[];
   calendarSources: CalendarSource[];
+  externalTaskSourceOrder: ExternalTaskSourceTab[];
   localApple: LocalAppleIntegrationSettings;
+  dida: DidaIntegrationSettings;
   appleReminderLinks: Record<string, string>;
+  didaTaskLinks: Record<string, string>;
 };

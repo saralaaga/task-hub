@@ -3,17 +3,19 @@ import { type DateBucket } from "../calendar/dateBuckets";
 import { getTaskBucket, type TaskFilterState } from "../filtering/filters";
 import type { Translator } from "../i18n";
 import type { TaskNote } from "../taskNotes";
-import type { AppleReminderList, CalendarItemEditDraft, TaskItem } from "../types";
+import type { AppleReminderList, CalendarItemEditDraft, DidaProject, TaskItem } from "../types";
 import { renderTaskNoteBody, type TaskNoteMarkdownRenderer } from "./renderTaskNoteBody";
 
 export type TaskRowHandlers = {
   onComplete: (task: TaskItem) => void;
   onJump: (task: TaskItem) => void;
   onSendToAppleReminders: (task: TaskItem) => void;
+  onSendToDida?: (task: TaskItem) => void;
   onSelect: (task: TaskItem) => void;
   onTagSelect: (tag: string) => void;
-  onSourceSelect: (source: "all" | "vault" | "apple-reminders") => void;
+  onSourceSelect: (source: "all" | "vault" | "apple-reminders" | "dida") => void;
   onAppleReminderListChange: (task: TaskItem, listId: string) => void;
+  onDidaProjectChange?: (task: TaskItem, projectId: string) => void;
   onTaskUpdate?: (task: TaskItem, draft: Extract<CalendarItemEditDraft, { kind: "task" }>) => void;
   onTaskDelete?: (task: TaskItem) => void;
   onCreateTaskNote?: (task: TaskItem) => void;
@@ -25,10 +27,14 @@ export type TaskRowHandlers = {
 export type TaskRenderOptions = {
   allowAppleReminderCreate?: boolean;
   allowAppleReminderWriteback: boolean;
+  allowDidaCreate?: boolean;
+  allowDidaWriteback?: boolean;
+  allowDidaDelete?: boolean;
   selectedTaskId?: string;
   sourceColors?: Partial<Record<TaskItem["source"], string>>;
   taskColors?: Record<string, string>;
   appleReminderLists?: AppleReminderList[];
+  didaProjects?: DidaProject[];
   bindTagInputSuggest?: (input: HTMLInputElement) => void;
   taskListScrollTop?: number;
   exitingTaskIds?: ReadonlySet<string>;
@@ -137,7 +143,7 @@ function renderTaskRow(
   if (color) row.style.setProperty("--task-hub-source-color", color);
   const checkbox = row.createEl("input", { type: "checkbox" });
   checkbox.checked = task.completed;
-  checkbox.disabled = task.source !== "vault" && !(task.source === "apple-reminders" && options.allowAppleReminderWriteback);
+  checkbox.disabled = task.source !== "vault" && !(task.source === "apple-reminders" && options.allowAppleReminderWriteback) && !(task.source === "dida" && options.allowDidaWriteback);
   checkbox.addEventListener("click", (event) => {
     event.stopPropagation();
     row.toggleClass("is-completing", true);
@@ -245,13 +251,15 @@ function renderTaskDetails(
   }
 
   const canEditAppleReminder = task.source === "apple-reminders" && options.allowAppleReminderWriteback && Boolean(task.externalId);
-  if (!canEditAppleReminder) {
+  const canEditDida = task.source === "dida" && Boolean(options.allowDidaWriteback) && Boolean(task.externalId);
+  const canEditExternalTask = canEditAppleReminder || canEditDida;
+  if (!canEditExternalTask) {
     details.createDiv({ cls: `task-hub-detail-title ${task.completed ? "is-completed" : ""}`, text: task.text });
   }
   const facts = details.createDiv({ cls: "task-hub-detail-facts" });
   facts.createDiv({ text: `${t("completed")}: ${task.completed ? t("completed") : t("open")}` });
-  if (!canEditAppleReminder && task.dueDate) facts.createDiv({ text: `${t("today")}: ${task.dueDate}` });
-  if (!canEditAppleReminder && task.tags.length > 0) facts.createDiv({ text: `${t("tags")}: ${task.tags.join(" ")}` });
+  if (!canEditExternalTask && task.dueDate) facts.createDiv({ text: `${t("today")}: ${task.dueDate}` });
+  if (!canEditExternalTask && task.tags.length > 0) facts.createDiv({ text: `${t("tags")}: ${task.tags.join(" ")}` });
   facts.createDiv({ text: `${t("source")}: ${task.externalSourceName ?? task.filePath}` });
   if (task.heading) facts.createDiv({ text: task.heading });
   if (task.contextPreview) {
@@ -263,42 +271,45 @@ function renderTaskDetails(
   let dateInput: HTMLInputElement | undefined;
   let tagsEditor: TagChipEditor | undefined;
   let listSelect: HTMLSelectElement | undefined;
-  if (task.source === "apple-reminders" && (canEditAppleReminder || (options.appleReminderLists?.length ?? 0) > 0)) {
+  if ((task.source === "apple-reminders" || task.source === "dida") && (canEditExternalTask || (externalListsForTask(task, options).length > 0))) {
     const editor = details.createDiv({ cls: "task-hub-detail-editor" });
-    titleInput = canEditAppleReminder
+    titleInput = canEditExternalTask
       ? detailInput(editor, t("taskCreationBody"), task.text, "text", "task-hub-detail-title-input")
       : undefined;
-    dateInput = canEditAppleReminder ? detailInput(editor, t("date"), task.dueDate ?? "", "date") : undefined;
-    tagsEditor = canEditAppleReminder
+    dateInput = canEditExternalTask ? detailInput(editor, t("date"), task.dueDate ?? "", "date") : undefined;
+    tagsEditor = canEditExternalTask
       ? tagChipEditor(editor, t("tags"), task.tags, options.bindTagInputSuggest)
       : undefined;
     if (titleInput) options.bindTagInputSuggest?.(titleInput);
-    if ((options.appleReminderLists?.length ?? 0) > 0) {
+    const externalLists = externalListsForTask(task, options);
+    if (externalLists.length > 0) {
       const listRow = editor.createEl("label", { cls: "task-hub-detail-field" });
-      listRow.createSpan({ text: t("appleReminderList") });
+      listRow.createSpan({ text: task.source === "dida" ? t("didaProject") : t("appleReminderList") });
       listSelect = listRow.createEl("select");
-      for (const list of options.appleReminderLists ?? []) {
+      for (const list of externalLists) {
         listSelect.createEl("option", { value: list.id, text: list.name });
       }
       if (task.externalListId) {
         listSelect.value = task.externalListId;
       }
-      listSelect.disabled = !canEditAppleReminder && (!options.allowAppleReminderCreate || !task.externalId);
+      listSelect.disabled = !canEditExternalTask && (!options.allowAppleReminderCreate || !options.allowDidaCreate || !task.externalId);
       listSelect.addEventListener("change", () => {
-        if (canEditAppleReminder) return;
-        handlers.onAppleReminderListChange(task, listSelect!.value);
+        if (canEditExternalTask) return;
+        if (task.source === "dida") handlers.onDidaProjectChange?.(task, listSelect!.value);
+        else handlers.onAppleReminderListChange(task, listSelect!.value);
       });
     }
   }
 
   const canSendToAppleReminders = task.source === "vault" && Boolean(options.allowAppleReminderCreate);
+  const canSendToDida = task.source === "vault" && Boolean(options.allowDidaCreate);
   const actionLanguageClass = t("language") === "语言" ? "is-compact-language" : "is-long-language";
   const actions = details.createDiv({
-    cls: ["task-hub-detail-actions", canSendToAppleReminders || canEditAppleReminder ? "has-three-actions" : "", actionLanguageClass]
+    cls: ["task-hub-detail-actions", canSendToAppleReminders || canSendToDida || canEditExternalTask ? "has-three-actions" : "", actionLanguageClass]
       .filter(Boolean)
       .join(" ")
   });
-  if (canEditAppleReminder && titleInput && dateInput && tagsEditor) {
+  if (canEditExternalTask && titleInput && dateInput && tagsEditor) {
     const save = actions.createEl("button", { cls: "mod-cta task-hub-detail-save", text: t("save") });
     save.addEventListener("click", () => {
       handlers.onTaskUpdate?.(task, {
@@ -311,7 +322,7 @@ function renderTaskDetails(
       });
     });
   }
-  const canToggle = task.source === "vault" || (task.source === "apple-reminders" && options.allowAppleReminderWriteback);
+  const canToggle = task.source === "vault" || (task.source === "apple-reminders" && options.allowAppleReminderWriteback) || (task.source === "dida" && options.allowDidaWriteback);
   const completeButton = actions.createEl("button", { text: task.completed ? t("markOpen") : t("markComplete") });
   completeButton.disabled = !canToggle;
   completeButton.addEventListener("click", () => handlers.onComplete(task));
@@ -321,6 +332,10 @@ function renderTaskDetails(
   if (canSendToAppleReminders) {
     const sendButton = actions.createEl("button", { cls: "mod-cta", text: t("sendToAppleReminders") });
     sendButton.addEventListener("click", () => handlers.onSendToAppleReminders(task));
+  }
+  if (canSendToDida) {
+    const sendButton = actions.createEl("button", { cls: "mod-cta", text: t("sendToDida") });
+    sendButton.addEventListener("click", () => handlers.onSendToDida?.(task));
   }
   if (!canToggle && task.source !== "vault") {
     details.createDiv({ cls: "task-hub-detail-note", text: t("externalTaskReadOnly") });
@@ -543,9 +558,15 @@ function taskDisplayColor(task: TaskItem, options: Pick<TaskRenderOptions, "sour
   return (task.externalListId ? options.taskColors?.[task.externalListId] : undefined) ?? options.sourceColors?.[task.source];
 }
 
+function externalListsForTask(task: TaskItem, options: Pick<TaskRenderOptions, "appleReminderLists" | "didaProjects">): Array<{ id: string; name: string }> {
+  if (task.source === "dida") return options.didaProjects ?? [];
+  if (task.source === "apple-reminders") return options.appleReminderLists ?? [];
+  return [];
+}
+
 function renderTaskDetailSourceLogo(container: HTMLElement, task: TaskItem | undefined): void {
   if (!task) return;
-  const source = task.source === "apple-reminders" ? "apple" : "obsidian";
+  const source = task.source === "apple-reminders" ? "apple" : task.source === "dida" ? "dida" : "obsidian";
   const logo = container.createSpan({ cls: `task-hub-detail-source-logo is-${source}` });
   logo.setAttr("aria-hidden", "true");
   if (source === "apple") {
@@ -558,5 +579,5 @@ function renderTaskDetailSourceLogo(container: HTMLElement, task: TaskItem | und
 }
 
 function canOpenSource(task: TaskItem): boolean {
-  return task.source === "vault" || task.source === "apple-reminders";
+  return task.source === "vault" || task.source === "apple-reminders" || task.source === "dida";
 }

@@ -46,6 +46,18 @@ Create `Project A.md` in a test vault:
 - Adding a bad ICS URL in settings shows a sync failure state.
 - Adding a valid public ICS URL shows events after Sync.
 
+## Dida Checklist
+
+- Create a dedicated Dida/TickTick test account or a `Task Hub Test` list.
+- Enable Dida integration, enter the API token, and click Test / sync.
+- Enable Dida tasks and confirm synced Dida tasks appear in the task list and calendar layers.
+- Set Dida list colors, then confirm task cards use the expected colors.
+- With Dida writeback disabled, confirm Dida task checkboxes and detail fields are read-only.
+- Enable Dida writeback and confirm a Dida task can be completed, reopened, edited, and moved to another list.
+- Enable Dida drag rescheduling, drag a dated Dida task in month/week/day views, and confirm the date or time changes in Dida.
+- Enable Dida deletion and confirm deleting a test Dida task removes it from the external list after sync.
+- Enable Dida creation, send a vault Markdown task to Dida, and confirm the external task is created before the Markdown line is removed.
+
 ## Local Apple Helper Checklist
 
 - Run `npm run build:apple-helper`.
@@ -71,6 +83,7 @@ Create `Project A.md` in a test vault:
 - ICS compatibility should be checked with real public calendars that include timezone and folded fields.
 - Mobile and narrow-pane layouts need visual review inside Obsidian.
 - Obsidian community plugin installation does not currently distribute `taskhub-apple-helper`; Apple helper behavior must be verified separately.
+- Dida native tag sync writes Task Hub tags into the API `tags` field; confirm the Dida client shows them in the tag menu. Android alarm-mode behavior still requires real-client verification; Task Hub writes reminder times through the API.
 
 ## 中文
 
@@ -118,6 +131,18 @@ Create `Project A.md` in a test vault:
 - 在设置中添加错误 ICS URL 后，应显示同步失败状态。
 - 添加有效公共 ICS URL 并同步后，应显示事件。
 
+## 滴答清单验证
+
+- 创建专用滴答 / TickTick 测试账号，或创建 `Task Hub Test` 清单。
+- 开启滴答清单集成，填写 API 口令，点击“测试 / 同步”。
+- 开启滴答任务，确认同步后的滴答任务出现在任务列表和日历图层中。
+- 设置滴答清单颜色，确认任务卡片使用预期颜色。
+- 关闭滴答写回时，确认滴答任务复选框和详情字段处于只读状态。
+- 开启滴答写回，确认可以完成、重新打开、编辑滴答任务，并移动到另一个清单。
+- 开启滴答拖动改期，在月/周/日视图中拖动有日期的滴答任务，确认滴答中的日期或时间变化。
+- 开启滴答删除，确认删除测试滴答任务后，同步后外部清单中不再出现该任务。
+- 开启滴答创建，把一条 vault Markdown 任务发送到滴答，确认先创建外部任务，再删除 Markdown 源行。
+
 ## 本地 Apple Helper 验证
 
 - 运行 `npm run build:apple-helper`。
@@ -143,3 +168,4 @@ Create `Project A.md` in a test vault:
 - ICS 兼容性需要用包含时区和折行字段的真实公共日历验证。
 - 移动端和窄面板布局需要在 Obsidian 中进一步视觉检查。
 - Obsidian 社区插件安装目前不会分发 `taskhub-apple-helper`；Apple helper 行为需要单独验证。
+- 滴答原生标签同步会把 Task Hub 标签写入 API 的 `tags` 字段；需确认滴答客户端的标签菜单能显示。Android 闹钟模式仍需要真实客户端验证；Task Hub 通过 API 写入提醒时间。

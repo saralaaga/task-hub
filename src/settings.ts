@@ -1,7 +1,8 @@
 import { App, PluginSettingTab, Setting } from "obsidian";
 import { createTranslator, type Translator } from "./i18n";
 import type TaskHubPlugin from "./main";
-import type { AppleCalendarInfo, CalendarCreationKind, CalendarCreationTarget, CalendarEventCreationTarget, CalendarSource, CalendarSourceStatus, CalendarTaskCreationTarget, LocalAppleSyncStatus, TaskHubSettings } from "./types";
+import { DEFAULT_DIDA_API_BASE, DIDA_INBOX_PROJECT_NAME } from "./dida/didaMapping";
+import type { AppleCalendarInfo, CalendarCreationKind, CalendarCreationTarget, CalendarEventCreationTarget, CalendarSource, CalendarSourceStatus, CalendarTaskCreationTarget, ExternalTaskSourceTab, LocalAppleSyncStatus, TaskHubSettings } from "./types";
 
 export const TASK_HUB_SETTINGS_SCHEMA_VERSION = 2;
 
@@ -40,7 +41,26 @@ export const DEFAULT_SETTINGS: TaskHubSettings = {
   ignoredPaths: ["Templates/", "Archive/"],
   tagViewOrder: [],
   calendarSources: [],
+  externalTaskSourceOrder: ["apple-calendar", "apple-reminders", "dida"],
   appleReminderLinks: {},
+  didaTaskLinks: {},
+  dida: {
+    enabled: false,
+    tasksEnabled: false,
+    tasksColor: "#3b82f6",
+    taskColorOverrides: {},
+    tasksWritebackEnabled: false,
+    tasksCreateEnabled: false,
+    tasksDragRescheduleEnabled: false,
+    tasksDeleteEnabled: false,
+    tasksCreateTagsEnabled: true,
+    defaultProjectId: undefined,
+    projects: [],
+    apiBase: DEFAULT_DIDA_API_BASE,
+    apiToken: "",
+    syncStatus: { state: "never" },
+    defaultReminderOffsetMinutes: 0
+  },
   localApple: {
     enabled: false,
     remindersEnabled: false,
@@ -67,6 +87,7 @@ export const DEFAULT_SETTINGS: TaskHubSettings = {
 
 export function normalizeTaskHubSettings(loaded: Partial<TaskHubSettings> | null): TaskHubSettings {
   const loadedLocalApple = loaded?.localApple as Partial<TaskHubSettings["localApple"]> | undefined;
+  const loadedDida = loaded?.dida as Partial<TaskHubSettings["dida"]> | undefined;
   const loadedSchemaVersion = loaded?.settingsSchemaVersion ?? 1;
   const localAppleEnabled =
     loadedLocalApple?.enabled ??
@@ -91,6 +112,7 @@ export function normalizeTaskHubSettings(loaded: Partial<TaskHubSettings> | null
     taskCreationFilePath: loaded?.taskCreationFilePath ?? DEFAULT_SETTINGS.taskCreationFilePath,
     taskNotes: normalizeTaskNotesSettings(loaded?.taskNotes),
     taskViewFilters: normalizeTaskViewFilters(loaded?.taskViewFilters, loaded?.showCompletedByDefault),
+    externalTaskSourceOrder: normalizeExternalTaskSourceOrder(loaded?.externalTaskSourceOrder),
     localApple: {
       ...DEFAULT_SETTINGS.localApple,
       ...(loadedLocalApple ?? {}),
@@ -109,8 +131,52 @@ export function normalizeTaskHubSettings(loaded: Partial<TaskHubSettings> | null
         loadedLocalApple?.calendarDefaultTimedTaskDurationMinutes ??
         DEFAULT_SETTINGS.localApple.calendarDefaultTimedTaskDurationMinutes
     },
-    appleReminderLinks: loaded?.appleReminderLinks ?? {}
+    dida: {
+      ...DEFAULT_SETTINGS.dida,
+      ...(loadedDida ?? {}),
+      enabled: loadedDida?.enabled ?? DEFAULT_SETTINGS.dida.enabled,
+      tasksEnabled: loadedDida?.tasksEnabled ?? DEFAULT_SETTINGS.dida.tasksEnabled,
+      tasksColor: loadedDida?.tasksColor ?? DEFAULT_SETTINGS.dida.tasksColor,
+      taskColorOverrides: loadedDida?.taskColorOverrides ?? DEFAULT_SETTINGS.dida.taskColorOverrides,
+      projects: normalizeDidaProjects(loadedDida?.projects),
+      apiBase: normalizeDidaApiBase(loadedDida?.apiBase),
+      apiToken: loadedDida?.apiToken ?? DEFAULT_SETTINGS.dida.apiToken,
+      syncStatus: loadedDida?.syncStatus ?? DEFAULT_SETTINGS.dida.syncStatus,
+      defaultReminderOffsetMinutes:
+        typeof loadedDida?.defaultReminderOffsetMinutes === "number"
+          ? loadedDida.defaultReminderOffsetMinutes
+          : DEFAULT_SETTINGS.dida.defaultReminderOffsetMinutes
+    },
+    appleReminderLinks: loaded?.appleReminderLinks ?? {},
+    didaTaskLinks: loaded?.didaTaskLinks ?? {}
   };
+}
+
+function normalizeExternalTaskSourceOrder(value: unknown): ExternalTaskSourceTab[] {
+  const defaults = DEFAULT_SETTINGS.externalTaskSourceOrder;
+  if (!Array.isArray(value)) return defaults;
+  const known = value.filter((item): item is ExternalTaskSourceTab =>
+    item === "apple-calendar" || item === "apple-reminders" || item === "dida"
+  );
+  return [...known, ...defaults.filter((item) => !known.includes(item))];
+}
+
+function normalizeDidaApiBase(value: unknown): string {
+  return typeof value === "string" && /^https:\/\/.+/u.test(value.trim())
+    ? value.trim().replace(/\/+$/u, "")
+    : DEFAULT_SETTINGS.dida.apiBase;
+}
+
+function normalizeDidaProjects(value: unknown): TaskHubSettings["dida"]["projects"] {
+  if (!Array.isArray(value)) return DEFAULT_SETTINGS.dida.projects;
+  return value
+    .filter((project): project is { id: string; name: string } =>
+      Boolean(project) && typeof project.id === "string" && typeof project.name === "string"
+    )
+    .map((project) => ({
+      ...project,
+      name: project.name === "未在清单中" ? DIDA_INBOX_PROJECT_NAME : project.name
+    }));
 }
 
 function normalizeCalendarTimeScale(value: unknown): TaskHubSettings["calendarTimeScale"] {
@@ -508,15 +574,315 @@ export class TaskHubSettingTab extends PluginSettingTab {
     new Setting(containerEl).setName(t("supportedTaskSyntax")).setDesc(t("supportedTaskSyntaxDesc")).setHeading();
 
     this.displayCalendarSources(containerEl);
-    this.displayLocalApple(containerEl);
+    this.displayExternalTaskSources(containerEl);
     if (scrollTop !== undefined) {
       containerEl.scrollTop = scrollTop;
     }
   }
 
-  private displayLocalApple(containerEl: HTMLElement): void {
+  private displayDida(containerEl: HTMLElement, options: { heading?: boolean } = {}): void {
     const t = createTranslator(this.plugin.settings.language);
-    new Setting(containerEl).setName(t("localApple")).setDesc(t("localAppleDesc")).setHeading();
+    if (options.heading) {
+      new Setting(containerEl).setName(t("dida")).setDesc(t("didaDesc")).setHeading();
+    }
+
+    new Setting(containerEl)
+      .setName(t("didaEnable"))
+      .setDesc(this.plugin.settings.dida.enabled ? createCalendarSourceStatusText(this.plugin.settings.dida.syncStatus, t) : t("didaDisabledDesc"))
+      .addToggle((toggle) => {
+        toggle.setValue(this.plugin.settings.dida.enabled).onChange(async (value) => {
+          this.plugin.settings.dida.enabled = value;
+          if (!value) {
+            this.plugin.settings.dida.tasksEnabled = false;
+            this.plugin.settings.dida.tasksWritebackEnabled = false;
+            this.plugin.settings.dida.tasksCreateEnabled = false;
+            this.plugin.settings.dida.tasksDragRescheduleEnabled = false;
+            this.plugin.settings.dida.tasksDeleteEnabled = false;
+          }
+          await this.plugin.saveSettings();
+          await this.plugin.syncDida({ silent: true });
+          this.display({ preserveScroll: true });
+        });
+      })
+      .addButton((button) => {
+        button
+          .setButtonText(t("didaTestConnection"))
+          .setDisabled(!this.plugin.settings.dida.enabled || !this.plugin.settings.dida.apiToken.trim())
+          .onClick(async () => {
+            await this.plugin.syncDida({ silent: false });
+            this.display({ preserveScroll: true });
+          });
+      });
+
+    if (!this.plugin.settings.dida.enabled) return;
+
+    const grid = containerEl.createDiv({ cls: "task-hub-settings-grid" });
+    new Setting(grid)
+      .setName(t("didaApiBase"))
+      .setDesc(t("didaApiBaseDesc"))
+      .addDropdown((dropdown) => {
+        dropdown
+          .addOption("https://api.dida365.com", t("didaApiBaseDida"))
+          .addOption("https://api.ticktick.com", t("didaApiBaseTickTick"))
+          .setValue(this.plugin.settings.dida.apiBase)
+          .onChange(async (value) => {
+            this.plugin.settings.dida.apiBase = value;
+            await this.plugin.saveSettings();
+          });
+      });
+
+    new Setting(grid)
+      .setName(t("didaApiToken"))
+      .setDesc(t("didaApiTokenDesc"))
+      .addText((text) => {
+        text.inputEl.type = "password";
+        text.setPlaceholder("dp_...").setValue(this.plugin.settings.dida.apiToken).onChange(async (value) => {
+          this.plugin.settings.dida.apiToken = value.trim();
+          await this.plugin.saveSettings();
+        });
+      });
+
+    new Setting(grid)
+      .setName(t("didaTasks"))
+      .setDesc(t("didaTasksDesc"))
+      .addToggle((toggle) => {
+        toggle.setValue(this.plugin.settings.dida.tasksEnabled).onChange(async (value) => {
+          this.plugin.settings.dida.tasksEnabled = value;
+          if (!value) {
+            this.plugin.settings.dida.tasksWritebackEnabled = false;
+            this.plugin.settings.dida.tasksCreateEnabled = false;
+            this.plugin.settings.dida.tasksDragRescheduleEnabled = false;
+            this.plugin.settings.dida.tasksDeleteEnabled = false;
+          }
+          await this.plugin.saveSettings();
+          await this.plugin.syncDida({ silent: true });
+          this.display({ preserveScroll: true });
+        });
+      });
+  }
+
+  private displayDidaWritebackSettings(containerEl: HTMLElement, t: Translator): void {
+    new Setting(containerEl)
+      .setName(t("didaWriteback"))
+      .setDesc(t("didaWritebackDesc"))
+      .addToggle((toggle) => {
+        toggle.setValue(this.plugin.settings.dida.tasksWritebackEnabled).onChange(async (value) => {
+          this.plugin.settings.dida.tasksWritebackEnabled = value;
+          if (!value) this.plugin.settings.dida.tasksDragRescheduleEnabled = false;
+          await this.plugin.saveSettings();
+          this.display({ preserveScroll: true });
+        });
+      });
+
+    new Setting(containerEl)
+      .setName(t("didaDragReschedule"))
+      .setDesc(t("didaDragRescheduleDesc"))
+      .addToggle((toggle) => {
+        toggle.setValue(this.plugin.settings.dida.tasksDragRescheduleEnabled).onChange(async (value) => {
+          this.plugin.settings.dida.tasksDragRescheduleEnabled = value && this.plugin.settings.dida.tasksWritebackEnabled;
+          await this.plugin.saveSettings();
+          this.display({ preserveScroll: true });
+        });
+      });
+
+    new Setting(containerEl)
+      .setName(t("didaDelete"))
+      .setDesc(t("didaDeleteDesc"))
+      .addToggle((toggle) => {
+        toggle.setValue(this.plugin.settings.dida.tasksDeleteEnabled).onChange(async (value) => {
+          if (value && !(await this.plugin.confirmRiskySourceDeletionSetting())) {
+            this.display({ preserveScroll: true });
+            return;
+          }
+          this.plugin.settings.dida.tasksDeleteEnabled = value;
+          await this.plugin.saveSettings();
+          this.display({ preserveScroll: true });
+        });
+      });
+
+    new Setting(containerEl)
+      .setName(t("didaCreate"))
+      .setDesc(t("didaCreateDesc"))
+      .addToggle((toggle) => {
+        toggle.setValue(this.plugin.settings.dida.tasksCreateEnabled).onChange(async (value) => {
+          if (value && !(await this.plugin.confirmRiskySourceDeletionSetting())) {
+            this.display({ preserveScroll: true });
+            return;
+          }
+          this.plugin.settings.dida.tasksCreateEnabled = value;
+          await this.plugin.saveSettings();
+          this.display({ preserveScroll: true });
+        });
+      });
+
+    if (this.plugin.settings.dida.tasksCreateEnabled) {
+      new Setting(containerEl)
+        .setName(t("didaCreateTags"))
+        .setDesc(t("didaCreateTagsDesc"))
+        .addToggle((toggle) => {
+          toggle.setValue(this.plugin.settings.dida.tasksCreateTagsEnabled).onChange(async (value) => {
+            this.plugin.settings.dida.tasksCreateTagsEnabled = value;
+            await this.plugin.saveSettings();
+          });
+        });
+
+      new Setting(containerEl)
+        .setName(t("didaDefaultProject"))
+        .setDesc(t("didaDefaultProjectDesc"))
+        .addDropdown((dropdown) => {
+          populateDidaProjectDropdown(dropdown.selectEl, this.plugin, t);
+          dropdown.setValue(this.plugin.settings.dida.defaultProjectId ?? "").onChange(async (value) => {
+            this.plugin.settings.dida.defaultProjectId = value || undefined;
+            await this.plugin.saveSettings();
+          });
+        });
+
+      new Setting(containerEl)
+        .setName(t("didaDefaultReminder"))
+        .setDesc(t("didaDefaultReminderDesc"))
+        .addText((text) => {
+          text.setPlaceholder("0").setValue(String(this.plugin.settings.dida.defaultReminderOffsetMinutes ?? 0)).onChange(async (value) => {
+            const minutes = Number.parseInt(value, 10);
+            if (Number.isFinite(minutes) && minutes >= 0 && minutes <= 10080) {
+              this.plugin.settings.dida.defaultReminderOffsetMinutes = minutes;
+              await this.plugin.saveSettings();
+            }
+          });
+        });
+    }
+  }
+
+  private displayDidaProjectColorOverrides(containerEl: HTMLElement, t: Translator): void {
+    const projects = this.plugin.getDidaProjects();
+    if (projects.length === 0) {
+      containerEl.createDiv({ cls: "task-hub-empty", text: t("didaProjectColorNoProjects") });
+      return;
+    }
+    new Setting(containerEl).setName(t("didaProjectColors")).setDesc(t("didaProjectColorsDesc")).setHeading();
+    for (const project of projects) {
+      const value = this.plugin.settings.dida.taskColorOverrides[project.id] ?? this.plugin.settings.dida.tasksColor;
+      this.displayLocalAppleColorSetting(
+        containerEl,
+        t,
+        project.name,
+        `${t("didaProject")}: ${project.name}`,
+        value,
+        this.plugin.settings.dida.tasksColor,
+        (color) => {
+          this.plugin.settings.dida.taskColorOverrides = {
+            ...this.plugin.settings.dida.taskColorOverrides,
+            [project.id]: color
+          };
+        }
+      );
+    }
+  }
+
+  private displayExternalTaskSources(containerEl: HTMLElement): void {
+    const t = createTranslator(this.plugin.settings.language);
+    new Setting(containerEl).setName(t("externalTaskSources")).setDesc(t("externalTaskSourcesDesc")).setHeading();
+
+    this.displayLocalApple(containerEl, { tabs: false });
+    this.displayDida(containerEl);
+
+    const tabs = this.enabledExternalTaskSourceTabs();
+    if (tabs.length === 0) {
+      containerEl.createDiv({ cls: "task-hub-empty", text: t("externalTaskSourcesEmpty") });
+      return;
+    }
+
+    const activeTab = this.activeExternalTaskSourceTab(tabs);
+    const tabList = containerEl.createDiv({ cls: "task-hub-settings-tab-list" });
+    for (const tab of tabs) {
+      const button = tabList.createEl("button", {
+        cls: `task-hub-settings-tab ${tab === activeTab ? "is-active" : ""}`,
+        text: this.externalTaskSourceTabLabel(tab, t),
+        attr: {
+          type: "button",
+          draggable: "true"
+        }
+      });
+      button.addEventListener("click", () => {
+        this.externalTaskSourceTab = tab;
+        this.display({ preserveScroll: true });
+      });
+      button.addEventListener("dragstart", (event) => {
+        event.dataTransfer?.setData("text/task-hub-external-tab", tab);
+        button.addClass("is-dragging");
+      });
+      button.addEventListener("dragend", () => {
+        button.removeClass("is-dragging");
+      });
+      button.addEventListener("dragover", (event) => {
+        event.preventDefault();
+      });
+      button.addEventListener("drop", (event) => {
+        event.preventDefault();
+        const source = event.dataTransfer?.getData("text/task-hub-external-tab") as ExternalTaskSourceTab | undefined;
+        if (!source || source === tab) return;
+        void this.reorderExternalTaskSourceTabs(source, tab);
+      });
+    }
+
+    const panel = containerEl.createDiv({ cls: "task-hub-settings-tab-panel" });
+    if (activeTab === "apple-calendar") this.displayAppleCalendarTab(panel, t);
+    else if (activeTab === "apple-reminders") this.displayAppleRemindersTab(panel, t);
+    else this.displayDidaTab(panel, t);
+  }
+
+  private displayDidaTab(panel: HTMLElement, t: Translator): void {
+    if (!this.plugin.settings.dida.enabled) {
+      panel.createDiv({ cls: "task-hub-empty", text: t("didaDisabledDesc") });
+      return;
+    }
+    if (!this.plugin.settings.dida.tasksEnabled) {
+      panel.createDiv({ cls: "task-hub-empty", text: t("didaTasksDesc") });
+      return;
+    }
+    this.displayDidaProjectColorOverrides(panel, t);
+    this.displayDidaWritebackSettings(panel, t);
+  }
+
+  private enabledExternalTaskSourceTabs(): ExternalTaskSourceTab[] {
+    const enabled: ExternalTaskSourceTab[] = [
+      this.plugin.settings.localApple.enabled && this.plugin.settings.localApple.calendarEnabled ? "apple-calendar" : undefined,
+      this.plugin.settings.localApple.enabled && this.plugin.settings.localApple.remindersEnabled ? "apple-reminders" : undefined,
+      this.plugin.settings.dida.enabled && this.plugin.settings.dida.tasksEnabled ? "dida" : undefined
+    ].filter((tab): tab is ExternalTaskSourceTab => Boolean(tab));
+    return this.plugin.settings.externalTaskSourceOrder.filter((tab) => enabled.includes(tab));
+  }
+
+  private activeExternalTaskSourceTab(tabs: ExternalTaskSourceTab[]): ExternalTaskSourceTab {
+    if (tabs.includes(this.externalTaskSourceTab)) return this.externalTaskSourceTab;
+    this.externalTaskSourceTab = tabs[0];
+    return this.externalTaskSourceTab;
+  }
+
+  private externalTaskSourceTabLabel(tab: ExternalTaskSourceTab, t: Translator): string {
+    if (tab === "apple-calendar") return t("localAppleCalendar");
+    if (tab === "apple-reminders") return t("localAppleReminders");
+    return t("dida");
+  }
+
+  private async reorderExternalTaskSourceTabs(source: ExternalTaskSourceTab, target: ExternalTaskSourceTab): Promise<void> {
+    const order = [...this.plugin.settings.externalTaskSourceOrder];
+    const sourceIndex = order.indexOf(source);
+    const targetIndex = order.indexOf(target);
+    if (sourceIndex === -1 || targetIndex === -1 || sourceIndex === targetIndex) return;
+    const [moved] = order.splice(sourceIndex, 1);
+    order.splice(targetIndex, 0, moved);
+    this.plugin.settings.externalTaskSourceOrder = order;
+    await this.plugin.saveSettings();
+    this.display({ preserveScroll: true });
+  }
+
+  private externalTaskSourceTab: ExternalTaskSourceTab = "apple-calendar";
+
+  private displayLocalApple(containerEl: HTMLElement, options: { heading?: boolean; tabs?: boolean } = {}): void {
+    const t = createTranslator(this.plugin.settings.language);
+    if (options.heading) {
+      new Setting(containerEl).setName(t("localApple")).setDesc(t("localAppleDesc")).setHeading();
+    }
 
     new Setting(containerEl)
       .setName(t("localApple"))
@@ -616,6 +982,8 @@ export class TaskHubSettingTab extends PluginSettingTab {
           this.display({ preserveScroll: true });
         });
       });
+
+    if (options.tabs === false) return;
 
     const tabs = this.enabledLocalAppleTabs();
     if (tabs.length === 0) {
@@ -1193,6 +1561,9 @@ export function serializeTaskCreationTarget(target: CalendarTaskCreationTarget):
   if (target.type === "apple-reminders") {
     return `apple-reminders:${target.listId ?? ""}`;
   }
+  if (target.type === "dida") {
+    return `dida:${target.projectId ?? ""}`;
+  }
   return "vault";
 }
 
@@ -1200,6 +1571,10 @@ export function parseTaskCreationTarget(value: string): CalendarTaskCreationTarg
   if (value.startsWith("apple-reminders:")) {
     const listId = value.slice("apple-reminders:".length);
     return { type: "apple-reminders", listId: listId || undefined };
+  }
+  if (value.startsWith("dida:")) {
+    const projectId = value.slice("dida:".length);
+    return { type: "dida", projectId: projectId || undefined };
   }
   return { type: "vault" };
 }
@@ -1227,6 +1602,9 @@ export function parseCreationTarget(value: string, kind: CalendarCreationKind): 
 export function taskCreationTargetLabel(target: CalendarTaskCreationTarget, plugin: TaskHubPlugin, t: Translator): string {
   if (target.type === "vault") {
     return t("vaultTasks");
+  }
+  if (target.type === "dida") {
+    return didaProjectName(target.projectId, plugin) ?? t("didaDefaultProjectInbox");
   }
   return appleReminderListName(target.listId, plugin) ?? t("localAppleRemindersDefaultListInbox");
 }
@@ -1263,6 +1641,15 @@ export function populateTaskCreationTargetDropdown(selectEl: HTMLSelectElement, 
       });
     }
   }
+  if (plugin.canCreateDidaTasks()) {
+    const projects = plugin.getDidaProjects();
+    for (const project of projects) {
+      selectEl.createEl("option", {
+        value: serializeTaskCreationTarget({ type: "dida", projectId: project.id }),
+        text: `${t("dida")}: ${project.name}`
+      });
+    }
+  }
 
 }
 
@@ -1293,6 +1680,13 @@ function populateAppleReminderListDropdown(selectEl: HTMLSelectElement, plugin: 
   }
 }
 
+function populateDidaProjectDropdown(selectEl: HTMLSelectElement, plugin: TaskHubPlugin, t: Translator): void {
+  selectEl.empty();
+  for (const project of plugin.getDidaProjects()) {
+    selectEl.createEl("option", { value: project.id, text: project.name });
+  }
+}
+
 function appleReminderListName(listId: string | undefined, plugin: TaskHubPlugin): string | undefined {
   if (!listId) return undefined;
   return plugin.getAppleReminderLists().find((list) => list.id === listId)?.name;
@@ -1301,4 +1695,15 @@ function appleReminderListName(listId: string | undefined, plugin: TaskHubPlugin
 function appleCalendarName(calendarId: string | undefined, plugin: TaskHubPlugin): string | undefined {
   if (!calendarId) return undefined;
   return plugin.getAppleCalendars().find((calendar) => calendar.id === calendarId)?.name;
+}
+
+function didaProjectName(projectId: string | undefined, plugin: TaskHubPlugin): string | undefined {
+  if (!projectId) return undefined;
+  return plugin.getDidaProjects().find((project) => project.id === projectId)?.name;
+}
+
+function createCalendarSourceStatusText(status: CalendarSourceStatus, t: Translator): string {
+  if (status.state === "ok") return `${t("synced")}, ${status.eventCount} ${t("tasks")}, ${status.lastSyncedAt}`;
+  if (status.state === "error") return `${t("failedSync")}: ${status.message}`;
+  return t("neverSynced");
 }

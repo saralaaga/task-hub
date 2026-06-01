@@ -17,7 +17,7 @@ export type ShellState = {
 };
 
 export type SourceFilterOption = {
-  id: "all" | "vault" | "apple-reminders";
+  id: "all" | "vault" | "apple-reminders" | "dida";
   label: string;
   count: number;
 };
@@ -101,7 +101,7 @@ function renderFilters(container: HTMLElement, state: ShellState, handlers: Shel
 
 function renderConditionMenu(container: HTMLElement, state: ShellState, handlers: ShellHandlers, options: ShellRenderOptions): void {
   const conditions = state.filters.conditions ?? { operator: "and" as const, tag: "", dateBucket: "" as const, text: "" };
-  const sourceActive = state.filters.sourceQuery === "vault" || state.filters.sourceQuery === "apple-reminders";
+  const sourceActive = state.filters.sourceQuery === "vault" || state.filters.sourceQuery === "apple-reminders" || state.filters.sourceQuery === "dida";
   const activeConditionCount = [conditions.tag.trim(), conditions.dateBucket, conditions.text.trim(), sourceActive ? state.filters.sourceQuery : ""].filter(Boolean).length;
   const menu = container.createEl("details", { cls: "task-hub-condition-menu" });
 
@@ -156,7 +156,7 @@ function renderConditionMenu(container: HTMLElement, state: ShellState, handlers
     const sourceRow = panel.createDiv({ cls: "task-hub-condition-row task-hub-condition-source-row" });
     sourceRow.createSpan({ text: state.t("source") });
     const sourceOptions = sourceRow.createDiv({ cls: "task-hub-source-filter-options" });
-    const activeSource = state.filters.sourceQuery === "vault" || state.filters.sourceQuery === "apple-reminders"
+    const activeSource = state.filters.sourceQuery === "vault" || state.filters.sourceQuery === "apple-reminders" || state.filters.sourceQuery === "dida"
       ? state.filters.sourceQuery
       : "all";
     for (const source of state.sourceFilters) {

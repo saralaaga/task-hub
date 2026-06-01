@@ -23,6 +23,7 @@ Task Hub is a desktop-only Obsidian plugin that brings scattered Markdown tasks 
 - Extract due dates written as `📅 YYYY-MM-DD` or `due:: YYYY-MM-DD`.
 - Show dated tasks and external events in day, week, and month calendar views.
 - Reschedule vault Markdown tasks, Apple Reminders, and Apple Calendar events by dragging calendar cards to another day when the matching writeback option is enabled.
+- Sync Dida/TickTick tasks through the Open API, with optional create, edit, complete, delete, color, and drag-reschedule controls.
 - Add read-only public ICS calendar sources.
 - Read iCloud-synced Apple Reminders and Apple Calendar data on macOS desktop through the local Apple helper.
 - Explicitly send a vault Markdown task to Apple Reminders from the editor context menu, the command palette, a user-assigned hotkey, or Task Hub task details when reminder creation is enabled.
@@ -38,9 +39,29 @@ The task view shows vault tasks and supported external task sources in one list.
 
 When Local Apple and Apple Reminders are enabled, the separate **Create Apple Reminders from vault tasks** setting allows one-at-a-time export from vault Markdown tasks. Use the editor right-click menu on a task line, the command **Send current task to Apple Reminders**, an Obsidian hotkey assigned to that command, or the Task Hub task detail action.
 
+When Dida integration is enabled, Task Hub can read Dida/TickTick tasks through the configured API token. Separate settings control task creation, edit/complete writeback, drag rescheduling, deletion, default list, default reminder offset, and per-list colors. Sending a vault Markdown task to Dida is explicit; Task Hub creates the external task first and then removes the source Markdown line.
+
 The calendar view combines dated tasks, public ICS events, Apple Calendar events, and dated Apple Reminders where available. You can switch between month, week, and day layouts. Drag a vault Markdown task card to another day to update its existing `📅 YYYY-MM-DD` or `due:: YYYY-MM-DD` date. When the matching writeback options are enabled, dated Apple Reminder cards and Apple Calendar event cards can also be dragged to change their date.
 
 The tag view groups indexed tasks by tag and lets you drill into a tag's related tasks.
+
+## External Source Support Matrix
+
+| Capability | Apple Calendar | Apple Reminders | Dida / TickTick |
+| --- | --- | --- | --- |
+| Platform / backend | macOS desktop local helper | macOS desktop local helper | Open API over HTTPS |
+| Read into Task Hub | Yes: events | Yes: reminders | Yes: tasks, including inbox |
+| Create from Task Hub | Yes: calendar events when Apple Calendar task sending is enabled | Yes: reminders when reminder creation is enabled | Yes: tasks when Dida creation is enabled |
+| Edit title / notes | Yes, when Apple Calendar writeback is enabled | Yes, when reminder writeback is enabled | Yes, when Dida writeback is enabled |
+| Complete / reopen | Not applicable to events | Yes, when reminder writeback is enabled | Yes, when Dida writeback is enabled |
+| Drag reschedule | Yes, when Apple Calendar writeback is enabled | Yes, when reminder writeback and drag controls are enabled | Yes, when Dida writeback and drag controls are enabled |
+| Move between lists / calendars | Calendar selection is available for edited events where writable calendars are loaded | Yes, when reminder creation/writeback controls are enabled | Yes, when Dida writeback is enabled |
+| Delete external item | No | No | Yes, when Dida deletion is enabled |
+| Send vault Markdown task to external source | No direct send; use calendar event creation from the calendar UI | Yes, explicit send action after enabling creation | Yes, explicit send action after enabling creation |
+| Tag read | Not applicable | Yes, through reminder title hashtags | Yes, native Dida `tags` field maps to Task Hub hashtags |
+| Tag write | Not applicable | Yes, as Apple-compatible title hashtags when reminder tag creation is enabled | Yes, as native Dida task tags when native tag sync is enabled |
+| Date / time write | Yes: event date/time | Yes: reminder due date/time where available | Yes: task date/time and reminders |
+| Recurrence | Read/write is limited; dragged recurring events are saved as the dragged occurrence only | Read display only where available | Preserved when present in synced task payloads; full recurrence editing is not a first-class UI yet |
 
 ## Task Notes
 
@@ -67,15 +88,17 @@ Task Hub intentionally keeps the first releases conservative:
 - Vault Markdown tasks can be completed from Task Hub.
 - Vault Markdown tasks with an existing supported date can be rescheduled from the calendar.
 - Vault Markdown tasks can be sent to Apple Reminders only by explicit user action, and Task Hub records the created reminder id to avoid duplicate sends.
+- Vault Markdown tasks can be sent to Dida only by explicit user action, and Task Hub records the created Dida task id to avoid duplicate sends.
 - Task notes are local Markdown files. Thino integration is limited to Thino multi-file-compatible notes; Thino single-file, Canvas, and diary storage are outside the current scope.
 - Apple Reminders completion and date writeback are optional and must be enabled in settings.
+- Dida completion, editing, drag rescheduling, creation, deletion, and native tag sync are optional and must be enabled independently in settings. Dida API tokens are stored in Obsidian plugin data; use a test account or rotate tokens after development.
 - Public ICS events are read-only. Apple Calendar event date writeback is available only when you explicitly enable it in Local Apple settings.
 - Full Obsidian Tasks plugin grammar is not implemented.
 - Timed Markdown task syntax, Google Calendar OAuth, Microsoft Calendar OAuth, and mobile support are not included yet.
 
 ## Privacy
 
-Task Hub indexes Markdown files inside your local vault and stores plugin settings in your vault's Obsidian plugin data. Public ICS sources are fetched only from URLs you configure. Local Apple integration runs only on macOS desktop and asks macOS for Reminders or Calendar access before reading local data. iCloud Reminders and Calendar data stay mediated by Apple's local sync services; Task Hub does not talk directly to iCloud servers.
+Task Hub indexes Markdown files inside your local vault and stores plugin settings in your vault's Obsidian plugin data. Public ICS sources are fetched only from URLs you configure. Dida/TickTick integration sends authenticated HTTPS requests only to the configured API base. Local Apple integration runs only on macOS desktop and asks macOS for Reminders or Calendar access before reading local data. iCloud Reminders and Calendar data stay mediated by Apple's local sync services; Task Hub does not talk directly to iCloud servers.
 
 Task Hub does not send vault tasks to a remote service.
 
@@ -87,7 +110,7 @@ Obsidian's plugin review may show several capability warnings. Task Hub uses the
 - **Vault read/write:** Task Hub reads individual notes for indexing and only writes back when you complete, delete, edit, or reschedule a supported task. Markdown task writeback checks that the original source line still matches before changing it.
 - **Filesystem access:** The plugin checks and installs the optional bundled Local Apple helper inside its own plugin folder on macOS desktop.
 - **Shell execution:** The plugin launches only the bundled `taskhub-apple-helper` binary for optional Apple Reminders and Apple Calendar integration. The helper asks macOS for local Reminders/Calendar permission and does not ask for your Apple ID.
-- **Network requests:** Task Hub fetches only the public ICS calendar URLs you configure.
+- **Network requests:** Task Hub fetches only the public ICS calendar URLs you configure and the configured Dida/TickTick Open API when enabled.
 
 ## Installation
 

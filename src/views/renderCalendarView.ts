@@ -5,7 +5,7 @@ import { toLocalDateKey } from "../calendar/dateBuckets";
 import { formatLunarDayLabel, formatLunarMonthTitle } from "../calendar/lunarCalendar";
 import type { TranslationKey, Translator } from "../i18n";
 import type { TaskNote } from "../taskNotes";
-import type { AppleCalendarInfo, AppleReminderList, CalendarEvent, CalendarItemEditDraft, CalendarSource, CalendarSourceStatus, CalendarTimeScale, TaskItem, WeekStart } from "../types";
+import type { AppleCalendarInfo, AppleReminderList, CalendarEvent, CalendarItemEditDraft, CalendarSource, CalendarSourceStatus, CalendarTimeScale, DidaProject, TaskItem, WeekStart } from "../types";
 import { renderTaskNoteBody, type TaskNoteMarkdownRenderer } from "./renderTaskNoteBody";
 
 export type CalendarViewState = {
@@ -16,6 +16,10 @@ export type CalendarViewState = {
   includeCompletedTasks: boolean;
   allowAppleReminderWriteback: boolean;
   allowAppleReminderCreate?: boolean;
+  allowDidaWriteback?: boolean;
+  allowDidaDragReschedule?: boolean;
+  allowDidaDelete?: boolean;
+  allowDidaCreate?: boolean;
   allowAppleCalendarWriteback?: boolean;
   allowAppleCalendarReminderConversion?: boolean;
   allowTaskCreation: boolean;
@@ -28,6 +32,7 @@ export type CalendarViewState = {
   taskDurationOverrides?: Record<string, number>;
   taskColors?: Record<string, string>;
   appleReminderLists?: AppleReminderList[];
+  didaProjects?: DidaProject[];
   appleCalendars?: AppleCalendarInfo[];
   bindTagInputSuggest?: (input: HTMLInputElement) => void;
   taskNotesEnabled?: boolean;
@@ -52,6 +57,7 @@ export type CalendarViewHandlers = {
   onTaskReschedule: (task: TaskItem, target: CalendarDropTarget) => void;
   onTaskDelete?: (task: TaskItem) => void;
   onTaskSendToAppleReminders?: (task: TaskItem) => void;
+  onTaskSendToDida?: (task: TaskItem) => void;
   onCreateTaskNote?: (task: TaskItem) => void;
   onEventReschedule?: (event: CalendarEvent, target: CalendarDropTarget) => void;
   onEventUpdate?: (event: CalendarEvent, draft: Extract<CalendarItemEditDraft, { kind: "event" }>) => void;
@@ -881,6 +887,8 @@ function renderCalendarDetailsPopover(anchor: HTMLElement, item: CalendarItem, h
     ? detailCompactSelect(headerControls, state.appleCalendars ?? [], item.event.calendarId)
     : item.task?.source === "apple-reminders"
       ? detailCompactSelect(headerControls, state.appleReminderLists ?? [], item.task.externalListId)
+    : item.task?.source === "dida"
+      ? detailCompactSelect(headerControls, state.didaProjects ?? [], item.task.externalListId)
     : undefined;
   if (headerSourceSelect) header.addClass("has-calendar-select");
   const close = header.createEl("button", { cls: "task-hub-icon-button", text: "×" });
@@ -889,7 +897,7 @@ function renderCalendarDetailsPopover(anchor: HTMLElement, item: CalendarItem, h
   bindDetailsPopoverDrag(popover, header, ownerDocument);
 
   if (item.task) {
-    renderTaskDetailsPopover(popover, item, item.task, handlers, state, closePopover, item.task.source === "apple-reminders" ? headerSourceSelect : undefined);
+    renderTaskDetailsPopover(popover, item, item.task, handlers, state, closePopover, item.task.source === "apple-reminders" || item.task.source === "dida" ? headerSourceSelect : undefined);
     return;
   }
   if (item.event) {
@@ -954,6 +962,7 @@ function renderDetailSourceLogo(container: HTMLElement, item: CalendarItem): voi
 function detailSourceKind(item: CalendarItem): "apple" | "obsidian" | undefined {
   if (item.task?.source === "vault") return "obsidian";
   if (item.task?.source === "apple-reminders") return "apple";
+  if (item.task?.source === "dida") return "obsidian";
   if (item.event?.sourceId === "apple-calendar") return "apple";
   return undefined;
 }
@@ -1017,7 +1026,7 @@ function renderTaskDetailsPopover(
   closePopover: () => void,
   headerList?: HTMLSelectElement
 ): void {
-  const editable = task.source === "vault" || (task.source === "apple-reminders" && state.allowAppleReminderWriteback);
+  const editable = task.source === "vault" || (task.source === "apple-reminders" && state.allowAppleReminderWriteback) || (task.source === "dida" && state.allowDidaWriteback);
   const form = popover.createDiv({ cls: "task-hub-calendar-detail-form" });
   const title = detailInput(form, state.t("taskCreationBody"), task.text);
   state.bindTagInputSuggest?.(title);
@@ -1030,8 +1039,14 @@ function renderTaskDetailsPopover(
     tags = detailInput(form, state.t("tags"), task.tags.join(" ")) as HTMLInputElement;
     state.bindTagInputSuggest?.(tags);
   }
-  if (task.source === "apple-reminders") {
-    list = headerList ?? detailSelect(form, state.t("appleReminderList"), state.appleReminderLists ?? [], task.externalListId, true);
+  if (task.source === "apple-reminders" || task.source === "dida") {
+    list = headerList ?? detailSelect(
+      form,
+      task.source === "dida" ? state.t("didaProject") : state.t("appleReminderList"),
+      task.source === "dida" ? state.didaProjects ?? [] : state.appleReminderLists ?? [],
+      task.externalListId,
+      true
+    );
     notes = detailTextarea(form, state.t("notes"), task.contextPreview ?? "");
   }
   if (!editable) {
@@ -1277,8 +1292,8 @@ function taskDraftChanged(task: TaskItem, title: string, date: string, time: str
   if (date !== (task.dueDate ?? "")) return true;
   if (time !== timeFromTask(task)) return true;
   if (task.source === "vault" && (tags ?? "").trim() !== task.tags.join(" ")) return true;
-  if (task.source === "apple-reminders" && (listId ?? "") !== (task.externalListId ?? "")) return true;
-  if (task.source === "apple-reminders" && (notes ?? "") !== (task.contextPreview ?? "")) return true;
+  if ((task.source === "apple-reminders" || task.source === "dida") && (listId ?? "") !== (task.externalListId ?? "")) return true;
+  if ((task.source === "apple-reminders" || task.source === "dida") && (notes ?? "") !== (task.contextPreview ?? "")) return true;
   return false;
 }
 
@@ -1373,6 +1388,21 @@ function bindCalendarItemContextMenu(
             if (task) {
               markCalendarItemExternalSending(item);
               handlers.onTaskSendToAppleReminders?.(task);
+            }
+          });
+      });
+    }
+    if (item.task && canSendTaskToDida(item, state)) {
+      menu.addItem((menuItem) => {
+        itemCount += 1;
+        menuItem
+          .setTitle(state.t("sendToDida"))
+          .setIcon("send")
+          .onClick(() => {
+            const task = item.task;
+            if (task) {
+              markCalendarItemExternalSending(item);
+              handlers.onTaskSendToDida?.(task);
             }
           });
       });
@@ -1676,6 +1706,7 @@ function canDragCalendarItem(item: CalendarItem, state: CalendarViewState): bool
     return isWritableAppleCalendarEvent(item, state) && Boolean(state.allowAppleCalendarWriteback);
   }
   if (item.task?.source === "vault") return true;
+  if (item.task?.source === "dida") return Boolean(state.allowDidaWriteback && state.allowDidaDragReschedule && item.task.externalId);
   return item.task?.source === "apple-reminders" && state.allowAppleReminderWriteback && Boolean(item.task.externalId);
 }
 
@@ -1690,6 +1721,7 @@ function canResizeCalendarItem(item: CalendarItem, state: CalendarViewState): bo
 
 function canDeleteTask(item: CalendarItem, state: CalendarViewState): boolean {
   if (item.task?.source === "vault") return true;
+  if (item.task?.source === "dida") return Boolean(state.allowDidaDelete && item.task.externalId);
   return item.task?.source === "apple-reminders" && state.allowAppleReminderWriteback && Boolean(item.task.externalId);
 }
 
@@ -1699,6 +1731,10 @@ function canDeleteEvent(item: CalendarItem, state: CalendarViewState): boolean {
 
 function canSendTaskToAppleReminders(item: CalendarItem, state: CalendarViewState): boolean {
   return Boolean(state.allowAppleReminderCreate && item.task?.source === "vault");
+}
+
+function canSendTaskToDida(item: CalendarItem, state: CalendarViewState): boolean {
+  return Boolean(state.allowDidaCreate && item.task?.source === "vault");
 }
 
 function canSendAppleReminderToCalendar(item: CalendarItem, state: CalendarViewState): boolean {

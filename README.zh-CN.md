@@ -38,9 +38,29 @@ Task Hub 是一个仅支持 Obsidian 桌面端的任务聚合插件。它会把�
 
 开启本地 Apple 和 Apple 提醒事项后，单独打开 **从 vault 任务创建 Apple 提醒事项** 设置，即可一条一条地从 vault Markdown 任务创建提醒事项。入口包括任务行上的编辑器右键菜单、命令面板中的 **将当前任务发送到 Apple 提醒事项**、你在 Obsidian 中绑定到该命令的快捷键，以及 Task Hub 任务详情里的操作按钮。
 
+开启滴答清单集成后，Task Hub 可以通过配置的 API 口令读取滴答清单 / TickTick 任务。设置中可分别控制创建、编辑/完成写回、拖动改期、删除、默认清单、默认提醒提前量和每个清单的颜色。从 vault Markdown 任务发送到滴答是显式操作；Task Hub 会先创建外部任务，再删除源 Markdown 任务行。
+
 日历视图会合并有日期的任务、公共 ICS 事件、Apple Calendar 事件，以及可用的有日期 Apple Reminders。你可以在月、周、日布局之间切换。把 vault Markdown 任务卡片拖到另一天，会更新该任务现有的 `📅 YYYY-MM-DD` 或 `due:: YYYY-MM-DD` 日期。开启对应写回后，也可以拖动有日期的 Apple Reminder 卡片和 Apple Calendar 事件卡片来修改日期。
 
 标签视图会按标签聚合索引到的任务，并支持查看某个标签下的具体任务。
+
+## 外部来源支持矩阵
+
+| 能力 | Apple Calendar | Apple Reminders | 滴答清单 / TickTick |
+| --- | --- | --- | --- |
+| 平台 / 后端 | macOS 桌面端本地 helper | macOS 桌面端本地 helper | HTTPS Open API |
+| 读取到 Task Hub | 支持：日历事件 | 支持：提醒事项 | 支持：任务，包括收集箱 |
+| 从 Task Hub 创建 | 支持：开启 Apple Calendar 任务发送后可创建日历事件 | 支持：开启提醒事项创建后可创建提醒事项 | 支持：开启滴答创建后可创建任务 |
+| 编辑标题 / 备注 | 支持：开启 Apple Calendar 写回后 | 支持：开启提醒事项写回后 | 支持：开启滴答写回后 |
+| 完成 / 重新打开 | 不适用于日历事件 | 支持：开启提醒事项写回后 | 支持：开启滴答写回后 |
+| 拖动改期 | 支持：开启 Apple Calendar 写回后 | 支持：开启提醒事项写回和拖动开关后 | 支持：开启滴答写回和拖动开关后 |
+| 移动清单 / 日历 | 可在可写日历已加载时为编辑事件选择日历 | 支持：开启提醒事项创建/写回相关开关后 | 支持：开启滴答写回后 |
+| 删除外部项目 | 不支持 | 不支持 | 支持：开启滴答删除后 |
+| 将 vault Markdown 任务发送到外部来源 | 无直接发送；可在日历 UI 中创建日历事件 | 支持：开启创建后显式发送 | 支持：开启创建后显式发送 |
+| 标签读取 | 不适用于日历事件 | 支持：通过提醒事项标题中的 hashtag | 支持：滴答原生 `tags` 字段会映射为 Task Hub hashtag |
+| 标签写入 | 不适用于日历事件 | 支持：开启标签创建后写入 Apple 兼容的标题 hashtag | 支持：开启原生标签同步后写入滴答原生任务标签 |
+| 日期 / 时间写入 | 支持：事件日期和时间 | 支持：提醒事项到期日期/时间（可用时） | 支持：任务日期、时间和提醒 |
+| 重复规则 | 读取/写入有限；拖动重复事件时只保存被拖动的单次 occurrence | 可读取展示可用信息，暂未提供完整重复编辑 UI | 同步 payload 中已有重复信息会保留；暂未提供完整重复编辑 UI |
 
 ## 任务笔记
 
@@ -67,8 +87,10 @@ Apple Calendar 支持把本地/iCloud 日历事件读入 Task Hub 日历，包�
 - vault 内 Markdown 任务可以在 Task Hub 中完成。
 - 已有支持日期语法的 vault Markdown 任务可以在日历中拖动改期。
 - vault 内 Markdown 任务只有在用户明确触发时才会发送到 Apple 提醒事项；Task Hub 会记录已创建的提醒事项 id，避免重复发送。
+- vault 内 Markdown 任务只有在用户明确触发时才会发送到滴答清单；Task Hub 会记录已创建的滴答任务 id，避免重复发送。
 - 任务笔记是本地 Markdown 文件。Thino 集成仅限兼容 Thino multi-file 的笔记；Thino single-file、Canvas 和日记存储不在当前支持范围内。
 - Apple Reminders 完成状态/日期写回，以及 Apple Calendar 事件日期写回，都是可选能力，需要在设置中单独开启。
+- 滴答清单的完成、编辑、拖动改期、创建、删除和原生标签同步都是可选能力，需要在设置中分别开启。滴答 API 口令会保存在 Obsidian 插件数据中；开发测试建议使用测试账号或在测试后轮换口令。
 - 公共 ICS 事件只读。
 - 暂不支持 Obsidian Tasks 插件完整语法。
 - 暂不支持 Markdown 任务的具体开始/结束时间、Google Calendar OAuth、Microsoft Calendar OAuth 和移动端。
