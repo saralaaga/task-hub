@@ -122,13 +122,15 @@ describe("local Apple mapping", () => {
           name: "Buy milk",
           list: "Personal",
           completed: false,
-          dueDate: "2026-05-20T09:30:00"
+          dueDate: "2026-05-20T09:30:00",
+          alertMinutesBefore: 15
         },
         0
       )
     ).toMatchObject({
       dueDate: "2026-05-20",
-      scheduledDate: "2026-05-20T09:30"
+      scheduledDate: "2026-05-20T09:30",
+      alertMinutesBefore: 15
     });
   });
 
@@ -292,6 +294,7 @@ describe("local Apple mapping", () => {
         title: "Send invoice",
         dueDate: "2026-05-20",
         startMinutes: 570,
+        alertMinutesBefore: 10,
         listId: "list-1",
         notes: "Bring the signed copy",
         tags: ["#finance", "#client/acme"]
@@ -308,6 +311,8 @@ describe("local Apple mapping", () => {
       "2026-05-20",
       "--start-minutes",
       "570",
+      "--alert-minutes-before",
+      "10",
       "--list-id",
       "list-1",
       "--notes",
@@ -324,7 +329,8 @@ describe("local Apple mapping", () => {
       setAppleReminderDetails({
         id: "reminder-1",
         title: "Send invoice",
-        dueDate: null
+        dueDate: null,
+        alertMinutesBefore: null
       })
     );
 
@@ -334,7 +340,8 @@ describe("local Apple mapping", () => {
       "reminder-1",
       "--title",
       "Send invoice",
-      "--clear-due"
+      "--clear-due",
+      "--clear-alert"
     ]);
   });
 
@@ -520,6 +527,7 @@ describe("local Apple mapping", () => {
         notes: "From Task Hub\nProjects/Acme.md:3",
         dueDate: "2026-05-20",
         startMinutes: 570,
+        alertMinutesBefore: 30,
         listId: "list-1",
         tags: ["#work", "#client/acme"]
       })
@@ -536,6 +544,8 @@ describe("local Apple mapping", () => {
       "2026-05-20",
       "--start-minutes",
       "570",
+      "--alert-minutes-before",
+      "30",
       "--list-id",
       "list-1",
       "--tag",

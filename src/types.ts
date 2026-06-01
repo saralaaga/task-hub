@@ -32,6 +32,7 @@ export type TaskItem = {
   createdDate?: string;
   completedDate?: string;
   externalListId?: string;
+  alertMinutesBefore?: number;
 };
 
 export type TaskConditionFilterSettings = {
@@ -75,6 +76,7 @@ export type CalendarItemEditDraft =
       tags?: string[];
       reminderListId?: string;
       notes?: string;
+      alertMinutesBefore?: number | null;
     }
   | {
       kind: "event";

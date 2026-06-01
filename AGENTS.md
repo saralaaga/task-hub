@@ -160,6 +160,14 @@ cp src/styles.css /Users/carlos/Coding/testValut/.obsidian/plugins/task-hub/styl
 - Release 创建后用 `gh release view <version> --json url,tagName,name,assets` 验证附件状态、文件名和 tag；不要只凭命令退出码就宣称完成。
 - 如果 Apple helper 要进入普通用户分发路径，先单独设计签名、权限、Release 附件和安装说明；不要在未验证前把它写成社区插件自动安装能力。
 
+### 近期发版踩坑记录
+
+- 本仓库有时会在 detached HEAD 上完成 release 修复，而且 `main` 可能被另一个 worktree 占用。发版前先跑 `git status --short --branch`、`git log -1 --oneline --decorate`、`git worktree list`。如果当前提交是远端 `main` 的快进后继，但无法 `git switch main`，可以用 `git push origin HEAD:main` 推送；不要用 `git reset --hard` 去移动被其他 worktree 占用的 `main`。
+- tag 创建可能因为 `.git/refs/tags/*.lock` 沙箱权限失败；需要时用提升权限执行 `git tag <version> HEAD`。创建 tag 后再推送 `git push origin <version>`，最后确认 `git log -1 --decorate` 同时显示 `tag: <version>` 和 `origin/main`。
+- `gh release create` 如果输出 `error connecting to api.github.com`，不要立刻假定 release 没创建成功。先用提升权限跑 `gh release view <version> --json url,tagName,name,assets,isDraft,isPrerelease`；之前出现过普通 `gh release create` 报网络错误但 release/附件实际已创建或部分创建的情况。
+- GitHub Release 必须验证三个附件恰好可用：`main.js`、`manifest.json`、`styles.css`，并且 `state` 为 `uploaded`、`tagName` 等于版本号。最终回复里要给 release URL、commit hash、tag、验证命令结果。
+- 0.3.5/0.3.6 的教训：不要只靠“构建通过”就发布 Obsidian UI 交互改动。凡是弹窗、workspace leaf、MarkdownView、设置页、Thino/Task Hub 关联笔记这类 runtime 行为，发布前必须同步到 `/Users/carlos/Coding/testValut/.obsidian/plugins/task-hub/`，用 `cmp -s` 确认三件套一致，并在真实 Obsidian 中手工验证关键路径；如果因为 Computer Use 权限或其他限制无法手工验证，最终说明必须明确写“未完成真实 Obsidian 手工验证”。
+
 ## 测试约定
 
 改动后按风险选择验证：
@@ -200,10 +208,23 @@ cmp -s src/styles.css /Users/carlos/Coding/testValut/.obsidian/plugins/task-hub/
 https://github.com/saralaaga/task-hub/pull/1
 ```
 
-本机 git 全局代理可能配置为 `127.0.0.1:7897`。如果代理未启动，或当前沙箱不允许 `git` 进程连接本机代理端口，push / ls-remote 可能卡住或失败，并出现 `Failed to connect to 127.0.0.1 port 7897`。之前可用的推送方式是临时清空代理：
+本机 git 全局代理可能配置为 `127.0.0.1:7897`。如果代理未启动，或当前沙箱不允许 `git` 进程连接本机代理端口，push / ls-remote 可能卡住或失败，并出现 `Failed to connect to 127.0.0.1 port 7897`。有时可用的推送方式是临时清空代理：
 
 ```bash
 git -c http.proxy= -c https.proxy= push
+```
+
+但如果 `nc -vz 127.0.0.1 7897` 成功而直连 GitHub 超时，清空 proxy 反而会失败；这时要使用全局代理并提升权限：
+
+```bash
+git push origin HEAD:main
+git push origin <version>
+```
+
+如果出现 `Error in the HTTP2 framing layer`，可先重试一次：
+
+```bash
+git -c http.version=HTTP/1.1 push origin HEAD:main
 ```
 
 排查 GitHub 网络问题时先区分 git 和 GitHub CLI：

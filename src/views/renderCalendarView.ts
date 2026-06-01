@@ -4,6 +4,7 @@ import type { CalendarDropTarget } from "../calendar/calendarDropTarget";
 import { toLocalDateKey } from "../calendar/dateBuckets";
 import { formatLunarDayLabel, formatLunarMonthTitle } from "../calendar/lunarCalendar";
 import type { TranslationKey, Translator } from "../i18n";
+import { normalizeReminderAlertMinutes, populateReminderAlertSelect, type ReminderAlertMinutes } from "../reminderAlerts";
 import type { TaskNote } from "../taskNotes";
 import type { AppleCalendarInfo, AppleReminderList, CalendarEvent, CalendarItemEditDraft, CalendarSource, CalendarSourceStatus, CalendarTimeScale, TaskItem, WeekStart } from "../types";
 import { renderTaskNoteBody, type TaskNoteMarkdownRenderer } from "./renderTaskNoteBody";
@@ -1021,8 +1022,10 @@ function renderTaskDetailsPopover(
   const form = popover.createDiv({ cls: "task-hub-calendar-detail-form" });
   const title = detailInput(form, state.t("taskCreationBody"), task.text);
   state.bindTagInputSuggest?.(title);
-  const date = detailInput(form, state.t("date"), task.dueDate ?? "", "date");
-  const time = detailInput(form, state.t("startTime"), timeFromTask(task), "time");
+  const scheduleRow = form.createDiv({ cls: "task-hub-calendar-detail-time-row" });
+  const date = detailInput(scheduleRow, state.t("date"), task.dueDate ?? "", "date");
+  const time = detailInput(scheduleRow, state.t("startTime"), timeFromTask(task), "time");
+  const alertEditor = task.source === "apple-reminders" ? reminderAlertEditor(form, time, task.alertMinutesBefore, state.t) : undefined;
   let notes: HTMLTextAreaElement | undefined;
   let tags: HTMLInputElement | undefined;
   let list: HTMLSelectElement | undefined;
@@ -1035,7 +1038,7 @@ function renderTaskDetailsPopover(
     notes = detailTextarea(form, state.t("notes"), task.contextPreview ?? "");
   }
   if (!editable) {
-    for (const field of [title, date, time, tags, notes, list]) {
+    for (const field of [title, date, time, tags, notes, list, alertEditor?.toggle, alertEditor?.select]) {
       if (field) field.disabled = true;
     }
   }
@@ -1046,9 +1049,9 @@ function renderTaskDetailsPopover(
   });
   const save = actions.createEl("button", { cls: "mod-cta", text: state.t("save") });
   const updateSaveState = () => {
-    save.disabled = !editable || !taskDraftChanged(task, title.value, date.value, time.value, tags?.value, list?.value, notes?.value);
+    save.disabled = !editable || !taskDraftChanged(task, title.value, date.value, time.value, tags?.value, list?.value, notes?.value, alertEditor?.getAlertMinutesBefore());
   };
-  for (const input of [title, date, time, tags, notes, list].filter(Boolean)) {
+  for (const input of [title, date, time, tags, notes, list, alertEditor?.toggle, alertEditor?.select].filter(Boolean)) {
     input?.addEventListener("input", updateSaveState);
     input?.addEventListener("change", updateSaveState);
   }
@@ -1061,7 +1064,8 @@ function renderTaskDetailsPopover(
       startTime: time.value,
       tags: tags ? tags.value.split(/\s+/).filter(Boolean) : undefined,
       reminderListId: list?.value,
-      notes: notes?.value
+      notes: notes?.value,
+      alertMinutesBefore: alertEditor?.getAlertMinutesBefore()
     });
     closePopover();
   });
@@ -1251,6 +1255,54 @@ function detailSelect(
   return select;
 }
 
+type ReminderAlertEditor = {
+  toggle: HTMLInputElement;
+  select: HTMLSelectElement;
+  getAlertMinutesBefore: () => ReminderAlertMinutes | null;
+};
+
+function reminderAlertEditor(
+  container: HTMLElement,
+  timeInput: HTMLInputElement,
+  initialAlertMinutesBefore: number | undefined,
+  t: Translator
+): ReminderAlertEditor {
+  const row = container.createDiv({ cls: "task-hub-reminder-alert-row" });
+  const label = row.createEl("label", { cls: "task-hub-reminder-alert-switch" });
+  const toggle = label.createEl("input", { cls: "task-hub-reminder-alert-toggle", type: "checkbox" }) as HTMLInputElement;
+  label.createSpan({ text: t("reminderAlert") });
+  const select = row.createEl("select", { cls: "task-hub-reminder-alert-select" }) as HTMLSelectElement;
+  populateReminderAlertSelect(select, t);
+  const initial = normalizeReminderAlertMinutes(initialAlertMinutesBefore);
+  select.value = String(initial ?? 0);
+  toggle.checked = initial !== undefined;
+
+  const update = () => {
+    const hasTime = Boolean(timeInput.value);
+    toggle.disabled = false;
+    select.disabled = !toggle.checked;
+    row.toggleClass("is-disabled", !hasTime && !toggle.checked);
+  };
+  timeInput.addEventListener("input", update);
+  timeInput.addEventListener("change", update);
+  toggle.addEventListener("change", () => {
+    if (toggle.checked && !timeInput.value) {
+      timeInput.value = "09:00";
+    }
+    update();
+  });
+  update();
+
+  return {
+    toggle,
+    select,
+    getAlertMinutesBefore: () => {
+      if (!toggle.checked || !timeInput.value) return null;
+      return normalizeReminderAlertMinutes(Number(select.value)) ?? 0;
+    }
+  };
+}
+
 function detailCompactSelect(
   container: HTMLElement,
   options: Array<{ id: string; name: string }>,
@@ -1272,13 +1324,23 @@ function timeFromDateTime(value: string | undefined): string {
   return value?.match(/T(\d{2}):(\d{2})/)?.slice(1, 3).join(":") ?? "";
 }
 
-function taskDraftChanged(task: TaskItem, title: string, date: string, time: string, tags: string | undefined, listId: string | undefined, notes: string | undefined): boolean {
+function taskDraftChanged(
+  task: TaskItem,
+  title: string,
+  date: string,
+  time: string,
+  tags: string | undefined,
+  listId: string | undefined,
+  notes: string | undefined,
+  alertMinutesBefore: ReminderAlertMinutes | null | undefined
+): boolean {
   if (title.trim() !== task.text) return true;
   if (date !== (task.dueDate ?? "")) return true;
   if (time !== timeFromTask(task)) return true;
   if (task.source === "vault" && (tags ?? "").trim() !== task.tags.join(" ")) return true;
   if (task.source === "apple-reminders" && (listId ?? "") !== (task.externalListId ?? "")) return true;
   if (task.source === "apple-reminders" && (notes ?? "") !== (task.contextPreview ?? "")) return true;
+  if (task.source === "apple-reminders" && (alertMinutesBefore ?? undefined) !== normalizeReminderAlertMinutes(task.alertMinutesBefore)) return true;
   return false;
 }
 

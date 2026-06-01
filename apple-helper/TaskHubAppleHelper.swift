@@ -33,6 +33,7 @@ struct ReminderRecord: Encodable {
     let priority: Int
     let url: String?
     let tags: [String]?
+    let alertMinutesBefore: Int?
 }
 
 struct ReminderListRecord: Encodable {
@@ -91,6 +92,33 @@ func reminderDueString(from components: DateComponents?) -> String? {
         return date
     }
     return String(format: "%@T%02d:%02d:00", date, hour, minute)
+}
+
+func reminderDueDate(from components: DateComponents?) -> Date? {
+    guard let components else {
+        return nil
+    }
+    var datedComponents = components
+    datedComponents.calendar = components.calendar ?? Calendar(identifier: .gregorian)
+    return datedComponents.calendar?.date(from: datedComponents)
+}
+
+func reminderAlertMinutesBefore(reminder: EKReminder) -> Int? {
+    guard let dueDate = reminderDueDate(from: reminder.dueDateComponents),
+          let alarm = reminder.alarms?.first else {
+        return nil
+    }
+    let alarmDate: Date?
+    if let absoluteDate = alarm.absoluteDate {
+        alarmDate = absoluteDate
+    } else {
+        alarmDate = dueDate.addingTimeInterval(alarm.relativeOffset)
+    }
+    guard let alarmDate else {
+        return nil
+    }
+    let minutes = Int(round(dueDate.timeIntervalSince(alarmDate) / 60))
+    return minutes < 0 ? nil : minutes
 }
 
 func hexColor(from calendar: EKCalendar) -> String? {
@@ -354,7 +382,8 @@ func readReminders(store: EKEventStore) {
                 notes: reminder.notes,
                 priority: reminder.priority,
                 url: reminder.url?.absoluteString,
-                tags: reminderTagsFromTitle(reminder.title)
+                tags: reminderTagsFromTitle(reminder.title),
+                alertMinutesBefore: reminderAlertMinutesBefore(reminder: reminder)
             )
         }
         didComplete = true
@@ -576,8 +605,14 @@ func setReminderDetails(store: EKEventStore) {
     }
     if hasArgument("--clear-due") {
         reminder.dueDateComponents = nil
+        reminder.alarms = nil
     } else if argumentValue("--due") != nil || integerArgument("--start-minutes") != nil {
         reminder.dueDateComponents = dueDateComponents(from: argumentValue("--due"), startMinutes: integerArgument("--start-minutes"))
+    }
+    if hasArgument("--clear-alert") {
+        reminder.alarms = nil
+    } else if hasArgument("--alert-minutes-before") {
+        applyReminderAlert(reminder, alertMinutesBefore: integerArgument("--alert-minutes-before"))
     }
     if let listId = argumentValue("--list-id"), !listId.isEmpty {
         guard let calendar = store.calendar(withIdentifier: listId), calendar.allowsContentModifications else {
@@ -823,6 +858,20 @@ func dueDateComponents(from text: String?, startMinutes: Int? = nil) -> DateComp
     return components
 }
 
+func applyReminderAlert(_ reminder: EKReminder, alertMinutesBefore: Int?) {
+    reminder.alarms = nil
+    guard let alertMinutesBefore else {
+        return
+    }
+    guard let dueDate = reminderDueDate(from: reminder.dueDateComponents),
+          reminder.dueDateComponents?.hour != nil,
+          reminder.dueDateComponents?.minute != nil else {
+        fail("invalid_arguments", "Apple Reminder alerts require both --due and --start-minutes.", exitCode: 2)
+    }
+    let safeMinutes = max(0, min(366 * 24 * 60, alertMinutesBefore))
+    reminder.addAlarm(EKAlarm(absoluteDate: dueDate.addingTimeInterval(TimeInterval(-safeMinutes * 60))))
+}
+
 func createReminder(store: EKEventStore) {
     requireAccess(.reminder)
 
@@ -843,6 +892,9 @@ func createReminder(store: EKEventStore) {
     }
     reminder.notes = argumentValue("--notes")
     reminder.dueDateComponents = dueDateComponents(from: argumentValue("--due"), startMinutes: integerArgument("--start-minutes"))
+    if hasArgument("--alert-minutes-before") {
+        applyReminderAlert(reminder, alertMinutesBefore: integerArgument("--alert-minutes-before"))
+    }
 
     guard reminder.calendar != nil else {
         fail("eventkit_error", "No writable Apple Reminders list is available.", exitCode: 7)

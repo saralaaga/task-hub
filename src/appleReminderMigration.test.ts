@@ -9,10 +9,21 @@ const savedData: unknown[] = [];
 
 type FakeElement = {
   addClass: jest.Mock;
+  addEventListener: jest.Mock;
   appendChild: jest.Mock;
   createDiv: jest.Mock<FakeElement, []>;
+  createEl: jest.Mock;
+  createSpan: jest.Mock<FakeElement, [{ text?: string }?]>;
   empty: jest.Mock;
+  focus: jest.Mock;
   setText: jest.Mock;
+  setAttr: jest.Mock;
+  toggleClass: jest.Mock;
+  value?: string;
+  checked?: boolean;
+  disabled?: boolean;
+  type?: string;
+  children: FakeElement[];
 };
 
 type FakeButton = {
@@ -23,15 +34,54 @@ type FakeButton = {
 };
 
 const buttons: FakeButton[] = [];
+const modals: Array<{ contentEl: FakeElement; titleEl: FakeElement; modalEl: FakeElement }> = [];
 
 function fakeEl(): FakeElement {
-  return {
+  const element: FakeElement = {
     addClass: jest.fn(),
+    addEventListener: jest.fn((name: string, handler: () => void) => {
+      listeners.push({ element, name, handler });
+    }),
     appendChild: jest.fn(),
-    createDiv: jest.fn(() => fakeEl()),
+    children: [],
+    createDiv: jest.fn(() => {
+      const child = fakeEl();
+      element.children.push(child);
+      return child;
+    }),
+    createEl: jest.fn((tag: string, options: { type?: string; value?: string } = {}) => {
+      const child = fakeEl();
+      child.type = options.type ?? tag;
+      child.value = options.value ?? "";
+      element.children.push(child);
+      return child;
+    }),
+    createSpan: jest.fn((options: { text?: string } = {}) => {
+      const child = fakeEl();
+      child.type = "span";
+      child.value = options.text ?? "";
+      element.children.push(child);
+      return child;
+    }),
     empty: jest.fn(),
-    setText: jest.fn()
+    focus: jest.fn(),
+    setAttr: jest.fn(),
+    setText: jest.fn(),
+    toggleClass: jest.fn()
   };
+  return element;
+}
+
+const listeners: Array<{ element: FakeElement; name: string; handler: () => void }> = [];
+
+function collectElements(element: FakeElement): FakeElement[] {
+  return [element, ...element.children.flatMap(collectElements)];
+}
+
+function dispatchFake(element: FakeElement, name: string): void {
+  for (const listener of listeners.filter((candidate) => candidate.element === element && candidate.name === name)) {
+    listener.handler();
+  }
 }
 
 function flushAsync(): Promise<void> {
@@ -42,9 +92,10 @@ function flushAsync(): Promise<void> {
 
 jest.mock(
   "obsidian",
-  () => ({
-    ButtonComponent: class {
+  () => {
+    class MockButtonComponent {
       onClickHandler?: () => void;
+      setDisabled = jest.fn(() => this);
       setButtonText = jest.fn(() => this);
       setCta = jest.fn(() => this);
       onClick = jest.fn((handler: () => void) => {
@@ -55,7 +106,10 @@ jest.mock(
       constructor() {
         buttons.push(this as FakeButton);
       }
-    },
+    }
+
+    return {
+    ButtonComponent: MockButtonComponent,
     AbstractInputSuggest: class {
       constructor() {}
       close() {}
@@ -72,6 +126,7 @@ jest.mock(
 
       constructor(app: unknown) {
         this.app = app;
+        modals.push(this);
       }
 
       open() {
@@ -107,7 +162,89 @@ jest.mock(
     requestUrl: jest.fn(),
     getAllTags: jest.fn(() => []),
     parseFrontMatterTags: jest.fn(() => []),
-    Setting: class {},
+    Setting: class {
+      settingEl = fakeEl();
+      controlEl = fakeEl();
+      infoEl = fakeEl();
+
+      constructor(parent?: FakeElement) {
+        parent?.children.push(this.settingEl);
+        this.settingEl.children.push(this.infoEl, this.controlEl);
+      }
+
+      setName() {
+        return this;
+      }
+
+      setDesc() {
+        return this;
+      }
+
+      addDropdown(build?: (dropdown: { selectEl: FakeElement; setValue(value: string): { onChange(handler: (value: string) => void): unknown } }) => void) {
+        const selectEl = fakeEl();
+        selectEl.type = "select";
+        this.controlEl.children.push(selectEl);
+        build?.({
+          selectEl,
+          setValue(value: string) {
+            selectEl.value = value;
+            return {
+              onChange(handler: (value: string) => void) {
+                selectEl.addEventListener("change", () => handler(selectEl.value ?? ""));
+                return this;
+              }
+            };
+          }
+        });
+        return this;
+      }
+
+      addText(build?: (text: { inputEl: FakeElement; setPlaceholder(value: string): unknown; setValue(value: string): { onChange(handler: (value: string) => void): unknown } }) => void) {
+        const inputEl = fakeEl();
+        inputEl.type = "text";
+        this.controlEl.children.push(inputEl);
+        build?.({
+          inputEl,
+          setPlaceholder() {
+            return this;
+          },
+          setValue(value: string) {
+            inputEl.value = value;
+            return {
+              onChange(handler: (value: string) => void) {
+                inputEl.addEventListener("input", () => handler(inputEl.value ?? ""));
+                return this;
+              }
+            };
+          }
+        });
+        return this;
+      }
+
+      addTextArea(build?: (text: { setValue(value: string): { onChange(handler: (value: string) => void): unknown } }) => void) {
+        const inputEl = fakeEl();
+        inputEl.type = "textarea";
+        this.controlEl.children.push(inputEl);
+        build?.({
+          setValue(value: string) {
+            inputEl.value = value;
+            return {
+              onChange(handler: (value: string) => void) {
+                inputEl.addEventListener("input", () => handler(inputEl.value ?? ""));
+                return this;
+              }
+            };
+          }
+        });
+        return this;
+      }
+
+      addButton(build?: (button: FakeButton) => void) {
+        const button = new MockButtonComponent() as FakeButton;
+        build?.(button);
+        return this;
+      }
+    },
     TFile: class {},
     WorkspaceLeaf: class {
       containerEl = { tag: "workspace-leaf" };
@@ -136,7 +273,8 @@ jest.mock(
       });
       detach() {}
     }
-  }),
+  };
+  },
   { virtual: true }
 );
 
@@ -183,6 +321,8 @@ describe("Apple Reminders migration", () => {
     notices.length = 0;
     savedData.length = 0;
     buttons.length = 0;
+    modals.length = 0;
+    listeners.length = 0;
     jest.clearAllMocks();
     jest.spyOn(TaskHubPlugin.prototype, "isLocalAppleSupported").mockReturnValue(true);
   });
@@ -884,6 +1024,89 @@ describe("Apple Reminders migration", () => {
     expect(notices).toContain("Apple Reminder created.: reminder-created-1");
   });
 
+  it("creates a timed Apple Reminder with an alert from the modal", async () => {
+    const plugin = new TaskHubPlugin({} as never, {} as never);
+    plugin.app = {
+      workspace: {
+        getLeavesOfType: jest.fn(() => [])
+      }
+    } as never;
+    plugin.settings = {
+      ...DEFAULT_SETTINGS,
+      localApple: {
+        ...DEFAULT_SETTINGS.localApple,
+        enabled: true,
+        remindersEnabled: true,
+        remindersCreateEnabled: true
+      }
+    };
+    plugin.syncLocalApple = jest.fn(async () => undefined) as never;
+
+    await plugin.createTaskForDate({ dateKey: "2026-05-20", startMinutes: 570 }, "Design review", { type: "apple-reminders" }, undefined, 15);
+
+    expect(createAppleReminder).toHaveBeenCalledWith(expect.objectContaining({
+      dueDate: "2026-05-20",
+      startMinutes: 570,
+      alertMinutesBefore: 15
+    }));
+  });
+
+  it("sets 09:00 when enabling a new Apple Reminder alert without changing time when disabling it", async () => {
+    const plugin = new TaskHubPlugin({} as never, {} as never);
+    plugin.app = {
+      workspace: {
+        getLeavesOfType: jest.fn(() => [])
+      }
+    } as never;
+    plugin.settings = {
+      ...DEFAULT_SETTINGS,
+      calendarCreationDefaultKind: "task",
+      calendarTaskCreationDefaultTarget: { type: "apple-reminders" },
+      localApple: {
+        ...DEFAULT_SETTINGS.localApple,
+        enabled: true,
+        remindersEnabled: true,
+        remindersCreateEnabled: true
+      }
+    };
+    plugin.syncLocalApple = jest.fn(async () => undefined) as never;
+    (globalThis as unknown as { window: { setTimeout: typeof setTimeout } }).window = { setTimeout };
+
+    plugin.openCreateTaskModal("2026-05-20");
+
+    const modal = modals.at(-1);
+    const fields = modal ? collectElements(modal.contentEl) : [];
+    const bodyInput = fields.find((element) => element.type === "text");
+    const timeInput = fields.find((element) => element.type === "time");
+    const alertToggle = fields.find((element) => element.type === "checkbox");
+    const addButton = buttons.find((button) => button.setButtonText.mock.calls.some((call) => call[0] === "Add"));
+
+    expect(bodyInput).toBeDefined();
+    expect(timeInput?.value).toBe("");
+    expect(alertToggle?.disabled).toBe(false);
+
+    alertToggle!.checked = true;
+    dispatchFake(alertToggle!, "change");
+    expect(timeInput?.value).toBe("09:00");
+    alertToggle!.checked = false;
+    dispatchFake(alertToggle!, "change");
+    expect(timeInput?.value).toBe("09:00");
+
+    bodyInput!.value = "Design review";
+    dispatchFake(bodyInput!, "input");
+    addButton?.onClickHandler?.();
+    await flushAsync();
+
+    expect(createAppleReminder).toHaveBeenCalledWith(expect.objectContaining({
+      title: "Design review",
+      dueDate: "2026-05-20",
+      startMinutes: 540
+    }));
+    expect(createAppleReminder).toHaveBeenCalledWith(expect.not.objectContaining({
+      alertMinutesBefore: expect.any(Number)
+    }));
+  });
+
   it("extracts modal body hashtags into Apple Reminder tags", async () => {
     const plugin = new TaskHubPlugin({} as never, {} as never);
     plugin.app = {
@@ -1153,6 +1376,7 @@ describe("Apple Reminders migration", () => {
       title: "Send invoice",
       dueDate: "2026-05-21",
       startMinutes: 570,
+      alertMinutesBefore: null,
       listId: "list-1",
       notes: "Bring the signed copy",
       tags: []

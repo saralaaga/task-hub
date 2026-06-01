@@ -58,7 +58,17 @@ describe("Apple helper source", () => {
     expect(source).toContain("func setReminderDetails(store: EKEventStore)");
     expect(source).toContain("reminder.title = title");
     expect(source).toContain("hasArgument(\"--clear-due\")");
+    expect(source).toContain("hasArgument(\"--clear-alert\")");
+    expect(source).toContain("applyReminderAlert(reminder, alertMinutesBefore: integerArgument(\"--alert-minutes-before\"))");
     expect(source).toContain("reminder.calendar = calendar");
+  });
+
+  it("can create Apple Reminder alerts only after a timed due date is set", () => {
+    const source = readFileSync(path.join(__dirname, "..", "apple-helper", "TaskHubAppleHelper.swift"), "utf8");
+
+    expect(source).toContain("func applyReminderAlert(_ reminder: EKReminder, alertMinutesBefore: Int?)");
+    expect(source).toContain("reminder.dueDateComponents?.hour != nil");
+    expect(source).toContain("reminder.addAlarm(EKAlarm(absoluteDate:");
   });
 
   it("can update Apple Calendar event detail fields", () => {
