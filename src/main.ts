@@ -15,6 +15,7 @@ import { TaskIndex } from "./indexing/taskIndex";
 import { openExternalTaskSource } from "./externalSources";
 import { appendTaskToContent, createTaskLine, normalizeTaskCreationFilePath } from "./taskCreation";
 import { bindTaskHubTagInputSuggest, collectObsidianTags } from "./views/tagInputSuggest";
+import { normalizeReminderAlertMinutes, populateReminderAlertSelect, type ReminderAlertMinutes } from "./reminderAlerts";
 import {
   TaskNoteIndex,
   buildCalendarEventNoteKey,
@@ -782,6 +783,7 @@ export default class TaskHubPlugin extends Plugin {
         title,
         dueDate: draft.date || null,
         startMinutes: draft.startTime ? parseTimeInputValue(draft.startTime) : undefined,
+        alertMinutesBefore: draft.startTime ? draft.alertMinutesBefore ?? null : null,
         listId: draft.reminderListId || undefined,
         notes: draft.notes,
         tags: reminderTags
@@ -1195,7 +1197,13 @@ export default class TaskHubPlugin extends Plugin {
     new CreateTaskModal(this, target).open();
   }
 
-  async createTaskForDate(calendarTarget: CalendarDropTarget, text: string, target: CalendarCreationTarget = this.defaultCalendarCreationTarget(), notes?: string): Promise<void> {
+  async createTaskForDate(
+    calendarTarget: CalendarDropTarget,
+    text: string,
+    target: CalendarCreationTarget = this.defaultCalendarCreationTarget(),
+    notes?: string,
+    alertMinutesBefore?: number | null
+  ): Promise<void> {
     const t = createTranslator(this.settings.language);
     const timedTarget = calendarDropTargetParts(calendarTarget);
     const taskText = text.replace(/\s+/g, " ").trim();
@@ -1214,6 +1222,7 @@ export default class TaskHubPlugin extends Plugin {
         ...(cleanNotes ? { notes: cleanNotes } : {}),
         dueDate: timedTarget.dateKey,
         startMinutes: timedTarget.startMinutes,
+        ...(timedTarget.startMinutes !== undefined && alertMinutesBefore !== undefined ? { alertMinutesBefore } : {}),
         listId: target.listId ?? this.settings.localApple.remindersDefaultListId,
         tags: reminderTags
       };
@@ -2151,6 +2160,8 @@ function getWorkspaceLeafContainer(leaf: WorkspaceLeaf): HTMLElement {
 class CreateTaskModal extends Modal {
   private taskText = "";
   private notes = "";
+  private alertEnabled = false;
+  private alertMinutesBefore: ReminderAlertMinutes = 0;
   private calendarTarget: CalendarDropTarget;
   private creationKind: CalendarCreationKind;
   private target: CalendarCreationTarget;
@@ -2174,8 +2185,7 @@ class CreateTaskModal extends Modal {
 
   private render(): void {
     const t = createTranslator(this.plugin.settings.language);
-    const targetParts = calendarDropTargetParts(this.calendarTarget);
-    this.renderTitle(t, targetParts.dateKey);
+    this.renderTitle(t);
     this.modalEl.addClass("task-hub-create-modal");
     this.contentEl.empty();
 
@@ -2185,7 +2195,15 @@ class CreateTaskModal extends Modal {
       if (!text) return;
       submitButton?.setDisabled(true);
       try {
-        await this.plugin.createTaskForDate(this.calendarTarget, text, this.target, this.notes);
+        await this.plugin.createTaskForDate(
+          this.calendarTarget,
+          text,
+          this.target,
+          this.notes,
+          this.creationKind === "task" && this.target.type === "apple-reminders" && this.alertEnabled
+            ? this.alertMinutesBefore
+            : undefined
+        );
         this.close();
       } catch (error) {
         submitButton?.setDisabled(false);
@@ -2266,32 +2284,7 @@ class CreateTaskModal extends Modal {
       durationSetting.controlEl.createSpan({ cls: "task-hub-duration-unit", text: t("eventCreationDurationMinutes") });
     }
 
-    new Setting(this.contentEl)
-      .setName(t("taskCreationTime"))
-      .addText((text) => {
-        text.inputEl.type = "time";
-        text.inputEl.step = "900";
-        text.setValue(timeInputValue(calendarDropTargetParts(this.calendarTarget).startMinutes)).onChange((value) => {
-          const startMinutes = parseTimeInputValue(value);
-          const current = calendarDropTargetParts(this.calendarTarget);
-          this.calendarTarget =
-            startMinutes === undefined
-              ? this.creationKind === "event"
-                ? {
-                    dateKey: current.dateKey,
-                    durationMinutes: this.eventDurationMinutes
-                  }
-                : current.dateKey
-              : {
-                  dateKey: current.dateKey,
-                  startMinutes,
-                  durationMinutes:
-                    this.creationKind === "event"
-                      ? this.eventDurationMinutes
-                      : undefined
-                };
-        });
-      });
+    this.renderScheduleControls(t);
 
     new Setting(this.contentEl)
       .setName(t("taskCreationTarget"))
@@ -2334,28 +2327,97 @@ class CreateTaskModal extends Modal {
     this.contentEl.empty();
   }
 
-  private renderTitle(t: ReturnType<typeof createTranslator>, dateKey: string): void {
+  private renderTitle(t: ReturnType<typeof createTranslator>): void {
     this.titleEl.empty();
     this.titleEl.addClass("task-hub-create-modal-title");
-    this.titleEl.createSpan({ text: `${this.creationKind === "event" ? t("eventCreationTitle") : t("taskCreationTitle")} · ` });
-    const date = this.titleEl.createEl("input", {
+    this.titleEl.createSpan({ text: this.creationKind === "event" ? t("eventCreationTitle") : t("taskCreationTitle") });
+  }
+
+  private renderScheduleControls(t: ReturnType<typeof createTranslator>): void {
+    const schedule = new Setting(this.contentEl).setName(t("taskCreationTime"));
+    schedule.settingEl.addClass("task-hub-create-schedule-setting");
+    const dateInput = schedule.controlEl.createEl("input", {
       cls: "task-hub-create-date-input",
-      attr: { "aria-label": t("date") },
       type: "date",
-      value: dateKey
+      value: calendarDropTargetParts(this.calendarTarget).dateKey
+    }) as HTMLInputElement;
+    dateInput.setAttr("aria-label", t("date"));
+    dateInput.addEventListener("change", () => {
+      if (!dateInput.value) return;
+      this.calendarTarget = withCalendarDropTargetDate(this.calendarTarget, dateInput.value);
     });
-    date.addEventListener("change", () => {
-      if (!date.value) return;
-      this.calendarTarget = withCalendarDropTargetDate(this.calendarTarget, date.value);
-    });
-    const openPicker = () => {
+    dateInput.addEventListener("click", () => {
       try {
-        date.showPicker?.();
+        dateInput.showPicker?.();
       } catch {
-        date.focus();
+        dateInput.focus();
       }
+    });
+    const timeInput = schedule.controlEl.createEl("input", {
+      cls: "task-hub-create-time-input",
+      type: "time",
+      value: timeInputValue(calendarDropTargetParts(this.calendarTarget).startMinutes)
+    }) as HTMLInputElement;
+    timeInput.step = "900";
+
+    const alertSetting = new Setting(this.contentEl).setName(t("reminderAlert"));
+    alertSetting.settingEl.addClass("task-hub-create-alert-setting");
+    const alertLabel = alertSetting.controlEl.createEl("label", { cls: "task-hub-reminder-alert-switch task-hub-create-alert-switch" });
+    const alertToggle = alertLabel.createEl("input", { cls: "task-hub-reminder-alert-toggle", type: "checkbox" }) as HTMLInputElement;
+    const alertSelect = alertSetting.controlEl.createEl("select", { cls: "task-hub-reminder-alert-select" }) as HTMLSelectElement;
+    populateReminderAlertSelect(alertSelect, t);
+    alertSelect.value = String(this.alertMinutesBefore);
+    alertToggle.checked = this.alertEnabled;
+
+    const updateAlertState = () => {
+      const canAlert = this.creationKind === "task" && this.target.type === "apple-reminders";
+      alertToggle.disabled = !canAlert;
+      if (!canAlert) this.alertEnabled = false;
+      alertToggle.checked = this.alertEnabled;
+      alertSelect.disabled = !canAlert || !this.alertEnabled;
     };
-    date.addEventListener("click", openPicker);
+
+    timeInput.addEventListener("change", () => {
+      this.updateStartTimeFromInput(timeInput.value);
+      updateAlertState();
+    });
+    timeInput.addEventListener("input", () => {
+      this.updateStartTimeFromInput(timeInput.value);
+      updateAlertState();
+    });
+    alertToggle.addEventListener("change", () => {
+      if (alertToggle.checked && !timeInput.value) {
+        timeInput.value = "09:00";
+        this.updateStartTimeFromInput(timeInput.value);
+      }
+      this.alertEnabled = alertToggle.checked;
+      updateAlertState();
+    });
+    alertSelect.addEventListener("change", () => {
+      this.alertMinutesBefore = normalizeReminderAlertMinutes(Number(alertSelect.value)) ?? 0;
+    });
+    updateAlertState();
+  }
+
+  private updateStartTimeFromInput(value: string): void {
+    const startMinutes = parseTimeInputValue(value);
+    const current = calendarDropTargetParts(this.calendarTarget);
+    this.calendarTarget =
+      startMinutes === undefined
+        ? this.creationKind === "event"
+          ? {
+              dateKey: current.dateKey,
+              durationMinutes: this.eventDurationMinutes
+            }
+          : current.dateKey
+        : {
+            dateKey: current.dateKey,
+            startMinutes,
+            durationMinutes:
+              this.creationKind === "event"
+                ? this.eventDurationMinutes
+                : undefined
+          };
   }
 
   private defaultTargetForKind(kind: CalendarCreationKind): CalendarCreationTarget {

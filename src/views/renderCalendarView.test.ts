@@ -1516,6 +1516,124 @@ describe("renderCalendarView", () => {
     expect(onTaskDelete).toHaveBeenCalledWith(reminderTask);
   });
 
+  it("edits Apple Reminder alert settings from the calendar task popover", () => {
+    const container = new FakeElement();
+    const onTaskUpdate = jest.fn();
+    const reminderTask = {
+      ...task,
+      source: "apple-reminders" as const,
+      externalId: "reminder-1",
+      scheduledDate: "2026-05-08T09:30",
+      alertMinutesBefore: 15
+    };
+
+    renderCalendarView(
+      container as unknown as HTMLElement,
+      {
+        mode: "month",
+        focusDate: new Date("2026-05-08T12:00:00Z"),
+        weekStart: "monday",
+        visibleSourceIds: new Set(["apple-reminders"]),
+        includeCompletedTasks: false,
+        allowAppleReminderWriteback: true,
+        allowTaskCreation: false,
+        sources: [remindersSource],
+        t: (key) => key
+      },
+      [reminderTask],
+      [],
+      {
+        onLayerToggle: jest.fn(),
+        onModeChange: jest.fn(),
+        onMove: jest.fn(),
+        onDateCreateTask: jest.fn(),
+        onTaskComplete: jest.fn(),
+        onTaskJump: jest.fn(),
+        onTaskSelect: jest.fn(),
+        onTaskUpdate,
+        onTaskReschedule: jest.fn(),
+        onToday: jest.fn()
+      }
+    );
+
+    collect(container).find((element) => element.classes.has("task-hub-calendar-item"))?.click();
+    const popover = collect(fakeDocument.body).find((element) => element.classes.has("task-hub-calendar-detail-popover"));
+    const time = collect(popover as FakeElement).find((element) => element.type === "time");
+    const alertToggle = collect(popover as FakeElement).find((element) => element.classes.has("task-hub-reminder-alert-toggle"));
+    const alertSelect = collect(popover as FakeElement).find((element) => element.classes.has("task-hub-reminder-alert-select"));
+    const save = collect(popover as FakeElement).find((element) => element.text === "save");
+
+    expect(time?.value).toBe("09:30");
+    expect(alertToggle?.checked).toBe(true);
+    expect(alertToggle?.disabled).toBe(false);
+    expect(alertSelect?.value).toBe("15");
+    alertSelect!.value = "30";
+    alertSelect!.dispatch("change");
+    expect(save?.disabled).toBe(false);
+    save?.click();
+
+    expect(onTaskUpdate).toHaveBeenCalledWith(reminderTask, expect.objectContaining({ startTime: "09:30", alertMinutesBefore: 30 }));
+  });
+
+  it("sets a default time when enabling Apple Reminder alerts from the calendar popover", () => {
+    const container = new FakeElement();
+    const onTaskUpdate = jest.fn();
+    const reminderTask = {
+      ...task,
+      source: "apple-reminders" as const,
+      externalId: "reminder-1",
+      scheduledDate: undefined,
+      alertMinutesBefore: undefined
+    };
+
+    renderCalendarView(
+      container as unknown as HTMLElement,
+      {
+        mode: "month",
+        focusDate: new Date("2026-05-08T12:00:00Z"),
+        weekStart: "monday",
+        visibleSourceIds: new Set(["apple-reminders"]),
+        includeCompletedTasks: false,
+        allowAppleReminderWriteback: true,
+        allowTaskCreation: false,
+        sources: [remindersSource],
+        t: (key) => key
+      },
+      [reminderTask],
+      [],
+      {
+        onLayerToggle: jest.fn(),
+        onModeChange: jest.fn(),
+        onMove: jest.fn(),
+        onDateCreateTask: jest.fn(),
+        onTaskComplete: jest.fn(),
+        onTaskJump: jest.fn(),
+        onTaskSelect: jest.fn(),
+        onTaskUpdate,
+        onTaskReschedule: jest.fn(),
+        onToday: jest.fn()
+      }
+    );
+
+    collect(container).find((element) => element.classes.has("task-hub-calendar-item"))?.click();
+    const popover = collect(fakeDocument.body).find((element) => element.classes.has("task-hub-calendar-detail-popover"));
+    const time = collect(popover as FakeElement).find((element) => element.type === "time");
+    const alertToggle = collect(popover as FakeElement).find((element) => element.classes.has("task-hub-reminder-alert-toggle"));
+    const save = collect(popover as FakeElement).find((element) => element.text === "save");
+
+    expect(time?.value).toBe("");
+    expect(alertToggle?.disabled).toBe(false);
+    expect(collect(popover as FakeElement).some((element) => element.text === "设置时间后可提醒")).toBe(false);
+    alertToggle!.checked = true;
+    alertToggle!.dispatch("change");
+    expect(time?.value).toBe("09:00");
+    alertToggle!.checked = false;
+    alertToggle!.dispatch("change");
+    expect(time?.value).toBe("09:00");
+    save?.click();
+    expect(onTaskUpdate).toHaveBeenCalledWith(reminderTask, expect.objectContaining({ startTime: "09:00", alertMinutesBefore: null }));
+  });
+
   it("opens a read-only popover for ICS events", () => {
     const container = new FakeElement();
     const onDateCreateTask = jest.fn();

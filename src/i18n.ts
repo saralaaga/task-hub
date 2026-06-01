@@ -217,6 +217,13 @@ export type TranslationKey =
   | "rescanning"
   | "rescanTaskHub"
   | "remove"
+  | "reminderAlert"
+  | "reminderAlertAtTime"
+  | "reminderAlertMinutesBefore"
+  | "reminderAlertOneDayBefore"
+  | "reminderAlertOneHourBefore"
+  | "reminderAlertOneWeekBefore"
+  | "reminderAlertTwoDaysBefore"
   | "search"
   | "searchTags"
   | "searchTasks"
@@ -536,6 +543,13 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     rescanning: "Rescanning...",
     rescanTaskHub: "Rescan Task Hub",
     remove: "Remove",
+    reminderAlert: "Reminder",
+    reminderAlertAtTime: "At time",
+    reminderAlertMinutesBefore: "{minutes} minutes before",
+    reminderAlertOneDayBefore: "1 day before",
+    reminderAlertOneHourBefore: "1 hour before",
+    reminderAlertOneWeekBefore: "1 week before",
+    reminderAlertTwoDaysBefore: "2 days before",
     readOnly: "Read-only",
     date: "Date",
     endTime: "End time",
@@ -849,6 +863,13 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     rescanning: "刷新中...",
     rescanTaskHub: "重新扫描 Task Hub",
     remove: "删除",
+    reminderAlert: "提前提醒",
+    reminderAlertAtTime: "到点提醒",
+    reminderAlertMinutesBefore: "{minutes} 分钟前",
+    reminderAlertOneDayBefore: "1 天前",
+    reminderAlertOneHourBefore: "1 小时前",
+    reminderAlertOneWeekBefore: "1 周前",
+    reminderAlertTwoDaysBefore: "2 天前",
     date: "日期",
     endTime: "结束时间",
     save: "保存",

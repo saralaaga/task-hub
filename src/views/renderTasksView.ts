@@ -2,6 +2,7 @@ import { Menu, setIcon } from "obsidian";
 import { type DateBucket } from "../calendar/dateBuckets";
 import { getTaskBucket, type TaskFilterState } from "../filtering/filters";
 import type { Translator } from "../i18n";
+import { normalizeReminderAlertMinutes, populateReminderAlertSelect, type ReminderAlertMinutes } from "../reminderAlerts";
 import type { TaskNote } from "../taskNotes";
 import type { AppleReminderList, CalendarItemEditDraft, DidaProject, TaskItem } from "../types";
 import { renderTaskNoteBody, type TaskNoteMarkdownRenderer } from "./renderTaskNoteBody";
@@ -269,6 +270,8 @@ function renderTaskDetails(
 
   let titleInput: HTMLInputElement | undefined;
   let dateInput: HTMLInputElement | undefined;
+  let timeInput: HTMLInputElement | undefined;
+  let alertEditor: ReminderAlertEditor | undefined;
   let tagsEditor: TagChipEditor | undefined;
   let listSelect: HTMLSelectElement | undefined;
   if ((task.source === "apple-reminders" || task.source === "dida") && (canEditExternalTask || (externalListsForTask(task, options).length > 0))) {
@@ -276,7 +279,14 @@ function renderTaskDetails(
     titleInput = canEditExternalTask
       ? detailInput(editor, t("taskCreationBody"), task.text, "text", "task-hub-detail-title-input")
       : undefined;
-    dateInput = canEditExternalTask ? detailInput(editor, t("date"), task.dueDate ?? "", "date") : undefined;
+    if (canEditExternalTask) {
+      const scheduleRow = editor.createDiv({ cls: "task-hub-detail-schedule-row" });
+      dateInput = detailInput(scheduleRow, t("date"), task.dueDate ?? "", "date");
+      if (canEditAppleReminder) {
+        timeInput = detailInput(scheduleRow, t("startTime"), timeFromTask(task) ?? "", "time");
+        alertEditor = reminderAlertEditor(editor, timeInput, task.alertMinutesBefore, t);
+      }
+    }
     tagsEditor = canEditExternalTask
       ? tagChipEditor(editor, t("tags"), task.tags, options.bindTagInputSuggest)
       : undefined;
@@ -316,9 +326,10 @@ function renderTaskDetails(
         kind: "task",
         title: titleInput.value,
         date: dateInput.value,
-        startTime: timeFromTask(task),
+        startTime: timeInput?.value || undefined,
         tags: tagsEditor.getTags(),
-        reminderListId: listSelect?.value
+        reminderListId: listSelect?.value,
+        alertMinutesBefore: alertEditor?.getAlertMinutesBefore() ?? null
       });
     });
   }
@@ -403,6 +414,50 @@ function detailInput(container: HTMLElement, label: string, value: string, type 
     input.addEventListener("focus", () => openNativeDatePicker(input));
   }
   return input;
+}
+
+type ReminderAlertEditor = {
+  getAlertMinutesBefore: () => ReminderAlertMinutes | null;
+};
+
+function reminderAlertEditor(
+  container: HTMLElement,
+  timeInput: HTMLInputElement,
+  initialAlertMinutesBefore: number | undefined,
+  t: Translator
+): ReminderAlertEditor {
+  const row = container.createDiv({ cls: "task-hub-reminder-alert-row" });
+  const label = row.createEl("label", { cls: "task-hub-reminder-alert-switch" });
+  const toggle = label.createEl("input", { cls: "task-hub-reminder-alert-toggle", type: "checkbox" });
+  label.createSpan({ text: t("reminderAlert") });
+  const select = row.createEl("select", { cls: "task-hub-reminder-alert-select" });
+  populateReminderAlertSelect(select, t);
+  const initial = normalizeReminderAlertMinutes(initialAlertMinutesBefore);
+  select.value = String(initial ?? 0);
+  toggle.checked = initial !== undefined;
+
+  const update = () => {
+    const hasTime = Boolean(timeInput.value);
+    toggle.disabled = false;
+    select.disabled = !toggle.checked;
+    row.toggleClass("is-disabled", !hasTime && !toggle.checked);
+  };
+  timeInput.addEventListener("input", update);
+  timeInput.addEventListener("change", update);
+  toggle.addEventListener("change", () => {
+    if (toggle.checked && !timeInput.value) {
+      timeInput.value = "09:00";
+    }
+    update();
+  });
+  update();
+
+  return {
+    getAlertMinutesBefore: () => {
+      if (!toggle.checked || !timeInput.value) return null;
+      return normalizeReminderAlertMinutes(Number(select.value)) ?? 0;
+    }
+  };
 }
 
 function openNativeDatePicker(input: HTMLInputElement): void {

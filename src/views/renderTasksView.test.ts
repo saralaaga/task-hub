@@ -728,8 +728,61 @@ describe("renderTasksView", () => {
       date: "2026-05-09",
       startTime: undefined,
       tags: ["#home", "#errand", "#client-acme"],
-      reminderListId: undefined
+      reminderListId: undefined,
+      alertMinutesBefore: null
     });
+  });
+
+  it("edits Apple Reminder alert settings from the task details pane only when a time exists", () => {
+    const container = new FakeElement();
+    const viewHandlers = handlers();
+    const task = { ...baseTask, scheduledDate: "2026-05-08T09:30", alertMinutesBefore: 15 };
+
+    renderTasksView(
+      container as unknown as HTMLElement,
+      [task],
+      [task],
+      { status: "open", tags: [], sourceQuery: "", textQuery: "" },
+      viewHandlers,
+      new Date("2026-05-08T12:00:00Z"),
+      (key) => key,
+      { allowAppleReminderWriteback: true }
+    );
+
+    const time = collect(container).find((element) => element.type === "time");
+    const alertToggle = collect(container).find((element) => element.classes.has("task-hub-reminder-alert-toggle"));
+    const alertSelect = collect(container).find((element) => element.classes.has("task-hub-reminder-alert-select"));
+    expect(time?.value).toBe("09:30");
+    expect(alertToggle?.disabled).toBe(false);
+    expect(alertToggle?.checked).toBe(true);
+    expect(alertSelect?.value).toBe("15");
+
+    alertSelect!.value = "30";
+    findElementByText(container, "save")!.click();
+    expect(viewHandlers.onTaskUpdate).toHaveBeenCalledWith(task, expect.objectContaining({ startTime: "09:30", alertMinutesBefore: 30 }));
+
+    const noTimeContainer = new FakeElement();
+    renderTasksView(
+      noTimeContainer as unknown as HTMLElement,
+      [{ ...baseTask, scheduledDate: undefined, alertMinutesBefore: 15 }],
+      [{ ...baseTask, scheduledDate: undefined, alertMinutesBefore: 15 }],
+      { status: "open", tags: [], sourceQuery: "", textQuery: "" },
+      handlers(),
+      new Date("2026-05-08T12:00:00Z"),
+      (key) => key,
+      { allowAppleReminderWriteback: true }
+    );
+
+    const noTime = collect(noTimeContainer).find((element) => element.type === "time");
+    const disabledToggle = collect(noTimeContainer).find((element) => element.classes.has("task-hub-reminder-alert-toggle"));
+    expect(disabledToggle?.disabled).toBe(false);
+    disabledToggle!.checked = true;
+    disabledToggle!.dispatch("change");
+    expect(noTime?.value).toBe("09:00");
+    disabledToggle!.checked = false;
+    disabledToggle!.dispatch("change");
+    expect(noTime?.value).toBe("09:00");
+    expect(collect(noTimeContainer).some((element) => element.text === "设置时间后可提醒")).toBe(false);
   });
 
   it("renders Apple Reminder tags as editable chips after input is committed", () => {

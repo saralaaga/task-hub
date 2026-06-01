@@ -68,15 +68,7 @@
 }
 
 .task-hub-create-date-input {
-  background: transparent;
-  border: 0;
-  box-shadow: none;
-  color: inherit;
-  font: inherit;
-  font-weight: inherit;
-  height: auto;
-  padding: 0;
-  width: 10.5em;
+  width: min(132px, 100%);
 }
 
 .task-hub-create-date-input:hover,
@@ -112,6 +104,62 @@
 .task-hub-create-modal .setting-item-control textarea {
   min-height: 96px;
   resize: vertical;
+}
+
+.task-hub-create-schedule-setting .setting-item-control,
+.task-hub-detail-schedule-row {
+  align-items: center;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.task-hub-create-schedule-setting .setting-item-control {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.task-hub-create-time-input {
+  width: min(132px, 100%);
+}
+
+.task-hub-create-alert-setting .setting-item-control {
+  align-items: center;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.task-hub-create-modal .task-hub-create-alert-setting input.task-hub-reminder-alert-toggle {
+  flex: 0 0 auto;
+  height: 18px;
+  margin: 0;
+  max-width: 18px;
+  min-width: 18px;
+  width: 18px !important;
+}
+
+.task-hub-reminder-alert-row,
+.task-hub-create-alert-row {
+  align-items: center;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.task-hub-reminder-alert-switch {
+  align-items: center;
+  color: var(--text-normal);
+  display: inline-flex;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.task-hub-reminder-alert-row.is-disabled {
+  opacity: 0.55;
+}
+
+.task-hub-reminder-alert-select {
+  min-width: 0;
 }
 
 .task-hub-create-modal .setting-item:has(textarea) {
@@ -1617,7 +1665,17 @@ body .task-hub-view button.task-hub-color-swatch {
 }
 
 .task-hub-calendar-item.has-checkbox {
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: 18px minmax(0, 1fr);
+}
+
+.task-hub-calendar-month .task-hub-calendar-item:not(.has-checkbox),
+.task-hub-agenda.is-scale-fit .task-hub-calendar-item:not(.has-checkbox) {
+  grid-template-columns: 18px minmax(0, 1fr);
+}
+
+.task-hub-calendar-month .task-hub-calendar-item:not(.has-checkbox) .task-hub-calendar-item-body,
+.task-hub-agenda.is-scale-fit .task-hub-calendar-item:not(.has-checkbox) .task-hub-calendar-item-body {
+  grid-column: 2;
 }
 
 .task-hub-calendar-item.is-task {
