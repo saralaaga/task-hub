@@ -260,6 +260,7 @@ function renderMonthGrid(
     for (const item of dayItems) {
       renderCalendarItem(itemArea, item, handlers, state);
     }
+    bindHiddenItemCount(itemArea);
   }
 }
 
@@ -316,6 +317,7 @@ function renderAgendaGrid(
     for (const item of allDayItems) {
       renderCalendarItem(slot, item, handlers, state);
     }
+    bindHiddenItemCount(slot);
   }
 
   const timeAxis = agenda.createDiv({ cls: "task-hub-agenda-time-axis" });
@@ -834,6 +836,31 @@ function renderCalendarItem(container: HTMLElement, item: CalendarItem, handlers
       renderCalendarDetailsPopover(row, item, handlers, state);
     });
   }
+}
+
+function bindHiddenItemCount(container: HTMLElement): void {
+  const badge = container.createDiv({ cls: "task-hub-hidden-count" });
+  badge.setAttr("aria-hidden", "true");
+  const update = () => updateHiddenItemCount(container, badge);
+  container.addEventListener("scroll", update);
+  update();
+  window.requestAnimationFrame?.(update);
+}
+
+function updateHiddenItemCount(container: HTMLElement, badge: HTMLElement): void {
+  const containerRect = container.getBoundingClientRect();
+  const visibleBottom = containerRect.bottom || containerRect.top + container.clientHeight;
+  const items = Array.from(container.children).filter((child): child is HTMLElement =>
+    "classList" in child && child.classList.contains("task-hub-calendar-item")
+  );
+  const hiddenCount = items.filter((item) => item.getBoundingClientRect().top >= visibleBottom).length;
+  if (hiddenCount > 0) {
+    badge.textContent = `+${hiddenCount}`;
+    container.addClass("has-hidden-items");
+    return;
+  }
+  badge.textContent = "";
+  container.removeClass("has-hidden-items");
 }
 
 function registerCalendarItemElement(element: HTMLElement, item: CalendarItem): void {

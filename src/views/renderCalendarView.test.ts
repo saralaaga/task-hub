@@ -96,6 +96,9 @@ class FakeElement {
   text = "";
   type = "";
   value = "";
+  clientHeight = 0;
+  scrollHeight = 0;
+  scrollTop = 0;
   attributes = new Map<string, string>();
   classes = new Set<string>();
   style = new Proxy({
@@ -119,6 +122,20 @@ class FakeElement {
 
   constructor(ownerDocument: Document = fakeDocument as unknown as Document) {
     this.ownerDocument = ownerDocument;
+  }
+
+  get classList(): { contains: (cls: string) => boolean } {
+    return {
+      contains: (cls: string) => this.classes.has(cls)
+    };
+  }
+
+  get textContent(): string {
+    return this.text;
+  }
+
+  set textContent(value: string) {
+    this.text = value;
   }
 
   empty(): void {
@@ -1282,6 +1299,74 @@ describe("renderCalendarView", () => {
     expect(collect(container).map((element) => element.text)).not.toContain("+2 more");
   });
 
+  it("shows a live hidden-item count while scrolling overflowing month day items", () => {
+    const container = new FakeElement();
+    const manyTasks = Array.from({ length: 5 }, (_, index) => ({
+      ...task,
+      id: `hidden-month-${index}`,
+      text: `Hidden month ${index + 1}`,
+      dueDate: "2026-05-08"
+    }));
+
+    renderCalendarView(
+      container as unknown as HTMLElement,
+      {
+        mode: "month",
+        focusDate: new Date("2026-05-08T12:00:00Z"),
+        weekStart: "monday",
+        visibleSourceIds: new Set(["vault"]),
+        includeCompletedTasks: false,
+        allowAppleReminderWriteback: false,
+        allowAppleCalendarWriteback: false,
+        allowTaskCreation: false,
+        sources: [],
+        t: (key) => key
+      },
+      manyTasks,
+      [],
+      {
+        onLayerToggle: jest.fn(),
+        onModeChange: jest.fn(),
+        onMove: jest.fn(),
+        onDateCreateTask: jest.fn(),
+        onTaskComplete: jest.fn(),
+        onTaskJump: jest.fn(),
+        onTaskSelect: jest.fn(),
+        onTaskReschedule: jest.fn(),
+        onEventReschedule: jest.fn(),
+        onToday: jest.fn()
+      }
+    );
+
+    const itemArea = collect(container)
+      .filter((element) => element.classes.has("task-hub-calendar-day-items"))
+      .find((element) => collect(element).filter((child) => child.classes.has("task-hub-calendar-item")).length === 5)!;
+    const itemRows = collect(itemArea).filter((element) => element.classes.has("task-hub-calendar-item"));
+    itemArea.boundingRect = { top: 0, bottom: 100, height: 100 };
+    itemArea.clientHeight = 100;
+    itemArea.scrollHeight = 180;
+    itemRows.forEach((row, index) => {
+      row.boundingRect = { top: index * 36, bottom: index * 36 + 30, height: 30 };
+    });
+    itemArea.dispatch("scroll");
+
+    const badge = collect(itemArea).find((element) => element.classes.has("task-hub-hidden-count"));
+    expect(badge?.text).toBe("+2");
+    expect(itemArea.classes.has("has-hidden-items")).toBe(true);
+
+    itemRows[3].boundingRect = { top: 90, bottom: 120, height: 30 };
+    itemRows[4].boundingRect = { top: 126, bottom: 156, height: 30 };
+    itemArea.dispatch("scroll");
+
+    expect(badge?.text).toBe("+1");
+
+    itemRows[4].boundingRect = { top: 90, bottom: 120, height: 30 };
+    itemArea.dispatch("scroll");
+
+    expect(badge?.text).toBe("");
+    expect(itemArea.classes.has("has-hidden-items")).toBe(false);
+  });
+
   it("does not create a task from a month day when calendar task creation is disabled", () => {
     const container = new FakeElement();
     const onDateCreateTask = jest.fn();
@@ -1917,6 +2002,66 @@ describe("renderCalendarView", () => {
       .find((element) => collect(element).filter((child) => child.classes.has("task-hub-calendar-item")).length === 5);
     expect(fridaySlot).toBeDefined();
     expect(collect(container).map((element) => element.text)).not.toContain("+2 more");
+  });
+
+  it("shows a live hidden-item count while scrolling overflowing week all-day items", () => {
+    const container = new FakeElement();
+    const manyTasks = Array.from({ length: 4 }, (_, index) => ({
+      ...task,
+      id: `hidden-week-${index}`,
+      text: `Hidden week ${index + 1}`,
+      dueDate: "2026-05-08"
+    }));
+
+    renderCalendarView(
+      container as unknown as HTMLElement,
+      {
+        mode: "week",
+        focusDate: new Date("2026-05-08T12:00:00Z"),
+        weekStart: "monday",
+        visibleSourceIds: new Set(["vault"]),
+        includeCompletedTasks: false,
+        allowAppleReminderWriteback: false,
+        allowTaskCreation: false,
+        sources: [],
+        t: (key) => key
+      },
+      manyTasks,
+      [],
+      {
+        onLayerToggle: jest.fn(),
+        onModeChange: jest.fn(),
+        onMove: jest.fn(),
+        onDateCreateTask: jest.fn(),
+        onTaskComplete: jest.fn(),
+        onTaskJump: jest.fn(),
+        onTaskSelect: jest.fn(),
+        onTaskReschedule: jest.fn(),
+        onToday: jest.fn()
+      }
+    );
+
+    const fridaySlot = collect(container)
+      .filter((element) => element.classes.has("task-hub-agenda-all-day-slot"))
+      .find((element) => collect(element).filter((child) => child.classes.has("task-hub-calendar-item")).length === 4)!;
+    const itemRows = collect(fridaySlot).filter((element) => element.classes.has("task-hub-calendar-item"));
+    fridaySlot.boundingRect = { top: 0, bottom: 92, height: 92 };
+    fridaySlot.clientHeight = 92;
+    fridaySlot.scrollHeight = 152;
+    itemRows.forEach((row, index) => {
+      row.boundingRect = { top: index * 38, bottom: index * 38 + 32, height: 32 };
+    });
+    fridaySlot.dispatch("scroll");
+
+    const badge = collect(fridaySlot).find((element) => element.classes.has("task-hub-hidden-count"));
+    expect(badge?.text).toBe("+1");
+    expect(fridaySlot.classes.has("has-hidden-items")).toBe(true);
+
+    itemRows[3].boundingRect = { top: 76, bottom: 108, height: 32 };
+    fridaySlot.dispatch("scroll");
+
+    expect(badge?.text).toBe("");
+    expect(fridaySlot.classes.has("has-hidden-items")).toBe(false);
   });
 
   it("creates a task from a week day header when calendar task creation is enabled", () => {

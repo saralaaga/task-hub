@@ -1595,6 +1595,7 @@ body .task-hub-view button.task-hub-color-swatch {
   overflow-x: hidden;
   overflow-y: auto;
   padding-right: 2px;
+  position: relative;
   scrollbar-gutter: stable;
 }
 
@@ -2013,6 +2014,7 @@ body .task-hub-view button.task-hub-color-swatch {
   overflow-x: hidden;
   overflow-y: auto;
   padding: 6px;
+  position: relative;
   scrollbar-gutter: stable;
 }
 
@@ -2024,6 +2026,43 @@ body .task-hub-view button.task-hub-color-swatch {
 .task-hub-agenda-all-day-slot > .task-hub-calendar-item {
   flex: 0 0 auto;
   min-height: max-content;
+}
+
+.task-hub-calendar-day-items.has-hidden-items::after,
+.task-hub-agenda-all-day-slot.has-hidden-items::after {
+  background: linear-gradient(to bottom, transparent, color-mix(in srgb, var(--background-primary) 88%, transparent));
+  bottom: 0;
+  content: "";
+  height: 30px;
+  left: 0;
+  pointer-events: none;
+  position: sticky;
+  right: 0;
+  z-index: 8;
+}
+
+.task-hub-hidden-count {
+  align-self: center;
+  background: color-mix(in srgb, var(--background-primary) 92%, var(--interactive-accent));
+  border: 1px solid color-mix(in srgb, var(--interactive-accent) 44%, var(--background-modifier-border));
+  border-radius: 999px;
+  bottom: 4px;
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--background-modifier-box-shadow) 38%, transparent);
+  color: var(--text-muted);
+  display: none;
+  font-size: var(--font-ui-smaller);
+  font-weight: 600;
+  line-height: 1;
+  padding: 4px 9px;
+  pointer-events: none;
+  position: sticky;
+  width: max-content;
+  z-index: 9;
+}
+
+.task-hub-calendar-day-items.has-hidden-items > .task-hub-hidden-count,
+.task-hub-agenda-all-day-slot.has-hidden-items > .task-hub-hidden-count {
+  display: block;
 }
 
 .task-hub-calendar-day.is-drop-hover,
