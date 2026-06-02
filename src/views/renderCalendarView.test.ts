@@ -2945,7 +2945,7 @@ describe("renderCalendarView", () => {
     expect(eventItem?.classes.has("is-drag-muted")).toBe(false);
   });
 
-  it("reschedules selected timed tasks and events together to the exact dropped time", () => {
+  it("reschedules selected timed tasks and events by their relative timed offsets", () => {
     const container = new FakeElement();
     currentTestRoot = container;
     const onTaskReschedule = jest.fn();
@@ -3011,8 +3011,64 @@ describe("renderCalendarView", () => {
     });
     expect(onEventReschedule).toHaveBeenCalledWith(selectedEvent, {
       dateKey: "2026-05-08",
-      startMinutes: 600,
+      startMinutes: 660,
       durationMinutes: 90
+    });
+  });
+
+  it("clamps relatively moved selected timed items to the day boundary", () => {
+    const container = new FakeElement();
+    currentTestRoot = container;
+    const onTaskReschedule = jest.fn();
+    const earlyTask = { ...task, id: "early-task", text: "Early task", dueDate: "2026-05-08", scheduledDate: "2026-05-08T00:15" };
+    const anchorTask = { ...task, id: "anchor-task", text: "Anchor task", dueDate: "2026-05-08", scheduledDate: "2026-05-08T01:00" };
+
+    renderCalendarView(
+      container as unknown as HTMLElement,
+      {
+        mode: "day",
+        focusDate: new Date("2026-05-08T12:00:00Z"),
+        weekStart: "monday",
+        visibleSourceIds: new Set(["vault"]),
+        includeCompletedTasks: false,
+        allowAppleReminderWriteback: false,
+        allowTaskCreation: false,
+        selectedTaskIds: new Set(["early-task", "anchor-task"]),
+        sources: [],
+        t: (key) => key
+      },
+      [earlyTask, anchorTask],
+      [],
+      {
+        onLayerToggle: jest.fn(),
+        onModeChange: jest.fn(),
+        onMove: jest.fn(),
+        onDateCreateTask: jest.fn(),
+        onTaskComplete: jest.fn(),
+        onTaskJump: jest.fn(),
+        onTaskSelect: jest.fn(),
+        onTaskReschedule,
+        onToday: jest.fn()
+      }
+    );
+
+    const timedItems = collect(container).filter((element) => element.classes.has("task-hub-calendar-timed-item"));
+    const anchorItem = timedItems.find((element) => collect(element).some((child) => child.text === "Anchor task"));
+    const column = collect(container).find((element) => element.classes.has("task-hub-agenda-column"));
+    column!.boundingRect = { top: 0 };
+    const dataTransfer = new FakeDataTransfer();
+    anchorItem!.boundingRect = { top: 56 };
+    anchorItem?.dispatch("pointerdown", { dataTransfer, clientY: 56 });
+    anchorItem?.dispatch("dragstart", { dataTransfer, clientY: 56 });
+    column?.dispatch("drop", { dataTransfer, clientY: 0 });
+
+    expect(onTaskReschedule).toHaveBeenCalledWith(earlyTask, {
+      dateKey: "2026-05-08",
+      startMinutes: 0
+    });
+    expect(onTaskReschedule).toHaveBeenCalledWith(anchorTask, {
+      dateKey: "2026-05-08",
+      startMinutes: 0
     });
   });
 
@@ -3126,8 +3182,69 @@ describe("renderCalendarView", () => {
     expect(rows).toHaveLength(1);
     expect(rowTops).toEqual(["196px"]);
     expect(rows[0].classes.has("is-overlap-stack")).toBe(true);
-    expect(rows[0].draggable).toBe(false);
+    expect(rows[0].draggable).toBe(true);
     expect(count?.text).toBe("+1");
+  });
+
+  it("drags the visible representative task from an overlap stack", () => {
+    const container = new FakeElement();
+    currentTestRoot = container;
+    const onTaskReschedule = jest.fn();
+    const firstTask = {
+      ...task,
+      id: "task-overlap-drag-1",
+      text: "First drag",
+      scheduledDate: "2026-05-08T09:30"
+    };
+    const secondTask = {
+      ...task,
+      id: "task-overlap-drag-2",
+      text: "Second drag",
+      scheduledDate: "2026-05-08T09:45"
+    };
+
+    renderCalendarView(
+      container as unknown as HTMLElement,
+      {
+        mode: "day",
+        focusDate: new Date("2026-05-08T12:00:00Z"),
+        weekStart: "monday",
+        visibleSourceIds: new Set(["vault"]),
+        includeCompletedTasks: false,
+        allowAppleReminderWriteback: false,
+        allowTaskCreation: false,
+        sources: [],
+        t: (key) => key
+      },
+      [firstTask, secondTask],
+      [],
+      {
+        onLayerToggle: jest.fn(),
+        onModeChange: jest.fn(),
+        onMove: jest.fn(),
+        onDateCreateTask: jest.fn(),
+        onTaskComplete: jest.fn(),
+        onTaskJump: jest.fn(),
+        onTaskSelect: jest.fn(),
+        onTaskReschedule,
+        onToday: jest.fn()
+      }
+    );
+
+    const row = collect(container).find((element) => element.classes.has("task-hub-calendar-timed-item"));
+    const column = collect(container).find((element) => element.classes.has("task-hub-agenda-column"));
+    column!.boundingRect = { top: 0 };
+    row!.boundingRect = { top: 196 };
+    const dataTransfer = new FakeDataTransfer();
+    row?.dispatch("pointerdown", { dataTransfer, clientY: 196 });
+    row?.dispatch("dragstart", { dataTransfer, clientY: 196 });
+    column?.dispatch("drop", { dataTransfer, clientY: 224 });
+
+    expect(onTaskReschedule).toHaveBeenCalledWith(firstTask, {
+      dateKey: "2026-05-08",
+      startMinutes: 600
+    });
+    expect(onTaskReschedule).not.toHaveBeenCalledWith(secondTask, expect.anything());
   });
 
   it("places timed tasks beside overlapping calendar events", () => {

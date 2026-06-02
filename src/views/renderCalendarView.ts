@@ -578,7 +578,7 @@ function renderTimedCalendarItem(
   if (isTaskPoint && layout?.isOverlapRepresentative && (layout.overlapCount ?? 1) > 1) {
     row.createSpan({ cls: "task-hub-calendar-overlap-count", text: `+${(layout.overlapCount ?? 1) - 1}` });
   }
-  if (!isOverlapStackSummary(layout)) bindCalendarItemDrag(row, item, state, hourHeight);
+  bindCalendarItemDrag(row, item, state, hourHeight);
   bindCalendarItemResize(row, container, item, startHour, hourHeight, handlers, state);
   const task = item.task;
   if (task) {
@@ -1806,7 +1806,7 @@ function rescheduleCalendarItemSelection(
   }
 
   for (const item of selectedItems) {
-    rescheduleCalendarItem(item, sharedCalendarDropTarget(item, target, state), handlers);
+    rescheduleCalendarItem(item, selectedCalendarDropTarget(draggedItem, item, target, state), handlers);
   }
 }
 
@@ -1945,6 +1945,22 @@ function deferredCleanup(callback: () => void, delay: number): void {
   scheduler(callback, delay);
 }
 
+function selectedCalendarDropTarget(
+  draggedItem: CalendarItem,
+  item: CalendarItem,
+  target: CalendarDropTarget,
+  state: CalendarViewState
+): CalendarDropTarget {
+  if (typeof target !== "string") {
+    const targetStartMinutes = target.startMinutes;
+    const draggedStartMinutes = draggedItem.startMinutes;
+    if (targetStartMinutes !== undefined && draggedStartMinutes !== undefined) {
+      return sharedCalendarTimedDropTarget(item, draggedStartMinutes, target.dateKey, targetStartMinutes, state);
+    }
+  }
+  return sharedCalendarDropTarget(item, target, state);
+}
+
 function sharedCalendarDropTarget(
   item: CalendarItem,
   target: CalendarDropTarget,
@@ -1966,6 +1982,28 @@ function sharedCalendarDropTarget(
   return {
     dateKey: target.dateKey,
     startMinutes: target.startMinutes
+  };
+}
+
+function sharedCalendarTimedDropTarget(
+  item: CalendarItem,
+  draggedStartMinutes: number,
+  dateKey: string,
+  targetStartMinutes: number,
+  state: CalendarViewState
+): CalendarDropTarget {
+  const originalStartMinutes = item.startMinutes ?? draggedStartMinutes;
+  const relativeStartMinutes = snapDayQuarterHour(targetStartMinutes + originalStartMinutes - draggedStartMinutes);
+  if (item.kind === "event") {
+    return {
+      dateKey,
+      startMinutes: relativeStartMinutes,
+      durationMinutes: itemDurationMinutes(item, state)
+    };
+  }
+  return {
+    dateKey,
+    startMinutes: relativeStartMinutes
   };
 }
 
