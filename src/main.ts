@@ -1593,7 +1593,6 @@ export default class TaskHubPlugin extends Plugin {
         });
         return {
           status: response.status,
-          json: response.json,
           text: response.text
         };
       }

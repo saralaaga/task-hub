@@ -90,6 +90,7 @@ function renderForTest(overrides: Partial<TaskFilterState> = {}) {
     onViewChange: jest.fn<void, [DashboardView]>(),
     onRescan: jest.fn(),
     onCreateTask: jest.fn(),
+    onUnscheduledToggle: jest.fn(),
     onStatusChange: jest.fn(),
     onConditionChange: jest.fn(),
     onSourceFilterChange: jest.fn(),
@@ -124,6 +125,7 @@ function renderShellForState(stateOverrides: Partial<Parameters<typeof renderShe
     onViewChange: jest.fn<void, [DashboardView]>(),
     onRescan: jest.fn(),
     onCreateTask: jest.fn(),
+    onUnscheduledToggle: jest.fn(),
     onStatusChange: jest.fn(),
     onConditionChange: jest.fn(),
     onSourceFilterChange: jest.fn(),
@@ -244,5 +246,23 @@ describe("renderShell", () => {
     expect(createButton).toBeDefined();
     createButton!.trigger("click");
     expect(handlers.onCreateTask).toHaveBeenCalledTimes(1);
+  });
+
+  it("places the unscheduled button between add and rescan", () => {
+    const { container, handlers } = renderShellForState({ unscheduledTaskCount: 3, unscheduledPanelOpen: true });
+    const buttons = collect(container).filter((element) => element.type === "button");
+    const addIndex = buttons.findIndex((element) => element.attrs.get("aria-label") === "add");
+    const unscheduledIndex = buttons.findIndex((element) => element.attrs.get("aria-label") === "unscheduledTasks");
+    const rescanIndex = buttons.findIndex((element) => element.attrs.get("aria-label") === "rescan");
+    const unscheduled = buttons[unscheduledIndex];
+
+    expect(addIndex).toBeGreaterThanOrEqual(0);
+    expect(unscheduledIndex).toBe(addIndex + 1);
+    expect(rescanIndex).toBe(unscheduledIndex + 1);
+    expect(unscheduled.classes.has("is-active")).toBe(true);
+    expect(collect(unscheduled).some((element) => element.text === "3")).toBe(true);
+
+    unscheduled.trigger("click");
+    expect(handlers.onUnscheduledToggle).toHaveBeenCalledTimes(1);
   });
 });

@@ -38,6 +38,27 @@ describe("dida task mapping", () => {
     });
   });
 
+  it("maps Dida zoned midnight responses to the intended local all-day date", () => {
+    const task = didaTaskToTaskItem(
+      {
+        id: "task-all-day",
+        projectId: "project-1",
+        title: "All-day task",
+        status: 0,
+        isAllDay: true,
+        dueDate: "2026-06-08T16:00:00.000+0000",
+        timeZone: "Asia/Shanghai"
+      },
+      { id: "project-1", name: "Inbox" },
+      0
+    );
+
+    expect(task).toMatchObject({
+      dueDate: "2026-06-09",
+      scheduledDate: undefined
+    });
+  });
+
   it("names the Dida inbox as 收集箱", () => {
     const task = didaTaskToTaskItem(
       {

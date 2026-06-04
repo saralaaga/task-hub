@@ -1209,6 +1209,47 @@ describe("Apple Reminders migration", () => {
     }));
   });
 
+  it("completes Dida tasks when Obsidian requestUrl has an empty JSON body", async () => {
+    const { requestUrl } = jest.requireMock("obsidian");
+    requestUrl.mockResolvedValueOnce({
+      status: 200,
+      text: "",
+      get json() {
+        throw new SyntaxError("Unexpected end of JSON input");
+      }
+    });
+    const plugin = new TaskHubPlugin({} as never, {} as never);
+    plugin.app = { workspace: { getLeavesOfType: jest.fn(() => []) } } as never;
+    plugin.settings = {
+      ...DEFAULT_SETTINGS,
+      dida: {
+        ...DEFAULT_SETTINGS.dida,
+        enabled: true,
+        tasksEnabled: true,
+        tasksWritebackEnabled: true,
+        apiToken: "token"
+      }
+    };
+    plugin.syncDida = jest.fn(async () => undefined) as never;
+
+    const result = await plugin.completeTask(task({
+      id: "dida:task-1",
+      filePath: "Dida",
+      rawLine: "Dida task",
+      text: "Dida task",
+      source: "dida",
+      externalId: "task-1",
+      externalListId: "project-1"
+    }));
+
+    expect(result.status).toBe("updated");
+    expect(requestUrl).toHaveBeenCalledWith(expect.objectContaining({
+      method: "POST",
+      url: "https://api.dida365.com/open/v1/project/project-1/task/task-1/complete"
+    }));
+    expect(notices).toContain("Task completed.");
+  });
+
   it("requests Reminders access and retries when creating an Apple Reminder before permission is granted", async () => {
     const notDetermined = Object.assign(new Error("Apple access has not been requested yet."), { code: "not_determined" });
     createAppleReminder.mockRejectedValueOnce(notDetermined).mockResolvedValueOnce("reminder-created-after-access");

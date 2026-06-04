@@ -13,6 +13,8 @@ export type ShellState = {
   sourceFilters?: SourceFilterOption[];
   stats: TaskIndexStats;
   isRefreshing?: boolean;
+  unscheduledPanelOpen?: boolean;
+  unscheduledTaskCount?: number;
   t: Translator;
 };
 
@@ -26,6 +28,7 @@ export type ShellHandlers = {
   onViewChange: (view: DashboardView) => void;
   onRescan: () => void | Promise<void>;
   onCreateTask: () => void;
+  onUnscheduledToggle: () => void;
   onStatusChange: (status: TaskFilterState["status"]) => void;
   onConditionChange: (conditions: NonNullable<TaskFilterState["conditions"]>) => void;
   onSourceFilterChange?: (source: SourceFilterOption["id"]) => void;
@@ -83,6 +86,19 @@ function renderFilters(container: HTMLElement, state: ShellState, handlers: Shel
   createTask.createSpan({ text: state.t("add") });
   createTask.addEventListener("click", () => {
     handlers.onCreateTask();
+  });
+
+  const unscheduled = filters.createEl("button", {
+    cls: `task-hub-unscheduled-toggle ${state.unscheduledPanelOpen ? "is-active" : ""}`,
+    text: state.t("unscheduled")
+  });
+  unscheduled.setAttr("aria-label", state.t("unscheduledTasks"));
+  unscheduled.setAttr("title", state.t("unscheduledTasks"));
+  if ((state.unscheduledTaskCount ?? 0) > 0) {
+    unscheduled.createSpan({ cls: "task-hub-unscheduled-toggle-count", text: String(state.unscheduledTaskCount) });
+  }
+  unscheduled.addEventListener("click", () => {
+    handlers.onUnscheduledToggle();
   });
 
   const rescanLabel = state.isRefreshing ? state.t("rescanning") : state.t("rescan");

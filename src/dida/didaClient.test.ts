@@ -48,4 +48,31 @@ describe("DidaClient", () => {
     await expect(client.listProjects()).rejects.toThrow("Dida API request failed with HTTP 401");
     await expect(client.listProjects()).rejects.not.toThrow("secret-token");
   });
+
+  it("falls back to status update when the complete endpoint rejects the project path", async () => {
+    const calls: Array<{ url: string; method: string; body?: string }> = [];
+    const client = new DidaClient({
+      apiBase: "https://api.dida365.com",
+      apiToken: "secret-token",
+      request: async (request) => {
+        calls.push({
+          url: request.url,
+          method: request.method,
+          body: request.body
+        });
+        if (request.url.endsWith("/complete")) {
+          return { status: 404, text: "not found" };
+        }
+        return { status: 200, json: { ok: true } };
+      }
+    });
+
+    await client.completeTask("inbox", "t1");
+
+    expect(calls.map((call) => [call.method, call.url])).toEqual([
+      ["POST", "https://api.dida365.com/open/v1/project/inbox/task/t1/complete"],
+      ["POST", "https://api.dida365.com/open/v1/task/t1"]
+    ]);
+    expect(JSON.parse(calls[1].body ?? "{}")).toEqual({ projectId: "inbox", status: 2 });
+  });
 });

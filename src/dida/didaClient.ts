@@ -43,7 +43,7 @@ export type DidaProjectData = {
 };
 
 export type DidaTaskPayload = {
-  title: string;
+  title?: string;
   projectId?: string;
   content?: string;
   desc?: string;
@@ -102,7 +102,12 @@ export class DidaClient {
   }
 
   async completeTask(projectId: string, taskId: string): Promise<void> {
-    await this.call("POST", `/open/v1/project/${encodeURIComponent(projectId)}/task/${encodeURIComponent(taskId)}/complete`);
+    try {
+      await this.call("POST", `/open/v1/project/${encodeURIComponent(projectId)}/task/${encodeURIComponent(taskId)}/complete`);
+    } catch (error) {
+      if (!isProjectScopedTaskPathError(error)) throw error;
+      await this.updateTask(projectId, taskId, { projectId, status: 2 });
+    }
   }
 
   async reopenTask(projectId: string, taskId: string, title: string): Promise<void> {
@@ -129,6 +134,10 @@ export class DidaClient {
     }
     return response.json ?? parseJsonText(response.text);
   }
+}
+
+function isProjectScopedTaskPathError(error: unknown): boolean {
+  return error instanceof DidaApiError && (error.status === 400 || error.status === 404);
 }
 
 function parseJsonText(text: string | undefined): unknown {

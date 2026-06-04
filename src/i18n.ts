@@ -201,6 +201,7 @@ export type TranslationKey =
   | "noOpenTasks"
   | "noTags"
   | "noDate"
+  | "noUnscheduledTasks"
   | "notSynced"
   | "open"
   | "openSource"
@@ -305,6 +306,8 @@ export type TranslationKey =
   | "thursday"
   | "sunday"
   | "saturday"
+  | "unscheduled"
+  | "unscheduledTasks"
   | "vaultTasks"
   | "week"
   | "weekStartsOn"
@@ -527,6 +530,7 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     noOpenTasks: "No open tasks found in the indexed vault.",
     noTags: "No tags found in indexed tasks.",
     noDate: "No date",
+    noUnscheduledTasks: "No unscheduled tasks.",
     notSynced: "not synced",
     open: "Open",
     openSource: "Open source",
@@ -631,6 +635,8 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     thursday: "Thursday",
     sunday: "Sunday",
     saturday: "Saturday",
+    unscheduled: "Unscheduled",
+    unscheduledTasks: "Unscheduled tasks",
     vaultTasks: "Vault tasks",
     week: "Week",
     weekStartsOn: "Week starts on",
@@ -846,6 +852,7 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     noOpenTasks: "当前索引的仓库中没有未完成任务。",
     noTags: "索引任务中没有标签。",
     noDate: "无日期",
+    noUnscheduledTasks: "没有未排期任务。",
     notSynced: "未同步",
     open: "未完成",
     openSource: "打开来源",
@@ -950,6 +957,8 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     thursday: "周四",
     sunday: "周日",
     saturday: "周六",
+    unscheduled: "未排期",
+    unscheduledTasks: "未排期任务",
     vaultTasks: "仓库任务",
     week: "周",
     weekStartsOn: "一周开始于",

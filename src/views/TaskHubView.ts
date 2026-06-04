@@ -27,6 +27,7 @@ export class TaskHubView extends ItemView {
   private contentScrollTop = 0;
   private completingTaskIds = new Set<string>();
   private selectedTaskIds = new Set<string>();
+  private unscheduledPanelOpen = false;
 
   constructor(
     leaf: WorkspaceLeaf,
@@ -55,6 +56,7 @@ export class TaskHubView extends ItemView {
     }
     const container = this.containerEl.children[1] as HTMLElement;
     const allTasks = this.plugin.getTasks();
+    const unscheduledTasks = collectUnscheduledTasks(allTasks, this.filters, new Date(), (task) => this.canScheduleTask(task));
     const calendarSources = this.plugin.getCalendarSources();
     const calendarSourceIds = ["vault", ...calendarSources.map((source) => source.id)];
     syncVisibleSources(this.visibleSourceIds, this.knownCalendarSourceIds, calendarSourceIds);
@@ -80,6 +82,8 @@ export class TaskHubView extends ItemView {
         sourceFilters: taskSourceFilterOptions(allTasks, this.filters, new Date(), t),
         stats: this.plugin.taskIndex.getStats(),
         isRefreshing: this.isRefreshing,
+        unscheduledPanelOpen: this.view === "calendar" && this.unscheduledPanelOpen,
+        unscheduledTaskCount: unscheduledTasks.length,
         t
       },
       {
@@ -89,6 +93,15 @@ export class TaskHubView extends ItemView {
         },
         onRescan: () => void this.refreshData(),
         onCreateTask: () => this.plugin.openCreateTaskModal(toLocalDateKey(new Date())),
+        onUnscheduledToggle: () => {
+          if (this.view !== "calendar") {
+            this.view = "calendar";
+            this.unscheduledPanelOpen = true;
+          } else {
+            this.unscheduledPanelOpen = !this.unscheduledPanelOpen;
+          }
+          this.render();
+        },
         onStatusChange: (status) => {
           this.updateFilters({ ...this.filters, status });
         },
@@ -241,6 +254,8 @@ export class TaskHubView extends ItemView {
           sources: calendarSources,
           taskNotesEnabled: this.plugin.settings.taskNotes.enabled,
           selectedTaskIds: this.selectedTaskIds,
+          unscheduledPanelOpen: this.unscheduledPanelOpen,
+          unscheduledTasks,
           allowThinoNoteEdit: this.plugin.settings.taskNotes.thinoIntegrationEnabled,
           getTaskNotes: (task) => this.plugin.getTaskNotes(task),
           getEventNotes: (event) => this.plugin.getEventNotes(event),
@@ -361,6 +376,22 @@ export class TaskHubView extends ItemView {
     this.selectedTaskIds = new Set(taskIds && taskIds.length > 0 ? taskIds : [task.id]);
   }
 
+  private canScheduleTask(task: TaskItem): boolean {
+    if (task.source === "vault") return true;
+    if (task.source === "apple-reminders") {
+      return this.plugin.settings.localApple.remindersWritebackEnabled && Boolean(task.externalId);
+    }
+    if (task.source === "dida") {
+      return Boolean(
+        this.plugin.settings.dida.tasksWritebackEnabled &&
+          this.plugin.settings.dida.tasksDragRescheduleEnabled &&
+          task.externalId &&
+          task.externalListId
+      );
+    }
+    return false;
+  }
+
   private exitingTaskIds(allTasks: TaskItem[]): ReadonlySet<string> {
     if (this.filters.status !== "open" || this.completingTaskIds.size === 0) {
       return new Set();
@@ -427,6 +458,22 @@ export class TaskHubView extends ItemView {
 
 }
 
+export function collectUnscheduledTasks(
+  tasks: TaskItem[],
+  filters: TaskFilterState,
+  now: Date,
+  canScheduleTask: (task: TaskItem) => boolean
+): TaskItem[] {
+  return filterTasks(tasks, filters, now)
+    .filter((task) => !task.dueDate && canScheduleTask(task))
+    .sort((left, right) =>
+      taskSourceRank(left) - taskSourceRank(right) ||
+      left.filePath.localeCompare(right.filePath) ||
+      left.line - right.line ||
+      left.text.localeCompare(right.text)
+    );
+}
+
 function findTaskListPane(container: HTMLElement): HTMLElement | undefined {
   return container.querySelector<HTMLElement>(".task-hub-task-list-pane") ?? undefined;
 }
@@ -467,6 +514,13 @@ function toggleSetValue(values: Set<string>, value: string): Set<string> {
     next.add(value);
   }
   return next;
+}
+
+function taskSourceRank(task: TaskItem): number {
+  if (task.source === "vault") return 0;
+  if (task.source === "apple-reminders") return 1;
+  if (task.source === "dida") return 2;
+  return 3;
 }
 
 function cloneTaskFilters(filters: TaskFilterState): TaskFilterState {

@@ -145,7 +145,29 @@ describe("rescheduleTaskInContent", () => {
     expect(result.status).toBe("conflict");
   });
 
-  it("returns a conflict when the matched line has no supported due token", () => {
+  it("adds an emoji due token when an unscheduled task is dropped on an all-day target", () => {
+    const task = taskItem({ line: 0, rawLine: "- [ ] Pay invoice #finance", dueDate: undefined });
+    const result = rescheduleTaskInContent("- [ ] Pay invoice #finance", task, "2026-05-12");
+
+    expect(result).toEqual({
+      status: "updated",
+      content: "- [ ] Pay invoice #finance 📅 2026-05-12",
+      line: 0
+    });
+  });
+
+  it("adds emoji due and scheduled time tokens when an unscheduled task is dropped on a timed target", () => {
+    const task = taskItem({ line: 0, rawLine: "- [ ] Pay invoice #finance", dueDate: undefined });
+    const result = rescheduleTaskInContent("- [ ] Pay invoice #finance", task, "2026-05-12", undefined, 570);
+
+    expect(result).toEqual({
+      status: "updated",
+      content: "- [ ] Pay invoice #finance 📅 2026-05-12 ⏰ 09:30",
+      line: 0
+    });
+  });
+
+  it("returns a conflict when a scheduled task line has no supported due token", () => {
     const task = taskItem({ line: 0, rawLine: "- [ ] Pay invoice", dueDate: "2026-05-08" });
     const result = rescheduleTaskInContent("- [ ] Pay invoice", task, "2026-05-12");
 

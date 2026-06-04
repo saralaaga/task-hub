@@ -530,7 +530,7 @@ function toDateKey(value: string | undefined): string | undefined {
   if (localDateTime && !/(?:Z|[+-]\d{2}:?\d{2})$/.test(value)) return localDateTime[1];
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return undefined;
-  return date.toISOString().slice(0, 10);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
 function toLocalDateTime(value: string | undefined): string | undefined {

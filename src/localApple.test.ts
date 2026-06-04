@@ -151,6 +151,24 @@ describe("local Apple mapping", () => {
     });
   });
 
+  it("preserves Apple Reminder zoned midnight due date keys without UTC shifting", () => {
+    expect(
+      reminderToTask(
+        {
+          id: "reminder-1",
+          name: "Buy milk",
+          list: "Personal",
+          completed: false,
+          dueDate: "2026-05-19T16:00:00.000Z"
+        },
+        0
+      )
+    ).toMatchObject({
+      dueDate: "2026-05-20",
+      scheduledDate: "2026-05-20T00:00"
+    });
+  });
+
   it("maps Apple Calendar records to Task Hub calendar events", () => {
     expect(
       calendarRecordToEvent(

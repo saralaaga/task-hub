@@ -359,6 +359,34 @@
   flex: 0 0 auto;
 }
 
+.task-hub-unscheduled-toggle {
+  align-items: center;
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: 6px;
+  min-height: 32px;
+}
+
+.task-hub-unscheduled-toggle.is-active {
+  background: color-mix(in srgb, var(--interactive-accent) 14%, var(--background-primary));
+  border-color: color-mix(in srgb, var(--interactive-accent) 46%, var(--background-modifier-border));
+  color: var(--text-accent);
+}
+
+.task-hub-unscheduled-toggle-count {
+  align-items: center;
+  background: var(--background-modifier-border);
+  border-radius: 999px;
+  color: var(--text-muted);
+  display: inline-flex;
+  font-size: var(--font-ui-smaller);
+  font-weight: 700;
+  height: 18px;
+  justify-content: center;
+  min-width: 18px;
+  padding: 0 5px;
+}
+
 .task-hub-search-button {
   align-items: center;
   display: inline-flex;
@@ -1491,6 +1519,104 @@ body .task-hub-view button.task-hub-color-swatch {
   min-height: 28px;
 }
 
+.task-hub-calendar-with-sidebar {
+  align-items: start;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 320px);
+  min-width: 0;
+}
+
+.task-hub-calendar-pane {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.task-hub-unscheduled-panel {
+  align-content: start;
+  background: color-mix(in srgb, var(--background-secondary) 76%, var(--background-primary));
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  max-height: calc(100vh - 190px);
+  min-width: 0;
+  overflow: hidden;
+  padding: 10px;
+  position: sticky;
+  top: 8px;
+}
+
+.task-hub-unscheduled-header {
+  align-items: center;
+  border-bottom: 1px solid var(--background-modifier-border);
+  display: flex;
+  gap: 8px;
+  padding-bottom: 8px;
+}
+
+.task-hub-unscheduled-title {
+  color: var(--text-normal);
+  font-size: var(--font-ui-small);
+  font-weight: 700;
+}
+
+.task-hub-unscheduled-count {
+  background: var(--background-modifier-border);
+  border-radius: 999px;
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  font-weight: 700;
+  margin-left: auto;
+  min-width: 20px;
+  padding: 1px 7px;
+  text-align: center;
+}
+
+.task-hub-unscheduled-empty {
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  padding: 8px 2px;
+}
+
+.task-hub-unscheduled-list {
+  display: grid;
+  gap: 7px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.task-hub-unscheduled-task {
+  grid-template-columns: 18px minmax(0, 1fr);
+}
+
+.task-hub-unscheduled-task-body {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.task-hub-unscheduled-task-title {
+  color: var(--text-normal);
+  font-size: var(--font-ui-small);
+  font-weight: 600;
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-hub-unscheduled-task-meta {
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .task-hub-calendar-grid {
   display: grid;
   gap: 10px;
@@ -2127,6 +2253,12 @@ body .task-hub-view button.task-hub-color-swatch {
   background: color-mix(in srgb, var(--interactive-accent) 6%, transparent);
 }
 
+.task-hub-agenda-column.is-drop-hover {
+  background-color: color-mix(in srgb, var(--interactive-accent) 10%, transparent);
+  outline: 2px solid color-mix(in srgb, var(--interactive-accent) 58%, transparent);
+  outline-offset: -2px;
+}
+
 .task-hub-calendar-timed-item {
   left: 6px;
   position: absolute;
@@ -2589,6 +2721,15 @@ body .task-hub-view button.task-hub-color-swatch {
   .task-hub-calendar-month,
   .task-hub-calendar-week {
     grid-template-columns: 1fr;
+  }
+
+  .task-hub-calendar-with-sidebar {
+    grid-template-columns: 1fr;
+  }
+
+  .task-hub-unscheduled-panel {
+    max-height: 260px;
+    position: static;
   }
 
   .task-hub-task-workbench {

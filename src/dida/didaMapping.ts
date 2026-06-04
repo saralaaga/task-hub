@@ -10,7 +10,7 @@ export const TICKTICK_API_BASE = "https://api.ticktick.com";
 
 export function didaTaskToTaskItem(task: DidaTaskRecord, project: DidaProject, index: number): TaskItem {
   const dateValue = task.dueDate ?? task.startDate;
-  const dueDate = dateValue?.slice(0, 10);
+  const dueDate = toLocalDateKey(dateValue);
   const scheduledDate = task.isAllDay ? undefined : toLocalDateTime(dateValue);
   const tags = task.tags ? didaTagsForTaskHub(task.tags) : extractHashtags(task.title);
   return {
@@ -96,8 +96,32 @@ function extractHashtags(title: string): string[] {
   return title.match(/#[\p{L}\p{N}_/-]+/gu) ?? [];
 }
 
+function toLocalDateKey(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  const dateOnly = value.match(/^(\d{4}-\d{2}-\d{2})$/);
+  if (dateOnly) return dateOnly[1];
+  const floatingDateTime = value.match(/^(\d{4}-\d{2}-\d{2})T/);
+  if (floatingDateTime && !hasExplicitZone(value)) return floatingDateTime[1];
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value.slice(0, 10);
+  return formatLocalDateKey(date);
+}
+
 function toLocalDateTime(value: string | undefined): string | undefined {
-  return value?.match(/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2})/)?.[1];
+  if (!value || !/T\d{2}:\d{2}/.test(value)) return undefined;
+  const floating = value.match(/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2})(?::\d{2})?/);
+  if (floating && !hasExplicitZone(value)) return floating[1];
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return floating?.[1];
+  return `${formatLocalDateKey(date)}T${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+}
+
+function hasExplicitZone(value: string): boolean {
+  return /(?:Z|[+-]\d{2}:?\d{2})$/.test(value);
+}
+
+function formatLocalDateKey(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
 function localDateTimeWithOffset(date: string, startMinutes: number): string {

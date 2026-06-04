@@ -888,6 +888,57 @@ describe("renderCalendarView", () => {
     expect(elements.map((element) => element.text)).not.toContain("event");
   });
 
+  it("allows completing a Dida calendar task from its checkbox when writeback is enabled", () => {
+    const container = new FakeElement();
+    const onTaskComplete = jest.fn();
+    const didaTask: TaskItem = {
+      ...task,
+      id: "dida-task",
+      filePath: "Dida/Inbox",
+      rawLine: "Dida task",
+      text: "Dida task",
+      source: "dida",
+      externalId: "task-1",
+      externalListId: "project-1"
+    };
+
+    renderCalendarView(
+      container as unknown as HTMLElement,
+      {
+        mode: "month",
+        focusDate: new Date("2026-05-08T12:00:00Z"),
+        weekStart: "monday",
+        visibleSourceIds: new Set(["dida"]),
+        includeCompletedTasks: false,
+        allowAppleReminderWriteback: false,
+        allowDidaWriteback: true,
+        allowTaskCreation: false,
+        sources: [],
+        t: (key) => key
+      },
+      [didaTask],
+      [],
+      {
+        onLayerToggle: jest.fn(),
+        onModeChange: jest.fn(),
+        onMove: jest.fn(),
+        onDateCreateTask: jest.fn(),
+        onTaskComplete,
+        onTaskJump: jest.fn(),
+        onTaskSelect: jest.fn(),
+        onTaskReschedule: jest.fn(),
+        onToday: jest.fn()
+      }
+    );
+
+    const item = collect(container).find((element) => element.classes.has("task-hub-calendar-item") && element.classes.has("is-task"));
+    const checkbox = item ? collect(item).find((element) => element.type === "checkbox") : undefined;
+    checkbox?.click();
+
+    expect(checkbox?.disabled).toBe(false);
+    expect(onTaskComplete).toHaveBeenCalledWith(didaTask);
+  });
+
   it("highlights the today button when the current calendar range contains today", () => {
     const cases = [
       { mode: "day" as const, focusDate: "2026-05-16T12:00:00Z" },
@@ -2337,6 +2388,154 @@ describe("renderCalendarView", () => {
     targetDay?.dispatch("drop", { dataTransfer });
 
     expect(onTaskReschedule).toHaveBeenCalledWith(task, "2026-05-12");
+  });
+
+  it("renders unscheduled tasks in a side panel and schedules one by dropping it on a month day", () => {
+    const container = new FakeElement();
+    const onTaskReschedule = jest.fn();
+    const unscheduledTask = { ...task, id: "task-unscheduled", dueDate: undefined, rawLine: "- [ ] Unscheduled", text: "Unscheduled" };
+
+    renderCalendarView(
+      container as unknown as HTMLElement,
+      {
+        mode: "month",
+        focusDate: new Date("2026-05-08T12:00:00Z"),
+        weekStart: "monday",
+        visibleSourceIds: new Set(["vault"]),
+        includeCompletedTasks: false,
+        allowAppleReminderWriteback: false,
+        allowTaskCreation: false,
+        unscheduledPanelOpen: true,
+        unscheduledTasks: [unscheduledTask],
+        selectedTaskIds: new Set(["task-unscheduled"]),
+        sources: [],
+        t: (key) => key
+      },
+      [task, unscheduledTask],
+      [],
+      {
+        onLayerToggle: jest.fn(),
+        onModeChange: jest.fn(),
+        onMove: jest.fn(),
+        onDateCreateTask: jest.fn(),
+        onTaskComplete: jest.fn(),
+        onTaskJump: jest.fn(),
+        onTaskSelect: jest.fn(),
+        onTaskSelectionChange: jest.fn(),
+        onTaskReschedule,
+        onToday: jest.fn()
+      }
+    );
+
+    const panel = collect(container).find((element) => element.classes.has("task-hub-unscheduled-panel"));
+    const row = collect(container).find((element) => element.classes.has("task-hub-unscheduled-task"));
+    const targetDay = collect(container)
+      .filter((element) => element.classes.has("task-hub-calendar-day"))
+      .find((element) => collect(element).map((child) => child.text).includes("12"));
+    const dataTransfer = new FakeDataTransfer();
+    row?.dispatch("dragstart", { dataTransfer });
+    targetDay?.dispatch("drop", { dataTransfer });
+
+    expect(panel).toBeDefined();
+    expect(row?.draggable).toBe(true);
+    expect(onTaskReschedule).toHaveBeenCalledWith(unscheduledTask, "2026-05-12");
+  });
+
+  it("completes an unscheduled side-panel task from its checkbox", () => {
+    const container = new FakeElement();
+    const onTaskComplete = jest.fn();
+    const onTaskSelectionChange = jest.fn();
+    const unscheduledTask = { ...task, id: "task-unscheduled-complete", dueDate: undefined, rawLine: "- [ ] Complete me", text: "Complete me" };
+
+    renderCalendarView(
+      container as unknown as HTMLElement,
+      {
+        mode: "month",
+        focusDate: new Date("2026-05-08T12:00:00Z"),
+        weekStart: "monday",
+        visibleSourceIds: new Set(["vault"]),
+        includeCompletedTasks: false,
+        allowAppleReminderWriteback: false,
+        allowTaskCreation: false,
+        unscheduledPanelOpen: true,
+        unscheduledTasks: [unscheduledTask],
+        sources: [],
+        t: (key) => key
+      },
+      [unscheduledTask],
+      [],
+      {
+        onLayerToggle: jest.fn(),
+        onModeChange: jest.fn(),
+        onMove: jest.fn(),
+        onDateCreateTask: jest.fn(),
+        onTaskComplete,
+        onTaskJump: jest.fn(),
+        onTaskSelect: jest.fn(),
+        onTaskSelectionChange,
+        onTaskReschedule: jest.fn(),
+        onToday: jest.fn()
+      }
+    );
+
+    const row = collect(container).find((element) => element.classes.has("task-hub-unscheduled-task"));
+    const checkbox = row ? collect(row).find((element) => element.type === "checkbox") : undefined;
+    checkbox?.click();
+
+    expect(onTaskComplete).toHaveBeenCalledWith(unscheduledTask);
+    expect(onTaskSelectionChange).not.toHaveBeenCalled();
+  });
+
+  it("schedules an unscheduled side-panel task to a specific time in day view", () => {
+    const container = new FakeElement();
+    const onTaskReschedule = jest.fn();
+    const unscheduledTask = { ...task, id: "task-unscheduled-time", dueDate: undefined, rawLine: "- [ ] Timed", text: "Timed" };
+
+    renderCalendarView(
+      container as unknown as HTMLElement,
+      {
+        mode: "day",
+        focusDate: new Date("2026-05-08T12:00:00Z"),
+        weekStart: "monday",
+        visibleSourceIds: new Set(["vault"]),
+        includeCompletedTasks: false,
+        allowAppleReminderWriteback: false,
+        allowTaskCreation: false,
+        calendarDayStartHour: 6,
+        calendarDayEndHour: 22,
+        unscheduledPanelOpen: true,
+        unscheduledTasks: [unscheduledTask],
+        selectedTaskIds: new Set(["task-unscheduled-time"]),
+        sources: [],
+        t: (key) => key
+      },
+      [unscheduledTask],
+      [],
+      {
+        onLayerToggle: jest.fn(),
+        onModeChange: jest.fn(),
+        onMove: jest.fn(),
+        onDateCreateTask: jest.fn(),
+        onTaskComplete: jest.fn(),
+        onTaskJump: jest.fn(),
+        onTaskSelect: jest.fn(),
+        onTaskSelectionChange: jest.fn(),
+        onTaskReschedule,
+        onToday: jest.fn()
+      }
+    );
+
+    const row = collect(container).find((element) => element.classes.has("task-hub-unscheduled-task"));
+    const column = collect(container).find((element) => element.classes.has("task-hub-agenda-column"));
+    if (column) column.boundingRect = { top: 0, height: 896 };
+    const dataTransfer = new FakeDataTransfer();
+    row?.dispatch("dragstart", { dataTransfer, clientY: 0 });
+    column?.dispatch("drop", { dataTransfer, clientY: 168 });
+
+    expect(onTaskReschedule).toHaveBeenCalledWith(unscheduledTask, {
+      dateKey: "2026-05-08",
+      startMinutes: 540
+    });
   });
 
   it("does not make Apple Reminder tasks draggable when writeback is disabled", () => {

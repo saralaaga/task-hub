@@ -83,7 +83,7 @@ export function rescheduleTaskInContent(
   }
 
   const lines = content.split(/\r?\n/);
-  const direct = tryRescheduleAtLine(lines, task.line, task.rawLine, targetDate, messages, startMinutes);
+  const direct = tryRescheduleAtLine(lines, task.line, task.rawLine, targetDate, messages, startMinutes, task.dueDate === undefined);
   if (direct.status !== "conflict") {
     return withContent(direct, lines);
   }
@@ -96,7 +96,7 @@ export function rescheduleTaskInContent(
     };
   }
 
-  return withContent(tryRescheduleAtLine(lines, nearby, task.rawLine, targetDate, messages, startMinutes), lines);
+  return withContent(tryRescheduleAtLine(lines, nearby, task.rawLine, targetDate, messages, startMinutes, task.dueDate === undefined), lines);
 }
 
 export function deleteTaskInContent(
@@ -179,7 +179,8 @@ function tryRescheduleAtLine(
   rawLine: string,
   targetDate: string,
   messages: RescheduleMessages,
-  startMinutes?: number
+  startMinutes: number | undefined,
+  allowAppendDueDate: boolean
 ): CompletionResult {
   const currentLine = lines[line];
   if (currentLine === undefined) {
@@ -190,7 +191,10 @@ function tryRescheduleAtLine(
     return { status: "conflict", message: messages.lineMismatchConflict };
   }
 
-  const nextLine = updateScheduledTime(replaceDueDate(currentLine, targetDate), startMinutes);
+  const nextLine = updateScheduledTime(
+    replaceDueDate(currentLine, targetDate) ?? appendDueDateIfUnscheduled(currentLine, taskLineHasDate(rawLine), targetDate, allowAppendDueDate),
+    startMinutes
+  );
   if (!nextLine) {
     return { status: "conflict", message: messages.dateTokenMissing };
   }
@@ -279,6 +283,11 @@ function replaceDueDate(line: string, targetDate: string): string | undefined {
   return undefined;
 }
 
+function appendDueDateIfUnscheduled(line: string, taskHasDate: boolean, targetDate: string, allowAppend = true): string | undefined {
+  if (taskHasDate || !allowAppend) return undefined;
+  return `${line.trimEnd()} 📅 ${targetDate}`;
+}
+
 function updateScheduledTime(line: string | undefined, startMinutes: number | undefined): string | undefined {
   if (!line) return line;
   if (startMinutes === undefined) return line.replace(SCHEDULED_TIME, "");
@@ -293,6 +302,10 @@ function updateScheduledTime(line: string | undefined, startMinutes: number | un
     return line.replace(INLINE_DUE, (match) => `${match}${timeToken}`);
   }
   return line;
+}
+
+function taskLineHasDate(line: string): boolean {
+  return EMOJI_DUE.test(line) || INLINE_DUE.test(line);
 }
 
 function taskHasScheduledTime(task: TaskItem): boolean {
