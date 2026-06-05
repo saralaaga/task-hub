@@ -1,17 +1,18 @@
 jest.mock("obsidian", () => ({
   setIcon: jest.fn(),
   Menu: class {
-    items: Array<{ title: string; icon: string; click?: () => void }> = [];
+    items: Array<{ title: string; icon: string; disabled?: boolean; click?: () => void }> = [];
     shownAt: unknown;
 
     constructor() {
       mockMenus.push(this);
     }
 
-    addItem(build: (item: { setTitle(title: string): unknown; setIcon(icon: string): unknown; onClick(click: () => void): unknown }) => void): void {
+    addItem(build: (item: { setTitle(title: string): unknown; setIcon(icon: string): unknown; setDisabled(disabled: boolean): unknown; onClick(click: () => void): unknown }) => void): void {
       const item = {
         title: "",
         icon: "",
+        disabled: undefined as boolean | undefined,
         click: undefined as (() => void) | undefined,
         setTitle(title: string) {
           this.title = title;
@@ -19,6 +20,10 @@ jest.mock("obsidian", () => ({
         },
         setIcon(icon: string) {
           this.icon = icon;
+          return this;
+        },
+        setDisabled(disabled: boolean) {
+          this.disabled = disabled;
           return this;
         },
         onClick(click: () => void) {
@@ -39,7 +44,7 @@ jest.mock("obsidian", () => ({
 import { renderTasksView } from "./renderTasksView";
 import type { TaskItem } from "../types";
 
-const mockMenus: Array<{ items: Array<{ title: string; icon: string; click?: () => void }>; shownAt: unknown }> = [];
+const mockMenus: Array<{ items: Array<{ title: string; icon: string; disabled?: boolean; click?: () => void }>; shownAt: unknown }> = [];
 
 class FakeElement {
   children: FakeElement[] = [];
@@ -408,6 +413,35 @@ describe("renderTasksView", () => {
     expect(logo?.classes.has("is-apple")).toBe(true);
   });
 
+  it("marks Dida task details with the Dida source logo", () => {
+    const container = new FakeElement();
+    const didaTask = {
+      ...baseTask,
+      id: "dida-logo",
+      source: "dida" as const,
+      externalId: "dida-1",
+      externalListId: "project-1",
+      externalSourceName: "Dida",
+      filePath: "Dida/Inbox"
+    };
+
+    renderTasksView(
+      container as unknown as HTMLElement,
+      [didaTask],
+      [didaTask],
+      { status: "open", tags: [], sourceQuery: "", textQuery: "" },
+      handlers(),
+      new Date("2026-05-08T12:00:00Z"),
+      (key) => key,
+      { allowAppleReminderWriteback: false, allowDidaWriteback: true, sourceColors: { dida: "#3b82f6" } }
+    );
+
+    const details = collect(container).find((element) => element.classes.has("task-hub-task-details"));
+    const logo = collect(details as FakeElement).find((element) => element.classes.has("task-hub-detail-source-logo"));
+
+    expect(logo?.classes.has("is-dida")).toBe(true);
+  });
+
   it("uses Apple Reminder list colors for task rows and details", () => {
     const container = new FakeElement();
     const task = { ...baseTask, externalListId: "personal" };
@@ -495,13 +529,14 @@ describe("renderTasksView", () => {
 
     const row = collect(container).find((element) => element.classes.has("task-hub-task-row"));
     const event = row!.dispatch("contextmenu");
-    mockMenus[0].items.find((item) => item.title === "deleteCalendarItem")?.click?.();
+    mockMenus[0].items.find((item) => item.title === "deleteFromAppleReminders")?.click?.();
 
     expect(event.preventDefault).toHaveBeenCalled();
     expect(event.stopPropagation).toHaveBeenCalled();
     expect(row?.classes.has("is-selected")).toBe(true);
-    expect(mockMenus[0].items.map((item) => item.title)).toEqual(["markComplete", "openSource", "deleteCalendarItem"]);
-    expect(mockMenus[0].items.find((item) => item.title === "deleteCalendarItem")?.icon).toBe("trash");
+    expect(mockMenus[0].items.map((item) => item.title)).toEqual(["sourceAppleReminders", "markComplete", "openSource", "deleteFromAppleReminders"]);
+    expect(mockMenus[0].items[0].disabled).toBe(true);
+    expect(mockMenus[0].items.find((item) => item.title === "deleteFromAppleReminders")?.icon).toBe("trash");
     expect(viewHandlers.onTaskDelete).toHaveBeenCalledWith(baseTask);
   });
 
@@ -733,10 +768,12 @@ describe("renderTasksView", () => {
 
     const row = collect(container).find((element) => element.classes.has("task-hub-task-row"));
     row!.dispatch("contextmenu");
-    mockMenus[0].items[0].click?.();
+    mockMenus[0].items[1].click?.();
 
-    expect(mockMenus[0].items[0].title).toBe("createTaskNote");
-    expect(mockMenus[0].items[0].icon).toBe("sticky-note");
+    expect(mockMenus[0].items[0].title).toBe("sourceAppleReminders");
+    expect(mockMenus[0].items[0].disabled).toBe(true);
+    expect(mockMenus[0].items[1].title).toBe("createTaskNote");
+    expect(mockMenus[0].items[1].icon).toBe("sticky-note");
     expect(viewHandlers.onCreateTaskNote).toHaveBeenCalledWith(baseTask);
   });
 

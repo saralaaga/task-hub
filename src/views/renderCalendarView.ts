@@ -7,8 +7,18 @@ import type { TranslationKey, Translator } from "../i18n";
 import { normalizeReminderAlertMinutes, populateReminderAlertSelect, type ReminderAlertMinutes } from "../reminderAlerts";
 import type { TaskNote } from "../taskNotes";
 import type { AppleCalendarInfo, AppleReminderList, CalendarEvent, CalendarItemEditDraft, CalendarSource, CalendarSourceStatus, CalendarTimeScale, DidaProject, TaskItem, WeekStart } from "../types";
+import { canDeleteAppleCalendarEventCapability, canDeleteAppleReminderCapability } from "../integrationCapabilities";
+import {
+  addSourceIndicatorMenuItem,
+  deleteLabelForEvent,
+  deleteLabelForTask,
+  deleteLabelForTaskBulkAction,
+  sourceIndicatorLabelForEvent,
+  sourceIndicatorLabelForTask
+} from "./contextMenuLabels";
 import { renderTaskNoteBody, type TaskNoteMarkdownRenderer } from "./renderTaskNoteBody";
 import { resolveTaskBulkActions, type TaskBulkActionId } from "./taskSelection";
+import { renderSourceLogo, sourceLogoKindForCalendarItem } from "./sourceLogos";
 
 export type CalendarViewState = {
   mode: CalendarViewMode;
@@ -16,6 +26,10 @@ export type CalendarViewState = {
   weekStart: WeekStart;
   visibleSourceIds: Set<string>;
   includeCompletedTasks: boolean;
+  localAppleEnabled?: boolean;
+  localAppleSupported?: boolean;
+  localAppleRemindersEnabled?: boolean;
+  localAppleCalendarEnabled?: boolean;
   allowAppleReminderWriteback: boolean;
   allowAppleReminderCreate?: boolean;
   allowDidaWriteback?: boolean;
@@ -868,6 +882,7 @@ function renderUnscheduledTaskRow(container: HTMLElement, task: TaskItem, state:
   const row = container.createDiv({ cls: calendarItemClass(item, "task-hub-unscheduled-task") });
   registerCalendarItemElement(row, item);
   bindCalendarItemDrag(row, item, state);
+  bindCalendarItemContextMenu(row, item, state, handlers);
   if (item.color) row.style.setProperty("--task-hub-item-color", item.color);
 
   const checkbox = row.createEl("input", { type: "checkbox" });
@@ -1077,25 +1092,9 @@ function renderTimedTaskOverlapPopover(anchor: HTMLElement, items: CalendarItem[
 }
 
 function renderDetailSourceLogo(container: HTMLElement, item: CalendarItem): void {
-  const source = detailSourceKind(item);
+  const source = sourceLogoKindForCalendarItem(item);
   if (!source) return;
-  const logo = container.createSpan({ cls: `task-hub-calendar-detail-logo is-${source}` });
-  logo.setAttr("aria-hidden", "true");
-  if (source === "apple") {
-    logo.createSvg("svg", { attr: { viewBox: "0 0 24 24", focusable: "false" } })
-      .createSvg("path", { attr: { d: "M16.2 2.2c.1 1.2-.4 2.4-1.2 3.3-.8.9-2.1 1.5-3.2 1.4-.1-1.1.4-2.3 1.1-3.1.9-1 2.3-1.6 3.3-1.6ZM20 17.4c-.4.9-.6 1.3-1.1 2.1-.7 1.1-1.8 2.5-3.1 2.5-1.1 0-1.4-.7-2.9-.7s-1.8.7-2.9.7c-1.3 0-2.3-1.3-3.1-2.4-2.1-3.2-2.4-7-.9-9 1-1.3 2.5-2.1 3.9-2.1 1.4 0 2.3.7 3.1.7.8 0 2-.8 3.4-.7 1.2 0 2.4.5 3.3 1.7-2.9 1.6-2.4 5.6.3 7.2Z" } });
-    return;
-  }
-  logo.createSvg("svg", { attr: { viewBox: "0 0 24 24", focusable: "false" } })
-    .createSvg("path", { attr: { d: "M12 2 4.8 6.1 3.5 16 12 22l8.5-6-1.3-9.9L12 2Zm0 2.8 4.7 2.7-1 7.2L12 17.4l-3.7-2.7-1-7.2L12 4.8Zm0 3.2-2.2 1.3.5 3.6L12 14l1.7-1.1.5-3.6L12 8Z" } });
-}
-
-function detailSourceKind(item: CalendarItem): "apple" | "obsidian" | undefined {
-  if (item.task?.source === "vault") return "obsidian";
-  if (item.task?.source === "apple-reminders") return "apple";
-  if (item.task?.source === "dida") return "obsidian";
-  if (item.event?.sourceId === "apple-calendar") return "apple";
-  return undefined;
+  renderSourceLogo(container, "task-hub-calendar-detail-logo", source);
 }
 
 function positionDetailsPopover(popover: HTMLElement, anchor: HTMLElement): void {
@@ -1534,6 +1533,13 @@ function bindCalendarItemContextMenu(
       return;
     }
     let itemCount = 0;
+    if (item.task) {
+      addSourceIndicatorMenuItem(menu, sourceIndicatorLabelForTask(item.task, state.t));
+      itemCount += 1;
+    } else if (item.event) {
+      addSourceIndicatorMenuItem(menu, sourceIndicatorLabelForEvent(item.event, state.t));
+      itemCount += 1;
+    }
     if (state.taskNotesEnabled && item.task) {
       menu.addItem((menuItem) => {
         itemCount += 1;
@@ -1568,24 +1574,26 @@ function bindCalendarItemContextMenu(
       });
     }
     if (item.task && canDeleteTask(item, state)) {
+      const task = item.task;
       menu.addItem((menuItem) => {
         itemCount += 1;
         menuItem
-          .setTitle(state.t("deleteCalendarItem"))
+          .setTitle(deleteLabelForTask(task, state.t))
           .setIcon("trash")
           .onClick(() => {
-            if (item.task) handlers.onTaskDelete?.(item.task);
+            handlers.onTaskDelete?.(task);
           });
       });
     }
     if (item.event && canDeleteEvent(item, state)) {
+      const calendarEvent = item.event;
       menu.addItem((menuItem) => {
         itemCount += 1;
         menuItem
-          .setTitle(state.t("deleteCalendarItem"))
+          .setTitle(deleteLabelForEvent(calendarEvent, state.t))
           .setIcon("trash")
           .onClick(() => {
-            if (item.event) handlers.onEventDelete?.(item.event);
+            handlers.onEventDelete?.(calendarEvent);
           });
       });
     }
@@ -1688,16 +1696,22 @@ function addCalendarTaskBulkMenuItems(
   state: CalendarViewState,
   handlers: CalendarViewHandlers
 ): void {
+  if (tasks.length === 1) {
+    addSourceIndicatorMenuItem(menu, sourceIndicatorLabelForTask(tasks[0], state.t));
+  }
   const actions = resolveTaskBulkActions(tasks, {
     allowAppleReminderWriteback: state.allowAppleReminderWriteback,
     allowAppleReminderCreate: state.allowAppleReminderCreate,
     allowAppleCalendarReminderConversion: state.allowAppleCalendarReminderConversion,
+    allowDidaCreate: state.allowDidaCreate,
+    allowDidaWriteback: state.allowDidaWriteback,
+    allowDidaDelete: state.allowDidaDelete,
     taskNotesEnabled: state.taskNotesEnabled
   });
 
   for (const action of actions) {
     menu.addItem((menuItem) => {
-      const spec = calendarTaskBulkMenuSpec(action.id, state);
+      const spec = calendarTaskBulkMenuSpec(action.id, tasks, state);
       menuItem
         .setTitle(spec.title)
         .setIcon(spec.icon)
@@ -1726,14 +1740,15 @@ function addCalendarItemBulkMenuItems(
   });
 }
 
-function calendarTaskBulkMenuSpec(action: TaskBulkActionId, state: CalendarViewState): { title: string; icon: string } {
+function calendarTaskBulkMenuSpec(action: TaskBulkActionId, tasks: TaskItem[], state: CalendarViewState): { title: string; icon: string } {
   if (action === "create-note") return { title: state.t("createTaskNote"), icon: "sticky-note" };
   if (action === "mark-complete") return { title: state.t("markComplete"), icon: "check-square" };
   if (action === "mark-open") return { title: state.t("markOpen"), icon: "square" };
   if (action === "open-source") return { title: state.t("openSource"), icon: "external-link" };
+  if (action === "send-to-dida") return { title: state.t("sendToDida"), icon: "send" };
   if (action === "send-to-apple-reminders") return { title: state.t("sendToAppleReminders"), icon: "bell-plus" };
   if (action === "send-to-apple-calendar") return { title: state.t("sendToAppleCalendar"), icon: "calendar-plus" };
-  return { title: state.t("deleteCalendarItem"), icon: "trash" };
+  return { title: deleteLabelForTaskBulkAction(action, tasks, state.t), icon: "trash" };
 }
 
 function runCalendarTaskBulkAction(action: TaskBulkActionId, tasks: TaskItem[], handlers: CalendarViewHandlers): void {
@@ -1743,6 +1758,7 @@ function runCalendarTaskBulkAction(action: TaskBulkActionId, tasks: TaskItem[], 
     else if (action === "open-source") handlers.onTaskJump(task);
     else if (action === "delete") handlers.onTaskDelete?.(task);
     else if (action === "send-to-apple-reminders") handlers.onTaskSendToAppleReminders?.(task);
+    else if (action === "send-to-dida") handlers.onTaskSendToDida?.(task);
     else if (action === "send-to-apple-calendar") handlers.onTaskSendToAppleCalendar?.(task);
   }
 }
@@ -2261,6 +2277,7 @@ function calendarItemFromDragEvent(event: DragEvent, visibleItems: CalendarItem[
 }
 
 function isTaskHubDrag(event: DragEvent): boolean {
+  if (activeDraggedCalendarItemId) return true;
   const types = Array.from(event.dataTransfer?.types ?? []);
   return types.includes(CALENDAR_ITEM_DRAG_MIME) || types.includes(TASK_DRAG_MIME);
 }
@@ -2286,11 +2303,22 @@ function canResizeCalendarItem(item: CalendarItem, state: CalendarViewState): bo
 function canDeleteTask(item: CalendarItem, state: CalendarViewState): boolean {
   if (item.task?.source === "vault") return true;
   if (item.task?.source === "dida") return Boolean(state.allowDidaDelete && item.task.externalId);
-  return item.task?.source === "apple-reminders" && state.allowAppleReminderWriteback && Boolean(item.task.externalId);
+  return item.task?.source === "apple-reminders" && canDeleteAppleReminderCapability({
+    enabled: Boolean(state.localAppleEnabled),
+    remindersEnabled: Boolean(state.localAppleRemindersEnabled)
+  }, Boolean(state.localAppleSupported), item.task.externalId);
 }
 
 function canDeleteEvent(item: CalendarItem, state: CalendarViewState): boolean {
-  return isWritableAppleCalendarEvent(item, state) && Boolean(state.allowAppleCalendarWriteback);
+  return canDeleteAppleCalendarEventCapability(
+    {
+      enabled: Boolean(state.localAppleEnabled),
+      calendarEnabled: Boolean(state.localAppleCalendarEnabled)
+    },
+    Boolean(state.localAppleSupported),
+    isWritableAppleCalendarEvent(item, state),
+    item.event?.id
+  );
 }
 
 function canDeleteCalendarItem(item: CalendarItem, state: CalendarViewState): boolean {

@@ -1,16 +1,30 @@
+import { Menu } from "obsidian";
 import type { Translator } from "../i18n";
 import type { TaskItem } from "../types";
+import { addSourceIndicatorMenuItem, deleteLabelForTaskBulkAction, sourceIndicatorLabelForTask } from "./contextMenuLabels";
+import { resolveTaskBulkActions, type TaskBulkActionId } from "./taskSelection";
 
 export type TagViewHandlers = {
   onTagSelect: (tag: string) => void;
   onTaskComplete: (task: TaskItem) => void;
   onTaskSelect: (task: TaskItem) => void;
   onReorderTags: (sourceTag: string, targetTag: string) => void;
+  onTaskJump?: (task: TaskItem) => void;
+  onTaskDelete?: (task: TaskItem) => void;
+  onSendToAppleReminders?: (task: TaskItem) => void;
+  onSendToDida?: (task: TaskItem) => void;
+  onSendToAppleCalendar?: (task: TaskItem) => void;
+  onCreateTaskNote?: (task: TaskItem) => void;
 };
 
 export type TagRenderOptions = {
   allowAppleReminderWriteback: boolean;
+  allowAppleReminderCreate?: boolean;
   allowDidaWriteback?: boolean;
+  allowDidaCreate?: boolean;
+  allowDidaDelete?: boolean;
+  allowAppleCalendarReminderConversion?: boolean;
+  taskNotesEnabled?: boolean;
   orderedTags?: string[];
   sourceColors?: Partial<Record<TaskItem["source"], string>>;
   taskColors?: Record<string, string>;
@@ -77,7 +91,7 @@ function renderTagCard(
   renderMetrics(header, group.tasks, t);
   const taskList = card.createDiv({ cls: "task-hub-tag-task-list" });
   for (const entry of group.entries) {
-    renderTagTask(taskList, entry.task, group.tag, handlers, options, entry.contextOnly);
+    renderTagTask(taskList, entry.task, group.tag, handlers, options, t, entry.contextOnly);
   }
 }
 
@@ -87,6 +101,7 @@ function renderTagTask(
   cardTag: string,
   handlers: TagViewHandlers,
   options: TagRenderOptions,
+  t: Translator,
   contextOnly = false
 ): void {
   const item = container.createDiv({
@@ -113,6 +128,67 @@ function renderTagTask(
     scheduleWrappedTagLayout(body, title);
   }
   item.addEventListener("click", () => handlers.onTaskSelect(task));
+  item.addEventListener("contextmenu", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const menu = new Menu();
+    addTagTaskMenuItems(menu, [task], handlers, options, t);
+    menu.showAtMouseEvent(event as MouseEvent);
+  });
+}
+
+function addTagTaskMenuItems(
+  menu: Menu,
+  tasks: TaskItem[],
+  handlers: TagViewHandlers,
+  options: TagRenderOptions,
+  t: Translator
+): void {
+  if (tasks.length === 1) {
+    addSourceIndicatorMenuItem(menu, sourceIndicatorLabelForTask(tasks[0], t));
+  }
+  const actions = resolveTaskBulkActions(tasks, {
+    allowAppleReminderWriteback: options.allowAppleReminderWriteback,
+    allowAppleReminderCreate: options.allowAppleReminderCreate,
+    allowAppleCalendarReminderConversion: options.allowAppleCalendarReminderConversion,
+    allowDidaCreate: options.allowDidaCreate,
+    allowDidaWriteback: options.allowDidaWriteback,
+    allowDidaDelete: options.allowDidaDelete,
+    taskNotesEnabled: options.taskNotesEnabled
+  });
+
+  for (const action of actions) {
+    menu.addItem((item) => {
+      const spec = tagTaskMenuSpec(action.id, tasks, t);
+      item
+        .setTitle(spec.title)
+        .setIcon(spec.icon)
+        .onClick(() => runTagTaskAction(action.id, tasks, handlers));
+    });
+  }
+}
+
+function tagTaskMenuSpec(action: TaskBulkActionId, tasks: TaskItem[], t: Translator): { title: string; icon: string } {
+  if (action === "create-note") return { title: t("createTaskNote"), icon: "sticky-note" };
+  if (action === "mark-complete") return { title: t("markComplete"), icon: "check-square" };
+  if (action === "mark-open") return { title: t("markOpen"), icon: "square" };
+  if (action === "open-source") return { title: t("openSource"), icon: "external-link" };
+  if (action === "send-to-apple-reminders") return { title: t("sendToAppleReminders"), icon: "bell-plus" };
+  if (action === "send-to-apple-calendar") return { title: t("sendToAppleCalendar"), icon: "calendar-plus" };
+  if (action === "send-to-dida") return { title: t("sendToDida"), icon: "check-circle-2" };
+  return { title: deleteLabelForTaskBulkAction(action, tasks, t), icon: "trash" };
+}
+
+function runTagTaskAction(action: TaskBulkActionId, tasks: TaskItem[], handlers: TagViewHandlers): void {
+  for (const task of tasks) {
+    if (action === "create-note") handlers.onCreateTaskNote?.(task);
+    else if (action === "mark-complete" || action === "mark-open") handlers.onTaskComplete(task);
+    else if (action === "open-source") handlers.onTaskJump?.(task);
+    else if (action === "delete") handlers.onTaskDelete?.(task);
+    else if (action === "send-to-apple-reminders") handlers.onSendToAppleReminders?.(task);
+    else if (action === "send-to-apple-calendar") handlers.onSendToAppleCalendar?.(task);
+    else if (action === "send-to-dida") handlers.onSendToDida?.(task);
+  }
 }
 
 function taskDisplayColor(task: TaskItem, options: Pick<TagRenderOptions, "sourceColors" | "taskColors">): string | undefined {

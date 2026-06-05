@@ -51,6 +51,9 @@ export type TranslationKey =
   | "defaultView"
   | "defaultViewDesc"
   | "delete"
+  | "deleteFromAppleCalendar"
+  | "deleteFromAppleReminders"
+  | "deleteFromDida"
   | "deleteCalendarItem"
   | "dida"
   | "didaApiBase"
@@ -242,6 +245,10 @@ export type TranslationKey =
   | "showLunarCalendarDesc"
   | "skipped"
   | "sourceSearch"
+  | "sourceAppleCalendar"
+  | "sourceAppleReminders"
+  | "sourceDida"
+  | "sourceVaultTask"
   | "source"
   | "save"
   | "startTime"
@@ -368,6 +375,9 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     defaultViewDesc: "View shown when Task Hub opens.",
     delete: "Delete",
     deleteCalendarItem: "Delete from calendar",
+    deleteFromAppleCalendar: "Delete from Apple Calendar",
+    deleteFromAppleReminders: "Delete from Apple Reminders",
+    deleteFromDida: "Delete from Dida",
     dida: "Dida",
     didaApiBase: "API service",
     didaApiBaseDesc: "Choose Dida for China or TickTick for the international service.",
@@ -568,6 +578,10 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     sendToAppleReminders: "Send to Apple Reminders",
     sendToAppleRemindersDisabled: "Enable Apple Reminders creation in settings first",
     sendToDida: "Send to Dida",
+    sourceAppleCalendar: "Apple Calendar",
+    sourceAppleReminders: "Apple Reminders",
+    sourceDida: "Dida",
+    sourceVaultTask: "Vault task",
     showCompletedByDefault: "Show completed tasks by default",
     showCompletedByDefaultDesc: "Completed tasks remain indexed but hidden unless this is enabled.",
     showCompletedInView: "Show completed",
@@ -696,6 +710,9 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     defaultViewDesc: "打开 Task Hub 时默认显示的视图。",
     delete: "Delete",
     deleteCalendarItem: "从日历删除",
+    deleteFromAppleCalendar: "从 Apple Calendar 删除",
+    deleteFromAppleReminders: "从 Apple Reminders 删除",
+    deleteFromDida: "从滴答删除",
     dida: "滴答清单",
     didaApiBase: "API 服务",
     didaApiBaseDesc: "国内账号选择滴答清单，国际账号选择 TickTick。",
@@ -890,6 +907,10 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     sendToAppleReminders: "发送到 Apple 提醒事项",
     sendToAppleRemindersDisabled: "请先在设置中开启创建 Apple 提醒事项",
     sendToDida: "发送到滴答清单",
+    sourceAppleCalendar: "Apple Calendar",
+    sourceAppleReminders: "Apple Reminders",
+    sourceDida: "滴答清单",
+    sourceVaultTask: "vault 任务",
     showCompletedByDefault: "默认显示已完成任务",
     showCompletedByDefaultDesc: "已完成任务仍会被索引；关闭时默认隐藏。",
     showCompletedInView: "显示已完成",

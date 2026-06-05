@@ -205,6 +205,12 @@ export class TaskHubView extends ItemView {
             this.selectedTaskIds = new Set([task.id]);
             this.updateFilters({ ...this.filters, tags: [] });
           },
+          onTaskJump: (task) => void this.plugin.jumpToTask(task),
+          onTaskDelete: (task) => void this.plugin.deleteCalendarTask(task),
+          onSendToAppleReminders: (task) => void this.plugin.sendTaskToAppleReminders(task),
+          onSendToDida: (task) => void this.plugin.sendTaskToDida(task),
+          onSendToAppleCalendar: (task) => void this.plugin.convertAppleReminderToCalendarEvent(task),
+          onCreateTaskNote: (task) => void this.plugin.createTaskNoteForTask(task),
           onReorderTags: (sourceTag, targetTag) => {
             void this.reorderTagCards(sourceTag, targetTag);
           }
@@ -212,7 +218,13 @@ export class TaskHubView extends ItemView {
         t,
         {
           allowAppleReminderWriteback: this.plugin.settings.localApple.remindersWritebackEnabled,
+          allowAppleReminderCreate: this.plugin.canCreateAppleReminders(),
           allowDidaWriteback: this.plugin.settings.dida.tasksWritebackEnabled,
+          allowDidaCreate: this.plugin.canCreateDidaTasks(),
+          allowDidaDelete: this.plugin.settings.dida.tasksDeleteEnabled,
+          allowAppleCalendarReminderConversion:
+            this.plugin.settings.localApple.calendarReminderConversionEnabled && this.plugin.canConvertAppleCalendarAndReminders(),
+          taskNotesEnabled: this.plugin.settings.taskNotes.enabled,
           orderedTags: this.plugin.settings.tagViewOrder,
           sourceColors,
           taskColors
@@ -230,6 +242,10 @@ export class TaskHubView extends ItemView {
           weekStart: this.plugin.settings.weekStart,
           visibleSourceIds: this.visibleSourceIds,
           includeCompletedTasks: this.filters.status !== "open",
+          localAppleEnabled: this.plugin.settings.localApple.enabled,
+          localAppleSupported: this.plugin.isLocalAppleSupported(),
+          localAppleRemindersEnabled: this.plugin.settings.localApple.remindersEnabled,
+          localAppleCalendarEnabled: this.plugin.settings.localApple.calendarEnabled,
           allowAppleReminderWriteback: this.plugin.settings.localApple.remindersWritebackEnabled,
           allowAppleReminderCreate: this.plugin.canCreateAppleReminders(),
           allowDidaWriteback: this.plugin.settings.dida.tasksWritebackEnabled,

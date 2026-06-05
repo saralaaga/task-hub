@@ -1,5 +1,49 @@
+jest.mock("obsidian", () => ({
+  Menu: class {
+    items: Array<{ title: string; icon: string; disabled?: boolean; click?: () => void }> = [];
+    shownAt: unknown;
+
+    constructor() {
+      mockMenus.push(this);
+    }
+
+    addItem(build: (item: { setTitle(title: string): unknown; setIcon(icon: string): unknown; setDisabled(disabled: boolean): unknown; onClick(click: () => void): unknown }) => void): void {
+      const item = {
+        title: "",
+        icon: "",
+        disabled: undefined as boolean | undefined,
+        click: undefined as (() => void) | undefined,
+        setTitle(title: string) {
+          this.title = title;
+          return this;
+        },
+        setIcon(icon: string) {
+          this.icon = icon;
+          return this;
+        },
+        setDisabled(disabled: boolean) {
+          this.disabled = disabled;
+          return this;
+        },
+        onClick(click: () => void) {
+          this.click = click;
+          return this;
+        }
+      };
+      build(item);
+      this.items.push(item);
+    }
+
+    showAtMouseEvent(event: unknown): void {
+      this.shownAt = event;
+    }
+  }
+}), { virtual: true });
+
 import { renderTagsView } from "./renderTagsView";
 import type { TaskItem } from "../types";
+
+const mockMenus: Array<{ items: Array<{ title: string; icon: string; disabled?: boolean; click?: () => void }>; shownAt: unknown }> = [];
 
 class FakeElement {
   children: FakeElement[] = [];
@@ -11,7 +55,7 @@ class FakeElement {
   type = "";
   classes = new Set<string>();
   style = { setProperty: jest.fn() };
-  listeners = new Map<string, Array<(event: { stopPropagation(): void }) => void>>();
+  listeners = new Map<string, Array<(event: FakeEvent) => void>>();
 
   empty(): void {
     this.children = [];
@@ -43,14 +87,22 @@ class FakeElement {
     this.classes.delete(cls);
   }
 
-  addEventListener(name: string, listener: (event: { stopPropagation(): void }) => void): void {
+  addEventListener(name: string, listener: (event: FakeEvent) => void): void {
     this.listeners.set(name, [...(this.listeners.get(name) ?? []), listener]);
   }
 
   click(): void {
     for (const listener of this.listeners.get("click") ?? []) {
-      listener({ stopPropagation: jest.fn() });
+      listener({ stopPropagation: jest.fn(), preventDefault: jest.fn() });
     }
+  }
+
+  dispatch(name: string): FakeEvent {
+    const event = { stopPropagation: jest.fn(), preventDefault: jest.fn() };
+    for (const listener of this.listeners.get(name) ?? []) {
+      listener(event);
+    }
+    return event;
   }
 
   private append(options: { cls?: string; text?: string } = {}): FakeElement {
@@ -63,6 +115,11 @@ class FakeElement {
     return child;
   }
 }
+
+type FakeEvent = {
+  stopPropagation(): void;
+  preventDefault(): void;
+};
 
 function collect(element: FakeElement): FakeElement[] {
   return [element, ...element.children.flatMap(collect)];
@@ -92,6 +149,10 @@ const appleTask = (id: string, text: string, tags: string[], completed = false):
 });
 
 describe("renderTagsView", () => {
+  beforeEach(() => {
+    mockMenus.length = 0;
+  });
+
   it("renders tag cards with their tasks", () => {
     const container = new FakeElement();
 
@@ -322,6 +383,73 @@ describe("renderTagsView", () => {
     findCheckbox(container)?.click();
 
     expect(onTaskComplete).toHaveBeenCalledWith(selectedTask);
+  });
+
+  it("shows Dida task context actions from tag cards", () => {
+    const container = new FakeElement();
+    const didaTask = {
+      ...task("dida-1", "Dida task", ["#work"]),
+      source: "dida" as const,
+      externalId: "dida-1",
+      externalListId: "project-1",
+      dueDate: "2026-06-05"
+    };
+    const onTaskJump = jest.fn();
+    const onTaskDelete = jest.fn();
+
+    renderTagsView(
+      container as unknown as HTMLElement,
+      [didaTask],
+      {
+        onTagSelect: jest.fn(),
+        onTaskComplete: jest.fn(),
+        onTaskSelect: jest.fn(),
+        onTaskJump,
+        onTaskDelete,
+        onReorderTags: jest.fn()
+      },
+      (key) => key,
+      { allowAppleReminderWriteback: false, allowDidaWriteback: true, allowDidaDelete: true }
+    );
+
+    const taskRow = collect(container).find((element) => element.classes.has("task-hub-tag-task"));
+    const event = taskRow?.dispatch("contextmenu");
+
+    expect(event?.preventDefault).toHaveBeenCalled();
+    expect(mockMenus.at(-1)?.items.map((item) => item.title)).toEqual(["sourceDida", "markComplete", "openSource", "deleteFromDida"]);
+    expect(mockMenus.at(-1)?.items[0].disabled).toBe(true);
+    mockMenus.at(-1)?.items[2].click?.();
+    mockMenus.at(-1)?.items[3].click?.();
+    expect(onTaskJump).toHaveBeenCalledWith(didaTask);
+    expect(onTaskDelete).toHaveBeenCalledWith(didaTask);
+  });
+
+  it("shows send to Dida for vault tasks from tag cards when enabled", () => {
+    const container = new FakeElement();
+    const vaultTask = task("vault-send", "Vault send", ["#work"]);
+    const onSendToDida = jest.fn();
+
+    renderTagsView(
+      container as unknown as HTMLElement,
+      [vaultTask],
+      {
+        onTagSelect: jest.fn(),
+        onTaskComplete: jest.fn(),
+        onTaskSelect: jest.fn(),
+        onSendToDida,
+        onReorderTags: jest.fn()
+      },
+      (key) => key,
+      { allowAppleReminderWriteback: false, allowDidaCreate: true }
+    );
+
+    const taskRow = collect(container).find((element) => element.classes.has("task-hub-tag-task"));
+    taskRow?.dispatch("contextmenu");
+
+    expect(mockMenus.at(-1)?.items.map((item) => item.title)).toEqual(["sourceVaultTask", "markComplete", "openSource", "deleteCalendarItem", "sendToDida"]);
+    expect(mockMenus.at(-1)?.items[0].disabled).toBe(true);
+    mockMenus.at(-1)?.items[4].click?.();
+    expect(onSendToDida).toHaveBeenCalledWith(vaultTask);
   });
 
   it("renders only the tasks provided by the caller", () => {

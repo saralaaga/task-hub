@@ -1,17 +1,18 @@
 jest.mock("obsidian", () => ({
   setIcon: jest.fn(),
   Menu: class {
-    items: Array<{ title: string; icon: string; click?: () => void }> = [];
+    items: Array<{ title: string; icon: string; disabled?: boolean; click?: () => void }> = [];
     shownAt: unknown;
 
     constructor() {
       mockMenus.push(this);
     }
 
-    addItem(build: (item: { setTitle(title: string): unknown; setIcon(icon: string): unknown; onClick(click: () => void): unknown }) => void): void {
+    addItem(build: (item: { setTitle(title: string): unknown; setIcon(icon: string): unknown; setDisabled(disabled: boolean): unknown; onClick(click: () => void): unknown }) => void): void {
       const item = {
         title: "",
         icon: "",
+        disabled: undefined as boolean | undefined,
         click: undefined as (() => void) | undefined,
         setTitle(title: string) {
           this.title = title;
@@ -19,6 +20,10 @@ jest.mock("obsidian", () => ({
         },
         setIcon(icon: string) {
           this.icon = icon;
+          return this;
+        },
+        setDisabled(disabled: boolean) {
+          this.disabled = disabled;
           return this;
         },
         onClick(click: () => void) {
@@ -39,7 +44,7 @@ jest.mock("obsidian", () => ({
 import { renderCalendarView } from "./renderCalendarView";
 import type { CalendarEvent, CalendarSource, TaskItem } from "../types";
 
-const mockMenus: Array<{ items: Array<{ title: string; icon: string; click?: () => void }>; shownAt: unknown }> = [];
+const mockMenus: Array<{ items: Array<{ title: string; icon: string; disabled?: boolean; click?: () => void }>; shownAt: unknown }> = [];
 
 class FakeDocument {
   listeners = new Map<string, Array<(event: FakeEvent) => void>>();
@@ -303,6 +308,7 @@ class FakeDataTransfer {
   effectAllowed = "";
   dropEffect = "";
   hideData = false;
+  hideTypes = false;
   private values = new Map<string, string>();
 
   setData(type: string, value: string): void {
@@ -315,6 +321,7 @@ class FakeDataTransfer {
   }
 
   get types(): string[] {
+    if (this.hideTypes) return [];
     return Array.from(this.values.keys());
   }
 
@@ -1165,6 +1172,10 @@ describe("renderCalendarView", () => {
         weekStart: "monday",
         visibleSourceIds: new Set(["apple-reminders"]),
         includeCompletedTasks: false,
+        localAppleEnabled: true,
+        localAppleSupported: true,
+        localAppleRemindersEnabled: true,
+        localAppleCalendarEnabled: true,
         allowAppleReminderWriteback: true,
         allowTaskCreation: false,
         sources: [remindersSource],
@@ -1200,6 +1211,10 @@ describe("renderCalendarView", () => {
         weekStart: "monday",
         visibleSourceIds: new Set(["apple-reminders"]),
         includeCompletedTasks: false,
+        localAppleEnabled: true,
+        localAppleSupported: true,
+        localAppleRemindersEnabled: true,
+        localAppleCalendarEnabled: true,
         allowAppleReminderWriteback: true,
         allowTaskCreation: false,
         taskColors: { personal: "#ef4444" },
@@ -1522,6 +1537,55 @@ describe("renderCalendarView", () => {
     expect(onTaskDelete).toHaveBeenCalledWith(task);
   });
 
+  it("shows the Dida source logo in calendar task details", () => {
+    const container = new FakeElement();
+    const didaTask: TaskItem = {
+      ...task,
+      id: "dida-logo",
+      filePath: "Dida/Inbox",
+      rawLine: "Dida logo task",
+      text: "Dida logo task",
+      source: "dida",
+      externalId: "task-1",
+      externalListId: "project-1"
+    };
+
+    renderCalendarView(
+      container as unknown as HTMLElement,
+      {
+        mode: "month",
+        focusDate: new Date("2026-05-08T12:00:00Z"),
+        weekStart: "monday",
+        visibleSourceIds: new Set(["dida"]),
+        includeCompletedTasks: false,
+        allowAppleReminderWriteback: false,
+        allowDidaWriteback: true,
+        allowTaskCreation: false,
+        sources: [],
+        t: (key) => key
+      },
+      [didaTask],
+      [],
+      {
+        onLayerToggle: jest.fn(),
+        onModeChange: jest.fn(),
+        onMove: jest.fn(),
+        onDateCreateTask: jest.fn(),
+        onTaskComplete: jest.fn(),
+        onTaskJump: jest.fn(),
+        onTaskSelect: jest.fn(),
+        onTaskUpdate: jest.fn(),
+        onTaskReschedule: jest.fn(),
+        onToday: jest.fn()
+      }
+    );
+
+    collect(container).find((element) => element.classes.has("task-hub-calendar-item"))?.click();
+    const popover = collect(fakeDocument.body).find((element) => element.classes.has("task-hub-calendar-detail-popover"));
+    const logo = collect(popover as FakeElement).find((element) => element.classes.has("task-hub-calendar-detail-logo"));
+    expect(logo?.classes.has("is-dida")).toBe(true);
+  });
+
   it("renders calendar detail notes with menu actions instead of card clicks", () => {
     const container = new FakeElement();
     const onOpenTaskNote = jest.fn();
@@ -1614,6 +1678,10 @@ describe("renderCalendarView", () => {
         weekStart: "monday",
         visibleSourceIds: new Set(["apple-reminders"]),
         includeCompletedTasks: false,
+        localAppleEnabled: true,
+        localAppleSupported: true,
+        localAppleRemindersEnabled: true,
+        localAppleCalendarEnabled: true,
         allowAppleReminderWriteback: true,
         allowTaskCreation: false,
         sources: [remindersSource],
@@ -2260,6 +2328,10 @@ describe("renderCalendarView", () => {
         weekStart: "monday",
         visibleSourceIds: new Set(["apple-calendar:calendar-1"]),
         includeCompletedTasks: false,
+        localAppleEnabled: true,
+        localAppleSupported: true,
+        localAppleRemindersEnabled: true,
+        localAppleCalendarEnabled: true,
         allowAppleReminderWriteback: false,
         allowAppleCalendarWriteback: true,
         allowTaskCreation: false,
@@ -2538,6 +2610,113 @@ describe("renderCalendarView", () => {
     });
   });
 
+  it("shows send to Dida in the unscheduled task context menu when Dida creation is enabled", () => {
+    const container = new FakeElement();
+    const onTaskJump = jest.fn();
+    const onTaskDelete = jest.fn();
+    const onTaskSendToDida = jest.fn();
+    const unscheduledTask = { ...task, id: "task-unscheduled-dida", dueDate: undefined, rawLine: "- [ ] Send me", text: "Send me" };
+
+    renderCalendarView(
+      container as unknown as HTMLElement,
+      {
+        mode: "month",
+        focusDate: new Date("2026-05-08T12:00:00Z"),
+        weekStart: "monday",
+        visibleSourceIds: new Set(["vault"]),
+        includeCompletedTasks: false,
+        allowAppleReminderWriteback: false,
+        allowDidaCreate: true,
+        allowTaskCreation: false,
+        unscheduledPanelOpen: true,
+        unscheduledTasks: [unscheduledTask],
+        sources: [],
+        t: (key) => key
+      },
+      [unscheduledTask],
+      [],
+      {
+        onLayerToggle: jest.fn(),
+        onModeChange: jest.fn(),
+        onMove: jest.fn(),
+        onDateCreateTask: jest.fn(),
+        onTaskComplete: jest.fn(),
+        onTaskJump,
+        onTaskSelect: jest.fn(),
+        onTaskSelectionChange: jest.fn(),
+        onTaskReschedule: jest.fn(),
+        onTaskDelete: onTaskDelete,
+        onTaskSendToDida,
+        onToday: jest.fn()
+      }
+    );
+
+    const row = collect(container).find((element) => element.classes.has("task-hub-unscheduled-task"));
+    row!.dispatch("contextmenu");
+
+    expect(mockMenus.at(-1)?.items.map((item) => item.title)).toEqual(["sourceVaultTask", "openSource", "deleteCalendarItem", "sendToDida"]);
+    expect(mockMenus.at(-1)?.items[0].disabled).toBe(true);
+    mockMenus.at(-1)?.items[1].click?.();
+    mockMenus.at(-1)?.items[2].click?.();
+    mockMenus.at(-1)?.items[3].click?.();
+    expect(onTaskJump).toHaveBeenCalledWith(unscheduledTask);
+    expect(onTaskDelete).toHaveBeenCalledWith(unscheduledTask);
+    expect(onTaskSendToDida).toHaveBeenCalledWith(unscheduledTask);
+    expect(row?.classes.has("is-external-sending")).toBe(true);
+  });
+
+  it("supports bulk send to Dida from unscheduled task context menus", () => {
+    const container = new FakeElement();
+    const onTaskSelectionChange = jest.fn();
+    const onTaskSendToDida = jest.fn();
+    const firstTask = { ...task, id: "task-unscheduled-dida-1", dueDate: undefined, rawLine: "- [ ] First", text: "First" };
+    const secondTask = { ...task, id: "task-unscheduled-dida-2", dueDate: undefined, rawLine: "- [ ] Second", text: "Second" };
+
+    renderCalendarView(
+      container as unknown as HTMLElement,
+      {
+        mode: "month",
+        focusDate: new Date("2026-05-08T12:00:00Z"),
+        weekStart: "monday",
+        visibleSourceIds: new Set(["vault"]),
+        includeCompletedTasks: false,
+        allowAppleReminderWriteback: false,
+        allowDidaCreate: true,
+        allowTaskCreation: false,
+        unscheduledPanelOpen: true,
+        unscheduledTasks: [firstTask, secondTask],
+        sources: [],
+        t: (key) => key
+      },
+      [firstTask, secondTask],
+      [],
+      {
+        onLayerToggle: jest.fn(),
+        onModeChange: jest.fn(),
+        onMove: jest.fn(),
+        onDateCreateTask: jest.fn(),
+        onTaskComplete: jest.fn(),
+        onTaskJump: jest.fn(),
+        onTaskSelect: jest.fn(),
+        onTaskSelectionChange,
+        onTaskReschedule: jest.fn(),
+        onTaskSendToDida,
+        onToday: jest.fn()
+      }
+    );
+
+    const rows = collect(container).filter((element) => element.classes.has("task-hub-unscheduled-task"));
+    rows[0].dispatch("click");
+    rows[1].dispatch("click", { metaKey: true });
+    rows[1].dispatch("contextmenu");
+
+    expect(new Set(onTaskSelectionChange.mock.calls.at(-1)?.[1])).toEqual(new Set([firstTask.id, secondTask.id]));
+    expect(mockMenus.at(-1)?.items.map((item) => item.title)).toEqual(["markComplete", "deleteCalendarItem", "sendToDida"]);
+    mockMenus.at(-1)?.items[2].click?.();
+    expect(onTaskSendToDida).toHaveBeenCalledWith(firstTask);
+    expect(onTaskSendToDida).toHaveBeenCalledWith(secondTask);
+  });
+
   it("does not make Apple Reminder tasks draggable when writeback is disabled", () => {
     const container = new FakeElement();
 
@@ -2572,6 +2751,208 @@ describe("renderCalendarView", () => {
     const item = collect(container).find((element) => element.classes.has("task-hub-calendar-item"));
 
     expect(item?.draggable).toBe(false);
+  });
+
+  it("reschedules a dragged Dida task when writeback and drag reschedule are enabled in month view", () => {
+    const container = new FakeElement();
+    const onTaskReschedule = jest.fn();
+    const didaTask: TaskItem = {
+      ...task,
+      id: "dida-drag-month",
+      filePath: "Dida/Inbox",
+      rawLine: "Dida drag task",
+      text: "Dida drag task",
+      source: "dida",
+      externalId: "task-1",
+      externalListId: "project-1"
+    };
+
+    renderCalendarView(
+      container as unknown as HTMLElement,
+      {
+        mode: "month",
+        focusDate: new Date("2026-05-08T12:00:00Z"),
+        weekStart: "monday",
+        visibleSourceIds: new Set(["dida"]),
+        includeCompletedTasks: false,
+        allowAppleReminderWriteback: false,
+        allowDidaWriteback: true,
+        allowDidaDragReschedule: true,
+        allowTaskCreation: false,
+        sources: [],
+        t: (key) => key
+      },
+      [didaTask],
+      [],
+      {
+        onLayerToggle: jest.fn(),
+        onModeChange: jest.fn(),
+        onMove: jest.fn(),
+        onDateCreateTask: jest.fn(),
+        onTaskComplete: jest.fn(),
+        onTaskJump: jest.fn(),
+        onTaskSelect: jest.fn(),
+        onTaskReschedule,
+        onToday: jest.fn()
+      }
+    );
+
+    const item = collect(container).find((element) => element.classes.has("task-hub-calendar-item"));
+    const targetDay = collect(container)
+      .filter((element) => element.classes.has("task-hub-calendar-day"))
+      .find((element) => collect(element).map((child) => child.text).includes("12"));
+    const dataTransfer = new FakeDataTransfer();
+    item?.dispatch("dragstart", { dataTransfer });
+    targetDay?.dispatch("drop", { dataTransfer });
+
+    expect(item?.draggable).toBe(true);
+    expect(onTaskReschedule).toHaveBeenCalledWith(didaTask, "2026-05-12");
+  });
+
+  it("reschedules selected Dida tasks together to the dropped month day", () => {
+    const container = new FakeElement();
+    const onTaskSelectionChange = jest.fn();
+    const onTaskReschedule = jest.fn();
+    const firstTask: TaskItem = {
+      ...task,
+      id: "dida-drag-bulk-1",
+      filePath: "Dida/Inbox",
+      rawLine: "First Dida drag task",
+      text: "First Dida drag task",
+      source: "dida",
+      externalId: "task-1",
+      externalListId: "project-1"
+    };
+    const secondTask: TaskItem = {
+      ...task,
+      id: "dida-drag-bulk-2",
+      filePath: "Dida/Inbox",
+      rawLine: "Second Dida drag task",
+      text: "Second Dida drag task",
+      source: "dida",
+      externalId: "task-2",
+      externalListId: "project-1",
+      dueDate: "2026-05-09"
+    };
+
+    renderCalendarView(
+      container as unknown as HTMLElement,
+      {
+        mode: "month",
+        focusDate: new Date("2026-05-08T12:00:00Z"),
+        weekStart: "monday",
+        visibleSourceIds: new Set(["dida"]),
+        includeCompletedTasks: false,
+        allowAppleReminderWriteback: false,
+        allowDidaWriteback: true,
+        allowDidaDragReschedule: true,
+        allowTaskCreation: false,
+        sources: [],
+        t: (key) => key
+      },
+      [firstTask, secondTask],
+      [],
+      {
+        onLayerToggle: jest.fn(),
+        onModeChange: jest.fn(),
+        onMove: jest.fn(),
+        onDateCreateTask: jest.fn(),
+        onTaskComplete: jest.fn(),
+        onTaskJump: jest.fn(),
+        onTaskSelect: jest.fn(),
+        onTaskSelectionChange,
+        onTaskReschedule,
+        onToday: jest.fn()
+      }
+    );
+
+    const items = collect(container).filter((element) => element.classes.has("task-hub-calendar-item") && element.classes.has("is-task"));
+    items[0].dispatch("click");
+    items[1].dispatch("click", { metaKey: true });
+    const targetDay = collect(container)
+      .filter((element) => element.classes.has("task-hub-calendar-day"))
+      .find((element) => collect(element).map((child) => child.text).includes("12"));
+    const dataTransfer = new FakeDataTransfer();
+    items[1].dispatch("dragstart", { dataTransfer });
+    targetDay?.dispatch("drop", { dataTransfer });
+
+    expect(new Set(onTaskSelectionChange.mock.calls.at(-1)?.[1])).toEqual(new Set([firstTask.id, secondTask.id]));
+    expect(onTaskReschedule).toHaveBeenCalledWith(firstTask, "2026-05-12");
+    expect(onTaskReschedule).toHaveBeenCalledWith(secondTask, "2026-05-12");
+  });
+
+  it("keeps multi-select drag reschedule working when transfer types disappear mid-drag", () => {
+    const container = new FakeElement();
+    const onTaskSelectionChange = jest.fn();
+    const onTaskReschedule = jest.fn();
+    const firstTask: TaskItem = {
+      ...task,
+      id: "dida-drag-fallback-1",
+      filePath: "Dida/Inbox",
+      rawLine: "First fallback drag task",
+      text: "First fallback drag task",
+      source: "dida",
+      externalId: "task-1",
+      externalListId: "project-1"
+    };
+    const secondTask: TaskItem = {
+      ...task,
+      id: "dida-drag-fallback-2",
+      filePath: "Dida/Inbox",
+      rawLine: "Second fallback drag task",
+      text: "Second fallback drag task",
+      source: "dida",
+      externalId: "task-2",
+      externalListId: "project-1",
+      dueDate: "2026-05-09"
+    };
+
+    renderCalendarView(
+      container as unknown as HTMLElement,
+      {
+        mode: "month",
+        focusDate: new Date("2026-05-08T12:00:00Z"),
+        weekStart: "monday",
+        visibleSourceIds: new Set(["dida"]),
+        includeCompletedTasks: false,
+        allowAppleReminderWriteback: false,
+        allowDidaWriteback: true,
+        allowDidaDragReschedule: true,
+        allowTaskCreation: false,
+        sources: [],
+        t: (key) => key
+      },
+      [firstTask, secondTask],
+      [],
+      {
+        onLayerToggle: jest.fn(),
+        onModeChange: jest.fn(),
+        onMove: jest.fn(),
+        onDateCreateTask: jest.fn(),
+        onTaskComplete: jest.fn(),
+        onTaskJump: jest.fn(),
+        onTaskSelect: jest.fn(),
+        onTaskSelectionChange,
+        onTaskReschedule,
+        onToday: jest.fn()
+      }
+    );
+
+    const items = collect(container).filter((element) => element.classes.has("task-hub-calendar-item") && element.classes.has("is-task"));
+    items[0].dispatch("click");
+    items[1].dispatch("click", { metaKey: true });
+    const targetDay = collect(container)
+      .filter((element) => element.classes.has("task-hub-calendar-day"))
+      .find((element) => collect(element).map((child) => child.text).includes("12"));
+    const dataTransfer = new FakeDataTransfer();
+    items[1].dispatch("dragstart", { dataTransfer });
+    dataTransfer.hideTypes = true;
+    targetDay?.dispatch("dragover", { dataTransfer });
+    targetDay?.dispatch("drop", { dataTransfer });
+
+    expect(new Set(onTaskSelectionChange.mock.calls.at(-1)?.[1])).toEqual(new Set([firstTask.id, secondTask.id]));
+    expect(onTaskReschedule).toHaveBeenCalledWith(firstTask, "2026-05-12");
+    expect(onTaskReschedule).toHaveBeenCalledWith(secondTask, "2026-05-12");
   });
 
   it("reschedules a dragged Apple Reminder when writeback is enabled in month view", () => {
@@ -2661,6 +3042,53 @@ describe("renderCalendarView", () => {
     dataTransfer.hideData = true;
     const dragover = targetDay?.dispatch("dragover", { dataTransfer });
     dataTransfer.hideData = false;
+    targetDay?.dispatch("drop", { dataTransfer });
+
+    expect(dragover?.preventDefault).toHaveBeenCalled();
+    expect(onTaskReschedule).toHaveBeenCalledWith(reminderTask, "2026-05-12");
+  });
+
+  it("accepts task drops when drag events cannot expose transfer types after dragstart", () => {
+    const container = new FakeElement();
+    const onTaskReschedule = jest.fn();
+    const reminderTask = { ...task, source: "apple-reminders" as const, externalId: "reminder-1" };
+
+    renderCalendarView(
+      container as unknown as HTMLElement,
+      {
+        mode: "month",
+        focusDate: new Date("2026-05-08T12:00:00Z"),
+        weekStart: "monday",
+        visibleSourceIds: new Set(["apple-reminders"]),
+        includeCompletedTasks: false,
+        allowAppleReminderWriteback: true,
+        allowTaskCreation: false,
+        sources: [remindersSource],
+        t: (key) => key
+      },
+      [reminderTask],
+      [],
+      {
+        onLayerToggle: jest.fn(),
+        onModeChange: jest.fn(),
+        onMove: jest.fn(),
+        onDateCreateTask: jest.fn(),
+        onTaskComplete: jest.fn(),
+        onTaskJump: jest.fn(),
+        onTaskSelect: jest.fn(),
+        onTaskReschedule,
+        onToday: jest.fn()
+      }
+    );
+
+    const item = collect(container).find((element) => element.classes.has("task-hub-calendar-item"));
+    const targetDay = collect(container)
+      .filter((element) => element.classes.has("task-hub-calendar-day"))
+      .find((element) => collect(element).map((child) => child.text).includes("12"));
+    const dataTransfer = new FakeDataTransfer();
+    item?.dispatch("dragstart", { dataTransfer });
+    dataTransfer.hideTypes = true;
+    const dragover = targetDay?.dispatch("dragover", { dataTransfer });
     targetDay?.dispatch("drop", { dataTransfer });
 
     expect(dragover?.preventDefault).toHaveBeenCalled();
@@ -3085,6 +3513,10 @@ describe("renderCalendarView", () => {
         weekStart: "monday",
         visibleSourceIds: new Set(["vault", "apple-calendar:calendar-1"]),
         includeCompletedTasks: false,
+        localAppleEnabled: true,
+        localAppleSupported: true,
+        localAppleRemindersEnabled: true,
+        localAppleCalendarEnabled: true,
         allowAppleReminderWriteback: false,
         allowAppleCalendarWriteback: true,
         allowTaskCreation: false,
@@ -3137,6 +3569,10 @@ describe("renderCalendarView", () => {
         weekStart: "monday",
         visibleSourceIds: new Set(["vault", "apple-calendar:calendar-1"]),
         includeCompletedTasks: false,
+        localAppleEnabled: true,
+        localAppleSupported: true,
+        localAppleRemindersEnabled: true,
+        localAppleCalendarEnabled: true,
         allowAppleReminderWriteback: false,
         allowAppleCalendarWriteback: true,
         allowTaskCreation: false,
@@ -3191,6 +3627,10 @@ describe("renderCalendarView", () => {
         weekStart: "monday",
         visibleSourceIds: new Set(["vault", "apple-calendar:calendar-1"]),
         includeCompletedTasks: false,
+        localAppleEnabled: true,
+        localAppleSupported: true,
+        localAppleRemindersEnabled: true,
+        localAppleCalendarEnabled: true,
         allowAppleReminderWriteback: false,
         allowAppleCalendarWriteback: true,
         allowTaskCreation: false,
@@ -3247,6 +3687,10 @@ describe("renderCalendarView", () => {
         weekStart: "monday",
         visibleSourceIds: new Set(["vault", "apple-calendar:calendar-1"]),
         includeCompletedTasks: false,
+        localAppleEnabled: true,
+        localAppleSupported: true,
+        localAppleRemindersEnabled: true,
+        localAppleCalendarEnabled: true,
         allowAppleReminderWriteback: false,
         allowAppleCalendarWriteback: true,
         allowTaskCreation: false,
@@ -3313,6 +3757,10 @@ describe("renderCalendarView", () => {
         weekStart: "monday",
         visibleSourceIds: new Set(["vault", "apple-calendar:calendar-1"]),
         includeCompletedTasks: false,
+        localAppleEnabled: true,
+        localAppleSupported: true,
+        localAppleRemindersEnabled: true,
+        localAppleCalendarEnabled: true,
         allowAppleReminderWriteback: false,
         allowAppleCalendarWriteback: true,
         allowTaskCreation: false,
@@ -3438,6 +3886,10 @@ describe("renderCalendarView", () => {
         weekStart: "monday",
         visibleSourceIds: new Set(["vault", "apple-calendar:calendar-1"]),
         includeCompletedTasks: false,
+        localAppleEnabled: true,
+        localAppleSupported: true,
+        localAppleRemindersEnabled: true,
+        localAppleCalendarEnabled: true,
         allowAppleReminderWriteback: false,
         allowAppleCalendarWriteback: true,
         allowTaskCreation: false,
@@ -3467,9 +3919,12 @@ describe("renderCalendarView", () => {
     const items = collect(container).filter((element) => element.classes.has("task-hub-calendar-item"));
     const taskItem = items.find((element) => collect(element).some((child) => child.text === "Delete task"));
     const eventItem = items.find((element) => collect(element).some((child) => child.text === "Delete event"));
+    taskItem?.dispatch("click");
     eventItem?.dispatch("click", { metaKey: true });
-    taskItem?.dispatch("contextmenu");
+    eventItem?.dispatch("contextmenu");
 
+    expect(taskItem?.classes.has("is-multi-selected")).toBe(true);
+    expect(eventItem?.classes.has("is-multi-selected")).toBe(true);
     expect(mockMenus.at(-1)?.items.map((item) => item.title)).toEqual(["deleteCalendarItem"]);
     mockMenus.at(-1)?.items[0].click?.();
     expect(onTaskDelete).toHaveBeenCalledWith(selectedTask);
@@ -4463,23 +4918,72 @@ describe("renderCalendarView", () => {
 
     const item = collect(container).find((element) => element.classes.has("task-hub-calendar-item"));
     const contextEvent = item!.dispatch("contextmenu");
-    mockMenus[0].items[0].click?.();
     mockMenus[0].items[1].click?.();
     mockMenus[0].items[2].click?.();
+    mockMenus[0].items[3].click?.();
 
     expect(contextEvent.preventDefault).toHaveBeenCalled();
     expect(contextEvent.stopPropagation).toHaveBeenCalled();
     expect(item?.classes.has("is-selected")).toBe(true);
-    expect(mockMenus[0].items[0].title).toBe("openSource");
-    expect(mockMenus[0].items[0].icon).toBe("external-link");
-    expect(mockMenus[0].items[1].title).toBe("deleteCalendarItem");
-    expect(mockMenus[0].items[1].icon).toBe("trash");
-    expect(mockMenus[0].items[2].title).toBe("sendToAppleReminders");
-    expect(mockMenus[0].items[2].icon).toBe("bell-plus");
+    expect(mockMenus[0].items[0].title).toBe("sourceVaultTask");
+    expect(mockMenus[0].items[0].disabled).toBe(true);
+    expect(mockMenus[0].items[1].title).toBe("openSource");
+    expect(mockMenus[0].items[1].icon).toBe("external-link");
+    expect(mockMenus[0].items[2].title).toBe("deleteCalendarItem");
+    expect(mockMenus[0].items[2].icon).toBe("trash");
+    expect(mockMenus[0].items[3].title).toBe("sendToAppleReminders");
+    expect(mockMenus[0].items[3].icon).toBe("bell-plus");
     expect(onTaskJump).toHaveBeenCalledWith(task);
     expect(onTaskDelete).toHaveBeenCalledWith(task);
     expect(onTaskSendToAppleReminders).toHaveBeenCalledWith(task);
     expect(item?.classes.has("is-external-sending")).toBe(true);
+  });
+
+  it("shows both Apple Reminders and Dida send actions for vault tasks when both are enabled", () => {
+    const container = new FakeElement();
+
+    renderCalendarView(
+      container as unknown as HTMLElement,
+      {
+        mode: "month",
+        focusDate: new Date("2026-05-08T12:00:00Z"),
+        weekStart: "monday",
+        visibleSourceIds: new Set(["vault"]),
+        includeCompletedTasks: false,
+        allowAppleReminderWriteback: false,
+        allowAppleReminderCreate: true,
+        allowDidaCreate: true,
+        allowTaskCreation: false,
+        sources: [],
+        t: (key) => key
+      },
+      [task],
+      [],
+      {
+        onLayerToggle: jest.fn(),
+        onModeChange: jest.fn(),
+        onMove: jest.fn(),
+        onDateCreateTask: jest.fn(),
+        onTaskComplete: jest.fn(),
+        onTaskJump: jest.fn(),
+        onTaskSelect: jest.fn(),
+        onTaskReschedule: jest.fn(),
+        onTaskDelete: jest.fn(),
+        onTaskSendToAppleReminders: jest.fn(),
+        onTaskSendToDida: jest.fn(),
+        onToday: jest.fn()
+      }
+    );
+
+    collect(container).find((element) => element.classes.has("task-hub-calendar-item"))?.dispatch("contextmenu");
+
+    expect(mockMenus[0].items.map((item) => item.title)).toEqual([
+      "sourceVaultTask",
+      "openSource",
+      "deleteCalendarItem",
+      "sendToAppleReminders",
+      "sendToDida"
+    ]);
   });
 
   it("uses command or control clicks to build a task-only bulk menu in calendar views", () => {
@@ -4592,10 +5096,12 @@ describe("renderCalendarView", () => {
 
     const item = collect(container).find((element) => element.classes.has("task-hub-calendar-item"));
     item!.dispatch("contextmenu");
-    mockMenus[0].items[0].click?.();
+    mockMenus[0].items[1].click?.();
 
-    expect(mockMenus[0].items[0].title).toBe("createTaskNote");
-    expect(mockMenus[0].items[0].icon).toBe("sticky-note");
+    expect(mockMenus[0].items[0].title).toBe("sourceVaultTask");
+    expect(mockMenus[0].items[0].disabled).toBe(true);
+    expect(mockMenus[0].items[1].title).toBe("createTaskNote");
+    expect(mockMenus[0].items[1].icon).toBe("sticky-note");
     expect(onCreateTaskNote).toHaveBeenCalledWith(task);
   });
 
@@ -4680,7 +5186,7 @@ describe("renderCalendarView", () => {
     );
     collect(remindersOnlyContainer).find((element) => element.classes.has("task-hub-calendar-item"))?.dispatch("contextmenu");
 
-    expect(mockMenus[0].items.map((item) => item.title)).toEqual(["openSource", "deleteCalendarItem", "sendToAppleReminders"]);
+    expect(mockMenus[0].items.map((item) => item.title)).toEqual(["sourceVaultTask", "openSource", "deleteCalendarItem", "sendToAppleReminders"]);
   });
 
   it("keeps read-only Apple Calendar events display-only in the context menu", () => {
@@ -4734,7 +5240,7 @@ describe("renderCalendarView", () => {
 
     collect(container).find((element) => element.classes.has("task-hub-calendar-item"))?.dispatch("contextmenu");
 
-    expect(mockMenus[0].items.map((item) => item.title)).toEqual(["sendToAppleRemindersDisabled"]);
+    expect(mockMenus[0].items.map((item) => item.title)).toEqual(["sourceAppleCalendar"]);
   });
 
   it("keeps delete available when no Apple send destination is enabled", () => {
@@ -4769,9 +5275,11 @@ describe("renderCalendarView", () => {
     );
     collect(disabledContainer).find((element) => element.classes.has("task-hub-calendar-item"))?.dispatch("contextmenu");
 
-    expect(mockMenus.at(-1)?.items).toHaveLength(2);
-    expect(mockMenus.at(-1)?.items[0].title).toBe("openSource");
-    expect(mockMenus.at(-1)?.items[1].title).toBe("deleteCalendarItem");
+    expect(mockMenus.at(-1)?.items).toHaveLength(3);
+    expect(mockMenus.at(-1)?.items[0].title).toBe("sourceVaultTask");
+    expect(mockMenus.at(-1)?.items[0].disabled).toBe(true);
+    expect(mockMenus.at(-1)?.items[1].title).toBe("openSource");
+    expect(mockMenus.at(-1)?.items[2].title).toBe("deleteCalendarItem");
 
     const remindersContainer = new FakeElement();
     renderCalendarView(
@@ -4782,13 +5290,17 @@ describe("renderCalendarView", () => {
         weekStart: "monday",
         visibleSourceIds: new Set(["apple-reminders"]),
         includeCompletedTasks: false,
+        localAppleEnabled: true,
+        localAppleSupported: true,
+        localAppleRemindersEnabled: true,
+        localAppleCalendarEnabled: true,
         allowAppleReminderWriteback: false,
         allowAppleReminderCreate: true,
         allowTaskCreation: false,
         sources: [remindersSource],
         t: (key) => key
       },
-      [{ ...task, source: "apple-reminders" }],
+      [{ ...task, source: "apple-reminders", externalId: "reminder-1" }],
       [],
       {
         onLayerToggle: jest.fn(),
@@ -4805,7 +5317,68 @@ describe("renderCalendarView", () => {
     collect(remindersContainer).find((element) => element.classes.has("task-hub-calendar-item"))?.dispatch("contextmenu");
 
     expect(mockMenus).toHaveLength(2);
-    expect(mockMenus.at(-1)?.items).toHaveLength(1);
-    expect(mockMenus.at(-1)?.items[0].title).toBe("openSource");
+    expect(mockMenus.at(-1)?.items).toHaveLength(3);
+    expect(mockMenus.at(-1)?.items[0].title).toBe("sourceAppleReminders");
+    expect(mockMenus.at(-1)?.items[0].disabled).toBe(true);
+    expect(mockMenus.at(-1)?.items[1].title).toBe("openSource");
+    expect(mockMenus.at(-1)?.items[2].title).toBe("deleteFromAppleReminders");
+  });
+
+  it("keeps Apple Calendar delete in the context menu when the calendar is writable", () => {
+    const container = new FakeElement();
+    const timedEvent = {
+      ...event,
+      start: "2026-05-08T09:00",
+      end: "2026-05-08T10:00",
+      allDay: false,
+      calendarId: "calendar-1",
+      calendarName: "提醒"
+    };
+
+    renderCalendarView(
+      container as unknown as HTMLElement,
+      {
+        mode: "day",
+        focusDate: new Date("2026-05-08T12:00:00Z"),
+        weekStart: "monday",
+        visibleSourceIds: new Set(["apple-calendar:calendar-1"]),
+        includeCompletedTasks: false,
+        localAppleEnabled: true,
+        localAppleSupported: true,
+        localAppleRemindersEnabled: true,
+        localAppleCalendarEnabled: true,
+        allowAppleReminderWriteback: false,
+        allowAppleCalendarWriteback: false,
+        allowTaskCreation: false,
+        appleCalendars: [{ id: "calendar-1", name: "提醒", writable: true }],
+        sources: [{
+          ...source,
+          id: "apple-calendar:calendar-1",
+          name: "Apple 日历 / 提醒"
+        }],
+        t: (key) => key
+      },
+      [],
+      [timedEvent],
+      {
+        onLayerToggle: jest.fn(),
+        onModeChange: jest.fn(),
+        onMove: jest.fn(),
+        onDateCreateTask: jest.fn(),
+        onTaskComplete: jest.fn(),
+        onTaskJump: jest.fn(),
+        onTaskSelect: jest.fn(),
+        onTaskReschedule: jest.fn(),
+        onEventDelete: jest.fn(),
+        onToday: jest.fn()
+      }
+    );
+
+    collect(container).find((element) => element.classes.has("task-hub-calendar-timed-item"))?.dispatch("contextmenu");
+
+    expect(mockMenus.at(-1)?.items.map((item) => item.title)).toEqual([
+      "sourceAppleCalendar",
+      "deleteFromAppleCalendar"
+    ]);
   });
 });

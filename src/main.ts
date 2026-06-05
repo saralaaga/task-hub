@@ -9,6 +9,12 @@ import { DIDA_INBOX_PROJECT_NAME, didaProjectsFromRecords, didaSource, didaTaskT
 import { extractDidaTitleTags } from "./dida/didaTags";
 import { createTranslator } from "./i18n";
 import { registerTaskHubIcon, TASK_HUB_ICON_ID } from "./icons";
+import {
+  canCreateAppleRemindersCapability,
+  canCreateDidaTasksCapability,
+  canDeleteAppleCalendarEventCapability,
+  canDeleteAppleReminderCapability
+} from "./integrationCapabilities";
 import { parseTaskAtLine } from "./indexing/editorTask";
 import { completeTaskInContent, deleteTaskInContent, rescheduleTaskInContent, updateTaskLineInContent, type CompletionResult } from "./indexing/taskActions";
 import { TaskIndex } from "./indexing/taskIndex";
@@ -142,6 +148,7 @@ export default class TaskHubPlugin extends Plugin {
   localAppleEvents: CalendarEvent[] = [];
   localAppleStatus: LocalAppleSyncStatus = { state: "never" };
   didaTasks: TaskItem[] = [];
+  private appleReminderWriteQueue: Promise<unknown> = Promise.resolve();
 
   isLocalAppleSupported(): boolean {
     return Platform.isDesktopApp && process.platform === "darwin";
@@ -209,13 +216,14 @@ export default class TaskHubPlugin extends Plugin {
     }
   }
 
+  private runAppleReminderWrite<T>(write: () => Promise<T>): Promise<T> {
+    const run = this.appleReminderWriteQueue.then(() => this.writeAppleReminderWithAccessRetry(write));
+    this.appleReminderWriteQueue = run.catch(() => undefined);
+    return run;
+  }
+
   canCreateAppleReminders(): boolean {
-    return (
-      this.isLocalAppleSupported() &&
-      this.settings.localApple.enabled &&
-      this.settings.localApple.remindersEnabled &&
-      this.settings.localApple.remindersCreateEnabled
-    );
+    return canCreateAppleRemindersCapability(this.settings.localApple, this.isLocalAppleSupported());
   }
 
   canSendTasksToAppleCalendar(): boolean {
@@ -261,7 +269,7 @@ export default class TaskHubPlugin extends Plugin {
   }
 
   canCreateDidaTasks(): boolean {
-    return this.settings.dida.enabled && this.settings.dida.tasksEnabled && this.settings.dida.tasksCreateEnabled && Boolean(this.settings.dida.apiToken.trim());
+    return canCreateDidaTasksCapability(this.settings.dida);
   }
 
   getDidaProjects() {
@@ -520,7 +528,7 @@ export default class TaskHubPlugin extends Plugin {
 
       try {
         const reminderId = task.externalId;
-        await this.writeAppleReminderWithAccessRetry(() =>
+        await this.runAppleReminderWrite(() =>
           setAppleReminderDueDate(reminderId, timedTarget.dateKey, timedTarget.startMinutes)
         );
         await this.syncLocalApple({ silent: true });
@@ -604,14 +612,14 @@ export default class TaskHubPlugin extends Plugin {
     }
 
     if (task.source === "apple-reminders") {
-      if (!this.isLocalAppleSupported() || !this.settings.localApple.remindersWritebackEnabled || !task.externalId) {
+      if (!canDeleteAppleReminderCapability(this.settings.localApple, this.isLocalAppleSupported(), task.externalId)) {
         const result: CompletionResult = { status: "conflict", message: t("externalTaskReadOnly") };
         new Notice(result.message);
         return result;
       }
       try {
-        const reminderId = task.externalId;
-        await this.writeAppleReminderWithAccessRetry(() => deleteAppleReminder(reminderId));
+        const reminderId = task.externalId as string;
+        await this.runAppleReminderWrite(() => deleteAppleReminder(reminderId));
         await this.syncLocalApple({ silent: true });
         new Notice(t("calendarItemDeleted"));
         this.refreshOpenViews();
@@ -658,7 +666,15 @@ export default class TaskHubPlugin extends Plugin {
 
   async deleteCalendarEvent(event: CalendarEvent): Promise<CompletionResult> {
     const t = createTranslator(this.settings.language);
-    if (event.sourceId !== "apple-calendar" || !this.settings.localApple.calendarWritebackEnabled) {
+    if (
+      event.sourceId !== "apple-calendar" ||
+      !canDeleteAppleCalendarEventCapability(
+        this.settings.localApple,
+        this.isLocalAppleSupported(),
+        this.isWritableAppleCalendarEvent(event),
+        event.id
+      )
+    ) {
       const result: CompletionResult = { status: "conflict", message: t("externalTaskReadOnly") };
       new Notice(result.message);
       return result;
@@ -789,7 +805,7 @@ export default class TaskHubPlugin extends Plugin {
         tags: reminderTags
       };
       try {
-        await this.writeAppleReminderWithAccessRetry(() => setAppleReminderDetails(input));
+        await this.runAppleReminderWrite(() => setAppleReminderDetails(input));
         await this.syncLocalApple({ silent: true });
         new Notice(t("taskUpdated"));
         this.refreshOpenViews();

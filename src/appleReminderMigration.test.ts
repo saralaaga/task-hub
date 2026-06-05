@@ -942,6 +942,74 @@ describe("Apple Reminders migration", () => {
     expect(notices).not.toContain("Task is already on this date.");
   });
 
+  it("serializes concurrent Apple Reminder drag reschedules", async () => {
+    const plugin = new TaskHubPlugin({} as never, {} as never);
+    plugin.app = {
+      workspace: {
+        getLeavesOfType: jest.fn(() => [])
+      }
+    } as never;
+    plugin.settings = {
+      ...DEFAULT_SETTINGS,
+      localApple: {
+        ...DEFAULT_SETTINGS.localApple,
+        enabled: true,
+        remindersEnabled: true,
+        remindersWritebackEnabled: true
+      }
+    };
+    plugin.syncLocalApple = jest.fn(async () => undefined) as never;
+
+    const callOrder: string[] = [];
+    let activeCalls = 0;
+    let releaseCurrent: (() => void) | undefined;
+    setAppleReminderDueDate.mockImplementation(async (id: string) => {
+      callOrder.push(`start:${id}`);
+      activeCalls += 1;
+      if (activeCalls > 1) {
+        throw new Error(`Concurrent Apple Reminder write detected for ${id}`);
+      }
+      await new Promise<void>((resolve) => {
+        releaseCurrent = () => {
+          callOrder.push(`end:${id}`);
+          activeCalls -= 1;
+          resolve();
+        };
+      });
+    });
+
+    const first = plugin.rescheduleTask(appleReminderTask({ externalId: "reminder-1" }), {
+      dateKey: "2026-05-21",
+      startMinutes: 540
+    });
+    await Promise.resolve();
+    expect(callOrder).toEqual(["start:reminder-1"]);
+
+    const second = plugin.rescheduleTask(appleReminderTask({ id: "apple-reminders:reminder-2", externalId: "reminder-2" }), {
+      dateKey: "2026-05-22",
+      startMinutes: 600
+    });
+    await Promise.resolve();
+    expect(callOrder).toEqual(["start:reminder-1"]);
+
+    releaseCurrent?.();
+    await first;
+    await Promise.resolve();
+    expect(callOrder).toEqual(["start:reminder-1", "end:reminder-1", "start:reminder-2"]);
+
+    releaseCurrent?.();
+    await second;
+
+    expect(callOrder).toEqual([
+      "start:reminder-1",
+      "end:reminder-1",
+      "start:reminder-2",
+      "end:reminder-2"
+    ]);
+    expect(setAppleReminderDueDate).toHaveBeenNthCalledWith(1, "reminder-1", "2026-05-21", 540);
+    expect(setAppleReminderDueDate).toHaveBeenNthCalledWith(2, "reminder-2", "2026-05-22", 600);
+  });
+
   it("creates an Apple Calendar event in the selected calendar", async () => {
     const plugin = new TaskHubPlugin({} as never, {} as never);
     plugin.app = {
@@ -1352,7 +1420,7 @@ describe("Apple Reminders migration", () => {
     expect(notices).toContain("Calendar item deleted.");
   });
 
-  it("deletes an Apple Reminder only when writeback is enabled", async () => {
+  it("deletes an Apple Reminder when Apple Reminders integration is enabled", async () => {
     const plugin = new TaskHubPlugin({} as never, {} as never);
     plugin.app = {
       workspace: {
@@ -1365,7 +1433,7 @@ describe("Apple Reminders migration", () => {
         ...DEFAULT_SETTINGS.localApple,
         enabled: true,
         remindersEnabled: true,
-        remindersWritebackEnabled: true
+        remindersWritebackEnabled: false
       }
     };
     plugin.syncLocalApple = jest.fn(async () => undefined) as never;
@@ -1376,7 +1444,7 @@ describe("Apple Reminders migration", () => {
     expect(notices).toContain("Calendar item deleted.");
   });
 
-  it("deletes an Apple Calendar event only when writeback is enabled", async () => {
+  it("deletes an Apple Calendar event when Apple Calendar integration is enabled", async () => {
     const plugin = new TaskHubPlugin({} as never, {} as never);
     plugin.app = {
       workspace: {
@@ -1389,7 +1457,7 @@ describe("Apple Reminders migration", () => {
         ...DEFAULT_SETTINGS.localApple,
         enabled: true,
         calendarEnabled: true,
-        calendarWritebackEnabled: true
+        calendarWritebackEnabled: false
       }
     };
     plugin.syncLocalApple = jest.fn(async () => undefined) as never;

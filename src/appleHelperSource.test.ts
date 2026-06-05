@@ -51,6 +51,17 @@ describe("Apple helper source", () => {
     );
   });
 
+  it("preserves timed reminder alerts during drag reschedules and clears alarms for all-day drops", () => {
+    const source = readFileSync(path.join(__dirname, "..", "apple-helper", "TaskHubAppleHelper.swift"), "utf8");
+    const start = source.indexOf("func setReminderDue(store: EKEventStore)");
+    const end = source.indexOf("func setReminderList(store: EKEventStore)", start);
+    const setReminderDueSource = source.slice(start, end);
+
+    expect(setReminderDueSource).toContain("let existingAlertMinutesBefore = reminderAlertMinutesBefore(reminder: reminder)");
+    expect(setReminderDueSource).toContain("applyReminderAlert(reminder, alertMinutesBefore: existingAlertMinutesBefore)");
+    expect(setReminderDueSource).toContain("reminder.alarms = nil");
+  });
+
   it("can update Apple Reminder detail fields", () => {
     const source = readFileSync(path.join(__dirname, "..", "apple-helper", "TaskHubAppleHelper.swift"), "utf8");
 

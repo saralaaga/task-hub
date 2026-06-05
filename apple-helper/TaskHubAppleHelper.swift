@@ -558,7 +558,13 @@ func setReminderDue(store: EKEventStore) {
         fail("not_found", "Apple Reminder no longer exists. Sync Task Hub and try again.", exitCode: 9)
     }
 
+    let existingAlertMinutesBefore = reminderAlertMinutesBefore(reminder: reminder)
     reminder.dueDateComponents = dueDateComponents(from: argumentValue("--due"), startMinutes: integerArgument("--start-minutes"))
+    if integerArgument("--start-minutes") != nil {
+        applyReminderAlert(reminder, alertMinutesBefore: existingAlertMinutesBefore)
+    } else {
+        reminder.alarms = nil
+    }
 
     do {
         try store.save(reminder, commit: true)
