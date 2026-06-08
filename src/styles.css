@@ -526,6 +526,10 @@
   width: 16px;
 }
 
+.task-hub-detail-source-logo.is-obsidian {
+  color: #8060d3;
+}
+
 .task-hub-detail-source-logo.is-obsidian svg {
   height: 17px;
   width: 17px;
@@ -1153,6 +1157,18 @@ body .task-hub-view button.task-hub-color-swatch {
   gap: 8px;
 }
 
+.task-hub-detail-extra.is-hidden {
+  display: none;
+}
+
+.task-hub-detail-toggle {
+  align-items: center;
+  color: var(--text-normal);
+  display: inline-flex;
+  gap: 6px;
+  font-size: var(--font-ui-smaller);
+}
+
 .task-hub-detail-field {
   display: grid;
   gap: 4px;
@@ -1161,8 +1177,14 @@ body .task-hub-view button.task-hub-color-swatch {
 }
 
 .task-hub-detail-field input,
-.task-hub-detail-field select {
+.task-hub-detail-field select,
+.task-hub-detail-field textarea {
   width: 100%;
+}
+
+.task-hub-detail-field textarea {
+  min-height: 88px;
+  resize: vertical;
 }
 
 .task-hub-tag-editor {
@@ -1223,6 +1245,10 @@ body .task-hub-view button.task-hub-color-swatch {
 .task-hub-tag-editor-chip.is-selected {
   outline: 2px solid color-mix(in srgb, var(--task-hub-source-color, var(--interactive-accent)) 46%, white);
   outline-offset: 2px;
+}
+
+.task-hub-tag-suggest {
+  z-index: 1030;
 }
 
 .task-hub-detail-save {
@@ -2619,6 +2645,10 @@ body .task-hub-view button.task-hub-color-swatch {
   width: 16px;
 }
 
+.task-hub-calendar-detail-logo.is-obsidian {
+  color: #8060d3;
+}
+
 .task-hub-calendar-detail-logo.is-obsidian svg {
   height: 17px;
   width: 17px;
@@ -2742,6 +2772,31 @@ body .task-hub-view button.task-hub-color-swatch {
 .task-hub-calendar-detail-readonly-row.is-muted {
   color: var(--text-faint);
   overflow-wrap: anywhere;
+}
+
+.task-hub-calendar-detail-readonly-field {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.task-hub-calendar-detail-readonly-label {
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  line-height: 1.25;
+}
+
+.task-hub-calendar-detail-readonly-value {
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 7px;
+  color: var(--text-normal);
+  font-size: var(--font-ui-small);
+  line-height: 1.35;
+  min-height: 34px;
+  overflow-wrap: anywhere;
+  padding: 7px 9px;
+  white-space: pre-wrap;
 }
 
 .task-hub-calendar-resize-feedback {

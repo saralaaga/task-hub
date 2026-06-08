@@ -201,6 +201,34 @@ describe("local Apple mapping", () => {
     });
   });
 
+  it("maps Apple recurrence fields to Task Hub items", () => {
+    expect(
+      reminderToTask(
+        {
+          id: "reminder-1",
+          name: "Buy milk",
+          list: "Personal",
+          completed: false,
+          recurrence: "RRULE:FREQ=WEEKLY"
+        },
+        0
+      )
+    ).toMatchObject({ recurrence: "RRULE:FREQ=WEEKLY" });
+
+    expect(
+      calendarRecordToEvent(
+        {
+          id: "event-1",
+          title: "Planning",
+          startDate: "2026-05-06T09:30:00.000Z",
+          allDay: false,
+          recurrence: "RRULE:FREQ=MONTHLY"
+        },
+        0
+      )
+    ).toMatchObject({ recurrence: "RRULE:FREQ=MONTHLY" });
+  });
+
   it("collects Apple calendars from event metadata", () => {
     expect(
       appleCalendarsFromEvents([
@@ -342,6 +370,45 @@ describe("local Apple mapping", () => {
     ]);
   });
 
+  it("writes Apple Reminder recurrence through the detail helper", async () => {
+    await withPlatform("darwin", () =>
+      setAppleReminderDetails({
+        id: "reminder-1",
+        title: "Send invoice",
+        recurrence: "RRULE:FREQ=WEEKLY"
+      })
+    );
+
+    expect(execFile.mock.calls.at(-1)?.[1]).toEqual([
+      "set-reminder-details",
+      "--id",
+      "reminder-1",
+      "--title",
+      "Send invoice",
+      "--recurrence",
+      "RRULE:FREQ=WEEKLY"
+    ]);
+  });
+
+  it("clears Apple Reminder recurrence through the detail helper", async () => {
+    await withPlatform("darwin", () =>
+      setAppleReminderDetails({
+        id: "reminder-1",
+        title: "Send invoice",
+        recurrence: null
+      })
+    );
+
+    expect(execFile.mock.calls.at(-1)?.[1]).toEqual([
+      "set-reminder-details",
+      "--id",
+      "reminder-1",
+      "--title",
+      "Send invoice",
+      "--clear-recurrence"
+    ]);
+  });
+
   it("can clear Apple Reminder due fields through the detail helper", async () => {
     await withPlatform("darwin", () =>
       setAppleReminderDetails({
@@ -462,6 +529,38 @@ describe("local Apple mapping", () => {
     ]);
   });
 
+  it("writes Apple Calendar recurrence and future span through the helper", async () => {
+    await withPlatform("darwin", () =>
+      setAppleCalendarEventDetails({
+        id: "event-1",
+        title: "Design review",
+        targetDate: "2026-05-20",
+        start: "2026-05-06T09:30:00.000Z",
+        allDay: true,
+        recurrence: "RRULE:FREQ=MONTHLY",
+        recurrenceScope: "future"
+      })
+    );
+
+    expect(execFile.mock.calls.at(-1)?.[1]).toEqual([
+      "set-calendar-event-details",
+      "--id",
+      "event-1",
+      "--title",
+      "Design review",
+      "--date",
+      "2026-05-20",
+      "--start",
+      "2026-05-06T09:30:00.000Z",
+      "--recurrence",
+      "RRULE:FREQ=MONTHLY",
+      "--span",
+      "future",
+      "--all-day",
+      "true"
+    ]);
+  });
+
   it("creates an Apple Calendar event through the helper", async () => {
     execFile.mockImplementationOnce((_file: string, _args: string[], _options: unknown, callback: ExecFileCallback) => {
       callback(null, "{\"ok\":true}", "");
@@ -522,6 +621,30 @@ describe("local Apple mapping", () => {
     ]);
   });
 
+  it("creates recurring Apple Calendar events through the helper", async () => {
+    execFile.mockImplementationOnce((_file: string, _args: string[], _options: unknown, callback: ExecFileCallback) => {
+      callback(null, "{\"ok\":true}", "");
+    });
+
+    await withPlatform("darwin", () =>
+      createAppleCalendarEvent({
+        title: "Pay invoice",
+        date: "2026-05-20",
+        recurrence: "RRULE:FREQ=WEEKLY"
+      })
+    );
+
+    expect(execFile.mock.calls.at(-1)?.[1]).toEqual([
+      "create-calendar-event",
+      "--title",
+      "Pay invoice",
+      "--date",
+      "2026-05-20",
+      "--recurrence",
+      "RRULE:FREQ=WEEKLY"
+    ]);
+  });
+
   it("deletes Apple Reminders through the helper", async () => {
     await withPlatform("darwin", () => deleteAppleReminder("reminder-1"));
 
@@ -547,7 +670,8 @@ describe("local Apple mapping", () => {
         startMinutes: 570,
         alertMinutesBefore: 30,
         listId: "list-1",
-        tags: ["#work", "#client/acme"]
+        tags: ["#work", "#client/acme"],
+        recurrence: "RRULE:FREQ=DAILY"
       })
     );
 
@@ -566,6 +690,8 @@ describe("local Apple mapping", () => {
       "30",
       "--list-id",
       "list-1",
+      "--recurrence",
+      "RRULE:FREQ=DAILY",
       "--tag",
       "#work",
       "--tag",

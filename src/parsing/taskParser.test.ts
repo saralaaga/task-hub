@@ -63,4 +63,18 @@ describe("parseTasksFromMarkdown", () => {
     expect(tasks).toHaveLength(1);
     expect(tasks[0].dueDate).toBeUndefined();
   });
+
+  it("extracts recurrence without keeping it in the rendered task text", () => {
+    const tasks = parseTasksFromMarkdown({
+      filePath: "Inbox.md",
+      content: "- [ ] Review budget #finance 📅 2026-06-08 repeat:: RRULE:FREQ=WEEKLY"
+    });
+
+    expect(tasks[0]).toMatchObject({
+      text: "Review budget",
+      tags: ["#finance"],
+      dueDate: "2026-06-08",
+      recurrence: "RRULE:FREQ=WEEKLY"
+    });
+  });
 });

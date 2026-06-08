@@ -47,4 +47,17 @@ describe("task creation helpers", () => {
       }
     ]);
   });
+
+  it("creates recurring task lines that the parser can read", () => {
+    const content = appendTaskToContent("", createTaskLine("Review budget", "2026-06-08", undefined, "RRULE:FREQ=WEEKLY"));
+
+    expect(content).toBe("- [ ] Review budget 📅 2026-06-08 repeat:: RRULE:FREQ=WEEKLY\n");
+    expect(parseTasksFromMarkdown({ filePath: "Task Hub.md", content })).toMatchObject([
+      {
+        text: "Review budget",
+        dueDate: "2026-06-08",
+        recurrence: "RRULE:FREQ=WEEKLY"
+      }
+    ]);
+  });
 });

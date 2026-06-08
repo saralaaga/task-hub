@@ -8,6 +8,7 @@ import { parseTaskSendTarget, preferredTaskSendTarget, taskSendTargetOptions } f
 import type { AppleReminderList, CalendarItemEditDraft, DidaProject, TaskItem, TaskSendTarget } from "../types";
 import { addSourceIndicatorMenuItem, deleteLabelForTaskBulkAction, sourceIndicatorLabelForTask } from "./contextMenuLabels";
 import { renderTaskNoteBody, type TaskNoteMarkdownRenderer } from "./renderTaskNoteBody";
+import { createRecurrenceSelect, recurrenceValueFromSelect } from "./recurrenceControls";
 import { resolveTaskBulkActions, type TaskBulkActionId } from "./taskSelection";
 import { renderSourceLogo, sourceLogoKindForTask } from "./sourceLogos";
 
@@ -357,19 +358,21 @@ function renderTaskDetails(
 
   const canEditAppleReminder = task.source === "apple-reminders" && options.allowAppleReminderWriteback && Boolean(task.externalId);
   const canEditDida = task.source === "dida" && Boolean(options.allowDidaWriteback) && Boolean(task.externalId);
+  const canEditVaultTask = task.source === "vault";
   const canEditExternalTask = canEditAppleReminder || canEditDida;
+  const canEditTask = canEditVaultTask || canEditExternalTask;
   const canToggle = task.source === "vault" || (task.source === "apple-reminders" && options.allowAppleReminderWriteback) || (task.source === "dida" && Boolean(options.allowDidaWriteback));
-  if (!canEditExternalTask) {
+  if (!canEditTask) {
     const titleRow = details.createDiv({ cls: "task-hub-detail-title-row" });
     renderTaskDetailCompleteCheckbox(titleRow, task, canToggle, handlers, t);
     titleRow.createDiv({ cls: `task-hub-detail-title ${task.completed ? "is-completed" : ""}`, text: task.text });
   }
   const facts = details.createDiv({ cls: "task-hub-detail-facts" });
-  if (!canEditExternalTask && task.dueDate) facts.createDiv({ text: `${t("today")}: ${task.dueDate}` });
-  if (!canEditExternalTask && task.tags.length > 0) facts.createDiv({ text: `${t("tags")}: ${task.tags.join(" ")}` });
+  if (!canEditTask && task.dueDate) facts.createDiv({ text: `${t("today")}: ${task.dueDate}` });
+  if (!canEditTask && task.tags.length > 0) facts.createDiv({ text: `${t("tags")}: ${task.tags.join(" ")}` });
   facts.createDiv({ text: `${t("source")}: ${task.externalSourceName ?? task.filePath}` });
   if (task.heading) facts.createDiv({ text: task.heading });
-  if (task.contextPreview) {
+  if (task.contextPreview && !canEditExternalTask) {
     details.createEl("h4", { text: t("context") });
     details.createDiv({ cls: "task-hub-detail-context", text: task.contextPreview });
   }
@@ -380,24 +383,42 @@ function renderTaskDetails(
   let alertEditor: ReminderAlertEditor | undefined;
   let tagsEditor: TagChipEditor | undefined;
   let listSelect: HTMLSelectElement | undefined;
-  if ((task.source === "apple-reminders" || task.source === "dida") && (canEditExternalTask || (externalListsForTask(task, options).length > 0))) {
+  let recurrenceSelect: HTMLSelectElement | undefined;
+  let notesInput: HTMLTextAreaElement | undefined;
+  let detailsToggle: HTMLInputElement | undefined;
+  if (canEditTask || ((task.source === "apple-reminders" || task.source === "dida") && externalListsForTask(task, options).length > 0)) {
     const editor = details.createDiv({ cls: "task-hub-detail-editor" });
-    if (canEditExternalTask) {
+    if (canEditTask) {
       const titleRow = editor.createDiv({ cls: "task-hub-detail-title-row is-editing" });
       renderTaskDetailCompleteCheckbox(titleRow, task, canToggle, handlers, t);
       titleInput = detailInput(titleRow, t("taskCreationBody"), task.text, "text", "task-hub-detail-title-input");
     }
-    if (canEditExternalTask) {
+    if (canEditTask) {
       const scheduleRow = editor.createDiv({ cls: "task-hub-detail-schedule-row" });
       dateInput = detailInput(scheduleRow, t("date"), task.dueDate ?? "", "date");
-      if (canEditAppleReminder) {
+      if (canEditAppleReminder || canEditVaultTask) {
         timeInput = detailInput(scheduleRow, t("startTime"), timeFromTask(task) ?? "", "time");
-        alertEditor = reminderAlertEditor(editor, timeInput, task.alertMinutesBefore, t);
+        if (canEditAppleReminder) {
+          alertEditor = reminderAlertEditor(editor, timeInput, task.alertMinutesBefore, t);
+        }
       }
     }
-    tagsEditor = canEditExternalTask
+    tagsEditor = canEditTask
       ? tagChipEditor(editor, t("tags"), task.tags, options.bindTagInputSuggest)
       : undefined;
+    if (canEditTask) {
+      const toggleRow = editor.createEl("label", { cls: "task-hub-detail-toggle" });
+      detailsToggle = toggleRow.createEl("input", { cls: "task-hub-detail-extra-toggle", type: "checkbox" }) as HTMLInputElement;
+      toggleRow.createSpan({ text: t("editDetails") });
+      const extra = editor.createDiv({ cls: "task-hub-detail-extra is-hidden" });
+      detailsToggle.addEventListener("change", () => {
+        extra.toggleClass("is-hidden", !detailsToggle!.checked);
+      });
+      recurrenceSelect = createRecurrenceSelect(extra, t("recurrence"), task.recurrence, t);
+      if (canEditExternalTask) {
+        notesInput = detailTextarea(extra, t("notes"), task.contextPreview ?? "");
+      }
+    }
     if (titleInput) options.bindTagInputSuggest?.(titleInput);
     const externalLists = externalListsForTask(task, options);
     if (externalLists.length > 0) {
@@ -424,15 +445,17 @@ function renderTaskDetails(
     : [];
   const canSendToExternalTarget = sendTargetOptions.length > 0;
   const actionLanguageClass = t("language") === "语言" ? "is-compact-language" : "is-long-language";
-  if ((canEditExternalTask && titleInput && dateInput && tagsEditor) || canSendToExternalTarget) {
+  if ((canEditTask && titleInput && dateInput && tagsEditor) || canSendToExternalTarget) {
     const actions = details.createDiv({
-      cls: ["task-hub-detail-actions", canSendToExternalTarget || canEditExternalTask ? "has-three-actions" : "", actionLanguageClass]
+      cls: ["task-hub-detail-actions", canSendToExternalTarget || canEditTask ? "has-three-actions" : "", actionLanguageClass]
         .filter(Boolean)
         .join(" ")
     });
-    if (canEditExternalTask && titleInput && dateInput && tagsEditor) {
+    if (canEditTask && titleInput && dateInput && tagsEditor) {
       const save = actions.createEl("button", { cls: "mod-cta task-hub-detail-save", text: t("save") });
       save.addEventListener("click", () => {
+        const detailsEnabled = Boolean(detailsToggle?.checked);
+        const recurrence = detailsEnabled && recurrenceSelect ? recurrenceValueFromSelect(recurrenceSelect) : undefined;
         handlers.onTaskUpdate?.(task, {
           kind: "task",
           title: titleInput.value,
@@ -440,7 +463,9 @@ function renderTaskDetails(
           startTime: timeInput?.value || undefined,
           tags: tagsEditor.getTags(),
           reminderListId: listSelect?.value,
-          alertMinutesBefore: alertEditor?.getAlertMinutesBefore() ?? null
+          alertMinutesBefore: alertEditor?.getAlertMinutesBefore() ?? null,
+          ...(detailsEnabled && notesInput ? { notes: notesInput.value } : {}),
+          ...(detailsEnabled ? { recurrence: recurrence ?? null } : {})
         });
       });
     }
@@ -608,6 +633,14 @@ function detailInput(container: HTMLElement, label: string, value: string, type 
     input.addEventListener("focus", () => openNativeDatePicker(input));
   }
   return input;
+}
+
+function detailTextarea(container: HTMLElement, label: string, value: string): HTMLTextAreaElement {
+  const row = container.createEl("label", { cls: "task-hub-detail-field" });
+  row.createSpan({ text: label });
+  const textarea = row.createEl("textarea") as HTMLTextAreaElement;
+  textarea.value = value;
+  return textarea;
 }
 
 type ReminderAlertEditor = {

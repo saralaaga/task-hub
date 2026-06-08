@@ -19,6 +19,7 @@ export class TaskHubTagInputSuggest extends AbstractInputSuggest<string> {
       inputEl.getBoundingClientRect = () => textareaCaretViewportRect(inputEl as HTMLTextAreaElement, originalGetBoundingClientRect);
     }
     super(app, inputEl as HTMLInputElement);
+    (this as unknown as { suggestEl?: HTMLElement }).suggestEl?.classList.add("task-hub-tag-suggest");
     this.sourceEl = inputEl;
     this.originalGetBoundingClientRect = originalGetBoundingClientRect;
   }

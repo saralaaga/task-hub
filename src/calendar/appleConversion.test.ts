@@ -52,6 +52,22 @@ describe("Apple Calendar and Reminders conversion", () => {
       notes: "Converted from Apple Reminders by Task Hub.\nList: Personal"
     });
   });
+
+  test("preserves recurrence when converting between Apple sources", () => {
+    expect(appleCalendarEventToReminderInput({
+      id: "event-1",
+      sourceId: "apple-calendar",
+      title: "Review",
+      start: "2026-05-20",
+      allDay: true,
+      recurrence: "RRULE:FREQ=WEEKLY"
+    })).toMatchObject({ recurrence: "RRULE:FREQ=WEEKLY" });
+
+    expect(appleReminderToCalendarEventInput(appleReminderTask({
+      dueDate: "2026-05-20",
+      recurrence: "RRULE:FREQ=MONTHLY"
+    }), 60)).toMatchObject({ recurrence: "RRULE:FREQ=MONTHLY" });
+  });
 });
 
 function appleReminderTask(overrides: Partial<TaskItem>): TaskItem {

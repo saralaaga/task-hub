@@ -91,6 +91,16 @@ describe("Apple helper source", () => {
     expect(source).toContain("event.calendar = calendar");
   });
 
+  it("can read and write simple EventKit recurrence rules", () => {
+    const source = readFileSync(path.join(__dirname, "..", "apple-helper", "TaskHubAppleHelper.swift"), "utf8");
+
+    expect(source).toContain("func recurrenceText(from item: EKCalendarItem)");
+    expect(source).toContain("func recurrenceRule(from text: String?)");
+    expect(source).toContain("applyRecurrence(to: reminder)");
+    expect(source).toContain("applyRecurrence(to: event)");
+    expect(source).toContain("argumentValue(\"--span\") == \"future\" ? .futureEvents : .thisEvent");
+  });
+
   it("can list Apple calendars with identifiers, colors, and writability", () => {
     const source = readFileSync(path.join(__dirname, "..", "apple-helper", "TaskHubAppleHelper.swift"), "utf8");
 

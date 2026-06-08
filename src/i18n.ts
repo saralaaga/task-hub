@@ -94,6 +94,7 @@ export type TranslationKey =
   | "didaWriteback"
   | "didaWritebackDesc"
   | "edit"
+  | "editDetails"
   | "event"
   | "eventCreationDefaultTarget"
   | "eventCreationDefaultTargetDesc"
@@ -221,6 +222,19 @@ export type TranslationKey =
   | "rescanning"
   | "rescanTaskHub"
   | "remove"
+  | "recurrence"
+  | "recurrenceApplyTo"
+  | "recurrenceCustom"
+  | "recurrenceDaily"
+  | "recurrenceEndDate"
+  | "recurrenceEndDateRequired"
+  | "recurrenceFuture"
+  | "recurrenceMonthly"
+  | "recurrenceNone"
+  | "recurrenceStartDate"
+  | "recurrenceThis"
+  | "recurrenceWeekly"
+  | "recurrenceYearly"
   | "reminderAlert"
   | "reminderAlertAtTime"
   | "reminderAlertMinutesBefore"
@@ -422,6 +436,7 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     didaWriteback: "Edit and complete Dida tasks",
     didaWritebackDesc: "Allow Task Hub to update Dida titles, notes, list, dates, times, and completion state.",
     edit: "Edit",
+    editDetails: "Edit details",
     event: "Event",
     eventCreationDefaultTarget: "Default event destination",
     eventCreationDefaultTargetDesc: "Default Apple Calendar selected when you create an event from the calendar.",
@@ -562,6 +577,19 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     rescanning: "Rescanning...",
     rescanTaskHub: "Rescan Task Hub",
     remove: "Remove",
+    recurrence: "Repeat",
+    recurrenceApplyTo: "Apply to",
+    recurrenceCustom: "Custom repeat",
+    recurrenceDaily: "Every day",
+    recurrenceEndDate: "Repeat until",
+    recurrenceEndDateRequired: "Choose repeat start and end dates for recurring events.",
+    recurrenceFuture: "This and future events",
+    recurrenceMonthly: "Every month",
+    recurrenceNone: "Does not repeat",
+    recurrenceStartDate: "Repeat from",
+    recurrenceThis: "This event only",
+    recurrenceWeekly: "Every week",
+    recurrenceYearly: "Every year",
     reminderAlert: "Reminder",
     reminderAlertAtTime: "At time",
     reminderAlertMinutesBefore: "{minutes} minutes before",
@@ -762,6 +790,7 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     didaWriteback: "编辑和完成滴答任务",
     didaWritebackDesc: "允许 Task Hub 更新滴答标题、备注、清单、日期、时间和完成状态。",
     edit: "编辑",
+    editDetails: "编辑详情",
     event: "事件",
     eventCreationDefaultTarget: "默认事件创建位置",
     eventCreationDefaultTargetDesc: "从日历新建事件时默认选中的 Apple 日历。",
@@ -897,6 +926,19 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     rescanning: "刷新中...",
     rescanTaskHub: "重新扫描 Task Hub",
     remove: "删除",
+    recurrence: "重复",
+    recurrenceApplyTo: "应用到",
+    recurrenceCustom: "自定义重复",
+    recurrenceDaily: "每天",
+    recurrenceEndDate: "重复截止日期",
+    recurrenceEndDateRequired: "请为循环事件选择重复开始日期和截止日期。",
+    recurrenceFuture: "本次及未来",
+    recurrenceMonthly: "每月",
+    recurrenceNone: "不重复",
+    recurrenceStartDate: "重复开始日期",
+    recurrenceThis: "仅本次",
+    recurrenceWeekly: "每周",
+    recurrenceYearly: "每年",
     reminderAlert: "提前提醒",
     reminderAlertAtTime: "到点提醒",
     reminderAlertMinutesBefore: "{minutes} 分钟前",

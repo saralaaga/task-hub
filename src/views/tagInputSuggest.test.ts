@@ -1,5 +1,12 @@
 jest.mock("obsidian", () => ({
   AbstractInputSuggest: class {
+    suggestEl = {
+      classes: new Set<string>(),
+      classList: {
+        add: (cls: string) => this.suggestEl.classes.add(cls)
+      }
+    };
+
     constructor(public app: unknown, public inputEl: HTMLInputElement | HTMLTextAreaElement) {}
     close(): void {}
   },
@@ -62,6 +69,12 @@ describe("tagInputSuggest", () => {
     const suggest = new TaskHubTagInputSuggest({} as never, input, () => ["#比赛", "#比赛/报名", "#生活"]);
 
     expect(suggest.getSuggestions("")).toEqual(["#比赛", "#比赛/报名"]);
+  });
+
+  it("marks the native suggest container for Task Hub layering", () => {
+    const suggest = new TaskHubTagInputSuggest({} as never, fakeInput(), () => []);
+
+    expect((suggest as unknown as { suggestEl: { classes: Set<string> } }).suggestEl.classes.has("task-hub-tag-suggest")).toBe(true);
   });
 
   it("shows existing tags when only the hash marker has been typed", () => {

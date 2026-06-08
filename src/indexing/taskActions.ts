@@ -1,4 +1,5 @@
 import type { TaskItem } from "../types";
+import { nextRecurrenceDate, normalizeRecurrenceRule } from "../recurrence";
 
 export type CompletionMessages = {
   lineChangedConflict: string;
@@ -18,6 +19,7 @@ export type TaskLineUpdate = {
   date?: string;
   startTime?: string;
   tags: string[];
+  recurrence?: string | null;
 };
 
 export type CompletionResult =
@@ -31,6 +33,7 @@ const TASK_PREFIX = /^(\s*- \[[ xX]\]\s+)(.*)$/;
 const EMOJI_DUE = /(?:^|\s)📅\s*\d{4}-\d{2}-\d{2}(?=\s|$)/u;
 const INLINE_DUE = /(?:^|\s)due::\s*\d{4}-\d{2}-\d{2}(?=\s|$)/u;
 const SCHEDULED_TIME = /(?:^|\s)⏰\s*\d{1,2}:\d{2}(?=\s|$)/u;
+const RECURRENCE = /(?:^|\s)(?:repeat::|🔁)\s*((?:RRULE:)?[A-Z0-9=;,_-]+)(?=\s|$)/iu;
 const TAG = /(^|\s)(#[\p{L}\p{N}_/-]+)/gu;
 const SEARCH_WINDOW = 5;
 const DEFAULT_COMPLETION_MESSAGES: CompletionMessages = {
@@ -55,7 +58,7 @@ export function completeTaskInContent(
   }
 
   const lines = content.split(/\r?\n/);
-  const direct = tryToggleAtLine(lines, task.line, task.rawLine, messages, action);
+  const direct = tryToggleAtLine(lines, task.line, task, messages, action);
   if (direct.status !== "conflict") {
     return withContent(direct, lines);
   }
@@ -68,7 +71,7 @@ export function completeTaskInContent(
     };
   }
 
-  return withContent(tryToggleAtLine(lines, nearby, task.rawLine, messages, action), lines);
+  return withContent(tryToggleAtLine(lines, nearby, task, messages, action), lines);
 }
 
 export function rescheduleTaskInContent(
@@ -147,7 +150,7 @@ export function updateTaskLineInContent(
 function tryToggleAtLine(
   lines: string[],
   line: number,
-  rawLine: string,
+  task: TaskItem,
   messages: CompletionMessages,
   action: CompletionAction
 ): CompletionResult {
@@ -156,7 +159,7 @@ function tryToggleAtLine(
     return { status: "conflict", message: messages.lineOutsideFile };
   }
 
-  if (currentLine === rawLine) {
+  if (currentLine === task.rawLine) {
     if (hasTargetState(currentLine, action)) {
       return { status: "already_in_state" };
     }
@@ -167,6 +170,10 @@ function tryToggleAtLine(
     }
 
     lines[line] = currentLine.replace(marker, action === "complete" ? "$1- [x]" : "$1- [ ]");
+    if (action === "complete") {
+      const nextLine = nextRecurringTaskLine(currentLine, task);
+      if (nextLine) lines.splice(line + 1, 0, nextLine);
+    }
     return { status: "updated", content: "", line };
   }
 
@@ -304,6 +311,18 @@ function updateScheduledTime(line: string | undefined, startMinutes: number | un
   return line;
 }
 
+function nextRecurringTaskLine(line: string, task: TaskItem): string | undefined {
+  const recurrence = normalizeRecurrenceRule(task.recurrence ?? extractRecurrence(line));
+  const nextDate = nextRecurrenceDate(task.dueDate, recurrence);
+  if (!nextDate) return undefined;
+  const opened = line.replace(COMPLETED_TASK_MARKER, "$1- [ ]").replace(OPEN_TASK_MARKER, "$1- [ ]");
+  return replaceDueDate(opened, nextDate);
+}
+
+function extractRecurrence(line: string): string | undefined {
+  return normalizeRecurrenceRule(line.match(RECURRENCE)?.[1]);
+}
+
 function taskLineHasDate(line: string): boolean {
   return EMOJI_DUE.test(line) || INLINE_DUE.test(line);
 }
@@ -321,6 +340,12 @@ function buildUpdatedTaskBody(currentBody: string, update: TaskLineUpdate): stri
   if (update.startTime) {
     parts.push(`⏰ ${update.startTime}`);
   }
+  const recurrence = update.recurrence === undefined
+    ? extractRecurrence(currentBody)
+    : normalizeRecurrenceRule(update.recurrence);
+  if (recurrence) {
+    parts.push(`repeat:: ${recurrence}`);
+  }
   parts.push(...normalizeTags(update.tags));
   return parts.filter(Boolean).join(" ");
 }
@@ -330,6 +355,7 @@ function cleanTaskBody(body: string): string {
     .replace(EMOJI_DUE, " ")
     .replace(INLINE_DUE, " ")
     .replace(SCHEDULED_TIME, " ")
+    .replace(RECURRENCE, " ")
     .replace(TAG, " ")
     .replace(/\s+/g, " ")
     .trim();

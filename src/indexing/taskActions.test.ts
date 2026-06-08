@@ -55,6 +55,22 @@ describe("completeTaskInContent", () => {
 
     expect(result.status).toBe("conflict");
   });
+
+  it("completes a recurring task and adds the next open occurrence below it", () => {
+    const task = taskItem({
+      line: 0,
+      rawLine: "- [ ] Review budget 📅 2026-06-08 repeat:: RRULE:FREQ=WEEKLY #finance",
+      dueDate: "2026-06-08",
+      recurrence: "RRULE:FREQ=WEEKLY"
+    });
+    const result = completeTaskInContent("- [ ] Review budget 📅 2026-06-08 repeat:: RRULE:FREQ=WEEKLY #finance", task);
+
+    expect(result).toEqual({
+      status: "updated",
+      content: "- [x] Review budget 📅 2026-06-08 repeat:: RRULE:FREQ=WEEKLY #finance\n- [ ] Review budget 📅 2026-06-15 repeat:: RRULE:FREQ=WEEKLY #finance",
+      line: 0
+    });
+  });
 });
 
 describe("rescheduleTaskInContent", () => {
@@ -246,6 +262,40 @@ describe("updateTaskLineInContent", () => {
       date: "2026-05-08",
       startTime: "",
       tags: ["#finance"]
+    });
+
+    expect(result).toEqual({
+      status: "updated",
+      content: "- [ ] Pay invoice 📅 2026-05-08 #finance",
+      line: 0
+    });
+  });
+
+  it("updates recurrence when editing a task line", () => {
+    const task = taskItem({ line: 0, rawLine: "- [ ] Pay invoice 📅 2026-05-08 repeat:: RRULE:FREQ=WEEKLY #finance", dueDate: "2026-05-08", recurrence: "RRULE:FREQ=WEEKLY" });
+    const result = updateTaskLineInContent("- [ ] Pay invoice 📅 2026-05-08 repeat:: RRULE:FREQ=WEEKLY #finance", task, {
+      title: "Pay invoice",
+      date: "2026-05-08",
+      startTime: "",
+      tags: ["#finance"],
+      recurrence: "RRULE:FREQ=MONTHLY"
+    });
+
+    expect(result).toEqual({
+      status: "updated",
+      content: "- [ ] Pay invoice 📅 2026-05-08 repeat:: RRULE:FREQ=MONTHLY #finance",
+      line: 0
+    });
+  });
+
+  it("clears recurrence when editing a recurring task line", () => {
+    const task = taskItem({ line: 0, rawLine: "- [ ] Pay invoice 📅 2026-05-08 repeat:: RRULE:FREQ=WEEKLY #finance", dueDate: "2026-05-08", recurrence: "RRULE:FREQ=WEEKLY" });
+    const result = updateTaskLineInContent("- [ ] Pay invoice 📅 2026-05-08 repeat:: RRULE:FREQ=WEEKLY #finance", task, {
+      title: "Pay invoice",
+      date: "2026-05-08",
+      startTime: "",
+      tags: ["#finance"],
+      recurrence: null
     });
 
     expect(result).toEqual({

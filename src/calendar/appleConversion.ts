@@ -6,6 +6,7 @@ export type AppleReminderCreationInput = {
   dueDate?: string;
   startMinutes?: number;
   listId?: string;
+  recurrence?: string;
 };
 
 export type AppleCalendarEventCreationInput = {
@@ -15,6 +16,7 @@ export type AppleCalendarEventCreationInput = {
   startMinutes?: number;
   durationMinutes?: number;
   calendarId?: string;
+  recurrence?: string;
 };
 
 export function appleCalendarEventToReminderInput(
@@ -27,7 +29,8 @@ export function appleCalendarEventToReminderInput(
     notes: appleCalendarEventConversionNotes(event),
     dueDate: start.date,
     startMinutes: event.allDay ? undefined : start.minutes,
-    listId: defaultListId
+    listId: defaultListId,
+    ...(event.recurrence ? { recurrence: event.recurrence } : {})
   };
 }
 
@@ -48,7 +51,8 @@ export function appleReminderToCalendarEventInput(
     date: due,
     startMinutes: scheduled.minutes,
     durationMinutes: scheduled.minutes === undefined ? undefined : validDurationMinutes(defaultDurationMinutes),
-    calendarId
+    calendarId,
+    ...(task.recurrence ? { recurrence: task.recurrence } : {})
   };
 }
 

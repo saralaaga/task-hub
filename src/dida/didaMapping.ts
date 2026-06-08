@@ -53,7 +53,7 @@ export function taskItemToDidaPayload(input: {
     ...(input.projectId ? { projectId: input.projectId } : {}),
     ...(input.notes !== undefined ? { content: input.notes, desc: input.notes } : {}),
     ...(input.priority !== undefined ? { priority: input.priority } : {}),
-    ...(input.repeatFlag ? { repeatFlag: input.repeatFlag } : {}),
+    ...(input.repeatFlag !== undefined ? { repeatFlag: input.repeatFlag } : {}),
     ...(tags.length > 0 ? { tags } : {})
   };
 

@@ -1,4 +1,5 @@
 import type { TaskItem } from "../types";
+import { normalizeRecurrenceRule } from "../recurrence";
 
 type ParseInput = {
   filePath: string;
@@ -10,6 +11,7 @@ const TAG = /(^|\s)(#[\p{L}\p{N}_/-]+)/gu;
 const EMOJI_DUE = /(?:^|\s)📅\s*(\d{4}-\d{2}-\d{2})(?=\s|$)/u;
 const INLINE_DUE = /(?:^|\s)due::\s*(\d{4}-\d{2}-\d{2})(?=\s|$)/u;
 const EMOJI_TIME = /(?:^|\s)⏰\s*([01]\d|2[0-3]):([0-5]\d)(?=\s|$)/u;
+const RECURRENCE = /(?:^|\s)(?:repeat::|🔁)\s*((?:RRULE:)?[A-Z0-9=;,_-]+)(?=\s|$)/iu;
 const HEADING = /^(#{1,6})\s+(.+)$/;
 
 export function parseTasksFromMarkdown(input: ParseInput): TaskItem[] {
@@ -35,6 +37,7 @@ export function parseTasksFromMarkdown(input: ParseInput): TaskItem[] {
     const tags = extractTags(rawBody);
     const dueDate = extractDueDate(rawBody);
     const scheduledDate = dueDate ? extractScheduledDate(rawBody, dueDate) : undefined;
+    const recurrence = extractRecurrence(rawBody);
     const text = cleanTaskText(rawBody).trim();
     const task: TaskItem = {
       id: createTaskId(input.filePath, index, line),
@@ -48,6 +51,7 @@ export function parseTasksFromMarkdown(input: ParseInput): TaskItem[] {
       parentId,
       dueDate,
       scheduledDate,
+      recurrence,
       heading: currentHeading,
       contextPreview: buildContextPreview(lines, index),
       source: "vault"
@@ -87,11 +91,16 @@ function extractScheduledDate(text: string, dueDate: string): string | undefined
   return `${dueDate}T${match[1]}:${match[2]}`;
 }
 
+function extractRecurrence(text: string): string | undefined {
+  return normalizeRecurrenceRule(text.match(RECURRENCE)?.[1]);
+}
+
 function cleanTaskText(text: string): string {
   return text
     .replace(EMOJI_DUE, " ")
     .replace(INLINE_DUE, " ")
     .replace(EMOJI_TIME, " ")
+    .replace(RECURRENCE, " ")
     .replace(TAG, " ")
     .replace(/\s+/g, " ");
 }

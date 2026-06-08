@@ -85,7 +85,8 @@ describe("dida task mapping", () => {
         date: "2026-06-02",
         startMinutes: 570,
         tags: ["#work", "client"],
-        reminderOffsetMinutes: 30
+        reminderOffsetMinutes: 30,
+        repeatFlag: "RRULE:FREQ=WEEKLY"
       })
     ).toEqual({
       title: "Submit report",
@@ -96,7 +97,15 @@ describe("dida task mapping", () => {
       dueDate: "2026-06-02T09:30:00+0800",
       timeZone: "Asia/Shanghai",
       tags: ["work", "client"],
-      reminders: ["TRIGGER:-PT30M"]
+      reminders: ["TRIGGER:-PT30M"],
+      repeatFlag: "RRULE:FREQ=WEEKLY"
+    });
+  });
+
+  it("can send an empty Dida repeatFlag to clear recurrence", () => {
+    expect(taskItemToDidaPayload({ title: "Submit report", repeatFlag: "" })).toEqual({
+      title: "Submit report",
+      repeatFlag: ""
     });
   });
 });

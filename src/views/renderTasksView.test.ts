@@ -457,6 +457,38 @@ describe("renderTasksView", () => {
     expect(logo?.classes.has("is-dida")).toBe(true);
   });
 
+  it("uses the 2023 Obsidian mark viewBox for vault task details", () => {
+    const container = new FakeElement();
+    const vaultTask = {
+      ...baseTask,
+      id: "vault-logo",
+      externalId: undefined,
+      externalSourceName: undefined,
+      filePath: "Task Hub.md",
+      rawLine: "- [ ] Review logo",
+      source: "vault" as const
+    };
+
+    renderTasksView(
+      container as unknown as HTMLElement,
+      [vaultTask],
+      [vaultTask],
+      { status: "open", tags: [], sourceQuery: "", textQuery: "" },
+      handlers(),
+      new Date("2026-05-08T12:00:00Z"),
+      (key) => key
+    );
+
+    const details = collect(container).find((element) => element.classes.has("task-hub-task-details"));
+    const logo = collect(details as FakeElement).find((element) => element.classes.has("task-hub-detail-source-logo"));
+    const svg = collect(logo as FakeElement).find((element) => element.type === "svg");
+    const path = collect(logo as FakeElement).find((element) => element.type === "path");
+
+    expect(logo?.classes.has("is-obsidian")).toBe(true);
+    expect(svg?.attrs.get("viewBox")).toBe("0 0 70 90");
+    expect(path?.attrs.get("d")).toContain("M25.894 56.42");
+  });
+
   it("uses Apple Reminder list colors for task rows and details", () => {
     const container = new FakeElement();
     const task = { ...baseTask, externalListId: "personal" };
@@ -827,6 +859,85 @@ describe("renderTasksView", () => {
     });
   });
 
+  it("edits vault task tags from the task details pane", () => {
+    const container = new FakeElement();
+    const viewHandlers = handlers();
+    const task = {
+      ...baseTask,
+      id: "vault-tags",
+      externalId: undefined,
+      externalSourceName: undefined,
+      filePath: "Task Hub.md",
+      rawLine: "- [ ] Buy milk 📅 2026-05-08 #home",
+      source: "vault" as const,
+      tags: ["#home"]
+    };
+
+    renderTasksView(
+      container as unknown as HTMLElement,
+      [task],
+      [task],
+      { status: "open", tags: [], sourceQuery: "", textQuery: "" },
+      viewHandlers,
+      new Date("2026-05-08T12:00:00Z"),
+      (key) => key
+    );
+
+    const editor = collect(container).find((element) => element.classes.has("task-hub-tag-editor"));
+    const input = collect(container).find((element) => element.classes.has("task-hub-tag-editor-input"));
+    expect(collect(editor!).filter((element) => element.classes.has("task-hub-tag-editor-chip")).map((chip) => chip.text)).toEqual(["#home"]);
+
+    input!.value = "#errand";
+    input!.dispatch("keydown", { key: " " });
+    findElementByText(container, "save")!.click();
+
+    expect(viewHandlers.onTaskUpdate).toHaveBeenCalledWith(task, expect.objectContaining({
+      tags: ["#home", "#errand"]
+    }));
+  });
+
+  it("hides Apple Reminder recurrence and notes in task details until edit details is checked", () => {
+    const container = new FakeElement();
+    const viewHandlers = handlers();
+    const task = {
+      ...baseTask,
+      contextPreview: "Original notes",
+      recurrence: "RRULE:FREQ=WEEKLY"
+    };
+
+    renderTasksView(
+      container as unknown as HTMLElement,
+      [task],
+      [task],
+      { status: "open", tags: [], sourceQuery: "", textQuery: "" },
+      viewHandlers,
+      new Date("2026-05-08T12:00:00Z"),
+      (key) => key,
+      { allowAppleReminderWriteback: true }
+    );
+
+    const extra = collect(container).find((element) => element.classes.has("task-hub-detail-extra"));
+    const toggle = collect(container).find((element) => element.classes.has("task-hub-detail-extra-toggle"));
+    const recurrence = collect(extra!).find((element) => element.classes.has("task-hub-recurrence-select"));
+    const notes = collect(extra!).find((element) => element.type === "textarea");
+
+    expect(extra?.classes.has("is-hidden")).toBe(true);
+    expect(textValues(container)).not.toContain("Original notes");
+
+    toggle!.checked = true;
+    toggle!.dispatch("change");
+    expect(extra?.classes.has("is-hidden")).toBe(false);
+
+    recurrence!.value = "RRULE:FREQ=MONTHLY";
+    notes!.value = "Updated notes";
+    findElementByText(container, "save")!.click();
+
+    expect(viewHandlers.onTaskUpdate).toHaveBeenCalledWith(task, expect.objectContaining({
+      notes: "Updated notes",
+      recurrence: "RRULE:FREQ=MONTHLY"
+    }));
+  });
+
   it("edits Apple Reminder alert settings from the task details pane only when a time exists", () => {
     const container = new FakeElement();
     const viewHandlers = handlers();
@@ -1119,7 +1230,7 @@ describe("renderTasksView", () => {
     expect(collect(container).some((element) => element.classes.has("task-hub-task-row") && element.classes.has("is-completed"))).toBe(true);
   });
 
-  it("keeps task list cards free of context preview while details show context", () => {
+  it("keeps task list cards free of context preview while editable details hide notes by default", () => {
     const container = new FakeElement();
     const task = { ...baseTask, contextPreview: "Context line that should only appear in details" };
 
@@ -1135,8 +1246,11 @@ describe("renderTasksView", () => {
     );
 
     const elements = collect(container);
+    const extra = elements.find((element) => element.classes.has("task-hub-detail-extra"));
     expect(elements.some((element) => element.classes.has("task-hub-task-preview"))).toBe(false);
-    expect(elements.some((element) => element.classes.has("task-hub-detail-context") && element.text === task.contextPreview)).toBe(true);
+    expect(elements.some((element) => element.classes.has("task-hub-detail-context") && element.text === task.contextPreview)).toBe(false);
+    expect(extra?.classes.has("is-hidden")).toBe(true);
+    expect(collect(extra!).find((element) => element.type === "textarea")?.value).toBe(task.contextPreview);
   });
 
   it("keeps task filters visible when active filters match no tasks", () => {

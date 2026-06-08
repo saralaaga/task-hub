@@ -21,6 +21,7 @@ Task Hub is a desktop-only Obsidian plugin that brings vault tasks, Apple Remind
 - Browse tasks in task, calendar, and tag views.
 - Filter by completion state, source, tags, date bucket, text, and custom AND/OR conditions.
 - Extract due dates written as `📅 YYYY-MM-DD` or `due:: YYYY-MM-DD`.
+- Create and edit recurring tasks with common daily, weekly, monthly, and yearly rules.
 - Show dated tasks and external events in day, week, and month calendar views.
 - Reschedule vault Markdown tasks, Apple Reminders, and Apple Calendar events by dragging calendar cards to another day when the matching writeback option is enabled.
 - Sync Dida/TickTick tasks through the Open API, with optional create, edit, complete, delete, color, and drag-reschedule controls.
@@ -43,6 +44,8 @@ When Dida integration is enabled, Task Hub can read Dida/TickTick tasks through 
 
 The calendar view combines dated tasks, public ICS events, Apple Calendar events, and dated Apple Reminders where available. You can switch between month, week, and day layouts. Drag a vault Markdown task card to another day to update its existing `📅 YYYY-MM-DD` or `due:: YYYY-MM-DD` date. When the matching writeback options are enabled, dated Apple Reminder cards and Apple Calendar event cards can also be dragged to change their date.
 
+The create task dialog and editable task/event details support common recurrence rules: daily, weekly, monthly, and yearly. Vault Markdown tasks store recurrence as `repeat:: RRULE:FREQ=...`. Completing a recurring vault task marks the current line complete and adds the next open occurrence below it.
+
 The tag view groups indexed tasks by tag and lets you drill into a tag's related tasks.
 
 ## External Source Support Matrix
@@ -61,7 +64,7 @@ The tag view groups indexed tasks by tag and lets you drill into a tag's related
 | Tag read | Not applicable | Yes, through reminder title hashtags | Yes, native Dida `tags` field maps to Task Hub hashtags |
 | Tag write | Not applicable | Yes, as Apple-compatible title hashtags when reminder tag creation is enabled | Yes, as native Dida task tags when native tag sync is enabled |
 | Date / time write | Yes: event date/time | Yes: reminder due date/time where available | Yes: task date/time and reminders |
-| Recurrence | Read/write is limited; dragged recurring events are saved as the dragged occurrence only | Read display only where available | Preserved when present in synced task payloads; full recurrence editing is not a first-class UI yet |
+| Recurrence | Common recurrence rules can be created and edited; event edits default to this occurrence, with a future-events option | Common recurrence rules can be created and edited where EventKit exposes them | Common recurrence rules map to Dida/TickTick `repeatFlag` |
 
 ## Task Notes
 
@@ -77,9 +80,9 @@ When a vault Markdown task is sent to Apple Reminders, Task Hub updates linked n
 
 Task Hub integrates with Apple's local Reminders and Calendar databases on macOS. If your Mac is signed in to iCloud and Reminders/Calendar syncing is enabled, Task Hub can show the same iCloud-backed reminders and events that appear in the native Apple apps. Task Hub does not connect to iCloud.com or ask for your Apple ID password; macOS handles account sync and permissions locally.
 
-Apple Reminders support includes reading reminder title, list, completion state, notes, URL, and due date. When Apple Reminders writeback is enabled in settings, Task Hub can mark reminders complete or open, and can reschedule dated reminders by dragging them in the calendar. Vault Markdown tasks can also be explicitly sent to Apple Reminders when reminder creation is enabled.
+Apple Reminders support includes reading reminder title, list, completion state, notes, URL, due date, and simple recurrence where EventKit exposes it. When Apple Reminders writeback is enabled in settings, Task Hub can mark reminders complete or open, edit common recurrence rules, and reschedule dated reminders by dragging them in the calendar. Vault Markdown tasks can also be explicitly sent to Apple Reminders when reminder creation is enabled.
 
-Apple Calendar support includes reading local/iCloud calendar events into the Task Hub calendar with title, calendar name, start/end time, all-day state, location, notes, and URL where available. When Apple Calendar writeback is enabled in settings, Task Hub can reschedule events by dragging them to another day while preserving the event's time, duration, and all-day state. Recurring events are saved as the dragged occurrence only.
+Apple Calendar support includes reading local/iCloud calendar events into the Task Hub calendar with title, calendar name, start/end time, all-day state, location, notes, URL, and simple recurrence where available. When Apple Calendar writeback is enabled in settings, Task Hub can reschedule events by dragging them to another day while preserving the event's time, duration, and all-day state. Recurring event edits default to the selected occurrence, with a detail-panel option to apply changes to future events.
 
 ## Current Scope
 
@@ -87,6 +90,7 @@ Task Hub intentionally keeps the first releases conservative:
 
 - Vault Markdown tasks can be completed from Task Hub.
 - Vault Markdown tasks with an existing supported date can be rescheduled from the calendar.
+- Vault Markdown recurring tasks support common RRULE presets. Completing one keeps the completed occurrence and appends the next open occurrence.
 - Vault Markdown tasks can be sent to Apple Reminders only by explicit user action, and Task Hub records the created reminder id to avoid duplicate sends.
 - Vault Markdown tasks can be sent to Dida only by explicit user action, and Task Hub records the created Dida task id to avoid duplicate sends.
 - Task notes are local Markdown files. Thino integration is limited to Thino multi-file-compatible notes; Thino single-file, Canvas, and diary storage are outside the current scope.

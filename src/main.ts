@@ -23,6 +23,7 @@ import { appendTaskToContent, createTaskLine, normalizeTaskCreationFilePath } fr
 import { bindTaskHubTagInputSuggest, collectObsidianTags } from "./views/tagInputSuggest";
 import { normalizeReminderAlertMinutes, populateReminderAlertSelect, type ReminderAlertMinutes } from "./reminderAlerts";
 import { preferredTaskSendTarget, taskSendTargetOptions } from "./taskSendTargets";
+import { recurrenceDatesBetween } from "./recurrence";
 import {
   TaskNoteIndex,
   buildCalendarEventNoteKey,
@@ -72,6 +73,7 @@ import {
 } from "./settings";
 import type { AppleCalendarInfo, CalendarCreationKind, CalendarCreationTarget, CalendarEvent, CalendarItemEditDraft, CalendarSourceStatus, LocalAppleSyncStatus, TaskHubSettings, TaskItem, TaskSendTarget } from "./types";
 import { TaskHubView } from "./views/TaskHubView";
+import { populateRecurrenceSelect } from "./views/recurrenceControls";
 
 function validCalendarEventDuration(value: number | undefined): number {
   if (!Number.isFinite(value) || value === undefined) return 60;
@@ -495,7 +497,8 @@ export default class TaskHubPlugin extends Plugin {
             date: timedTarget.dateKey,
             startMinutes: timedTarget.startMinutes,
             tags: this.settings.dida.tasksCreateTagsEnabled ? task.tags : [],
-            reminderOffsetMinutes: this.settings.dida.defaultReminderOffsetMinutes
+            reminderOffsetMinutes: this.settings.dida.defaultReminderOffsetMinutes,
+            repeatFlag: task.recurrence
           })
         );
         await this.syncDida({ silent: true });
@@ -758,6 +761,7 @@ export default class TaskHubPlugin extends Plugin {
         return result;
       }
       const projectId = draft.reminderListId || task.externalListId;
+      const recurrence = draft.recurrence === undefined ? task.recurrence : draft.recurrence;
       try {
         await this.createDidaClient().updateTask(
           task.externalListId,
@@ -769,7 +773,8 @@ export default class TaskHubPlugin extends Plugin {
             date: draft.date || null,
             startMinutes: draft.startTime ? parseTimeInputValue(draft.startTime) : undefined,
             tags: this.settings.dida.tasksCreateTagsEnabled ? (draft.tags ?? task.tags) : [],
-            reminderOffsetMinutes: this.settings.dida.defaultReminderOffsetMinutes
+            reminderOffsetMinutes: this.settings.dida.defaultReminderOffsetMinutes,
+            repeatFlag: recurrence === null ? "" : recurrence
           })
         );
         await this.syncDida({ silent: true });
@@ -795,6 +800,7 @@ export default class TaskHubPlugin extends Plugin {
         return result;
       }
       const reminderTags = draft.tags ?? task.tags;
+      const recurrence = draft.recurrence === undefined ? task.recurrence : draft.recurrence;
       const input = {
         id: task.externalId,
         title,
@@ -803,7 +809,8 @@ export default class TaskHubPlugin extends Plugin {
         alertMinutesBefore: draft.startTime ? draft.alertMinutesBefore ?? null : null,
         listId: draft.reminderListId || undefined,
         notes: draft.notes,
-        tags: reminderTags
+        tags: reminderTags,
+        ...(draft.recurrence !== undefined || task.recurrence ? { recurrence } : {})
       };
       try {
         await this.runAppleReminderWrite(() => setAppleReminderDetails(input));
@@ -832,12 +839,14 @@ export default class TaskHubPlugin extends Plugin {
     }
 
     const update = { result: { status: "conflict", message: t("taskUpdateFailed") } as CompletionResult };
+    const recurrence = draft.recurrence === undefined ? task.recurrence : draft.recurrence;
     await this.app.vault.process(file, (content) => {
       update.result = updateTaskLineInContent(content, task, {
         title,
         date: draft.date,
         startTime: draft.startTime,
-        tags: draft.tags ?? []
+        tags: draft.tags ?? [],
+        recurrence
       }, {
         lineChangedConflict: t("lineChangedConflict"),
         lineMismatchConflict: t("lineMismatchConflict"),
@@ -887,7 +896,13 @@ export default class TaskHubPlugin extends Plugin {
         end: event.end,
         allDay: draft.allDay,
         calendarId: draft.calendarId || undefined,
-        notes: draft.notes
+        notes: draft.notes,
+        ...(draft.recurrence !== undefined || event.recurrence
+          ? {
+              recurrence: draft.recurrence === undefined ? event.recurrence : draft.recurrence,
+              recurrenceScope: draft.recurrenceScope ?? "this"
+            }
+          : {})
       });
       await this.syncLocalApple({ silent: true });
       new Notice(t("eventUpdated"));
@@ -967,7 +982,8 @@ export default class TaskHubPlugin extends Plugin {
         dueDate: currentTask.dueDate,
         startMinutes: startMinutesFromTask(currentTask),
         listId: target.listId ?? this.settings.localApple.remindersDefaultListId,
-        tags: this.settings.localApple.remindersCreateTagsEnabled ? normalizeAppleReminderTags(currentTask.tags) : []
+        tags: this.settings.localApple.remindersCreateTagsEnabled ? normalizeAppleReminderTags(currentTask.tags) : [],
+        ...(currentTask.recurrence ? { recurrence: currentTask.recurrence } : {})
       };
       const reminderId = await this.writeAppleReminderWithAccessRetry(() => createAppleReminder(input));
       const noteTransfer = await this.transferTaskNotesToAppleReminder(currentTask, reminderId);
@@ -1047,7 +1063,8 @@ export default class TaskHubPlugin extends Plugin {
           date: currentTask.dueDate,
           startMinutes: startMinutesFromTask(currentTask),
           tags: this.settings.dida.tasksCreateTagsEnabled ? currentTask.tags : [],
-          reminderOffsetMinutes: this.settings.dida.defaultReminderOffsetMinutes
+          reminderOffsetMinutes: this.settings.dida.defaultReminderOffsetMinutes,
+          repeatFlag: currentTask.recurrence
         })
       );
       this.settings.didaTaskLinks = {
@@ -1229,7 +1246,8 @@ export default class TaskHubPlugin extends Plugin {
           date: task.dueDate ?? null,
           startMinutes: startMinutesFromTask(task),
           tags: this.settings.dida.tasksCreateTagsEnabled ? task.tags : [],
-          reminderOffsetMinutes: this.settings.dida.defaultReminderOffsetMinutes
+          reminderOffsetMinutes: this.settings.dida.defaultReminderOffsetMinutes,
+          repeatFlag: task.recurrence
         })
       );
       await this.syncDida({ silent: true });
@@ -1248,7 +1266,10 @@ export default class TaskHubPlugin extends Plugin {
     text: string,
     target: CalendarCreationTarget = this.defaultCalendarCreationTarget(),
     notes?: string,
-    alertMinutesBefore?: number | null
+    alertMinutesBefore?: number | null,
+    recurrence?: string | null,
+    recurrenceUntil?: string,
+    recurrenceStart?: string
   ): Promise<void> {
     const t = createTranslator(this.settings.language);
     const timedTarget = calendarDropTargetParts(calendarTarget);
@@ -1270,7 +1291,8 @@ export default class TaskHubPlugin extends Plugin {
         startMinutes: timedTarget.startMinutes,
         ...(timedTarget.startMinutes !== undefined && alertMinutesBefore !== undefined ? { alertMinutesBefore } : {}),
         listId: target.listId ?? this.settings.localApple.remindersDefaultListId,
-        tags: reminderTags
+        tags: reminderTags,
+        ...(recurrence ? { recurrence } : {})
       };
       try {
         const reminderId = await this.writeAppleReminderWithAccessRetry(() => createAppleReminder(input));
@@ -1297,7 +1319,8 @@ export default class TaskHubPlugin extends Plugin {
             date: timedTarget.dateKey,
             startMinutes: timedTarget.startMinutes,
             tags: this.settings.dida.tasksCreateTagsEnabled ? didaText.tags : [],
-            reminderOffsetMinutes: this.settings.dida.defaultReminderOffsetMinutes
+            reminderOffsetMinutes: this.settings.dida.defaultReminderOffsetMinutes,
+            repeatFlag: recurrence ?? undefined
           })
         );
         await this.syncDida({ silent: true });
@@ -1316,15 +1339,24 @@ export default class TaskHubPlugin extends Plugin {
       const durationMinutes = validCalendarEventDuration(timedTarget.durationMinutes ?? 60);
       const startMinutes =
         timedTarget.startMinutes ?? (durationMinutes % (24 * 60) === 0 ? undefined : 0);
+      const eventDates = recurrence
+        ? recurrenceDatesBetween(recurrenceStart, recurrence, recurrenceUntil)
+        : [timedTarget.dateKey];
+      if (recurrence && eventDates.length === 0) {
+        new Notice(t("recurrenceEndDateRequired"));
+        return;
+      }
       try {
-        await createAppleCalendarEvent({
-          title: taskText,
-          ...(cleanNotes ? { notes: cleanNotes } : {}),
-          date: timedTarget.dateKey,
-          startMinutes,
-          durationMinutes,
-          calendarId: target.calendarId
-        });
+        for (const date of eventDates) {
+          await createAppleCalendarEvent({
+            title: taskText,
+            ...(cleanNotes ? { notes: cleanNotes } : {}),
+            date,
+            startMinutes,
+            durationMinutes,
+            calendarId: target.calendarId
+          });
+        }
         await this.syncLocalApple({ silent: true });
         new Notice(t("appleCalendarEventCreated"));
       } catch (error) {
@@ -1335,7 +1367,7 @@ export default class TaskHubPlugin extends Plugin {
 
     const path = normalizeTaskCreationFilePath(this.settings.taskCreationFilePath);
     await this.ensureParentFolders(path);
-    const taskLine = createTaskLine(taskText, timedTarget.dateKey, timedTarget.startMinutes);
+    const taskLine = createTaskLine(taskText, timedTarget.dateKey, timedTarget.startMinutes, recurrence);
     let file = this.app.vault.getFileByPath(path);
     if (!file) {
       file = await this.app.vault.create(path, appendTaskToContent("", taskLine));
@@ -2224,6 +2256,11 @@ class CreateTaskModal extends Modal {
   private notes = "";
   private alertEnabled = false;
   private alertMinutesBefore: ReminderAlertMinutes = 0;
+  private recurrence: string | null = null;
+  private eventRecurrenceStart = "";
+  private eventRecurrenceUntil = "";
+  private eventRecurrenceStartTouched = false;
+  private detailsExpanded = false;
   private calendarTarget: CalendarDropTarget;
   private creationKind: CalendarCreationKind;
   private target: CalendarCreationTarget;
@@ -2239,6 +2276,7 @@ class CreateTaskModal extends Modal {
     this.target = this.defaultTargetForKind(this.creationKind);
     const targetParts = calendarDropTargetParts(calendarTarget);
     this.eventDurationMinutes = validCalendarEventDuration(targetParts.durationMinutes ?? 60);
+    this.eventRecurrenceStart = targetParts.dateKey;
   }
 
   onOpen(): void {
@@ -2264,7 +2302,10 @@ class CreateTaskModal extends Modal {
           this.notes,
           this.creationKind === "task" && this.target.type === "apple-reminders" && this.alertEnabled
             ? this.alertMinutesBefore
-            : undefined
+            : undefined,
+          this.recurrence,
+          this.creationKind === "event" ? this.eventRecurrenceUntil : undefined,
+          this.creationKind === "event" ? this.eventRecurrenceStart : undefined
         );
         this.close();
       } catch (error) {
@@ -2363,7 +2404,48 @@ class CreateTaskModal extends Modal {
         });
       });
 
-    if (this.target.type === "apple-reminders" || this.target.type === "apple-calendar") {
+    new Setting(this.contentEl)
+      .setName(t("editDetails"))
+      .addToggle((toggle) => {
+        toggle.setValue(this.detailsExpanded).onChange((value) => {
+          this.detailsExpanded = value;
+          this.render();
+        });
+      });
+
+    if (this.detailsExpanded) {
+      new Setting(this.contentEl)
+        .setName(t("recurrence"))
+        .addDropdown((dropdown) => {
+          populateRecurrenceSelect(dropdown.selectEl, this.recurrence ?? undefined, t);
+          dropdown.setValue(this.recurrence ?? "").onChange((value) => {
+            this.recurrence = value || null;
+          });
+        });
+
+      if (this.creationKind === "event") {
+        new Setting(this.contentEl)
+          .setName(t("recurrenceStartDate"))
+          .addText((text) => {
+            text.inputEl.type = "date";
+            text.setValue(this.eventRecurrenceStart).onChange((value) => {
+              this.eventRecurrenceStart = value;
+              this.eventRecurrenceStartTouched = true;
+            });
+          });
+
+        new Setting(this.contentEl)
+          .setName(t("recurrenceEndDate"))
+          .addText((text) => {
+            text.inputEl.type = "date";
+            text.setValue(this.eventRecurrenceUntil).onChange((value) => {
+              this.eventRecurrenceUntil = value;
+            });
+          });
+      }
+    }
+
+    if (this.detailsExpanded && (this.target.type === "apple-reminders" || this.target.type === "apple-calendar" || this.target.type === "dida")) {
       new Setting(this.contentEl)
         .setName(t("notes"))
         .addTextArea((text) => {
@@ -2407,6 +2489,9 @@ class CreateTaskModal extends Modal {
     dateInput.addEventListener("change", () => {
       if (!dateInput.value) return;
       this.calendarTarget = withCalendarDropTargetDate(this.calendarTarget, dateInput.value);
+      if (this.creationKind === "event" && !this.eventRecurrenceStartTouched) {
+        this.eventRecurrenceStart = dateInput.value;
+      }
     });
     dateInput.addEventListener("click", () => {
       try {

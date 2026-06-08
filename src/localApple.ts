@@ -5,6 +5,7 @@ import * as path from "path";
 import { promisify } from "util";
 import { appleReminderTitleWithTags, extractAppleReminderTitleTags, mergeAppleReminderTags, normalizeAppleReminderTags } from "./appleReminderTags";
 import { normalizeReminderAlertMinutes } from "./reminderAlerts";
+import { normalizeRecurrenceRule } from "./recurrence";
 import type { AppleCalendarInfo, AppleReminderList, CalendarEvent, CalendarSourceStatus, TaskItem } from "./types";
 
 declare const TASKHUB_APPLE_HELPER_BASE64: string;
@@ -247,12 +248,15 @@ export type AppleReminderDetailsUpdate = {
   listId?: string;
   notes?: string;
   tags?: string[];
+  recurrence?: string | null;
 };
 
 export type AppleCalendarEventDetailsUpdate = AppleCalendarEventDateUpdate & {
   title: string;
   calendarId?: string;
   notes?: string;
+  recurrence?: string | null;
+  recurrenceScope?: "this" | "future";
 };
 
 export async function setAppleReminderDetails(input: AppleReminderDetailsUpdate): Promise<void> {
@@ -265,6 +269,7 @@ export async function setAppleReminderDetails(input: AppleReminderDetailsUpdate)
   if (input.alertMinutesBefore === null) args.push("--clear-alert");
   if (input.listId) args.push("--list-id", input.listId);
   if (input.notes !== undefined) args.push("--notes", input.notes);
+  addRecurrenceArgs(args, input.recurrence);
   for (const tag of tags) args.push("--tag", tag);
   parseHelperJson<{ ok: boolean }>(await runAppleHelper(args));
 }
@@ -278,6 +283,8 @@ export async function setAppleCalendarEventDetails(input: AppleCalendarEventDeta
   args.splice(3, 0, "--title", input.title);
   if (input.calendarId) args.splice(args.length - 2, 0, "--calendar-id", input.calendarId);
   if (input.notes !== undefined) args.splice(args.length - 2, 0, "--notes", input.notes);
+  addRecurrenceArgs(args, input.recurrence, args.length - 2);
+  if (input.recurrenceScope) args.splice(args.length - 2, 0, "--span", input.recurrenceScope);
   parseHelperJson<{ ok: boolean }>(await runAppleHelper(args));
 }
 
@@ -306,12 +313,14 @@ export async function createAppleCalendarEvent(input: {
   startMinutes?: number;
   durationMinutes?: number;
   calendarId?: string;
+  recurrence?: string | null;
 }): Promise<void> {
   const args = ["create-calendar-event", "--title", input.title, "--date", input.date];
   if (input.notes) args.push("--notes", input.notes);
   if (input.startMinutes !== undefined) args.push("--start-minutes", String(input.startMinutes));
   if (input.durationMinutes !== undefined) args.push("--duration-minutes", String(input.durationMinutes));
   if (input.calendarId) args.push("--calendar-id", input.calendarId);
+  addRecurrenceArgs(args, input.recurrence);
   parseHelperJson<{ ok: boolean }>(await runAppleHelper(args));
 }
 
@@ -323,7 +332,7 @@ export async function deleteAppleCalendarEvent(id: string): Promise<void> {
   parseHelperJson<{ ok: boolean }>(await runAppleHelper(["delete-calendar-event", "--id", id]));
 }
 
-export async function createAppleReminder(input: { title: string; notes?: string; dueDate?: string; listId?: string; startMinutes?: number; alertMinutesBefore?: number | null; tags?: string[] }): Promise<string> {
+export async function createAppleReminder(input: { title: string; notes?: string; dueDate?: string; listId?: string; startMinutes?: number; alertMinutesBefore?: number | null; tags?: string[]; recurrence?: string | null }): Promise<string> {
   const tags = normalizeAppleReminderTags(input.tags ?? []);
   const args = ["create-reminder", "--title", appleReminderTitleWithTags(input.title, tags, true)];
   if (input.notes) args.push("--notes", input.notes);
@@ -331,12 +340,22 @@ export async function createAppleReminder(input: { title: string; notes?: string
   if (input.startMinutes !== undefined) args.push("--start-minutes", String(input.startMinutes));
   if (typeof input.alertMinutesBefore === "number") args.push("--alert-minutes-before", String(input.alertMinutesBefore));
   if (input.listId) args.push("--list-id", input.listId);
+  addRecurrenceArgs(args, input.recurrence);
   for (const tag of tags) args.push("--tag", tag);
   const parsed = parseHelperJson<AppleHelperCreateReminderResponse>(await runAppleHelper(args));
   if (!parsed.reminderId) {
     throw createLocalAppleError("eventkit_error", "Apple Reminder was created but the helper did not return its identifier.");
   }
   return parsed.reminderId;
+}
+
+function addRecurrenceArgs(args: string[], recurrence: string | null | undefined, beforeIndex = args.length): void {
+  if (recurrence === null) {
+    args.splice(beforeIndex, 0, "--clear-recurrence");
+    return;
+  }
+  const normalized = normalizeRecurrenceRule(recurrence);
+  if (normalized) args.splice(beforeIndex, 0, "--recurrence", normalized);
 }
 
 export async function setAppleReminderList(id: string, listId: string): Promise<void> {
@@ -444,6 +463,7 @@ type AppleReminderRecord = {
   url?: string;
   tags?: string[];
   alertMinutesBefore?: number;
+  recurrence?: string;
 };
 
 type AppleCalendarRecord = {
@@ -458,6 +478,7 @@ type AppleCalendarRecord = {
   location?: string;
   notes?: string;
   url?: string;
+  recurrence?: string;
 };
 
 export function reminderToTask(record: AppleReminderRecord, index: number): TaskItem {
@@ -480,7 +501,8 @@ export function reminderToTask(record: AppleReminderRecord, index: number): Task
     contextPreview: record.notes,
     source: APPLE_REMINDERS_SOURCE_ID,
     externalUrl: record.url,
-    alertMinutesBefore: normalizeReminderAlertMinutes(record.alertMinutesBefore)
+    alertMinutesBefore: normalizeReminderAlertMinutes(record.alertMinutesBefore),
+    recurrence: normalizeRecurrenceRule(record.recurrence)
   };
 }
 
@@ -497,7 +519,8 @@ export function calendarRecordToEvent(record: AppleCalendarRecord, index: number
     calendarColor: normalizeHexColor(record.calendarColor),
     location: record.location,
     description: record.notes,
-    url: record.url
+    url: record.url,
+    recurrence: normalizeRecurrenceRule(record.recurrence)
   };
 }
 

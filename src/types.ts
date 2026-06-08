@@ -1,6 +1,7 @@
 import type { Language } from "./i18n";
 import type { DateBucket } from "./calendar/dateBuckets";
 import type { TaskNoteSettings } from "./taskNotes";
+import type { RecurrenceEditScope } from "./recurrence";
 
 export type TaskStatusFilter = "open" | "completed" | "all";
 export type DefaultView = "tasks" | "calendar" | "tags";
@@ -66,6 +67,7 @@ export type CalendarEvent = {
   location?: string;
   description?: string;
   url?: string;
+  recurrence?: string;
 };
 
 export type CalendarItemEditDraft =
@@ -78,6 +80,7 @@ export type CalendarItemEditDraft =
       reminderListId?: string;
       notes?: string;
       alertMinutesBefore?: number | null;
+      recurrence?: string | null;
     }
   | {
       kind: "event";
@@ -88,6 +91,8 @@ export type CalendarItemEditDraft =
       allDay: boolean;
       calendarId?: string;
       notes?: string;
+      recurrence?: string | null;
+      recurrenceScope?: RecurrenceEditScope;
     };
 
 export type CalendarSourceStatus =

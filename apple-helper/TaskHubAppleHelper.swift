@@ -34,6 +34,7 @@ struct ReminderRecord: Encodable {
     let url: String?
     let tags: [String]?
     let alertMinutesBefore: Int?
+    let recurrence: String?
 }
 
 struct ReminderListRecord: Encodable {
@@ -60,6 +61,7 @@ struct CalendarRecord: Encodable {
     let location: String?
     let notes: String?
     let url: String?
+    let recurrence: String?
 }
 
 func jsonEncoder() -> JSONEncoder {
@@ -119,6 +121,94 @@ func reminderAlertMinutesBefore(reminder: EKReminder) -> Int? {
     }
     let minutes = Int(round(dueDate.timeIntervalSince(alarmDate) / 60))
     return minutes < 0 ? nil : minutes
+}
+
+func recurrenceText(from item: EKCalendarItem) -> String? {
+    guard let rule = item.recurrenceRules?.first else {
+        return nil
+    }
+    let frequency: String
+    switch rule.frequency {
+    case .daily:
+        frequency = "DAILY"
+    case .weekly:
+        frequency = "WEEKLY"
+    case .monthly:
+        frequency = "MONTHLY"
+    case .yearly:
+        frequency = "YEARLY"
+    @unknown default:
+        return nil
+    }
+    var parts = ["FREQ=\(frequency)"]
+    if rule.interval > 1 {
+        parts.append("INTERVAL=\(rule.interval)")
+    }
+    if let count = rule.recurrenceEnd?.occurrenceCount, count > 0 {
+        parts.append("COUNT=\(count)")
+    } else if let endDate = rule.recurrenceEnd?.endDate {
+        let components = Calendar(identifier: .gregorian).dateComponents([.year, .month, .day], from: endDate)
+        if let year = components.year, let month = components.month, let day = components.day {
+            parts.append(String(format: "UNTIL=%04d%02d%02d", year, month, day))
+        }
+    }
+    return "RRULE:\(parts.joined(separator: ";"))"
+}
+
+func recurrenceRule(from text: String?) -> EKRecurrenceRule? {
+    guard let text, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+        return nil
+    }
+    let body = text.uppercased().replacingOccurrences(of: "RRULE:", with: "")
+    var values: [String: String] = [:]
+    for part in body.split(separator: ";") {
+        let pair = part.split(separator: "=", maxSplits: 1).map(String.init)
+        if pair.count == 2 {
+            values[pair[0]] = pair[1]
+        }
+    }
+    let frequency: EKRecurrenceFrequency
+    switch values["FREQ"] {
+    case "DAILY":
+        frequency = .daily
+    case "WEEKLY":
+        frequency = .weekly
+    case "MONTHLY":
+        frequency = .monthly
+    case "YEARLY":
+        frequency = .yearly
+    default:
+        fail("invalid_arguments", "recurrence requires RRULE:FREQ=DAILY, WEEKLY, MONTHLY, or YEARLY.", exitCode: 2)
+    }
+    let interval = max(Int(values["INTERVAL"] ?? "1") ?? 1, 1)
+    let end: EKRecurrenceEnd?
+    if let countText = values["COUNT"], let count = Int(countText), count > 0 {
+        end = EKRecurrenceEnd(occurrenceCount: count)
+    } else if let until = values["UNTIL"] {
+        let dateText = until.replacingOccurrences(of: #"^(\d{4})(\d{2})(\d{2}).*$"#, with: "$1-$2-$3", options: .regularExpression)
+        if let components = parseDateKey(dateText), let date = components.calendar?.date(from: components) {
+            end = EKRecurrenceEnd(end: date)
+        } else {
+            end = nil
+        }
+    } else {
+        end = nil
+    }
+    return EKRecurrenceRule(recurrenceWith: frequency, interval: interval, end: end)
+}
+
+func applyRecurrence(to item: EKCalendarItem) {
+    if hasArgument("--clear-recurrence") {
+        item.recurrenceRules = nil
+        return
+    }
+    if let rule = recurrenceRule(from: argumentValue("--recurrence")) {
+        item.recurrenceRules = [rule]
+    }
+}
+
+func calendarSaveSpan() -> EKSpan {
+    return argumentValue("--span") == "future" ? .futureEvents : .thisEvent
 }
 
 func hexColor(from calendar: EKCalendar) -> String? {
@@ -383,7 +473,8 @@ func readReminders(store: EKEventStore) {
                 priority: reminder.priority,
                 url: reminder.url?.absoluteString,
                 tags: reminderTagsFromTitle(reminder.title),
-                alertMinutesBefore: reminderAlertMinutesBefore(reminder: reminder)
+                alertMinutesBefore: reminderAlertMinutesBefore(reminder: reminder),
+                recurrence: recurrenceText(from: reminder)
             )
         }
         didComplete = true
@@ -433,7 +524,8 @@ func readCalendar(store: EKEventStore) {
             allDay: event.isAllDay,
             location: event.location,
             notes: event.notes,
-            url: event.url?.absoluteString
+            url: event.url?.absoluteString,
+            recurrence: recurrenceText(from: event)
         )
     }
 
@@ -626,6 +718,7 @@ func setReminderDetails(store: EKEventStore) {
         }
         reminder.calendar = calendar
     }
+    applyRecurrence(to: reminder)
 
     do {
         try store.save(reminder, commit: true)
@@ -750,7 +843,7 @@ func setCalendarEventDate(store: EKEventStore) {
     )
 
     do {
-        try store.save(event, span: .thisEvent, commit: true)
+        try store.save(event, span: calendarSaveSpan(), commit: true)
     } catch {
         fail("eventkit_error", error.localizedDescription, exitCode: 7)
     }
@@ -805,6 +898,7 @@ func setCalendarEventDetails(store: EKEventStore) {
         }
         event.calendar = calendar
     }
+    applyRecurrence(to: event)
     applyCalendarEventTiming(
         event: event,
         targetDate: targetDate,
@@ -816,7 +910,7 @@ func setCalendarEventDetails(store: EKEventStore) {
     )
 
     do {
-        try store.save(event, span: .thisEvent, commit: true)
+        try store.save(event, span: calendarSaveSpan(), commit: true)
     } catch {
         fail("eventkit_error", error.localizedDescription, exitCode: 7)
     }
@@ -901,6 +995,7 @@ func createReminder(store: EKEventStore) {
     if hasArgument("--alert-minutes-before") {
         applyReminderAlert(reminder, alertMinutesBefore: integerArgument("--alert-minutes-before"))
     }
+    applyRecurrence(to: reminder)
 
     guard reminder.calendar != nil else {
         fail("eventkit_error", "No writable Apple Reminders list is available.", exitCode: 7)
@@ -970,6 +1065,8 @@ func createCalendarEvent(store: EKEventStore) {
         event.startDate = startDate
         event.endDate = startDate.addingTimeInterval(TimeInterval(durationMinutes * 60))
     }
+
+    applyRecurrence(to: event)
 
     do {
         try store.save(event, span: .thisEvent, commit: true)

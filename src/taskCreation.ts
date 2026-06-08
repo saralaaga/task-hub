@@ -1,3 +1,5 @@
+import { normalizeRecurrenceRule } from "./recurrence";
+
 export const DEFAULT_TASK_CREATION_FILE_PATH = "Task Hub.md";
 
 export function normalizeTaskCreationFilePath(path: string | undefined): string {
@@ -7,10 +9,12 @@ export function normalizeTaskCreationFilePath(path: string | undefined): string 
   return normalized.toLowerCase().endsWith(".md") ? normalized : `${normalized}.md`;
 }
 
-export function createTaskLine(text: string, dateKey: string, startMinutes?: number): string {
+export function createTaskLine(text: string, dateKey: string, startMinutes?: number, recurrence?: string | null): string {
   const taskText = text.replace(/\s+/g, " ").trim();
   const timeText = startMinutes === undefined ? "" : ` ⏰ ${formatTaskTime(startMinutes)}`;
-  return `- [ ] ${taskText} 📅 ${dateKey}${timeText}`;
+  const normalizedRecurrence = normalizeRecurrenceRule(recurrence);
+  const recurrenceText = normalizedRecurrence ? ` repeat:: ${normalizedRecurrence}` : "";
+  return `- [ ] ${taskText} 📅 ${dateKey}${timeText}${recurrenceText}`;
 }
 
 export function appendTaskToContent(content: string, taskLine: string): string {

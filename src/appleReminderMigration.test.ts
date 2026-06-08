@@ -63,7 +63,9 @@ function fakeEl(): FakeElement {
       element.children.push(child);
       return child;
     }),
-    empty: jest.fn(),
+    empty: jest.fn(() => {
+      element.children = [];
+    }),
     focus: jest.fn(),
     setAttr: jest.fn(),
     setText: jest.fn(),
@@ -231,6 +233,24 @@ jest.mock(
             return {
               onChange(handler: (value: string) => void) {
                 inputEl.addEventListener("input", () => handler(inputEl.value ?? ""));
+                return this;
+              }
+            };
+          }
+        });
+        return this;
+      }
+
+      addToggle(build?: (toggle: { setValue(value: boolean): { onChange(handler: (value: boolean) => void): unknown } }) => void) {
+        const inputEl = fakeEl();
+        inputEl.type = "checkbox";
+        this.controlEl.children.push(inputEl);
+        build?.({
+          setValue(value: boolean) {
+            inputEl.checked = value;
+            return {
+              onChange(handler: (value: boolean) => void) {
+                inputEl.addEventListener("change", () => handler(Boolean(inputEl.checked)));
                 return this;
               }
             };
@@ -1077,6 +1097,46 @@ describe("Apple Reminders migration", () => {
     });
   });
 
+  it("creates recurring Apple Calendar events as separate concrete events from the task modal flow", async () => {
+    const plugin = new TaskHubPlugin({} as never, {} as never);
+    plugin.app = { workspace: { getLeavesOfType: jest.fn(() => []) } } as never;
+    plugin.settings = {
+      ...DEFAULT_SETTINGS,
+      localApple: {
+        ...DEFAULT_SETTINGS.localApple,
+        enabled: true,
+        calendarEnabled: true,
+        calendarTaskSendEnabled: true
+      }
+    };
+    plugin.syncLocalApple = jest.fn(async () => undefined) as never;
+
+    await plugin.createTaskForDate(
+      "2026-05-20",
+      "Design review",
+      { type: "apple-calendar", calendarId: "work" },
+      undefined,
+      undefined,
+      "RRULE:FREQ=WEEKLY",
+      "2026-06-03",
+      "2026-05-20"
+    );
+
+    expect(createAppleCalendarEvent).toHaveBeenCalledTimes(3);
+    expect(createAppleCalendarEvent).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      title: "Design review",
+      date: "2026-05-20",
+      calendarId: "work"
+    }));
+    expect(createAppleCalendarEvent).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      date: "2026-05-27"
+    }));
+    expect(createAppleCalendarEvent).toHaveBeenNthCalledWith(3, expect.objectContaining({
+      date: "2026-06-03"
+    }));
+    expect(createAppleCalendarEvent).not.toHaveBeenCalledWith(expect.objectContaining({ recurrence: expect.any(String) }));
+  });
+
   it("creates an Apple Reminder with modal notes", async () => {
     const plugin = new TaskHubPlugin({} as never, {} as never);
     plugin.app = {
@@ -1110,6 +1170,28 @@ describe("Apple Reminders migration", () => {
       tags: []
     });
     expect(notices).toContain("Apple Reminder created.: reminder-created-1");
+  });
+
+  it("creates recurring Apple Reminders from the task modal flow", async () => {
+    const plugin = new TaskHubPlugin({} as never, {} as never);
+    plugin.app = { workspace: { getLeavesOfType: jest.fn(() => []) } } as never;
+    plugin.settings = {
+      ...DEFAULT_SETTINGS,
+      localApple: {
+        ...DEFAULT_SETTINGS.localApple,
+        enabled: true,
+        remindersEnabled: true,
+        remindersCreateEnabled: true
+      }
+    };
+    plugin.syncLocalApple = jest.fn(async () => undefined) as never;
+
+    await plugin.createTaskForDate("2026-05-20", "Design review", { type: "apple-reminders" }, undefined, undefined, "RRULE:FREQ=DAILY");
+
+    expect(createAppleReminder).toHaveBeenCalledWith(expect.objectContaining({
+      title: "Design review",
+      recurrence: "RRULE:FREQ=DAILY"
+    }));
   });
 
   it("uses the selected Apple Reminder list when sending a vault task", async () => {
@@ -1233,6 +1315,78 @@ describe("Apple Reminders migration", () => {
     expect(createAppleReminder).toHaveBeenCalledWith(expect.not.objectContaining({
       alertMinutesBefore: expect.any(Number)
     }));
+  });
+
+  it("hides modal recurrence and notes until edit details is enabled", () => {
+    const plugin = new TaskHubPlugin({} as never, {} as never);
+    plugin.app = {
+      workspace: {
+        getLeavesOfType: jest.fn(() => [])
+      }
+    } as never;
+    plugin.settings = {
+      ...DEFAULT_SETTINGS,
+      calendarCreationDefaultKind: "task",
+      calendarTaskCreationDefaultTarget: { type: "apple-reminders" },
+      localApple: {
+        ...DEFAULT_SETTINGS.localApple,
+        enabled: true,
+        remindersEnabled: true,
+        remindersCreateEnabled: true
+      }
+    };
+    (globalThis as unknown as { window: { setTimeout: typeof setTimeout } }).window = { setTimeout };
+
+    plugin.openCreateTaskModal("2026-05-20");
+
+    const modal = modals.at(-1);
+    let fields = modal ? collectElements(modal.contentEl) : [];
+    const defaultSelectCount = fields.filter((element) => element.type === "select").length;
+    expect(fields.find((element) => element.type === "textarea")).toBeUndefined();
+
+    const editDetailsToggle = fields.filter((element) => element.type === "checkbox").at(-1);
+    editDetailsToggle!.checked = true;
+    dispatchFake(editDetailsToggle!, "change");
+
+    fields = modal ? collectElements(modal.contentEl) : [];
+    expect(fields.find((element) => element.type === "textarea")).toBeDefined();
+    expect(fields.filter((element) => element.type === "select")).toHaveLength(defaultSelectCount + 1);
+  });
+
+  it("shows recurrence start and end dates for recurring event creation details", () => {
+    const plugin = new TaskHubPlugin({} as never, {} as never);
+    plugin.app = {
+      workspace: {
+        getLeavesOfType: jest.fn(() => [])
+      }
+    } as never;
+    plugin.settings = {
+      ...DEFAULT_SETTINGS,
+      calendarCreationDefaultKind: "event",
+      calendarEventCreationDefaultTarget: { type: "apple-calendar", calendarId: "work" },
+      localApple: {
+        ...DEFAULT_SETTINGS.localApple,
+        enabled: true,
+        calendarEnabled: true,
+        calendarTaskSendEnabled: true
+      }
+    };
+    (globalThis as unknown as { window: { setTimeout: typeof setTimeout } }).window = { setTimeout };
+
+    plugin.openCreateTaskModal("2026-05-20");
+
+    const modal = modals.at(-1);
+    let fields = modal ? collectElements(modal.contentEl) : [];
+    expect(fields.filter((element) => element.type === "date")).toHaveLength(1);
+
+    const editDetailsToggle = fields.filter((element) => element.type === "checkbox").at(-1);
+    editDetailsToggle!.checked = true;
+    dispatchFake(editDetailsToggle!, "change");
+
+    fields = modal ? collectElements(modal.contentEl) : [];
+    const dateInputs = fields.filter((element) => element.type === "date");
+    expect(dateInputs).toHaveLength(3);
+    expect(dateInputs[1].value).toBe("2026-05-20");
   });
 
   it("extracts modal body hashtags into Apple Reminder tags", async () => {
@@ -1587,6 +1741,37 @@ describe("Apple Reminders migration", () => {
     expect(notices).toContain("Task updated.");
   });
 
+  it("updates Markdown task recurrence from calendar task details", async () => {
+    const file = { path: "Inbox.md", extension: "md", stat: { ctime: 1, mtime: 2, size: 3 } };
+    const plugin = new TaskHubPlugin({} as never, {} as never);
+    const process = jest.fn(async (_file, update) => update("- [ ] Pay invoice 📅 2026-05-20 repeat:: RRULE:FREQ=WEEKLY\nNext"));
+    plugin.app = {
+      vault: {
+        adapter: {},
+        getFileByPath: jest.fn(() => file),
+        process,
+        cachedRead: jest.fn(async () => "Next")
+      },
+      workspace: { getLeavesOfType: jest.fn(() => []) }
+    } as never;
+    plugin.settings = DEFAULT_SETTINGS;
+    plugin.taskIndex = { reindexFile: jest.fn(async () => undefined) } as never;
+
+    await plugin.updateCalendarTask(task({
+      rawLine: "- [ ] Pay invoice 📅 2026-05-20 repeat:: RRULE:FREQ=WEEKLY",
+      dueDate: "2026-05-20",
+      recurrence: "RRULE:FREQ=WEEKLY"
+    }), {
+      kind: "task",
+      title: "Pay invoice",
+      date: "2026-05-20",
+      tags: [],
+      recurrence: "RRULE:FREQ=MONTHLY"
+    });
+
+    await expect(process.mock.results[0].value).resolves.toBe("- [ ] Pay invoice 📅 2026-05-20 repeat:: RRULE:FREQ=MONTHLY\nNext");
+  });
+
   it("updates Apple Reminder detail drafts through the helper", async () => {
     const plugin = new TaskHubPlugin({} as never, {} as never);
     plugin.app = { workspace: { getLeavesOfType: jest.fn(() => []) } } as never;
@@ -1622,6 +1807,32 @@ describe("Apple Reminders migration", () => {
       tags: []
     });
     expect(notices).toContain("Task updated.");
+  });
+
+  it("updates Apple Reminder recurrence through task details", async () => {
+    const plugin = new TaskHubPlugin({} as never, {} as never);
+    plugin.app = { workspace: { getLeavesOfType: jest.fn(() => []) } } as never;
+    plugin.settings = {
+      ...DEFAULT_SETTINGS,
+      localApple: {
+        ...DEFAULT_SETTINGS.localApple,
+        enabled: true,
+        remindersEnabled: true,
+        remindersWritebackEnabled: true
+      }
+    };
+    plugin.syncLocalApple = jest.fn(async () => undefined) as never;
+
+    await plugin.updateCalendarTask(appleReminderTask(), {
+      kind: "task",
+      title: "Send invoice",
+      date: "2026-05-21",
+      recurrence: "RRULE:FREQ=WEEKLY"
+    });
+
+    expect(setAppleReminderDetails).toHaveBeenCalledWith(expect.objectContaining({
+      recurrence: "RRULE:FREQ=WEEKLY"
+    }));
   });
 
   it("preserves Apple Reminder tags when updating other details", async () => {
@@ -1761,6 +1972,45 @@ describe("Apple Reminders migration", () => {
       notes: "Discuss launch scope"
     });
     expect(notices).toContain("Event updated.");
+  });
+
+  it("updates recurring Apple Calendar event details with a future span when selected", async () => {
+    const plugin = new TaskHubPlugin({} as never, {} as never);
+    plugin.app = { workspace: { getLeavesOfType: jest.fn(() => []) } } as never;
+    plugin.settings = {
+      ...DEFAULT_SETTINGS,
+      localApple: {
+        ...DEFAULT_SETTINGS.localApple,
+        enabled: true,
+        calendarEnabled: true,
+        calendarWritebackEnabled: true
+      }
+    };
+    plugin.syncLocalApple = jest.fn(async () => undefined) as never;
+
+    await plugin.updateCalendarEvent({
+      id: "event-1",
+      sourceId: "apple-calendar",
+      title: "Design review",
+      start: "2026-05-20T09:30:00",
+      end: "2026-05-20T10:30:00",
+      allDay: false,
+      recurrence: "RRULE:FREQ=WEEKLY"
+    }, {
+      kind: "event",
+      title: "Updated review",
+      date: "2026-05-21",
+      startTime: "10:00",
+      endTime: "11:00",
+      allDay: false,
+      recurrence: "RRULE:FREQ=MONTHLY",
+      recurrenceScope: "future"
+    });
+
+    expect(setAppleCalendarEventDetails).toHaveBeenCalledWith(expect.objectContaining({
+      recurrence: "RRULE:FREQ=MONTHLY",
+      recurrenceScope: "future"
+    }));
   });
 });
 
