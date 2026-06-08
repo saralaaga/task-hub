@@ -2,6 +2,7 @@ import { App, PluginSettingTab, Setting } from "obsidian";
 import { createTranslator, type Translator } from "./i18n";
 import type TaskHubPlugin from "./main";
 import { DEFAULT_DIDA_API_BASE, DIDA_INBOX_PROJECT_NAME } from "./dida/didaMapping";
+import { normalizeTaskSendDefaultTarget, parseTaskSendTarget, serializeTaskSendTarget, taskSendTargetOptions } from "./taskSendTargets";
 import type { AppleCalendarInfo, CalendarCreationKind, CalendarCreationTarget, CalendarEventCreationTarget, CalendarSource, CalendarSourceStatus, CalendarTaskCreationTarget, ExternalTaskSourceTab, LocalAppleSyncStatus, TaskHubSettings } from "./types";
 
 export const TASK_HUB_SETTINGS_SCHEMA_VERSION = 2;
@@ -18,6 +19,7 @@ export const DEFAULT_SETTINGS: TaskHubSettings = {
   calendarCreationDefaultKind: "task",
   calendarTaskCreationDefaultTarget: { type: "vault" },
   calendarEventCreationDefaultTarget: { type: "apple-calendar" },
+  taskSendDefaultTarget: undefined,
   calendarTimeScale: "hour",
   calendarDayStartHour: 6,
   calendarDayEndHour: 22,
@@ -109,6 +111,22 @@ export function normalizeTaskHubSettings(loaded: Partial<TaskHubSettings> | null
       loaded?.calendarTaskCreationDefaultTarget ?? DEFAULT_SETTINGS.calendarTaskCreationDefaultTarget,
     calendarEventCreationDefaultTarget:
       loaded?.calendarEventCreationDefaultTarget ?? DEFAULT_SETTINGS.calendarEventCreationDefaultTarget,
+    taskSendDefaultTarget: normalizeTaskSendDefaultTarget(loaded?.taskSendDefaultTarget, {
+      localApple: {
+        ...DEFAULT_SETTINGS.localApple,
+        ...(loadedLocalApple ?? {}),
+        enabled: localAppleEnabled,
+        remindersLists: loadedLocalApple?.remindersLists ?? DEFAULT_SETTINGS.localApple.remindersLists
+      },
+      dida: {
+        ...DEFAULT_SETTINGS.dida,
+        ...(loadedDida ?? {}),
+        enabled: loadedDida?.enabled ?? DEFAULT_SETTINGS.dida.enabled,
+        tasksCreateEnabled: loadedDida?.tasksCreateEnabled ?? DEFAULT_SETTINGS.dida.tasksCreateEnabled,
+        apiToken: loadedDida?.apiToken ?? DEFAULT_SETTINGS.dida.apiToken,
+        projects: normalizeDidaProjects(loadedDida?.projects)
+      }
+    }),
     taskCreationFilePath: loaded?.taskCreationFilePath ?? DEFAULT_SETTINGS.taskCreationFilePath,
     taskNotes: normalizeTaskNotesSettings(loaded?.taskNotes),
     taskViewFilters: normalizeTaskViewFilters(loaded?.taskViewFilters, loaded?.showCompletedByDefault),
@@ -456,6 +474,27 @@ export class TaskHubSettingTab extends PluginSettingTab {
             this.plugin.settings.taskCreationFilePath = value;
             await this.plugin.saveSettings();
           });
+        });
+    }
+
+    const sendTargetOptions = currentTaskSendTargetOptions(this.plugin, t);
+    if (sendTargetOptions.length > 0) {
+      new Setting(basicSettingsGrid)
+        .setName(t("taskSendDefaultTarget"))
+        .setDesc(t("taskSendDefaultTargetDesc"))
+        .addDropdown((dropdown) => {
+          dropdown.selectEl.empty();
+          for (const option of sendTargetOptions) {
+            dropdown.addOption(option.value, option.label);
+          }
+          const currentValue = this.plugin.settings.taskSendDefaultTarget
+            ? serializeTaskSendTarget(this.plugin.settings.taskSendDefaultTarget)
+            : sendTargetOptions[0].value;
+          dropdown.setValue(sendTargetOptions.some((option) => option.value === currentValue) ? currentValue : sendTargetOptions[0].value)
+            .onChange(async (value) => {
+              this.plugin.settings.taskSendDefaultTarget = parseTaskSendTarget(value);
+              await this.plugin.saveSettings();
+            });
         });
     }
 
@@ -1651,6 +1690,40 @@ export function populateTaskCreationTargetDropdown(selectEl: HTMLSelectElement, 
     }
   }
 
+}
+
+export function populateTaskSendTargetDropdown(selectEl: HTMLSelectElement, plugin: TaskHubPlugin, t: Translator): void {
+  selectEl.empty();
+  for (const option of currentTaskSendTargetOptions(plugin, t)) {
+    selectEl.createEl("option", { value: option.value, text: option.label });
+  }
+}
+
+function currentTaskSendTargetOptions(plugin: TaskHubPlugin, t: Translator) {
+  const localAppleSupported = typeof plugin.isLocalAppleSupported === "function" ? plugin.isLocalAppleSupported() : true;
+  const allowAppleReminderCreate = typeof plugin.canCreateAppleReminders === "function"
+    ? plugin.canCreateAppleReminders()
+    : localAppleSupported && plugin.settings.localApple.enabled && plugin.settings.localApple.remindersCreateEnabled;
+  const allowDidaCreate = typeof plugin.canCreateDidaTasks === "function"
+    ? plugin.canCreateDidaTasks()
+    : plugin.settings.dida.enabled && plugin.settings.dida.tasksCreateEnabled && Boolean(plugin.settings.dida.apiToken.trim());
+  const appleReminderLists = typeof plugin.getAppleReminderLists === "function"
+    ? plugin.getAppleReminderLists()
+    : plugin.settings.localApple.remindersLists;
+  const didaProjects = typeof plugin.getDidaProjects === "function"
+    ? plugin.getDidaProjects()
+    : plugin.settings.dida.projects;
+  return taskSendTargetOptions({
+    allowAppleReminderCreate,
+    allowDidaCreate,
+    appleReminderLists,
+    didaProjects
+  }, {
+    appleReminders: t("localAppleReminders"),
+    appleRemindersInbox: t("localAppleRemindersDefaultListInbox"),
+    dida: t("dida"),
+    didaInbox: t("didaDefaultProjectInbox")
+  });
 }
 
 export function populateEventCreationTargetDropdown(selectEl: HTMLSelectElement, plugin: TaskHubPlugin, t: Translator): void {

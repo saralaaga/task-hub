@@ -1112,6 +1112,46 @@ describe("Apple Reminders migration", () => {
     expect(notices).toContain("Apple Reminder created.: reminder-created-1");
   });
 
+  it("uses the selected Apple Reminder list when sending a vault task", async () => {
+    const plugin = new TaskHubPlugin({} as never, {} as never);
+    const file = { path: "Project.md", extension: "md", stat: { ctime: 1, mtime: 2, size: 3 } };
+    plugin.app = {
+      vault: {
+        adapter: {},
+        getFileByPath: jest.fn(() => file),
+        read: jest.fn(async () => "- [ ] Design review 📅 2026-05-20"),
+        process: jest.fn(async (_file, update) => update("- [ ] Design review 📅 2026-05-20")),
+        cachedRead: jest.fn(async () => "")
+      },
+      workspace: {
+        getLeavesOfType: jest.fn(() => [])
+      }
+    } as never;
+    plugin.settings = {
+      ...DEFAULT_SETTINGS,
+      localApple: {
+        ...DEFAULT_SETTINGS.localApple,
+        enabled: true,
+        remindersEnabled: true,
+        remindersCreateEnabled: true,
+        remindersDefaultListId: "default-list"
+      }
+    };
+    plugin.taskIndex = {
+      reindexFile: jest.fn(async () => undefined)
+    } as never;
+    plugin.syncLocalApple = jest.fn(async () => undefined) as never;
+
+    await plugin.sendTaskToTarget(task({ filePath: "Project.md", rawLine: "- [ ] Design review 📅 2026-05-20" }), {
+      type: "apple-reminders",
+      listId: "selected-list"
+    });
+
+    expect(createAppleReminder).toHaveBeenCalledWith(expect.objectContaining({
+      listId: "selected-list"
+    }));
+  });
+
   it("creates a timed Apple Reminder with an alert from the modal", async () => {
     const plugin = new TaskHubPlugin({} as never, {} as never);
     plugin.app = {
@@ -1274,6 +1314,49 @@ describe("Apple Reminders migration", () => {
       title: "RPA 学习",
       projectId: "project-1",
       tags: ["比赛", "p/自习室"]
+    }));
+  });
+
+  it("uses the selected Dida project when sending a vault task", async () => {
+    const plugin = new TaskHubPlugin({} as never, {} as never);
+    const createTask = jest.fn(async () => ({ id: "dida-created-1" }));
+    const file = { path: "Project.md", extension: "md", stat: { ctime: 1, mtime: 2, size: 3 } };
+    jest.spyOn(plugin as never, "createDidaClient").mockReturnValue({ createTask } as never);
+    plugin.app = {
+      vault: {
+        adapter: {},
+        getFileByPath: jest.fn(() => file),
+        read: jest.fn(async () => "- [ ] Design review 📅 2026-05-20"),
+        process: jest.fn(async (_file, update) => update("- [ ] Design review 📅 2026-05-20")),
+        cachedRead: jest.fn(async () => "")
+      },
+      workspace: {
+        getLeavesOfType: jest.fn(() => [])
+      }
+    } as never;
+    plugin.settings = {
+      ...DEFAULT_SETTINGS,
+      dida: {
+        ...DEFAULT_SETTINGS.dida,
+        enabled: true,
+        tasksEnabled: true,
+        tasksCreateEnabled: true,
+        apiToken: "token",
+        defaultProjectId: "default-project"
+      }
+    };
+    plugin.taskIndex = {
+      reindexFile: jest.fn(async () => undefined)
+    } as never;
+    plugin.syncDida = jest.fn(async () => undefined) as never;
+
+    await plugin.sendTaskToTarget(task({ filePath: "Project.md", rawLine: "- [ ] Design review 📅 2026-05-20" }), {
+      type: "dida",
+      projectId: "selected-project"
+    });
+
+    expect(createTask).toHaveBeenCalledWith(expect.objectContaining({
+      projectId: "selected-project"
     }));
   });
 

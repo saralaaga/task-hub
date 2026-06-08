@@ -138,6 +138,10 @@ export type CalendarTaskCreationTarget =
   | { type: "apple-reminders"; listId?: string }
   | { type: "dida"; projectId?: string };
 
+export type TaskSendTarget =
+  | { type: "apple-reminders"; listId?: string }
+  | { type: "dida"; projectId?: string };
+
 export type CalendarEventCreationTarget =
   | { type: "apple-calendar"; calendarId?: string };
 
@@ -211,6 +215,7 @@ export type TaskHubSettings = {
   calendarCreationDefaultKind: CalendarCreationKind;
   calendarTaskCreationDefaultTarget: CalendarTaskCreationTarget;
   calendarEventCreationDefaultTarget: CalendarEventCreationTarget;
+  taskSendDefaultTarget?: TaskSendTarget;
   calendarTimeScale: CalendarTimeScale;
   calendarDayStartHour: number;
   calendarDayEndHour: number;

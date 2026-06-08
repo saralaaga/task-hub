@@ -98,6 +98,7 @@ class FakeElement {
   checked = false;
   disabled = false;
   draggable = false;
+  open = false;
   text = "";
   type = "";
   value = "";
@@ -151,14 +152,19 @@ class FakeElement {
     return this.append(options);
   }
 
-  createEl(tag: string, options: { cls?: string; type?: string; text?: string } = {}): FakeElement {
+  createEl(tag: string, options: { cls?: string; type?: string; text?: string; value?: string } = {}): FakeElement {
     const child = this.append(options);
     child.type = options.type ?? tag;
+    child.value = options.value ?? "";
     return child;
   }
 
   createSpan(options: { cls?: string; text?: string } = {}): FakeElement {
     return this.append(options);
+  }
+
+  setText(text: string): void {
+    this.text = text;
   }
 
   createSvg(tag: string, options: { attr?: Record<string, string> } = {}): FakeElement {
@@ -396,6 +402,10 @@ const remindersSource: CalendarSource = {
 
 function collect(element: FakeElement): FakeElement[] {
   return [element, ...element.children.flatMap(collect)];
+}
+
+function findText(element: FakeElement, text: string): FakeElement | undefined {
+  return collect(element).find((child) => child.text === text);
 }
 
 function styleValue(element: FakeElement, property: string): string | undefined {
@@ -1892,7 +1902,6 @@ describe("renderCalendarView", () => {
     const popover = collect(fakeDocument.body).find((element) => element.classes.has("task-hub-calendar-detail-popover"));
     const save = collect(popover as FakeElement).find((element) => element.text === "save");
     const titleInput = collect(popover as FakeElement).find((element) => element.type === "text");
-    const open = collect(popover as FakeElement).find((element) => element.text === "openSource");
     const deleteButton = collect(popover as FakeElement).find((element) => element.text === "delete");
     const allDayRow = collect(popover as FakeElement).find((element) => element.classes.has("task-hub-calendar-detail-check"));
     const hiddenTimeRows = collect(popover as FakeElement).filter((element) => element.classes.has("task-hub-calendar-detail-time-row") && element.classes.has("is-hidden"));
@@ -1902,7 +1911,7 @@ describe("renderCalendarView", () => {
     expect(save?.disabled).toBe(true);
     expect(titleInput?.disabled).toBe(true);
     expect(deleteButton).toBeUndefined();
-    open?.click();
+    findText(popover as FakeElement, "openSource")?.click();
     expect(window.open).toHaveBeenCalledWith("https://example.com/event");
     expect(onDateCreateTask).not.toHaveBeenCalled();
   });
@@ -4984,6 +4993,60 @@ describe("renderCalendarView", () => {
       "sendToAppleReminders",
       "sendToDida"
     ]);
+  });
+
+  it("shows a send target picker in calendar task details", () => {
+    const container = new FakeElement();
+    const onTaskSendToTarget = jest.fn();
+
+    renderCalendarView(
+      container as unknown as HTMLElement,
+      {
+        mode: "month",
+        focusDate: new Date("2026-05-08T12:00:00Z"),
+        weekStart: "monday",
+        visibleSourceIds: new Set(["vault"]),
+        includeCompletedTasks: false,
+        allowAppleReminderWriteback: false,
+        allowAppleReminderCreate: true,
+        allowDidaCreate: true,
+        allowTaskCreation: false,
+        appleReminderLists: [{ id: "apple-list", name: "Inbox" }],
+        didaProjects: [{ id: "dida-project", name: "Work" }],
+        taskSendDefaultTarget: { type: "dida", projectId: "dida-project" },
+        sources: [],
+        t: (key) => key
+      },
+      [task],
+      [],
+      {
+        onLayerToggle: jest.fn(),
+        onModeChange: jest.fn(),
+        onMove: jest.fn(),
+        onDateCreateTask: jest.fn(),
+        onTaskComplete: jest.fn(),
+        onTaskJump: jest.fn(),
+        onTaskSelect: jest.fn(),
+        onTaskReschedule: jest.fn(),
+        onTaskSendToTarget,
+        onToday: jest.fn()
+      }
+    );
+
+    collect(container).find((element) => element.classes.has("task-hub-calendar-item"))?.click();
+    const popover = collect(fakeDocument.body).find((element) => element.classes.has("task-hub-calendar-detail-popover"));
+    const sendPicker = collect(popover as FakeElement).find((element) => element.classes.has("task-hub-send-target-menu"));
+    const sendLabel = collect(popover as FakeElement).find((element) => element.classes.has("task-hub-send-target-label"));
+    const sendIcon = collect(popover as FakeElement).find((element) => element.classes.has("task-hub-send-target-icon"));
+
+    expect(findText(popover as FakeElement, "sendTo")).toBeDefined();
+    expect(sendPicker).toBeDefined();
+    expect(sendLabel?.text).toBe("dida: Work");
+    expect(sendIcon).toBeDefined();
+
+    findText(popover as FakeElement, "sendTo")?.click();
+
+    expect(onTaskSendToTarget).toHaveBeenCalledWith(task, { type: "dida", projectId: "dida-project" });
   });
 
   it("uses command or control clicks to build a task-only bulk menu in calendar views", () => {

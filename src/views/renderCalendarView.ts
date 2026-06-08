@@ -6,7 +6,8 @@ import { formatLunarDayLabel, formatLunarMonthTitle } from "../calendar/lunarCal
 import type { TranslationKey, Translator } from "../i18n";
 import { normalizeReminderAlertMinutes, populateReminderAlertSelect, type ReminderAlertMinutes } from "../reminderAlerts";
 import type { TaskNote } from "../taskNotes";
-import type { AppleCalendarInfo, AppleReminderList, CalendarEvent, CalendarItemEditDraft, CalendarSource, CalendarSourceStatus, CalendarTimeScale, DidaProject, TaskItem, WeekStart } from "../types";
+import { parseTaskSendTarget, preferredTaskSendTarget, taskSendTargetOptions } from "../taskSendTargets";
+import type { AppleCalendarInfo, AppleReminderList, CalendarEvent, CalendarItemEditDraft, CalendarSource, CalendarSourceStatus, CalendarTimeScale, DidaProject, TaskItem, TaskSendTarget, WeekStart } from "../types";
 import { canDeleteAppleCalendarEventCapability, canDeleteAppleReminderCapability } from "../integrationCapabilities";
 import {
   addSourceIndicatorMenuItem,
@@ -49,6 +50,7 @@ export type CalendarViewState = {
   taskColors?: Record<string, string>;
   appleReminderLists?: AppleReminderList[];
   didaProjects?: DidaProject[];
+  taskSendDefaultTarget?: TaskSendTarget;
   appleCalendars?: AppleCalendarInfo[];
   bindTagInputSuggest?: (input: HTMLInputElement) => void;
   taskNotesEnabled?: boolean;
@@ -78,6 +80,7 @@ export type CalendarViewHandlers = {
   onTaskDelete?: (task: TaskItem) => void;
   onTaskSendToAppleReminders?: (task: TaskItem) => void;
   onTaskSendToDida?: (task: TaskItem) => void;
+  onTaskSendToTarget?: (task: TaskItem, target: TaskSendTarget) => void;
   onCreateTaskNote?: (task: TaskItem) => void;
   onEventReschedule?: (event: CalendarEvent, target: CalendarDropTarget) => void;
   onEventUpdate?: (event: CalendarEvent, draft: Extract<CalendarItemEditDraft, { kind: "event" }>) => void;
@@ -1157,8 +1160,11 @@ function renderTaskDetailsPopover(
   headerList?: HTMLSelectElement
 ): void {
   const editable = task.source === "vault" || (task.source === "apple-reminders" && state.allowAppleReminderWriteback) || (task.source === "dida" && state.allowDidaWriteback);
+  const canToggle = task.source === "vault" || (task.source === "apple-reminders" && state.allowAppleReminderWriteback) || (task.source === "dida" && Boolean(state.allowDidaWriteback));
   const form = popover.createDiv({ cls: "task-hub-calendar-detail-form" });
-  const title = detailInput(form, state.t("taskCreationBody"), task.text);
+  const titleRow = form.createDiv({ cls: "task-hub-calendar-detail-title-row" });
+  renderCalendarTaskCompleteCheckbox(titleRow, task, canToggle, handlers, state);
+  const title = detailInput(titleRow, state.t("taskCreationBody"), task.text);
   state.bindTagInputSuggest?.(title);
   const scheduleRow = form.createDiv({ cls: "task-hub-calendar-detail-time-row" });
   const date = detailInput(scheduleRow, state.t("date"), task.dueDate ?? "", "date");
@@ -1213,15 +1219,107 @@ function renderTaskDetailsPopover(
     });
     closePopover();
   });
-  const open = actions.createEl("button", { text: state.t("openSource") });
-  open.addEventListener("click", () => {
-    handlers.onTaskJump(task);
-    closePopover();
-  });
+  const sendTargetOptions = task.source === "vault" ? taskSendOptionsForCalendar(state) : [];
+  if (sendTargetOptions.length > 0) {
+    renderCalendarTaskSendControl(actions, task, sendTargetOptions, handlers, state, closePopover);
+  }
   if (!editable) {
     popover.createDiv({ cls: "task-hub-detail-note", text: state.t("externalTaskReadOnly") });
   }
   renderCalendarNotes(popover, state.getTaskNotes?.(task) ?? [], handlers, state);
+}
+
+function renderCalendarTaskCompleteCheckbox(
+  container: HTMLElement,
+  task: TaskItem,
+  canToggle: boolean,
+  handlers: Pick<CalendarViewHandlers, "onTaskComplete">,
+  state: CalendarViewState
+): HTMLInputElement {
+  const checkbox = container.createEl("input", { cls: "task-hub-detail-complete-checkbox", type: "checkbox" }) as HTMLInputElement;
+  checkbox.checked = task.completed;
+  checkbox.disabled = !canToggle;
+  checkbox.setAttr("aria-label", task.completed ? state.t("markOpen") : state.t("markComplete"));
+  checkbox.addEventListener("change", () => handlers.onTaskComplete(task));
+  return checkbox;
+}
+
+function renderCalendarTaskSendControl(
+  actions: HTMLElement,
+  task: TaskItem,
+  options: ReturnType<typeof taskSendOptionsForCalendar>,
+  handlers: CalendarViewHandlers,
+  state: CalendarViewState,
+  closePopover: () => void
+): void {
+  const control = actions.createDiv({ cls: "task-hub-send-control" });
+  const selected = preferredTaskSendTarget(options, state.taskSendDefaultTarget) ?? options[0];
+  const send = control.createEl("button", { cls: "mod-cta", text: state.t("sendTo") });
+  const picker = renderCalendarTaskSendTargetPicker(control, options, selected.value, state);
+  send.addEventListener("click", () => {
+    const target = parseTaskSendTarget(picker.getValue());
+    if (handlers.onTaskSendToTarget) {
+      handlers.onTaskSendToTarget(task, target);
+    } else if (target.type === "dida") {
+      handlers.onTaskSendToDida?.(task);
+    } else {
+      handlers.onTaskSendToAppleReminders?.(task);
+    }
+    closePopover();
+  });
+}
+
+function renderCalendarTaskSendTargetPicker(
+  container: HTMLElement,
+  options: ReturnType<typeof taskSendOptionsForCalendar>,
+  selectedValue: string,
+  state: CalendarViewState
+): { getValue: () => string } {
+  let currentValue = selectedValue;
+  const current = options.find((option) => option.value === currentValue) ?? options[0];
+  currentValue = current.value;
+  const details = container.createEl("details", { cls: "task-hub-send-target-menu" }) as HTMLDetailsElement;
+  details.addEventListener("toggle", () => {
+    container.closest(".task-hub-calendar-detail-popover")?.toggleClass("is-send-menu-open", details.open);
+  });
+  const summary = details.createEl("summary", { cls: "task-hub-send-target-trigger" });
+  summary.setAttr("aria-label", state.t("sendToTarget"));
+  const label = summary.createSpan({ cls: "task-hub-send-target-label", text: current.label });
+  const icon = summary.createSpan({ cls: "task-hub-send-target-icon" });
+  setIcon(icon, "chevron-down");
+  const menu = details.createDiv({ cls: "task-hub-send-target-options" });
+  for (const option of options) {
+    const item = menu.createEl("button", {
+      cls: option.value === currentValue ? "task-hub-send-target-option is-selected" : "task-hub-send-target-option",
+      text: option.label
+    });
+    item.addEventListener("click", (event) => {
+      event.preventDefault();
+      currentValue = option.value;
+      label.setText(option.label);
+      for (const sibling of Array.from(menu.children)) {
+        sibling.removeClass("is-selected");
+      }
+      item.addClass("is-selected");
+      details.open = false;
+      container.closest(".task-hub-calendar-detail-popover")?.removeClass("is-send-menu-open");
+    });
+  }
+  return { getValue: () => currentValue };
+}
+
+function taskSendOptionsForCalendar(state: CalendarViewState) {
+  return taskSendTargetOptions({
+    allowAppleReminderCreate: state.allowAppleReminderCreate,
+    allowDidaCreate: state.allowDidaCreate,
+    appleReminderLists: state.appleReminderLists,
+    didaProjects: state.didaProjects
+  }, {
+    appleReminders: state.t("localAppleReminders"),
+    appleRemindersInbox: state.t("localAppleRemindersDefaultListInbox"),
+    dida: state.t("dida"),
+    didaInbox: state.t("didaDefaultProjectInbox")
+  });
 }
 
 function renderEventDetailsPopover(

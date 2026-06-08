@@ -22,6 +22,7 @@ import { openExternalTaskSource } from "./externalSources";
 import { appendTaskToContent, createTaskLine, normalizeTaskCreationFilePath } from "./taskCreation";
 import { bindTaskHubTagInputSuggest, collectObsidianTags } from "./views/tagInputSuggest";
 import { normalizeReminderAlertMinutes, populateReminderAlertSelect, type ReminderAlertMinutes } from "./reminderAlerts";
+import { preferredTaskSendTarget, taskSendTargetOptions } from "./taskSendTargets";
 import {
   TaskNoteIndex,
   buildCalendarEventNoteKey,
@@ -69,7 +70,7 @@ import {
   serializeCreationTarget,
   TaskHubSettingTab
 } from "./settings";
-import type { AppleCalendarInfo, CalendarCreationKind, CalendarCreationTarget, CalendarEvent, CalendarItemEditDraft, CalendarSourceStatus, LocalAppleSyncStatus, TaskHubSettings, TaskItem } from "./types";
+import type { AppleCalendarInfo, CalendarCreationKind, CalendarCreationTarget, CalendarEvent, CalendarItemEditDraft, CalendarSourceStatus, LocalAppleSyncStatus, TaskHubSettings, TaskItem, TaskSendTarget } from "./types";
 import { TaskHubView } from "./views/TaskHubView";
 
 function validCalendarEventDuration(value: number | undefined): number {
@@ -899,7 +900,36 @@ export default class TaskHubPlugin extends Plugin {
     }
   }
 
-  async sendTaskToAppleReminders(task: TaskItem): Promise<void> {
+  defaultTaskSendTarget(): TaskSendTarget | undefined {
+    return preferredTaskSendTarget(
+      taskSendTargetOptions({
+        allowAppleReminderCreate: this.canCreateAppleReminders(),
+        allowDidaCreate: this.canCreateDidaTasks(),
+        appleReminderLists: this.getAppleReminderLists(),
+        didaProjects: this.getDidaProjects()
+      }, {
+        appleReminders: "Apple Reminders",
+        appleRemindersInbox: "Inbox",
+        dida: "Dida",
+        didaInbox: "Inbox"
+      }),
+      this.settings.taskSendDefaultTarget
+    )?.target;
+  }
+
+  async sendTaskToTarget(task: TaskItem, target: TaskSendTarget | undefined = this.defaultTaskSendTarget()): Promise<void> {
+    if (!target) {
+      new Notice(createTranslator(this.settings.language)("sendToNoTargets"));
+      return;
+    }
+    if (target.type === "dida") {
+      await this.sendTaskToDida(task, target);
+      return;
+    }
+    await this.sendTaskToAppleReminders(task, target);
+  }
+
+  async sendTaskToAppleReminders(task: TaskItem, target: Extract<TaskSendTarget, { type: "apple-reminders" }> = { type: "apple-reminders" }): Promise<void> {
     const t = createTranslator(this.settings.language);
     if (!this.canCreateAppleReminders()) {
       new Notice(t("appleReminderCreateDisabled"));
@@ -936,7 +966,7 @@ export default class TaskHubPlugin extends Plugin {
         notes: this.appleReminderNotes(currentTask),
         dueDate: currentTask.dueDate,
         startMinutes: startMinutesFromTask(currentTask),
-        listId: this.settings.localApple.remindersDefaultListId,
+        listId: target.listId ?? this.settings.localApple.remindersDefaultListId,
         tags: this.settings.localApple.remindersCreateTagsEnabled ? normalizeAppleReminderTags(currentTask.tags) : []
       };
       const reminderId = await this.writeAppleReminderWithAccessRetry(() => createAppleReminder(input));
@@ -982,7 +1012,7 @@ export default class TaskHubPlugin extends Plugin {
     }
   }
 
-  async sendTaskToDida(task: TaskItem): Promise<void> {
+  async sendTaskToDida(task: TaskItem, target: Extract<TaskSendTarget, { type: "dida" }> = { type: "dida" }): Promise<void> {
     const t = createTranslator(this.settings.language);
     if (!this.canCreateDidaTasks()) {
       new Notice(t("didaCreateDisabled"));
@@ -1012,7 +1042,7 @@ export default class TaskHubPlugin extends Plugin {
       const created = await this.createDidaClient().createTask(
         taskItemToDidaPayload({
           title: currentTask.text,
-          projectId: this.settings.dida.defaultProjectId,
+          projectId: target.projectId ?? this.settings.dida.defaultProjectId,
           notes: this.appleReminderNotes(currentTask),
           date: currentTask.dueDate,
           startMinutes: startMinutesFromTask(currentTask),

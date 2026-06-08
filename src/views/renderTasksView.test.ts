@@ -51,6 +51,7 @@ class FakeElement {
   attrs = new Map<string, string>();
   checked = false;
   disabled = false;
+  open = false;
   text = "";
   type = "";
   value = "";
@@ -90,6 +91,10 @@ class FakeElement {
     return this.append(options);
   }
 
+  setText(text: string): void {
+    this.text = text;
+  }
+
   insertBefore(child: FakeElement, reference: FakeElement): void {
     child.parent = this;
     this.children = this.children.filter((existing) => existing !== child);
@@ -112,6 +117,14 @@ class FakeElement {
 
   get parentElement(): FakeElement | undefined {
     return this.parent;
+  }
+
+  closest(selector: string): FakeElement | null {
+    if (selector.startsWith(".")) {
+      const classes = selector.split(".").filter(Boolean);
+      if (classes.every((cls) => this.classes.has(cls))) return this;
+    }
+    return this.parent?.closest(selector) ?? null;
   }
 
   createSvg(tag: string, options: { attr?: Record<string, string> } = {}): FakeElement {
@@ -283,6 +296,8 @@ describe("renderTasksView", () => {
     onComplete: jest.fn(),
     onJump: jest.fn(),
     onSendToAppleReminders: jest.fn(),
+    onSendToDida: jest.fn(),
+    onSendToTarget: jest.fn(),
     onSelect: jest.fn(),
     onTagSelect: jest.fn(),
     onSourceSelect: jest.fn(),
@@ -1022,7 +1037,7 @@ describe("renderTasksView", () => {
     expect(date?.showPicker).toHaveBeenCalled();
   });
 
-  it("keeps the Apple Reminder save button in the same action row as the detail buttons", () => {
+  it("keeps external task completion in the title row and save in the action row", () => {
     const container = new FakeElement();
 
     renderTasksView(
@@ -1038,9 +1053,11 @@ describe("renderTasksView", () => {
 
     const actions = collect(container).find((element) => element.classes.has("task-hub-detail-actions"));
     const actionTexts = actions ? collect(actions).map((element) => element.text).filter(Boolean) : [];
+    const checkbox = collect(container).find((element) => element.classes.has("task-hub-detail-complete-checkbox"));
 
     expect(actions?.classes.has("has-three-actions")).toBe(true);
-    expect(actionTexts).toEqual(["save", "markComplete", "openSource"]);
+    expect(actionTexts).toEqual(["save"]);
+    expect(checkbox?.type).toBe("checkbox");
   });
 
   it("preserves an Apple Reminder start time when saving task detail edits", () => {
@@ -1317,7 +1334,7 @@ describe("renderTasksView", () => {
     expect(collect(container).some((element) => element.classes.has("task-hub-detail-title-input") && element.value === "Open second")).toBe(true);
   });
 
-  it("opens the selected vault task from the detail panel", () => {
+  it("toggles the selected vault task from the detail title checkbox", () => {
     const container = new FakeElement();
     const task = { ...baseTask, id: "vault-detail", source: "vault" as const, filePath: "Project.md", externalSourceName: undefined };
     const testHandlers = handlers();
@@ -1333,12 +1350,14 @@ describe("renderTasksView", () => {
       { allowAppleReminderWriteback: true }
     );
 
-    findElementByText(container, "openSource")?.click();
+    const checkbox = collect(container).find((element) => element.classes.has("task-hub-detail-complete-checkbox"));
+    checkbox?.change();
 
-    expect(testHandlers.onJump).toHaveBeenCalledWith(task);
+    expect(testHandlers.onComplete).toHaveBeenCalledWith(task);
+    expect(findElementByText(container, "openSource")).toBeUndefined();
   });
 
-  it("opens the selected Apple Reminders task from the detail panel", () => {
+  it("disables the detail title checkbox for read-only Apple Reminders tasks", () => {
     const container = new FakeElement();
     const testHandlers = handlers();
 
@@ -1353,14 +1372,14 @@ describe("renderTasksView", () => {
       { allowAppleReminderWriteback: false }
     );
 
-    const openButton = findElementByText(container, "openSource");
-    expect(openButton?.disabled).toBe(false);
-    openButton?.click();
+    const checkbox = collect(container).find((element) => element.classes.has("task-hub-detail-complete-checkbox"));
+    expect(checkbox?.disabled).toBe(true);
+    expect(findElementByText(container, "openSource")).toBeUndefined();
 
-    expect(testHandlers.onJump).toHaveBeenCalledWith(baseTask);
+    expect(testHandlers.onJump).not.toHaveBeenCalled();
   });
 
-  it("renders the Chinese open source action as open origin", () => {
+  it("does not render the Chinese open source action in the detail panel", () => {
     const container = new FakeElement();
 
     renderTasksView(
@@ -1374,11 +1393,11 @@ describe("renderTasksView", () => {
       { allowAppleReminderWriteback: true }
     );
 
-    expect(findElementByText(container, "打开来源")).toBeDefined();
+    expect(findElementByText(container, "打开来源")).toBeUndefined();
     expect(findElementByText(container, "打开源文件")).toBeUndefined();
   });
 
-  it("renders an Apple Reminders send action for vault tasks when creation is enabled", () => {
+  it("renders a send target picker for vault tasks when creation is enabled", () => {
     const container = new FakeElement();
     const task = { ...baseTask, id: "vault-send", source: "vault" as const, filePath: "Project.md", externalSourceName: undefined };
     const testHandlers = handlers();
@@ -1391,17 +1410,59 @@ describe("renderTasksView", () => {
       testHandlers,
       new Date("2026-05-08T12:00:00Z"),
       (key) => key,
-      { allowAppleReminderWriteback: true, allowAppleReminderCreate: true }
+      {
+        allowAppleReminderWriteback: true,
+        allowAppleReminderCreate: true,
+        allowDidaCreate: true,
+        appleReminderLists: [{ id: "apple-list", name: "Inbox" }],
+        didaProjects: [{ id: "dida-project", name: "Work" }],
+        taskSendDefaultTarget: { type: "dida", projectId: "dida-project" }
+      }
     );
 
-    findElementByText(container, "sendToAppleReminders")?.click();
+    findElementByText(container, "sendTo")?.click();
 
     const actions = collect(container).find((element) => element.classes.has("task-hub-detail-actions"));
-    const sendButton = findElementByText(container, "sendToAppleReminders");
-    expect(testHandlers.onSendToAppleReminders).toHaveBeenCalledWith(task);
+    const sendButton = findElementByText(container, "sendTo");
+    const sendPicker = collect(container).find((element) => element.classes.has("task-hub-send-target-menu"));
+    const sendLabel = collect(container).find((element) => element.classes.has("task-hub-send-target-label"));
+    const sendIcon = collect(container).find((element) => element.classes.has("task-hub-send-target-icon"));
+    expect(testHandlers.onSendToTarget).toHaveBeenCalledWith(task, { type: "dida", projectId: "dida-project" });
     expect(actions?.classes.has("has-three-actions")).toBe(true);
     expect(actions?.classes.has("is-long-language")).toBe(true);
     expect(sendButton?.classes.has("mod-cta")).toBe(true);
+    expect(sendPicker).toBeDefined();
+    expect(sendLabel?.text).toBe("dida: Work");
+    expect(sendIcon).toBeDefined();
+  });
+
+  it("sends to the selected target from the task details picker", () => {
+    const container = new FakeElement();
+    const task = { ...baseTask, id: "vault-send", source: "vault" as const, filePath: "Project.md", externalSourceName: undefined };
+    const testHandlers = handlers();
+
+    renderTasksView(
+      container as unknown as HTMLElement,
+      [task],
+      [task],
+      { status: "open", tags: [], sourceQuery: "", textQuery: "" },
+      testHandlers,
+      new Date("2026-05-08T12:00:00Z"),
+      (key) => key,
+      {
+        allowAppleReminderWriteback: true,
+        allowAppleReminderCreate: true,
+        allowDidaCreate: true,
+        appleReminderLists: [{ id: "apple-list", name: "Inbox" }],
+        didaProjects: [{ id: "dida-project", name: "Work" }]
+      }
+    );
+
+    const didaOption = collect(container).find((element) => element.classes.has("task-hub-send-target-option") && element.text === "dida: Work");
+    didaOption?.click();
+    findElementByText(container, "sendTo")?.click();
+
+    expect(testHandlers.onSendToTarget).toHaveBeenCalledWith(task, { type: "dida", projectId: "dida-project" });
   });
 
   it("keeps compact-language detail actions on the compact layout path", () => {
@@ -1416,7 +1477,7 @@ describe("renderTasksView", () => {
       handlers(),
       new Date("2026-05-08T12:00:00Z"),
       (key) => (key === "language" ? "语言" : key),
-      { allowAppleReminderWriteback: true, allowAppleReminderCreate: true }
+      { allowAppleReminderWriteback: true, allowAppleReminderCreate: true, appleReminderLists: [{ id: "apple-list", name: "Inbox" }] }
     );
 
     const actions = collect(container).find((element) => element.classes.has("task-hub-detail-actions"));
@@ -1439,7 +1500,7 @@ describe("renderTasksView", () => {
       { allowAppleReminderWriteback: true, allowAppleReminderCreate: false }
     );
 
-    expect(findElementByText(container, "sendToAppleReminders")).toBeUndefined();
+    expect(findElementByText(container, "sendTo")).toBeUndefined();
   });
 
 });

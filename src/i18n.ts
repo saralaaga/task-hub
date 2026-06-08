@@ -234,10 +234,13 @@ export type TranslationKey =
   | "settingsTitle"
   | "friday"
   | "sendCurrentTaskToAppleReminders"
+  | "sendTo"
   | "sendToAppleCalendar"
   | "sendToAppleReminders"
   | "sendToAppleRemindersDisabled"
   | "sendToDida"
+  | "sendToNoTargets"
+  | "sendToTarget"
   | "showCompletedByDefault"
   | "showCompletedByDefaultDesc"
   | "showCompletedInView"
@@ -279,6 +282,8 @@ export type TranslationKey =
   | "taskCreationTarget"
   | "taskDetails"
   | "taskHub"
+  | "taskSendDefaultTarget"
+  | "taskSendDefaultTargetDesc"
   | "taskNoteCreated"
   | "taskNotesDefaultMode"
   | "taskNotesDefaultModeDesc"
@@ -574,10 +579,13 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     settingsTitle: "Task Hub Settings",
     friday: "Friday",
     sendCurrentTaskToAppleReminders: "Send current task to Apple Reminders",
+    sendTo: "Send to",
     sendToAppleCalendar: "Convert to Apple Calendar",
     sendToAppleReminders: "Send to Apple Reminders",
     sendToAppleRemindersDisabled: "Enable Apple Reminders creation in settings first",
     sendToDida: "Send to Dida",
+    sendToNoTargets: "Turn on Apple Reminders or Dida creation in Task Hub settings first.",
+    sendToTarget: "Send destination",
     sourceAppleCalendar: "Apple Calendar",
     sourceAppleReminders: "Apple Reminders",
     sourceDida: "Dida",
@@ -615,6 +623,8 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     taskCreationTarget: "Create in",
     taskDetails: "Task details",
     taskHub: "Task Hub",
+    taskSendDefaultTarget: "Default send destination",
+    taskSendDefaultTargetDesc: "Default destination selected beside the Send to button in task details.",
     taskNoteCreated: "Task note created.",
     taskNotesDefaultMode: "Default note format",
     taskNotesDefaultModeDesc: "Create plain Task Hub notes or notes compatible only with Thino multi-file storage.",
@@ -903,10 +913,13 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     settingsTitle: "Task Hub 设置",
     friday: "周五",
     sendCurrentTaskToAppleReminders: "将当前任务发送到 Apple 提醒事项",
+    sendTo: "发送到",
     sendToAppleCalendar: "转换为 Apple 日历",
     sendToAppleReminders: "发送到 Apple 提醒事项",
     sendToAppleRemindersDisabled: "请先在设置中开启创建 Apple 提醒事项",
     sendToDida: "发送到滴答清单",
+    sendToNoTargets: "请先在 Task Hub 设置中开启 Apple 提醒事项或滴答清单创建。",
+    sendToTarget: "发送目标",
     sourceAppleCalendar: "Apple Calendar",
     sourceAppleReminders: "Apple Reminders",
     sourceDida: "滴答清单",
@@ -944,6 +957,8 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     taskCreationTarget: "创建到",
     taskDetails: "任务详情",
     taskHub: "Task Hub",
+    taskSendDefaultTarget: "默认发送地址",
+    taskSendDefaultTargetDesc: "任务详情中“发送到”按钮右侧默认选中的清单软件或清单。",
     taskNoteCreated: "任务笔记已创建。",
     taskNotesDefaultMode: "默认笔记格式",
     taskNotesDefaultModeDesc: "创建普通 Task Hub 笔记，或仅兼容 Thino multi-file 存储的笔记。",
