@@ -2387,7 +2387,7 @@ class CreateTaskModal extends Modal {
       durationSetting.controlEl.createSpan({ cls: "task-hub-duration-unit", text: t("eventCreationDurationMinutes") });
     }
 
-    this.renderScheduleControls(t);
+    const timeInput = this.renderScheduleControls(t);
 
     new Setting(this.contentEl)
       .setName(t("taskCreationTarget"))
@@ -2443,6 +2443,8 @@ class CreateTaskModal extends Modal {
             });
           });
       }
+
+      this.renderAlertControls(t, timeInput);
     }
 
     if (this.detailsExpanded && (this.target.type === "apple-reminders" || this.target.type === "apple-calendar" || this.target.type === "dida")) {
@@ -2477,10 +2479,11 @@ class CreateTaskModal extends Modal {
     this.titleEl.createSpan({ text: this.creationKind === "event" ? t("eventCreationTitle") : t("taskCreationTitle") });
   }
 
-  private renderScheduleControls(t: ReturnType<typeof createTranslator>): void {
+  private renderScheduleControls(t: ReturnType<typeof createTranslator>): HTMLInputElement {
     const schedule = new Setting(this.contentEl).setName(t("taskCreationTime"));
     schedule.settingEl.addClass("task-hub-create-schedule-setting");
-    const dateInput = schedule.controlEl.createEl("input", {
+    const datePicker = schedule.controlEl.createDiv({ cls: "task-hub-create-picker task-hub-create-date-picker" });
+    const dateInput = datePicker.createEl("input", {
       cls: "task-hub-create-date-input",
       type: "date",
       value: calendarDropTargetParts(this.calendarTarget).dateKey
@@ -2500,13 +2503,31 @@ class CreateTaskModal extends Modal {
         dateInput.focus();
       }
     });
-    const timeInput = schedule.controlEl.createEl("input", {
+    const timePicker = schedule.controlEl.createDiv({ cls: "task-hub-create-picker task-hub-create-time-picker" });
+    const timeInput = timePicker.createEl("input", {
       cls: "task-hub-create-time-input",
       type: "time",
       value: timeInputValue(calendarDropTargetParts(this.calendarTarget).startMinutes)
     }) as HTMLInputElement;
     timeInput.step = "900";
+    timeInput.addEventListener("click", () => {
+      try {
+        timeInput.showPicker?.();
+      } catch {
+        timeInput.focus();
+      }
+    });
 
+    timeInput.addEventListener("change", () => {
+      this.updateStartTimeFromInput(timeInput.value);
+    });
+    timeInput.addEventListener("input", () => {
+      this.updateStartTimeFromInput(timeInput.value);
+    });
+    return timeInput;
+  }
+
+  private renderAlertControls(t: ReturnType<typeof createTranslator>, timeInput: HTMLInputElement): void {
     const alertSetting = new Setting(this.contentEl).setName(t("reminderAlert"));
     alertSetting.settingEl.addClass("task-hub-create-alert-setting");
     const alertLabel = alertSetting.controlEl.createEl("label", { cls: "task-hub-reminder-alert-switch task-hub-create-alert-switch" });
@@ -2523,15 +2544,6 @@ class CreateTaskModal extends Modal {
       alertToggle.checked = this.alertEnabled;
       alertSelect.disabled = !canAlert || !this.alertEnabled;
     };
-
-    timeInput.addEventListener("change", () => {
-      this.updateStartTimeFromInput(timeInput.value);
-      updateAlertState();
-    });
-    timeInput.addEventListener("input", () => {
-      this.updateStartTimeFromInput(timeInput.value);
-      updateAlertState();
-    });
     alertToggle.addEventListener("change", () => {
       if (alertToggle.checked && !timeInput.value) {
         timeInput.value = "09:00";

@@ -79,7 +79,21 @@ describe("Task Hub styles", () => {
     const headerControlsRule = styles.match(/\.task-hub-calendar-detail-header-controls\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const headerSelectRule = styles.match(/\.task-hub-calendar-detail-header-select\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const closeRule = styles.match(/\.task-hub-calendar-detail-header\s*>\s*\.task-hub-icon-button\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const popoverRule = styles.match(/\.task-hub-calendar-detail-popover\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const popoverKeyframes = styles.match(/@keyframes task-hub-calendar-detail-popover-enter\s*\{(?<body>[\s\S]+?)\n\}/)?.groups?.body ?? "";
+    const detailRowRule = styles.match(/\.task-hub-detail-row\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const detailControlCheckboxRule = styles.match(/\.task-hub-calendar-detail-row\s+\.task-hub-detail-control\s+input\[type="checkbox"\]\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const reducedMotionRule = styles.match(/@media \(prefers-reduced-motion: reduce\)\s*\{(?<body>[\s\S]+?)\n\}/)?.groups?.body ?? "";
 
+    expect(popoverRule).toContain("animation: task-hub-calendar-detail-popover-enter 180ms cubic-bezier(0.2, 0.9, 0.2, 1) both");
+    expect(popoverRule).toContain("transform-origin: 32px 32px");
+    expect(popoverKeyframes).toContain("transform: translateY(10px) scale(0.96)");
+    expect(reducedMotionRule).toContain(".task-hub-calendar-detail-popover");
+    expect(detailRowRule).toContain("grid-template-columns: 36px var(--task-hub-detail-label-width, 128px) minmax(0, 1fr)");
+    expect(detailControlCheckboxRule).toContain("height: 18px");
+    expect(detailControlCheckboxRule).toContain("min-height: 18px");
+    expect(detailControlCheckboxRule).toContain("width: 18px");
+    expect(detailControlCheckboxRule).toContain("padding: 0");
     expect(dateRule).toContain("grid-template-columns: minmax(0, 1fr) minmax(0, 1fr)");
     expect(timeRule).toContain("grid-template-columns: minmax(0, 1fr) minmax(0, 1fr)");
     expect(alertRule).toContain("grid-template-columns: minmax(0, 1fr) minmax(0, 1fr)");
@@ -112,19 +126,39 @@ describe("Task Hub styles", () => {
   it("keeps the calendar creation modal narrow with aligned controls", () => {
     const styles = readFileSync(path.join(__dirname, "styles.css"), "utf8");
     const modalRule = styles.match(/\.task-hub-create-modal\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const modalEnterKeyframes = styles.match(/@keyframes task-hub-create-modal-enter\s*\{(?<body>[\s\S]+?)\n\}/)?.groups?.body ?? "";
+    const reducedMotionRule = styles.match(/@media \(prefers-reduced-motion: reduce\)\s*\{(?<body>[\s\S]+?)\n\}/)?.groups?.body ?? "";
     const rowRule = styles.match(/\.task-hub-create-modal\s+\.setting-item\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const infoRule = styles.match(/\.task-hub-create-modal\s+\.setting-item-info\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const controlRule = styles.match(/\.task-hub-create-modal\s+\.setting-item-control\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const scheduleControlRule = styles.match(/\.task-hub-create-schedule-setting\s+\.setting-item-control\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const pickerRule = styles.match(/\.task-hub-create-picker\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const datePickerRule = styles.match(/\.task-hub-create-date-picker\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const pickerInputRule = styles.match(/\.task-hub-create-picker\s+input\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const pickerIndicatorRule = styles.match(/\.task-hub-create-picker\s+input::-webkit-calendar-picker-indicator\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const pickerControlInputRule = styles.match(/\.task-hub-create-modal\s+\.setting-item-control\s+\.task-hub-create-picker\s+input\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const alertSettingRule = styles.match(/\.task-hub-create-alert-setting\s+\.setting-item-control\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const alertCheckboxRule = styles.match(/\.task-hub-create-modal\s+\.task-hub-create-alert-setting\s+input\.task-hub-reminder-alert-toggle\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const textareaRule = styles.match(/\.task-hub-create-modal\s+\.setting-item-control\s+textarea\s*\{(?<body>\s*min-height:[^}]+)\}/)?.groups?.body ?? "";
 
     expect(modalRule).toContain("width: min(560px, calc(100vw - 32px))");
+    expect(modalRule).toContain("animation: task-hub-create-modal-enter 160ms cubic-bezier(0.2, 0.9, 0.2, 1) both");
+    expect(modalEnterKeyframes).toContain("transform: translateY(8px) scale(0.96)");
+    expect(reducedMotionRule).toContain(".task-hub-create-modal");
     expect(rowRule).toContain("grid-template-columns: minmax(0, 1fr) minmax(220px, 280px)");
     expect(infoRule).toContain("text-align: left");
     expect(controlRule).toContain("justify-content: end");
     expect(scheduleControlRule).toContain("grid-template-columns: minmax(0, 1fr) minmax(0, 1fr)");
+    expect(pickerRule).toContain("width: min(132px, 100%)");
+    expect(datePickerRule).toContain("width: min(164px, 100%)");
+    expect(pickerInputRule).toContain("appearance: none");
+    expect(pickerInputRule).toContain("font-family: var(--font-interface)");
+    expect(pickerInputRule).toContain("font-variant-numeric: tabular-nums");
+    expect(pickerInputRule).toContain("padding: 0 10px 0 36px");
+    expect(pickerIndicatorRule).toContain("display: none");
+    expect(pickerIndicatorRule).toContain("-webkit-appearance: none");
+    expect(pickerIndicatorRule).toContain("width: 0");
+    expect(pickerControlInputRule).toContain("width: 100%");
     expect(alertSettingRule).toContain("grid-template-columns: minmax(0, 1fr) minmax(0, 1fr)");
     expect(alertCheckboxRule).toContain("height: 18px");
     expect(alertCheckboxRule).toContain("max-width: 18px");
@@ -197,9 +231,46 @@ describe("Task Hub styles", () => {
     const styles = readFileSync(path.join(__dirname, "styles.css"), "utf8");
     const detailRowRule = styles.match(/\.task-hub-detail-row\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const reminderDetailOverride = styles.match(/\.task-hub-reminder-alert-row\.task-hub-detail-row\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const detailExtraExpandingRule = styles.match(/\.task-hub-detail-extra\.is-expanding\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const detailExtraHiddenRule = styles.match(/\.task-hub-detail-extra\.is-hidden,\s*\.task-hub-detail-extra\.is-opening,\s*\.task-hub-detail-extra\.is-closing\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const reducedMotionRule = styles.match(/@media \(prefers-reduced-motion: reduce\)\s*\{(?<body>[\s\S]+?)\n\}/)?.groups?.body ?? "";
 
     expect(detailRowRule).toContain("grid-template-columns: 36px var(--task-hub-detail-label-width, 128px) minmax(0, 1fr)");
     expect(reminderDetailOverride).not.toContain("grid-template-columns");
+    expect(detailExtraExpandingRule).toContain("max-height 220ms cubic-bezier(0.2, 0.85, 0.25, 1)");
+    expect(detailExtraExpandingRule).toContain("overflow: clip");
+    expect(detailExtraHiddenRule).toContain("opacity: 0");
+    expect(detailExtraHiddenRule).toContain("transform: translateY(-8px)");
+    expect(reducedMotionRule).toContain(".task-hub-detail-extra.is-expanding");
+  });
+
+  it("animates the unscheduled side panel open and closed", () => {
+    const styles = readFileSync(path.join(__dirname, "styles.css"), "utf8");
+    const panelRule = styles.match(/\.task-hub-unscheduled-panel\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const closingRule = styles.match(/\.task-hub-unscheduled-panel\.is-closing\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const hostClosingRule = styles.match(/\.task-hub-calendar-with-sidebar\.is-unscheduled-closing\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const paneOpenRule = styles.match(/\.task-hub-calendar-with-sidebar\.is-unscheduled-open\s+\.task-hub-calendar-pane\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const paneClosingRule = styles.match(/\.task-hub-calendar-with-sidebar\.is-unscheduled-closing\s+\.task-hub-calendar-pane\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const enterKeyframes = styles.match(/@keyframes task-hub-unscheduled-panel-enter\s*\{(?<body>[\s\S]+?)\n\}/)?.groups?.body ?? "";
+    const exitKeyframes = styles.match(/@keyframes task-hub-unscheduled-panel-exit\s*\{(?<body>[\s\S]+?)\n\}/)?.groups?.body ?? "";
+    const paneOpenKeyframes = styles.match(/@keyframes task-hub-calendar-pane-make-room\s*\{(?<body>[\s\S]+?)\n\}/)?.groups?.body ?? "";
+    const paneCloseKeyframes = styles.match(/@keyframes task-hub-calendar-pane-restore-room\s*\{(?<body>[\s\S]+?)\n\}/)?.groups?.body ?? "";
+    const reducedMotionRule = styles.match(/@media \(prefers-reduced-motion: reduce\)\s*\{(?<body>[\s\S]+?)\n\}/)?.groups?.body ?? "";
+
+    expect(panelRule).toContain("animation: task-hub-unscheduled-panel-enter 220ms cubic-bezier(0.2, 0.85, 0.25, 1) both");
+    expect(panelRule).toContain("transform-origin: right center");
+    expect(hostClosingRule).toContain("grid-template-columns: minmax(0, 1fr)");
+    expect(closingRule).toContain("animation: task-hub-unscheduled-panel-exit 190ms cubic-bezier(0.4, 0, 0.2, 1) both");
+    expect(closingRule).toContain("position: absolute");
+    expect(closingRule).toContain("right: 0");
+    expect(paneOpenRule).toContain("animation: task-hub-calendar-pane-make-room 220ms cubic-bezier(0.2, 0.85, 0.25, 1) both");
+    expect(paneClosingRule).toContain("animation: task-hub-calendar-pane-restore-room 190ms cubic-bezier(0.4, 0, 0.2, 1) both");
+    expect(enterKeyframes).toContain("clip-path: inset(0 0 0 100%)");
+    expect(exitKeyframes).toContain("transform: translateX(18px) scaleX(0.96)");
+    expect(paneOpenKeyframes).toContain("transform: translateX(12px) scaleX(1.012)");
+    expect(paneCloseKeyframes).toContain("transform: translateX(10px) scaleX(1.01)");
+    expect(reducedMotionRule).toContain(".task-hub-calendar-with-sidebar .task-hub-calendar-pane");
+    expect(reducedMotionRule).toContain(".task-hub-unscheduled-panel");
   });
 
   it("keeps task content text lightweight in task and calendar cards", () => {

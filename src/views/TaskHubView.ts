@@ -28,6 +28,8 @@ export class TaskHubView extends ItemView {
   private completingTaskIds = new Set<string>();
   private selectedTaskIds = new Set<string>();
   private unscheduledPanelOpen = false;
+  private unscheduledPanelClosing = false;
+  private unscheduledPanelCloseTimer: ReturnType<typeof setTimeout> | undefined;
 
   constructor(
     leaf: WorkspaceLeaf,
@@ -95,10 +97,10 @@ export class TaskHubView extends ItemView {
         onCreateTask: () => this.plugin.openCreateTaskModal(toLocalDateKey(new Date())),
         onUnscheduledToggle: () => {
           if (this.view !== "calendar") {
+            this.openUnscheduledPanel();
             this.view = "calendar";
-            this.unscheduledPanelOpen = true;
           } else {
-            this.unscheduledPanelOpen = !this.unscheduledPanelOpen;
+            this.toggleUnscheduledPanel();
           }
           this.render();
         },
@@ -274,6 +276,7 @@ export class TaskHubView extends ItemView {
           taskNotesEnabled: this.plugin.settings.taskNotes.enabled,
           selectedTaskIds: this.selectedTaskIds,
           unscheduledPanelOpen: this.unscheduledPanelOpen,
+          unscheduledPanelClosing: this.unscheduledPanelClosing,
           unscheduledTasks,
           allowThinoNoteEdit: this.plugin.settings.taskNotes.thinoIntegrationEnabled,
           getTaskNotes: (task) => this.plugin.getTaskNotes(task),
@@ -335,6 +338,35 @@ export class TaskHubView extends ItemView {
       return;
     }
 
+  }
+
+  private toggleUnscheduledPanel(): void {
+    if (this.unscheduledPanelOpen) {
+      this.closeUnscheduledPanelWithAnimation();
+      return;
+    }
+    this.openUnscheduledPanel();
+  }
+
+  private openUnscheduledPanel(): void {
+    if (this.unscheduledPanelCloseTimer) {
+      clearTimeout(this.unscheduledPanelCloseTimer);
+      this.unscheduledPanelCloseTimer = undefined;
+    }
+    this.unscheduledPanelOpen = true;
+    this.unscheduledPanelClosing = false;
+  }
+
+  private closeUnscheduledPanelWithAnimation(): void {
+    if (this.unscheduledPanelCloseTimer) clearTimeout(this.unscheduledPanelCloseTimer);
+    this.unscheduledPanelOpen = false;
+    this.unscheduledPanelClosing = true;
+    this.unscheduledPanelCloseTimer = setTimeout(() => {
+      this.unscheduledPanelCloseTimer = undefined;
+      if (!this.unscheduledPanelClosing) return;
+      this.unscheduledPanelClosing = false;
+      this.render({ preserveTaskListScroll: true });
+    }, 220);
   }
 
   private async refreshData(): Promise<void> {

@@ -52,7 +52,22 @@
 }
 
 .task-hub-create-modal {
+  animation: task-hub-create-modal-enter 160ms cubic-bezier(0.2, 0.9, 0.2, 1) both;
+  transform-origin: center;
   width: min(560px, calc(100vw - 32px));
+  will-change: opacity, transform;
+}
+
+@keyframes task-hub-create-modal-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.96);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 .task-hub-create-modal .modal-content {
@@ -67,13 +82,82 @@
   gap: 4px;
 }
 
-.task-hub-create-date-input {
+.task-hub-create-picker {
+  color: var(--text-muted);
+  min-width: 0;
+  position: relative;
   width: min(132px, 100%);
 }
 
-.task-hub-create-date-input:hover,
-.task-hub-create-date-input:focus-visible {
+.task-hub-create-date-picker {
+  width: min(164px, 100%);
+}
+
+.task-hub-create-picker::before {
+  background-color: currentColor;
+  content: "";
+  height: 16px;
+  left: 12px;
+  pointer-events: none;
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 16px;
+  z-index: 1;
+}
+
+.task-hub-create-date-picker::before {
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M8 2v4'/%3E%3Cpath d='M16 2v4'/%3E%3Crect width='18' height='18' x='3' y='4' rx='2'/%3E%3Cpath d='M3 10h18'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M8 2v4'/%3E%3Cpath d='M16 2v4'/%3E%3Crect width='18' height='18' x='3' y='4' rx='2'/%3E%3Cpath d='M3 10h18'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+
+.task-hub-create-time-picker::before {
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpath d='M12 6v6l4 2'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpath d='M12 6v6l4 2'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+
+.task-hub-create-picker input {
+  -webkit-appearance: none;
+  appearance: none;
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  box-shadow: none;
+  color: var(--text-normal);
+  font-family: var(--font-interface);
+  font-size: var(--font-ui-medium);
+  font-variant-numeric: tabular-nums;
+  height: 34px;
+  line-height: 1.2;
+  padding: 0 10px 0 36px;
+  width: 100%;
+}
+
+.task-hub-create-picker input:hover,
+.task-hub-create-picker input:focus-visible {
   background: var(--background-modifier-hover);
+  border-color: var(--background-modifier-border-hover);
+}
+
+.task-hub-create-picker input::-webkit-calendar-picker-indicator {
+  -webkit-appearance: none;
+  background: transparent;
+  display: none;
+  height: 0;
+  margin: 0;
+  opacity: 0;
+  padding: 0;
+  width: 0;
+}
+
+.task-hub-create-picker input::-webkit-clear-button,
+.task-hub-create-picker input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  display: none;
+}
+
+.task-hub-create-picker input::-webkit-datetime-edit {
+  padding: 0;
 }
 
 .task-hub-create-modal .setting-item {
@@ -101,6 +185,10 @@
   width: min(280px, 100%);
 }
 
+.task-hub-create-modal .setting-item-control .task-hub-create-picker input {
+  width: 100%;
+}
+
 .task-hub-create-modal .setting-item-control textarea {
   min-height: 96px;
   resize: vertical;
@@ -116,10 +204,6 @@
 
 .task-hub-create-schedule-setting .setting-item-control {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-}
-
-.task-hub-create-time-input {
-  width: min(132px, 100%);
 }
 
 .task-hub-create-alert-setting .setting-item-control {
@@ -1204,6 +1288,27 @@ body .task-hub-view button.task-hub-color-swatch {
   display: none;
 }
 
+.task-hub-detail-extra {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.task-hub-detail-extra.is-expanding {
+  overflow: clip;
+  transform-origin: top;
+  transition:
+    max-height 220ms cubic-bezier(0.2, 0.85, 0.25, 1),
+    opacity 160ms ease-out,
+    transform 220ms cubic-bezier(0.2, 0.85, 0.25, 1);
+}
+
+.task-hub-detail-extra.is-hidden,
+.task-hub-detail-extra.is-opening,
+.task-hub-detail-extra.is-closing {
+  opacity: 0;
+  transform: translateY(-8px);
+}
+
 .task-hub-detail-toggle-row {
   border-top: 1px solid var(--background-modifier-border);
   margin-top: 6px;
@@ -1771,6 +1876,11 @@ body .task-hub-view button.task-hub-color-swatch {
   gap: 12px;
   grid-template-columns: minmax(0, 1fr) minmax(260px, 320px);
   min-width: 0;
+  position: relative;
+}
+
+.task-hub-calendar-with-sidebar.is-unscheduled-closing {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .task-hub-calendar-pane {
@@ -1779,8 +1889,45 @@ body .task-hub-view button.task-hub-color-swatch {
   min-width: 0;
 }
 
+.task-hub-calendar-with-sidebar.is-unscheduled-open .task-hub-calendar-pane {
+  animation: task-hub-calendar-pane-make-room 220ms cubic-bezier(0.2, 0.85, 0.25, 1) both;
+  transform-origin: left center;
+  will-change: opacity, transform;
+}
+
+.task-hub-calendar-with-sidebar.is-unscheduled-closing .task-hub-calendar-pane {
+  animation: task-hub-calendar-pane-restore-room 190ms cubic-bezier(0.4, 0, 0.2, 1) both;
+  transform-origin: left center;
+  will-change: opacity, transform;
+}
+
+@keyframes task-hub-calendar-pane-make-room {
+  from {
+    opacity: 0.96;
+    transform: translateX(12px) scaleX(1.012);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0) scaleX(1);
+  }
+}
+
+@keyframes task-hub-calendar-pane-restore-room {
+  from {
+    opacity: 1;
+    transform: translateX(0) scaleX(1);
+  }
+
+  to {
+    opacity: 0.98;
+    transform: translateX(10px) scaleX(1.01);
+  }
+}
+
 .task-hub-unscheduled-panel {
   align-content: start;
+  animation: task-hub-unscheduled-panel-enter 220ms cubic-bezier(0.2, 0.85, 0.25, 1) both;
   background: color-mix(in srgb, var(--background-secondary) 76%, var(--background-primary));
   border: 1px solid var(--background-modifier-border);
   border-radius: 8px;
@@ -1792,6 +1939,46 @@ body .task-hub-view button.task-hub-color-swatch {
   padding: 10px;
   position: sticky;
   top: 8px;
+  transform-origin: right center;
+  will-change: clip-path, opacity, transform;
+}
+
+.task-hub-unscheduled-panel.is-closing {
+  animation: task-hub-unscheduled-panel-exit 190ms cubic-bezier(0.4, 0, 0.2, 1) both;
+  box-sizing: border-box;
+  pointer-events: none;
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: min(320px, calc(100vw - 16px));
+}
+
+@keyframes task-hub-unscheduled-panel-enter {
+  from {
+    clip-path: inset(0 0 0 100%);
+    opacity: 0;
+    transform: translateX(18px) scaleX(0.96);
+  }
+
+  to {
+    clip-path: inset(0 0 0 0);
+    opacity: 1;
+    transform: translateX(0) scaleX(1);
+  }
+}
+
+@keyframes task-hub-unscheduled-panel-exit {
+  from {
+    clip-path: inset(0 0 0 0);
+    opacity: 1;
+    transform: translateX(0) scaleX(1);
+  }
+
+  to {
+    clip-path: inset(0 0 0 100%);
+    opacity: 0;
+    transform: translateX(18px) scaleX(0.96);
+  }
 }
 
 .task-hub-unscheduled-header {
@@ -2221,6 +2408,11 @@ body .task-hub-view button.task-hub-color-swatch {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .task-hub-create-modal,
+  .task-hub-calendar-detail-popover,
+  .task-hub-detail-extra.is-expanding,
+  .task-hub-calendar-with-sidebar .task-hub-calendar-pane,
+  .task-hub-unscheduled-panel,
   .task-hub-calendar-item.is-drag-muted,
   .task-hub-calendar-drag-stack-card,
   .task-hub-calendar-drop-scatter-chip {
@@ -2593,6 +2785,7 @@ body .task-hub-view button.task-hub-color-swatch {
 }
 
 .task-hub-calendar-detail-popover {
+  animation: task-hub-calendar-detail-popover-enter 180ms cubic-bezier(0.2, 0.9, 0.2, 1) both;
   background: var(--background-primary);
   border: 1px solid var(--background-modifier-border);
   border-radius: 10px;
@@ -2604,8 +2797,22 @@ body .task-hub-view button.task-hub-color-swatch {
   overflow: auto;
   padding: 16px;
   position: fixed;
+  transform-origin: 32px 32px;
   width: min(360px, calc(100vw - 16px));
+  will-change: opacity, transform;
   z-index: 1000;
+}
+
+@keyframes task-hub-calendar-detail-popover-enter {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.96);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 .task-hub-calendar-detail-header {
@@ -2800,6 +3007,15 @@ body .task-hub-view button.task-hub-color-swatch {
   accent-color: var(--task-hub-item-color, var(--task-hub-source-color, var(--interactive-accent)));
   height: 18px;
   margin: 0;
+  width: 18px;
+}
+
+.task-hub-calendar-detail-row .task-hub-detail-control input[type="checkbox"] {
+  box-sizing: border-box;
+  height: 18px;
+  margin: 0;
+  min-height: 18px;
+  padding: 0;
   width: 18px;
 }
 

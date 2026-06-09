@@ -451,7 +451,7 @@ function renderTaskDetails(
       toggleRow.row.addClass("task-hub-detail-toggle-row");
       const extra = editor.createDiv({ cls: "task-hub-detail-extra is-hidden" });
       detailsToggle!.addEventListener("change", () => {
-        extra.toggleClass("is-hidden", !detailsToggle!.checked);
+        toggleDetailExtra(extra, detailsToggle!.checked);
       });
       renderReadonlyDetailValue(extra, t("sourceFile"), taskDetailSourceFileLabel(task), "task-hub-detail-source-file");
       if (task.contextPreview && !canEditExternalTask) {
@@ -506,6 +506,59 @@ function renderTaskDetails(
     details.createDiv({ cls: "task-hub-detail-note", text: t("externalTaskReadOnly") });
   }
   renderTaskNotes(container, task, handlers, options, t);
+}
+
+function toggleDetailExtra(extra: HTMLElement, expanded: boolean): void {
+  const reducedMotion = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  if (reducedMotion) {
+    extra.toggleClass("is-hidden", !expanded);
+    extra.removeClass("is-expanding");
+    extra.removeClass("is-opening");
+    extra.removeClass("is-closing");
+    extra.style.maxHeight = "";
+    return;
+  }
+
+  extra.addClass("is-expanding");
+
+  if (expanded) {
+    extra.addClass("is-opening");
+    extra.style.maxHeight = "0px";
+    extra.removeClass("is-hidden");
+    void extra.offsetHeight;
+    extra.removeClass("is-opening");
+    extra.style.maxHeight = `${extra.scrollHeight}px`;
+    let finished = false;
+    const finish = (event?: TransitionEvent) => {
+      if (finished) return;
+      if (event?.propertyName && event.propertyName !== "max-height") return;
+      finished = true;
+      extra.removeClass("is-expanding");
+      extra.style.maxHeight = "";
+      extra.removeEventListener?.("transitionend", finish);
+    };
+    extra.addEventListener("transitionend", finish);
+    globalThis.setTimeout?.(() => finish(), 280);
+    return;
+  }
+
+  extra.style.maxHeight = `${extra.scrollHeight}px`;
+  void extra.offsetHeight;
+  extra.addClass("is-closing");
+  extra.style.maxHeight = "0px";
+  let finished = false;
+  const finish = (event?: TransitionEvent) => {
+    if (finished) return;
+    if (event?.propertyName && event.propertyName !== "max-height") return;
+    finished = true;
+    extra.addClass("is-hidden");
+    extra.removeClass("is-expanding");
+    extra.removeClass("is-closing");
+    extra.style.maxHeight = "";
+    extra.removeEventListener?.("transitionend", finish);
+  };
+  extra.addEventListener("transitionend", finish);
+  globalThis.setTimeout?.(() => finish(), 280);
 }
 
 function renderTaskDetailCompleteCheckbox(

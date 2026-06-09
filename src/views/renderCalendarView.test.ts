@@ -2443,7 +2443,8 @@ describe("renderCalendarView", () => {
     const toggle = collect(popover as FakeElement).find((element) => element.classes.has("task-hub-detail-extra-toggle"));
     const notesInput = collect(extra as FakeElement).find((element) => element.type === "textarea");
     const recurrenceSelect = collect(extra as FakeElement).find((element) => element.classes.has("task-hub-recurrence-select"));
-    const formCalendarRow = collect(popover as FakeElement).find((element) => element.classes.has("task-hub-calendar-detail-inline-row"));
+    const formCalendarLabel = collect(popover as FakeElement).find((element) => element.classes.has("task-hub-detail-label") && element.text === "localAppleCalendar");
+    const formCalendarRow = formCalendarLabel?.parent;
     const save = collect(popover as FakeElement).find((element) => element.text === "save");
     const deleteButton = collect(popover as FakeElement).find((element) => element.text === "delete");
     const calendarSelect = collect(formCalendarRow as FakeElement).find((element) => element.type === "select");
@@ -2453,6 +2454,10 @@ describe("renderCalendarView", () => {
     expect(collect(extra as FakeElement).find((element) => element.text === "recurrenceApplyTo")).toBeDefined();
     expect(notesInput?.value).toBe("Original event notes");
     expect(recurrenceSelect?.value).toBe("");
+    expect(formCalendarRow?.classes.has("task-hub-calendar-detail-row")).toBe(true);
+    expect(formCalendarRow?.classes.has("task-hub-calendar-detail-inline-row")).toBe(false);
+    expect(formCalendarLabel?.parent).toBe(formCalendarRow);
+    expect(calendarSelect?.parent?.classes.has("task-hub-detail-control")).toBe(true);
     toggle!.checked = true;
     toggle!.dispatch("change");
     expect(extra?.classes.has("is-hidden")).toBe(false);
@@ -2594,6 +2599,7 @@ describe("renderCalendarView", () => {
     );
 
     const panel = collect(container).find((element) => element.classes.has("task-hub-unscheduled-panel"));
+    const host = collect(container).find((element) => element.classes.has("task-hub-calendar-with-sidebar"));
     const row = collect(container).find((element) => element.classes.has("task-hub-unscheduled-task"));
     const targetDay = collect(container)
       .filter((element) => element.classes.has("task-hub-calendar-day"))
@@ -2603,8 +2609,53 @@ describe("renderCalendarView", () => {
     targetDay?.dispatch("drop", { dataTransfer });
 
     expect(panel).toBeDefined();
+    expect(host?.classes.has("is-unscheduled-open")).toBe(true);
     expect(row?.draggable).toBe(true);
     expect(onTaskReschedule).toHaveBeenCalledWith(unscheduledTask, "2026-05-12");
+  });
+
+  it("keeps the unscheduled side panel mounted while its close animation runs", () => {
+    const container = new FakeElement();
+    const unscheduledTask = { ...task, id: "task-unscheduled-closing", dueDate: undefined, rawLine: "- [ ] Unscheduled", text: "Unscheduled" };
+
+    renderCalendarView(
+      container as unknown as HTMLElement,
+      {
+        mode: "month",
+        focusDate: new Date("2026-05-08T12:00:00Z"),
+        weekStart: "monday",
+        visibleSourceIds: new Set(["vault"]),
+        includeCompletedTasks: false,
+        allowAppleReminderWriteback: false,
+        allowTaskCreation: false,
+        unscheduledPanelOpen: false,
+        unscheduledPanelClosing: true,
+        unscheduledTasks: [unscheduledTask],
+        sources: [],
+        t: (key) => key
+      },
+      [task, unscheduledTask],
+      [],
+      {
+        onLayerToggle: jest.fn(),
+        onModeChange: jest.fn(),
+        onMove: jest.fn(),
+        onDateCreateTask: jest.fn(),
+        onTaskComplete: jest.fn(),
+        onTaskJump: jest.fn(),
+        onTaskSelect: jest.fn(),
+        onTaskSelectionChange: jest.fn(),
+        onTaskReschedule: jest.fn(),
+        onToday: jest.fn()
+      }
+    );
+
+    const panel = collect(container).find((element) => element.classes.has("task-hub-unscheduled-panel"));
+    const host = collect(container).find((element) => element.classes.has("task-hub-calendar-with-sidebar"));
+
+    expect(panel).toBeDefined();
+    expect(host?.classes.has("is-unscheduled-closing")).toBe(true);
+    expect(panel?.classes.has("is-closing")).toBe(true);
   });
 
   it("completes an unscheduled side-panel task from its checkbox", () => {

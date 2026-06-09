@@ -62,6 +62,7 @@ export type CalendarViewState = {
   renderNoteMarkdown?: TaskNoteMarkdownRenderer;
   selectedTaskIds?: ReadonlySet<string>;
   unscheduledPanelOpen?: boolean;
+  unscheduledPanelClosing?: boolean;
   unscheduledTasks?: TaskItem[];
   sources: CalendarSource[];
   t: Translator;
@@ -226,8 +227,10 @@ export function renderCalendarView(
   });
   const visibleItems = items.filter((item) => item.date >= range.start && item.date <= range.end);
 
-  const calendarHost = state.unscheduledPanelOpen ? container.createDiv({ cls: "task-hub-calendar-with-sidebar" }) : container;
-  const calendarPane = state.unscheduledPanelOpen ? calendarHost.createDiv({ cls: "task-hub-calendar-pane" }) : container;
+  const showUnscheduledPanel = state.unscheduledPanelOpen || state.unscheduledPanelClosing;
+  const sidebarStateClass = state.unscheduledPanelClosing ? "is-unscheduled-closing" : "is-unscheduled-open";
+  const calendarHost = showUnscheduledPanel ? container.createDiv({ cls: `task-hub-calendar-with-sidebar ${sidebarStateClass}` }) : container;
+  const calendarPane = showUnscheduledPanel ? calendarHost.createDiv({ cls: "task-hub-calendar-pane" }) : container;
 
   if (visibleItems.length === 0) {
     calendarPane.createDiv({ cls: "task-hub-empty", text: state.t("calendarEmpty") });
@@ -235,12 +238,12 @@ export function renderCalendarView(
 
   if (state.mode === "day" || state.mode === "week") {
     renderAgendaGrid(calendarPane, state, range.days, visibleItems, handlers, today);
-    if (state.unscheduledPanelOpen) renderUnscheduledPanel(calendarHost, state, handlers);
+    if (showUnscheduledPanel) renderUnscheduledPanel(calendarHost, state, handlers);
     return;
   }
 
   renderMonthGrid(calendarPane, state, range.days, visibleItems, handlers, today);
-  if (state.unscheduledPanelOpen) renderUnscheduledPanel(calendarHost, state, handlers);
+  if (showUnscheduledPanel) renderUnscheduledPanel(calendarHost, state, handlers);
 }
 
 function renderMonthGrid(
@@ -866,6 +869,7 @@ function renderCalendarItem(container: HTMLElement, item: CalendarItem, handlers
 
 function renderUnscheduledPanel(container: HTMLElement, state: CalendarViewState, handlers: CalendarViewHandlers): void {
   const panel = container.createEl("aside", { cls: "task-hub-unscheduled-panel" });
+  panel.toggleClass("is-closing", Boolean(state.unscheduledPanelClosing));
   const tasks = state.unscheduledTasks ?? [];
   const header = panel.createDiv({ cls: "task-hub-unscheduled-header" });
   header.createDiv({ cls: "task-hub-unscheduled-title", text: state.t("unscheduled") });
@@ -1359,7 +1363,7 @@ function renderEventDetailsPopover(
   };
   allDayCheckbox.addEventListener("change", updateTimedFieldVisibility);
   updateTimedFieldVisibility();
-  const calendar = detailSelect(form, state.t("localAppleCalendar"), state.appleCalendars ?? [], event.calendarId, true);
+  const calendar = detailSelect(form, state.t("localAppleCalendar"), state.appleCalendars ?? [], event.calendarId);
   const detailExtra = renderCalendarDetailExtraToggle(form, state);
   const recurrence = canEdit
     ? createRecurrenceSelect(detailExtra.extra, state.t("recurrence"), event.recurrence, state.t)
@@ -1447,9 +1451,62 @@ function renderCalendarDetailExtraToggle(container: HTMLElement, state: Calendar
   toggleRow.row.addClass("task-hub-calendar-detail-toggle");
   const extra = container.createDiv({ cls: "task-hub-detail-extra task-hub-calendar-detail-extra is-hidden" });
   toggle!.addEventListener("change", () => {
-    extra.toggleClass("is-hidden", !toggle!.checked);
+    toggleDetailExtra(extra, toggle!.checked);
   });
   return { toggle: toggle!, extra };
+}
+
+function toggleDetailExtra(extra: HTMLElement, expanded: boolean): void {
+  const reducedMotion = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  if (reducedMotion) {
+    extra.toggleClass("is-hidden", !expanded);
+    extra.removeClass("is-expanding");
+    extra.removeClass("is-opening");
+    extra.removeClass("is-closing");
+    extra.style.maxHeight = "";
+    return;
+  }
+
+  extra.addClass("is-expanding");
+
+  if (expanded) {
+    extra.addClass("is-opening");
+    extra.style.maxHeight = "0px";
+    extra.removeClass("is-hidden");
+    void extra.offsetHeight;
+    extra.removeClass("is-opening");
+    extra.style.maxHeight = `${extra.scrollHeight}px`;
+    let finished = false;
+    const finish = (event?: TransitionEvent) => {
+      if (finished) return;
+      if (event?.propertyName && event.propertyName !== "max-height") return;
+      finished = true;
+      extra.removeClass("is-expanding");
+      extra.style.maxHeight = "";
+      extra.removeEventListener?.("transitionend", finish);
+    };
+    extra.addEventListener("transitionend", finish);
+    globalThis.setTimeout?.(() => finish(), 280);
+    return;
+  }
+
+  extra.style.maxHeight = `${extra.scrollHeight}px`;
+  void extra.offsetHeight;
+  extra.addClass("is-closing");
+  extra.style.maxHeight = "0px";
+  let finished = false;
+  const finish = (event?: TransitionEvent) => {
+    if (finished) return;
+    if (event?.propertyName && event.propertyName !== "max-height") return;
+    finished = true;
+    extra.addClass("is-hidden");
+    extra.removeClass("is-expanding");
+    extra.removeClass("is-closing");
+    extra.style.maxHeight = "";
+    extra.removeEventListener?.("transitionend", finish);
+  };
+  extra.addEventListener("transitionend", finish);
+  globalThis.setTimeout?.(() => finish(), 280);
 }
 
 function renderRecurrenceScopeSelect(container: HTMLElement, state: CalendarViewState): HTMLSelectElement {

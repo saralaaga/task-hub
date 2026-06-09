@@ -1285,10 +1285,15 @@ describe("Apple Reminders migration", () => {
     plugin.openCreateTaskModal("2026-05-20");
 
     const modal = modals.at(-1);
-    const fields = modal ? collectElements(modal.contentEl) : [];
+    let fields = modal ? collectElements(modal.contentEl) : [];
+    const editDetailsToggle = fields.filter((element) => element.type === "checkbox").at(-1);
+    editDetailsToggle!.checked = true;
+    dispatchFake(editDetailsToggle!, "change");
+
+    fields = modal ? collectElements(modal.contentEl) : [];
     const bodyInput = fields.find((element) => element.type === "text");
     const timeInput = fields.find((element) => element.type === "time");
-    const alertToggle = fields.find((element) => element.type === "checkbox");
+    const alertToggle = fields.filter((element) => element.type === "checkbox").at(-1);
     const addButton = buttons.find((button) => button.setButtonText.mock.calls.some((call) => call[0] === "Add"));
 
     expect(bodyInput).toBeDefined();
@@ -1317,7 +1322,7 @@ describe("Apple Reminders migration", () => {
     }));
   });
 
-  it("hides modal recurrence and notes until edit details is enabled", () => {
+  it("hides modal recurrence, reminder, and notes until edit details is enabled", () => {
     const plugin = new TaskHubPlugin({} as never, {} as never);
     plugin.app = {
       workspace: {
@@ -1342,7 +1347,9 @@ describe("Apple Reminders migration", () => {
     const modal = modals.at(-1);
     let fields = modal ? collectElements(modal.contentEl) : [];
     const defaultSelectCount = fields.filter((element) => element.type === "select").length;
+    const defaultCheckboxCount = fields.filter((element) => element.type === "checkbox").length;
     expect(fields.find((element) => element.type === "textarea")).toBeUndefined();
+    expect(defaultCheckboxCount).toBe(1);
 
     const editDetailsToggle = fields.filter((element) => element.type === "checkbox").at(-1);
     editDetailsToggle!.checked = true;
@@ -1350,7 +1357,8 @@ describe("Apple Reminders migration", () => {
 
     fields = modal ? collectElements(modal.contentEl) : [];
     expect(fields.find((element) => element.type === "textarea")).toBeDefined();
-    expect(fields.filter((element) => element.type === "select")).toHaveLength(defaultSelectCount + 1);
+    expect(fields.filter((element) => element.type === "checkbox")).toHaveLength(defaultCheckboxCount + 1);
+    expect(fields.filter((element) => element.type === "select")).toHaveLength(defaultSelectCount + 2);
   });
 
   it("shows recurrence start and end dates for recurring event creation details", () => {
