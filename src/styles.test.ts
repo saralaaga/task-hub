@@ -193,6 +193,15 @@ describe("Task Hub styles", () => {
     expect(chipRule).toContain("color: var(--text-normal)");
   });
 
+  it("keeps task detail reminder controls aligned with the shared input column", () => {
+    const styles = readFileSync(path.join(__dirname, "styles.css"), "utf8");
+    const detailRowRule = styles.match(/\.task-hub-detail-row\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const reminderDetailOverride = styles.match(/\.task-hub-reminder-alert-row\.task-hub-detail-row\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+
+    expect(detailRowRule).toContain("grid-template-columns: 36px var(--task-hub-detail-label-width, 128px) minmax(0, 1fr)");
+    expect(reminderDetailOverride).not.toContain("grid-template-columns");
+  });
+
   it("keeps task content text lightweight in task and calendar cards", () => {
     const styles = readFileSync(path.join(__dirname, "styles.css"), "utf8");
     const taskTextRule = styles.match(/\.task-hub-task-text\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";

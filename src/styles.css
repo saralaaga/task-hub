@@ -1238,10 +1238,6 @@ body .task-hub-view button.task-hub-color-swatch {
   width: 18px;
 }
 
-.task-hub-reminder-alert-row.task-hub-detail-row {
-  grid-template-columns: 36px 128px minmax(0, 1fr);
-}
-
 .task-hub-tag-editor {
   align-items: center;
   background: transparent;
