@@ -25,6 +25,7 @@ import { renderSourceLogo, sourceLogoKindForCalendarItem } from "./sourceLogos";
 
 export type CalendarViewState = {
   mode: CalendarViewMode;
+  modeTransition?: CalendarModeTransitionDirection;
   focusDate: Date;
   weekStart: WeekStart;
   visibleSourceIds: Set<string>;
@@ -67,6 +68,8 @@ export type CalendarViewState = {
   sources: CalendarSource[];
   t: Translator;
 };
+
+export type CalendarModeTransitionDirection = "left" | "right";
 
 export type CalendarViewHandlers = {
   onModeChange: (mode: CalendarViewMode) => void;
@@ -227,10 +230,14 @@ export function renderCalendarView(
   });
   const visibleItems = items.filter((item) => item.date >= range.start && item.date <= range.end);
 
+  const transitionClass = state.modeTransition ? `is-slide-${state.modeTransition}` : "";
+  const viewStage = container.createDiv({
+    cls: ["task-hub-calendar-view-stage", transitionClass].filter(Boolean).join(" ")
+  });
   const showUnscheduledPanel = state.unscheduledPanelOpen || state.unscheduledPanelClosing;
   const sidebarStateClass = state.unscheduledPanelClosing ? "is-unscheduled-closing" : "is-unscheduled-open";
-  const calendarHost = showUnscheduledPanel ? container.createDiv({ cls: `task-hub-calendar-with-sidebar ${sidebarStateClass}` }) : container;
-  const calendarPane = showUnscheduledPanel ? calendarHost.createDiv({ cls: "task-hub-calendar-pane" }) : container;
+  const calendarHost = showUnscheduledPanel ? viewStage.createDiv({ cls: `task-hub-calendar-with-sidebar ${sidebarStateClass}` }) : viewStage;
+  const calendarPane = showUnscheduledPanel ? calendarHost.createDiv({ cls: "task-hub-calendar-pane" }) : viewStage;
 
   if (visibleItems.length === 0) {
     calendarPane.createDiv({ cls: "task-hub-empty", text: state.t("calendarEmpty") });
@@ -391,12 +398,22 @@ function agendaTimeMetrics(state: CalendarViewState, hourCount: number, containe
       minorStepMinutes: scale === "quarter" ? 15 : scale === "half" ? 30 : 60
     };
   }
-  const containerHeight = container.getBoundingClientRect().height;
+  const containerHeight = measuredElementHeight(container);
   const availableHeight = Number.isFinite(containerHeight) && containerHeight > 0 ? Math.max(120, containerHeight - 190) : hourCount * 36;
   return {
     hourHeight: Math.max(24, Math.min(HOUR_HEIGHT, Math.floor(availableHeight / Math.max(1, hourCount)))),
     minorStepMinutes: 120
   };
+}
+
+function measuredElementHeight(element: HTMLElement): number {
+  let current: (HTMLElement & { parent?: HTMLElement }) | null | undefined = element;
+  while (current) {
+    const height = current.getBoundingClientRect().height;
+    if (Number.isFinite(height) && height > 0) return height;
+    current = current.parentElement ?? current.parent;
+  }
+  return 0;
 }
 
 function bindAgendaTimeScaleWheel(agenda: HTMLElement, state: CalendarViewState, handlers: CalendarViewHandlers): void {

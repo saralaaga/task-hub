@@ -862,11 +862,15 @@ body .task-hub-view button.task-hub-color-swatch {
   border-radius: 6px;
   cursor: pointer;
   display: grid;
-  gap: 8px;
+  gap: 7px;
   grid-template-columns: auto minmax(0, 1fr);
-  min-height: 46px;
-  padding: 8px 10px;
+  min-height: 38px;
+  padding: 5px 8px;
   width: 100%;
+}
+
+.task-hub-task-row > input[type="checkbox"] {
+  margin: 0;
 }
 
 .task-hub-task-row.is-selected {
@@ -1165,8 +1169,26 @@ body .task-hub-view button.task-hub-color-swatch {
   width: min(760px, 100%);
 }
 
+.task-hub-task-section h3 {
+  font-size: var(--font-ui-large);
+  line-height: 1.25;
+  padding: 2px 0 4px;
+}
+
 .task-hub-task-list-flow .task-hub-task-row {
   display: grid;
+}
+
+.task-hub-task-body {
+  min-width: 0;
+}
+
+.task-hub-task-title-line {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 7px;
+  min-width: 0;
 }
 
 .task-hub-task-text,
@@ -1179,8 +1201,10 @@ body .task-hub-view button.task-hub-color-swatch {
 
 .task-hub-task-text {
   -webkit-line-clamp: 1;
+  flex: 0 1 auto;
   font-weight: 400;
-  line-height: 1.35;
+  line-height: 1.28;
+  min-width: 8ch;
 }
 
 @keyframes task-hub-complete-pulse {
@@ -1870,6 +1894,45 @@ body .task-hub-view button.task-hub-color-swatch {
   min-height: 28px;
 }
 
+.task-hub-calendar-view-stage {
+  min-width: 0;
+  transform-origin: center;
+}
+
+.task-hub-calendar-view-stage.is-slide-left {
+  animation: task-hub-calendar-view-slide-left 240ms cubic-bezier(0.2, 0.85, 0.25, 1) both;
+  will-change: opacity, transform;
+}
+
+.task-hub-calendar-view-stage.is-slide-right {
+  animation: task-hub-calendar-view-slide-right 240ms cubic-bezier(0.2, 0.85, 0.25, 1) both;
+  will-change: opacity, transform;
+}
+
+@keyframes task-hub-calendar-view-slide-left {
+  from {
+    opacity: 0.62;
+    transform: translateX(34px) scale(0.985);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+@keyframes task-hub-calendar-view-slide-right {
+  from {
+    opacity: 0.62;
+    transform: translateX(-34px) scale(0.985);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
 .task-hub-calendar-with-sidebar {
   align-items: start;
   display: grid;
@@ -2411,6 +2474,8 @@ body .task-hub-view button.task-hub-color-swatch {
   .task-hub-create-modal,
   .task-hub-calendar-detail-popover,
   .task-hub-detail-extra.is-expanding,
+  .task-hub-calendar-view-stage.is-slide-left,
+  .task-hub-calendar-view-stage.is-slide-right,
   .task-hub-calendar-with-sidebar .task-hub-calendar-pane,
   .task-hub-unscheduled-panel,
   .task-hub-calendar-item.is-drag-muted,

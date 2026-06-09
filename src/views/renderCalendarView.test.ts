@@ -468,6 +468,43 @@ describe("renderCalendarView", () => {
     expect(elements.some((element) => element.classes.has("task-hub-calendar-lunar-day") && element.text === "初七")).toBe(true);
   });
 
+  it("marks the calendar content stage with the requested mode transition direction", () => {
+    const container = new FakeElement();
+
+    renderCalendarView(
+      container as unknown as HTMLElement,
+      {
+        mode: "week",
+        modeTransition: "left",
+        focusDate: new Date("2026-05-08T12:00:00Z"),
+        weekStart: "monday",
+        visibleSourceIds: new Set(["vault"]),
+        includeCompletedTasks: false,
+        allowAppleReminderWriteback: false,
+        allowTaskCreation: false,
+        sources: [],
+        t: (key) => key
+      },
+      [],
+      [],
+      {
+        onLayerToggle: jest.fn(),
+        onModeChange: jest.fn(),
+        onMove: jest.fn(),
+        onDateCreateTask: jest.fn(),
+        onTaskComplete: jest.fn(),
+        onTaskJump: jest.fn(),
+        onTaskSelect: jest.fn(),
+        onTaskReschedule: jest.fn(),
+        onToday: jest.fn()
+      }
+    );
+
+    const stage = collect(container).find((element) => element.classes.has("task-hub-calendar-view-stage"));
+    expect(stage?.classes.has("is-slide-left")).toBe(true);
+    expect(stage?.classes.has("is-slide-right")).toBe(false);
+  });
+
   it("changes the day and week time scale after two command wheel steps only", () => {
     const dayContainer = new FakeElement();
     const onDayTimeScaleChange = jest.fn();

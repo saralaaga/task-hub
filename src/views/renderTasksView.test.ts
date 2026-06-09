@@ -538,6 +538,30 @@ describe("renderTasksView", () => {
     expect(chips.map((chip) => chip.text)).toEqual(["#project", "#client/acme"]);
   });
 
+  it("keeps task list rows compact without date or source labels", () => {
+    const container = new FakeElement();
+    const task = {
+      ...baseTask,
+      externalSourceName: "Reminders",
+      filePath: "Apple Reminders/Reminders",
+      tags: ["#project"]
+    };
+
+    renderTasksView(
+      container as unknown as HTMLElement,
+      [task],
+      [task],
+      { status: "open", tags: [], sourceQuery: "", textQuery: "" },
+      handlers(),
+      new Date("2026-05-08T12:00:00Z"),
+      (key) => key,
+      { allowAppleReminderWriteback: true }
+    );
+
+    const row = collect(container).find((element) => element.classes.has("task-hub-task-row"))!;
+    expect(textValues(row)).toEqual(["Buy milk", "#project"]);
+  });
+
   it("uses task tag chips as clickable filters without rendering the sidebar tag panel", () => {
     const container = new FakeElement();
     const viewHandlers = handlers();

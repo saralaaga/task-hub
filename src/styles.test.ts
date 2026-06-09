@@ -273,6 +273,22 @@ describe("Task Hub styles", () => {
     expect(reducedMotionRule).toContain(".task-hub-unscheduled-panel");
   });
 
+  it("animates calendar mode switches horizontally", () => {
+    const styles = readFileSync(path.join(__dirname, "styles.css"), "utf8");
+    const leftRule = styles.match(/\.task-hub-calendar-view-stage\.is-slide-left\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const rightRule = styles.match(/\.task-hub-calendar-view-stage\.is-slide-right\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const leftKeyframes = styles.match(/@keyframes task-hub-calendar-view-slide-left\s*\{(?<body>[\s\S]+?)\n\}/)?.groups?.body ?? "";
+    const rightKeyframes = styles.match(/@keyframes task-hub-calendar-view-slide-right\s*\{(?<body>[\s\S]+?)\n\}/)?.groups?.body ?? "";
+    const reducedMotionRule = styles.match(/@media \(prefers-reduced-motion: reduce\)\s*\{(?<body>[\s\S]+?)\n\}/)?.groups?.body ?? "";
+
+    expect(leftRule).toContain("animation: task-hub-calendar-view-slide-left 240ms cubic-bezier(0.2, 0.85, 0.25, 1) both");
+    expect(rightRule).toContain("animation: task-hub-calendar-view-slide-right 240ms cubic-bezier(0.2, 0.85, 0.25, 1) both");
+    expect(leftKeyframes).toContain("transform: translateX(34px) scale(0.985)");
+    expect(rightKeyframes).toContain("transform: translateX(-34px) scale(0.985)");
+    expect(reducedMotionRule).toContain(".task-hub-calendar-view-stage.is-slide-left");
+    expect(reducedMotionRule).toContain(".task-hub-calendar-view-stage.is-slide-right");
+  });
+
   it("keeps task content text lightweight in task and calendar cards", () => {
     const styles = readFileSync(path.join(__dirname, "styles.css"), "utf8");
     const taskTextRule = styles.match(/\.task-hub-task-text\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";

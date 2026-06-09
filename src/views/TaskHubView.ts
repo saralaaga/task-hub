@@ -6,7 +6,7 @@ import { createTranslator } from "../i18n";
 import type TaskHubPlugin from "../main";
 import type { TaskItem } from "../types";
 import { type CalendarViewMode } from "../calendar/calendarModel";
-import { renderCalendarView } from "./renderCalendarView";
+import { renderCalendarView, type CalendarModeTransitionDirection } from "./renderCalendarView";
 import { renderShell, type DashboardView } from "./renderShell";
 import { syncVisibleSources } from "./sourceVisibility";
 import { renderTagsView } from "./renderTagsView";
@@ -18,6 +18,7 @@ export class TaskHubView extends ItemView {
   private view: DashboardView = this.plugin.settings.defaultView;
   private filters: TaskFilterState = cloneTaskFilters(this.plugin.settings.taskViewFilters);
   private calendarMode: CalendarViewMode = "month";
+  private calendarModeTransition: CalendarModeTransitionDirection | undefined;
   private calendarFocusDate = new Date();
   private visibleSourceIds = new Set<string>(["vault"]);
   private knownCalendarSourceIds = new Set<string>(["vault"]);
@@ -242,6 +243,7 @@ export class TaskHubView extends ItemView {
         main,
         {
           mode: this.calendarMode,
+          modeTransition: this.calendarModeTransition,
           focusDate: this.calendarFocusDate,
           weekStart: this.plugin.settings.weekStart,
           visibleSourceIds: this.visibleSourceIds,
@@ -288,6 +290,7 @@ export class TaskHubView extends ItemView {
         this.plugin.getCalendarEvents(),
         {
           onModeChange: (mode) => {
+            this.calendarModeTransition = calendarModeTransitionDirection(this.calendarMode, mode);
             this.calendarMode = mode;
             this.render();
           },
@@ -335,6 +338,7 @@ export class TaskHubView extends ItemView {
           onOpenTaskNoteInThino: (path) => void this.plugin.openTaskNoteSource(path)
         }
       );
+      this.calendarModeTransition = undefined;
       return;
     }
 
@@ -556,6 +560,17 @@ function moveDate(date: Date, mode: CalendarViewMode, direction: -1 | 1): Date {
   if (mode === "week") next.setDate(next.getDate() + direction * 7);
   if (mode === "month") next.setMonth(next.getMonth() + direction);
   return next;
+}
+
+function calendarModeTransitionDirection(from: CalendarViewMode, to: CalendarViewMode): CalendarModeTransitionDirection | undefined {
+  if (from === to) return undefined;
+  return calendarModeRank(to) > calendarModeRank(from) ? "left" : "right";
+}
+
+function calendarModeRank(mode: CalendarViewMode): number {
+  if (mode === "day") return 0;
+  if (mode === "week") return 1;
+  return 2;
 }
 
 function toggleSetValue(values: Set<string>, value: string): Set<string> {

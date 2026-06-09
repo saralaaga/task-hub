@@ -216,21 +216,18 @@ function renderTaskRow(
   });
 
   const body = row.createDiv({ cls: "task-hub-task-body" });
-  body.createDiv({ cls: "task-hub-task-text", text: renderPlainTaskText(task.text) });
-  if (options.taskNotesEnabled && options.getTaskNoteCount && options.getTaskNoteCount(task) > 0) {
-    body.createSpan({ cls: "task-hub-task-note-count", text: String(options.getTaskNoteCount(task)) });
-  }
-
-  const meta = body.createDiv({ cls: "task-hub-task-meta" });
-  if (task.dueDate) meta.createSpan({ text: task.dueDate });
+  const titleLine = body.createDiv({ cls: "task-hub-task-title-line" });
+  titleLine.createDiv({ cls: "task-hub-task-text", text: renderPlainTaskText(task.text) });
   for (const tag of task.tags) {
-    const chip = meta.createEl("button", { cls: "task-hub-task-tag", text: tag });
+    const chip = titleLine.createEl("button", { cls: "task-hub-task-tag", text: tag });
     chip.addEventListener("click", (event) => {
       event.stopPropagation();
       handlers.onTagSelect(tag);
     });
   }
-  meta.createSpan({ cls: "task-hub-task-source", text: task.externalSourceName ?? task.filePath });
+  if (options.taskNotesEnabled && options.getTaskNoteCount && options.getTaskNoteCount(task) > 0) {
+    body.createSpan({ cls: "task-hub-task-note-count", text: String(options.getTaskNoteCount(task)) });
+  }
 
   row.addEventListener("click", (event) => onSelect(task, event));
   row.addEventListener("dblclick", () => {
