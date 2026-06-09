@@ -13,7 +13,7 @@ permissions:
 jobs:
   build-release:
     name: Build release assets
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     env:
       TZ: Asia/Shanghai
 
@@ -40,7 +40,7 @@ jobs:
         run: npm run smoke
 
       - name: Prepare release assets
-        run: npm run build && node scripts/prepare-release-assets.cjs
+        run: npm run release:assets
 
       - name: Check version metadata
         run: |
