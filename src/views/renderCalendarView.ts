@@ -1033,26 +1033,17 @@ function renderCalendarDetailsPopover(anchor: HTMLElement, item: CalendarItem, h
   const title = header.createDiv({ cls: "task-hub-calendar-detail-title" });
   renderDetailSourceLogo(title, item);
   title.createSpan({ text: state.t(item.task ? "taskDetails" : "calendarDetails") });
-  const headerControls = header.createDiv({ cls: "task-hub-calendar-detail-header-controls" });
-  const headerSourceSelect = item.event?.sourceId === "apple-calendar"
-    ? detailCompactSelect(headerControls, state.appleCalendars ?? [], item.event.calendarId)
-    : item.task?.source === "apple-reminders"
-      ? detailCompactSelect(headerControls, state.appleReminderLists ?? [], item.task.externalListId)
-    : item.task?.source === "dida"
-      ? detailCompactSelect(headerControls, state.didaProjects ?? [], item.task.externalListId)
-    : undefined;
-  if (headerSourceSelect) header.addClass("has-calendar-select");
   const close = header.createEl("button", { cls: "task-hub-icon-button", text: "×" });
   close.setAttr("aria-label", state.t("cancel"));
   close.addEventListener("click", closePopover);
   bindDetailsPopoverDrag(popover, header, ownerDocument);
 
   if (item.task) {
-    renderTaskDetailsPopover(popover, item, item.task, handlers, state, closePopover, item.task.source === "apple-reminders" || item.task.source === "dida" ? headerSourceSelect : undefined);
+    renderTaskDetailsPopover(popover, item, item.task, handlers, state, closePopover);
     return;
   }
   if (item.event) {
-    renderEventDetailsPopover(popover, item, item.event, handlers, state, closePopover, headerSourceSelect);
+    renderEventDetailsPopover(popover, item, item.event, handlers, state, closePopover);
   }
 }
 
@@ -1158,35 +1149,23 @@ function renderTaskDetailsPopover(
   task: TaskItem,
   handlers: CalendarViewHandlers,
   state: CalendarViewState,
-  closePopover: () => void,
-  headerList?: HTMLSelectElement
+  closePopover: () => void
 ): void {
   const editable = task.source === "vault" || (task.source === "apple-reminders" && state.allowAppleReminderWriteback) || (task.source === "dida" && state.allowDidaWriteback);
   const canEdit = (task.source === "apple-reminders" || task.source === "dida") && editable && Boolean(handlers.onTaskUpdate);
   const canToggle = task.source === "vault" || (task.source === "apple-reminders" && state.allowAppleReminderWriteback) || (task.source === "dida" && Boolean(state.allowDidaWriteback));
   const form = popover.createDiv({ cls: "task-hub-calendar-detail-form" });
-  const titleRow = form.createDiv({ cls: "task-hub-calendar-detail-title-row" });
-  renderCalendarTaskCompleteCheckbox(titleRow, task, canToggle, handlers, state);
-  const title = detailInput(titleRow, state.t("taskCreationBody"), task.text);
+  const title = detailInput(form, state.t("taskCreationBody"), task.text, "text", (icon) => {
+    renderCalendarTaskCompleteCheckbox(icon, task, canToggle, handlers, state);
+  });
   state.bindTagInputSuggest?.(title);
-  const scheduleRow = form.createDiv({ cls: "task-hub-calendar-detail-time-row" });
-  const date = detailInput(scheduleRow, state.t("date"), task.dueDate ?? "", "date");
-  const time = detailInput(scheduleRow, state.t("startTime"), timeFromTask(task), "time");
+  const date = detailInput(form, state.t("date"), task.dueDate ?? "", "date");
+  const time = detailInput(form, state.t("startTime"), timeFromTask(task), "time");
   const alertEditor = task.source === "apple-reminders" ? reminderAlertEditor(form, time, task.alertMinutesBefore, state.t) : undefined;
   let tags: HTMLInputElement | undefined;
-  let list: HTMLSelectElement | undefined;
   if (task.source === "vault") {
     tags = detailInput(form, state.t("tags"), task.tags.join(" ")) as HTMLInputElement;
     state.bindTagInputSuggest?.(tags);
-  }
-  if (task.source === "apple-reminders" || task.source === "dida") {
-    list = headerList ?? detailSelect(
-      form,
-      task.source === "dida" ? state.t("didaProject") : state.t("appleReminderList"),
-      task.source === "dida" ? state.didaProjects ?? [] : state.appleReminderLists ?? [],
-      task.externalListId,
-      true
-    );
   }
   const detailExtra = renderCalendarDetailExtraToggle(form, state);
   const recurrence = canEdit
@@ -1204,30 +1183,54 @@ function renderTaskDetailsPopover(
       renderReadonlyDetailRow(detailExtra.extra, state.t("notes"), task.contextPreview ?? "");
     }
   }
-  for (const field of [title, date, time, tags, list, alertEditor?.toggle, alertEditor?.select]) {
+  for (const field of [title, date, time, tags, alertEditor?.select]) {
     if (field) field.disabled = !canEdit;
   }
-  const sendTargetOptions = task.source === "vault" ? taskSendOptionsForCalendar(state) : [];
-  if (canEdit || sendTargetOptions.length > 0) {
-    const actions = popover.createDiv({ cls: "task-hub-calendar-detail-actions" });
-    if (canEdit) {
-      const save = actions.createEl("button", { cls: "mod-cta", text: state.t("save") });
-      save.addEventListener("click", () => {
-        const detailsEnabled = detailExtra.toggle.checked;
-        handlers.onTaskUpdate?.(task, {
-          kind: "task",
-          title: title.value,
-          date: date.value,
-          startTime: time.value || undefined,
-          tags: tags ? tags.value.split(/\s+/).filter(Boolean) : undefined,
-          reminderListId: list?.value,
-          alertMinutesBefore: alertEditor?.getAlertMinutesBefore() ?? null,
-          ...(detailsEnabled && notes ? { notes: notes.value } : {}),
-          ...(detailsEnabled && recurrence ? { recurrence: recurrenceValueFromSelect(recurrence) ?? null } : {})
-        });
-        closePopover();
-      });
+  if (canEdit) {
+    let dirty = false;
+    let lastCommittedSignature = "";
+    const buildDraft = (): Extract<CalendarItemEditDraft, { kind: "task" }> => {
+      const detailsEnabled = detailExtra.toggle.checked;
+      return {
+        kind: "task",
+        title: title.value,
+        date: date.value,
+        startTime: time.value || undefined,
+        tags: tags ? tags.value.split(/\s+/).filter(Boolean) : undefined,
+        alertMinutesBefore: alertEditor?.getAlertMinutesBefore() ?? null,
+        ...(detailsEnabled && notes ? { notes: notes.value } : {}),
+        ...(detailsEnabled && recurrence ? { recurrence: recurrenceValueFromSelect(recurrence) ?? null } : {})
+      };
+    };
+    const markDirty = () => {
+      dirty = true;
+      popover.addClass("is-auto-save-dirty");
+    };
+    const commit = () => {
+      const draft = buildDraft();
+      const signature = JSON.stringify(draft);
+      if (!dirty || signature === lastCommittedSignature) {
+        dirty = false;
+        popover.removeClass("is-auto-save-dirty");
+        return;
+      }
+      dirty = false;
+      lastCommittedSignature = signature;
+      popover.removeClass("is-auto-save-dirty");
+      handlers.onTaskUpdate?.(task, draft);
+    };
+    lastCommittedSignature = JSON.stringify(buildDraft());
+    for (const field of [title, date, time, tags, recurrence, notes, detailExtra.toggle, alertEditor?.select]) {
+      if (!field) continue;
+      field.addEventListener("input", markDirty);
+      field.addEventListener("change", markDirty);
+      field.addEventListener("blur", commit);
     }
+    popover.addEventListener("mouseleave", commit);
+  }
+  const sendTargetOptions = task.source === "vault" ? taskSendOptionsForCalendar(state) : [];
+  if (sendTargetOptions.length > 0) {
+    const actions = popover.createDiv({ cls: "task-hub-calendar-detail-actions" });
     if (sendTargetOptions.length > 0) {
       renderCalendarTaskSendControl(actions, task, sendTargetOptions, handlers, state, closePopover);
     }
@@ -1337,29 +1340,26 @@ function renderEventDetailsPopover(
   event: CalendarEvent,
   handlers: CalendarViewHandlers,
   state: CalendarViewState,
-  closePopover: () => void,
-  headerCalendar?: HTMLSelectElement
+  closePopover: () => void
 ): void {
   const editable = event.sourceId === "apple-calendar" && Boolean(state.allowAppleCalendarWriteback) && isWritableAppleCalendarEvent(item, state);
   const canEdit = editable && Boolean(handlers.onEventUpdate);
   const form = popover.createDiv({ cls: "task-hub-calendar-detail-form" });
   const title = detailInput(form, state.t("eventCreationPlaceholder"), event.title);
-  const dateRow = form.createDiv({ cls: "task-hub-calendar-detail-date-row" });
-  const date = detailInput(dateRow, state.t("date"), event.start.slice(0, 10), "date");
-  const allDay = dateRow.createEl("label", { cls: "task-hub-calendar-detail-check" });
-  const allDayCheckbox = allDay.createEl("input", { type: "checkbox" });
+  const date = detailInput(form, state.t("date"), event.start.slice(0, 10), "date");
+  const allDayCheckbox = detailCheckbox(form, state.t("allDay"));
   allDayCheckbox.checked = event.allDay;
-  allDay.createSpan({ text: state.t("allDay") });
-  const timeRow = form.createDiv({ cls: "task-hub-calendar-detail-time-row" });
-  const startField = detailInputField(timeRow, state.t("startTime"), event.allDay ? "" : timeFromDateTime(event.start), "time");
-  const endField = detailInputField(timeRow, state.t("endTime"), event.allDay ? "" : timeFromDateTime(event.end), "time");
+  const startField = detailInputField(form, state.t("startTime"), event.allDay ? "" : timeFromDateTime(event.start), "time");
+  const endField = detailInputField(form, state.t("endTime"), event.allDay ? "" : timeFromDateTime(event.end), "time");
   const start = startField.input;
   const end = endField.input;
   const updateTimedFieldVisibility = () => {
-    timeRow.toggleClass("is-hidden", allDayCheckbox.checked);
+    startField.field.toggleClass("is-hidden", allDayCheckbox.checked);
+    endField.field.toggleClass("is-hidden", allDayCheckbox.checked);
   };
+  allDayCheckbox.addEventListener("change", updateTimedFieldVisibility);
   updateTimedFieldVisibility();
-  const calendar = headerCalendar ?? detailSelect(form, state.t("localAppleCalendar"), state.appleCalendars ?? [], event.calendarId, true);
+  const calendar = detailSelect(form, state.t("localAppleCalendar"), state.appleCalendars ?? [], event.calendarId, true);
   const detailExtra = renderCalendarDetailExtraToggle(form, state);
   const recurrence = canEdit
     ? createRecurrenceSelect(detailExtra.extra, state.t("recurrence"), event.recurrence, state.t)
@@ -1375,31 +1375,56 @@ function renderEventDetailsPopover(
   for (const field of [title, date, start, end, calendar, allDayCheckbox]) {
     field.disabled = !canEdit;
   }
-  if (canEdit || event.url) {
-    const actions = popover.createDiv({ cls: "task-hub-calendar-detail-actions" });
-    if (canEdit) {
-      const save = actions.createEl("button", { cls: "mod-cta", text: state.t("save") });
-      save.addEventListener("click", () => {
-        const detailsEnabled = detailExtra.toggle.checked;
-        handlers.onEventUpdate?.(event, {
-          kind: "event",
-          title: title.value,
-          date: date.value,
-          startTime: start.value || undefined,
-          endTime: end.value || undefined,
-          allDay: allDayCheckbox.checked,
-          calendarId: calendar.value,
-          ...(detailsEnabled && notes ? { notes: notes.value } : {}),
-          ...(detailsEnabled && recurrence
-            ? {
-                recurrence: recurrenceValueFromSelect(recurrence) ?? null,
-                recurrenceScope: recurrenceScope?.value === "future" ? "future" : "this"
-              }
-            : {})
-        });
-        closePopover();
-      });
+  if (canEdit) {
+    let dirty = false;
+    let lastCommittedSignature = "";
+    const buildDraft = (): Extract<CalendarItemEditDraft, { kind: "event" }> => {
+      const detailsEnabled = detailExtra.toggle.checked;
+      return {
+        kind: "event",
+        title: title.value,
+        date: date.value,
+        startTime: start.value || undefined,
+        endTime: end.value || undefined,
+        allDay: allDayCheckbox.checked,
+        calendarId: calendar.value,
+        ...(detailsEnabled && notes ? { notes: notes.value } : {}),
+        ...(detailsEnabled && recurrence
+          ? {
+              recurrence: recurrenceValueFromSelect(recurrence) ?? null,
+              recurrenceScope: recurrenceScope?.value === "future" ? "future" : "this"
+            }
+          : {})
+      };
+    };
+    const markDirty = () => {
+      dirty = true;
+      popover.addClass("is-auto-save-dirty");
+    };
+    const commit = () => {
+      const draft = buildDraft();
+      const signature = JSON.stringify(draft);
+      if (!dirty || signature === lastCommittedSignature) {
+        dirty = false;
+        popover.removeClass("is-auto-save-dirty");
+        return;
+      }
+      dirty = false;
+      lastCommittedSignature = signature;
+      popover.removeClass("is-auto-save-dirty");
+      handlers.onEventUpdate?.(event, draft);
+    };
+    lastCommittedSignature = JSON.stringify(buildDraft());
+    for (const field of [title, date, start, end, calendar, allDayCheckbox, recurrence, recurrenceScope, notes, detailExtra.toggle]) {
+      if (!field) continue;
+      field.addEventListener("input", markDirty);
+      field.addEventListener("change", markDirty);
+      field.addEventListener("blur", commit);
     }
+    popover.addEventListener("mouseleave", commit);
+  }
+  if (event.url) {
+    const actions = popover.createDiv({ cls: "task-hub-calendar-detail-actions" });
     if (event.url) {
       const open = actions.createEl("button", { text: state.t("openSource") });
       open.addEventListener("click", () => {
@@ -1415,20 +1440,21 @@ function renderEventDetailsPopover(
 }
 
 function renderCalendarDetailExtraToggle(container: HTMLElement, state: CalendarViewState): { toggle: HTMLInputElement; extra: HTMLElement } {
-  const toggleRow = container.createEl("label", { cls: "task-hub-detail-toggle task-hub-calendar-detail-toggle" });
-  const toggle = toggleRow.createEl("input", { cls: "task-hub-detail-extra-toggle", type: "checkbox" }) as HTMLInputElement;
-  toggleRow.createSpan({ text: state.t("editDetails") });
+  let toggle: HTMLInputElement | undefined;
+  const toggleRow = detailRow(container, state.t("editDetails"));
+  toggle = toggleRow.control.createEl("input", { cls: "task-hub-detail-extra-toggle", type: "checkbox" }) as HTMLInputElement;
+  toggleRow.row.addClass("task-hub-detail-toggle-row");
+  toggleRow.row.addClass("task-hub-calendar-detail-toggle");
   const extra = container.createDiv({ cls: "task-hub-detail-extra task-hub-calendar-detail-extra is-hidden" });
-  toggle.addEventListener("change", () => {
-    extra.toggleClass("is-hidden", !toggle.checked);
+  toggle!.addEventListener("change", () => {
+    extra.toggleClass("is-hidden", !toggle!.checked);
   });
-  return { toggle, extra };
+  return { toggle: toggle!, extra };
 }
 
 function renderRecurrenceScopeSelect(container: HTMLElement, state: CalendarViewState): HTMLSelectElement {
-  const field = container.createEl("label", { cls: "task-hub-calendar-detail-field" });
-  field.createSpan({ text: state.t("recurrenceApplyTo") });
-  const select = field.createEl("select") as HTMLSelectElement;
+  const row = detailRow(container, state.t("recurrenceApplyTo"));
+  const select = row.control.createEl("select") as HTMLSelectElement;
   select.createEl("option", { value: "this", text: state.t("recurrenceThis") });
   select.createEl("option", { value: "future", text: state.t("recurrenceFuture") });
   select.value = "this";
@@ -1436,10 +1462,9 @@ function renderRecurrenceScopeSelect(container: HTMLElement, state: CalendarView
 }
 
 function renderReadonlyDetailRow(container: HTMLElement, label: string, value: string): HTMLElement {
-  const row = container.createDiv({ cls: "task-hub-calendar-detail-readonly-field" });
-  row.createSpan({ cls: "task-hub-calendar-detail-readonly-label", text: label });
-  row.createDiv({ cls: "task-hub-calendar-detail-readonly-value", text: value });
-  return row;
+  const row = detailRow(container, label);
+  row.control.createDiv({ cls: "task-hub-calendar-detail-readonly-value", text: value });
+  return row.row;
 }
 
 function recurrenceLabel(value: string | undefined, t: Translator): string {
@@ -1497,27 +1522,64 @@ function renderCalendarNotes(
   }
 }
 
-function detailInput(container: HTMLElement, label: string, value: string | undefined, type = "text"): HTMLInputElement {
-  return detailInputField(container, label, value, type).input;
+type DetailRow = {
+  row: HTMLElement;
+  icon: HTMLElement;
+  label: HTMLElement;
+  control: HTMLElement;
+};
+
+function detailRow(container: HTMLElement, label: string, renderIcon?: (icon: HTMLElement) => void): DetailRow {
+  const row = container.createDiv({ cls: "task-hub-detail-row task-hub-calendar-detail-row" });
+  const icon = row.createDiv({ cls: "task-hub-detail-icon-cell" });
+  renderIcon?.(icon);
+  const labelEl = row.createSpan({ cls: "task-hub-detail-label", text: label });
+  const control = row.createDiv({ cls: "task-hub-detail-control" });
+  return { row, icon, label: labelEl, control };
+}
+
+function detailInput(
+  container: HTMLElement,
+  label: string,
+  value: string | undefined,
+  type = "text",
+  renderIcon?: (icon: HTMLElement) => void
+): HTMLInputElement {
+  return detailInputField(container, label, value, type, renderIcon).input;
 }
 
 function detailInputField(
   container: HTMLElement,
   label: string,
   value: string | undefined,
-  type = "text"
+  type = "text",
+  renderIcon?: (icon: HTMLElement) => void
 ): { field: HTMLElement; input: HTMLInputElement } {
-  const field = container.createEl("label", { cls: "task-hub-calendar-detail-field" });
-  field.createSpan({ text: label });
-  const input = field.createEl("input", { type }) as HTMLInputElement;
+  const row = detailRow(container, label, renderIcon);
+  const input = row.control.createEl("input", { type }) as HTMLInputElement;
   input.value = value ?? "";
-  return { field, input };
+  if (type === "date") {
+    input.addEventListener("click", () => openNativeDatePicker(input));
+    input.addEventListener("focus", () => openNativeDatePicker(input));
+  }
+  return { field: row.row, input };
+}
+
+function detailCheckbox(container: HTMLElement, label: string): HTMLInputElement {
+  let checkbox: HTMLInputElement | undefined;
+  detailRow(container, label, (icon) => {
+    checkbox = icon.createEl("input", { cls: "task-hub-calendar-detail-check", type: "checkbox" }) as HTMLInputElement;
+  });
+  return checkbox!;
+}
+
+function openNativeDatePicker(input: HTMLInputElement): void {
+  input.showPicker?.();
 }
 
 function detailTextarea(container: HTMLElement, label: string, value: string | undefined): HTMLTextAreaElement {
-  const field = container.createEl("label", { cls: "task-hub-calendar-detail-field" });
-  field.createSpan({ text: label });
-  const textarea = field.createEl("textarea") as HTMLTextAreaElement;
+  const row = detailRow(container, label);
+  const textarea = row.control.createEl("textarea") as HTMLTextAreaElement;
   textarea.value = value ?? "";
   return textarea;
 }
@@ -1529,11 +1591,9 @@ function detailSelect(
   value: string | undefined,
   inline = false
 ): HTMLSelectElement {
-  const field = container.createEl("label", {
-    cls: `task-hub-calendar-detail-field ${inline ? "task-hub-calendar-detail-inline-row" : ""}`
-  });
-  field.createSpan({ text: label });
-  const select = field.createEl("select") as HTMLSelectElement;
+  const row = detailRow(container, label);
+  if (inline) row.row.addClass("task-hub-calendar-detail-inline-row");
+  const select = row.control.createEl("select") as HTMLSelectElement;
   for (const option of options) {
     select.createEl("option", { value: option.id, text: option.name });
   }
@@ -1542,7 +1602,6 @@ function detailSelect(
 }
 
 type ReminderAlertEditor = {
-  toggle: HTMLInputElement;
   select: HTMLSelectElement;
   getAlertMinutesBefore: () => ReminderAlertMinutes | null;
 };
@@ -1553,26 +1612,21 @@ function reminderAlertEditor(
   initialAlertMinutesBefore: number | undefined,
   t: Translator
 ): ReminderAlertEditor {
-  const row = container.createDiv({ cls: "task-hub-reminder-alert-row" });
-  const label = row.createEl("label", { cls: "task-hub-reminder-alert-switch" });
-  const toggle = label.createEl("input", { cls: "task-hub-reminder-alert-toggle", type: "checkbox" }) as HTMLInputElement;
-  label.createSpan({ text: t("reminderAlert") });
-  const select = row.createEl("select", { cls: "task-hub-reminder-alert-select" }) as HTMLSelectElement;
-  populateReminderAlertSelect(select, t);
+  const row = detailRow(container, t("reminderAlert"));
+  row.row.addClass("task-hub-reminder-alert-row");
+  const select = row.control.createEl("select", { cls: "task-hub-reminder-alert-select" }) as HTMLSelectElement;
+  populateReminderAlertSelect(select, t, { includeNone: true });
   const initial = normalizeReminderAlertMinutes(initialAlertMinutesBefore);
-  select.value = String(initial ?? 0);
-  toggle.checked = initial !== undefined;
+  select.value = initial === undefined ? "" : String(initial);
 
   const update = () => {
     const hasTime = Boolean(timeInput.value);
-    toggle.disabled = false;
-    select.disabled = !toggle.checked;
-    row.toggleClass("is-disabled", !hasTime && !toggle.checked);
+    row.row.toggleClass("is-disabled", !hasTime && select.value !== "");
   };
   timeInput.addEventListener("input", update);
   timeInput.addEventListener("change", update);
-  toggle.addEventListener("change", () => {
-    if (toggle.checked && !timeInput.value) {
+  select.addEventListener("change", () => {
+    if (select.value !== "" && !timeInput.value) {
       timeInput.value = "09:00";
     }
     update();
@@ -1580,10 +1634,9 @@ function reminderAlertEditor(
   update();
 
   return {
-    toggle,
     select,
     getAlertMinutesBefore: () => {
-      if (!toggle.checked || !timeInput.value) return null;
+      if (select.value === "" || !timeInput.value) return null;
       return normalizeReminderAlertMinutes(Number(select.value)) ?? 0;
     }
   };

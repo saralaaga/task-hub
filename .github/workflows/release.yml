@@ -80,9 +80,20 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "${GITHUB_REF_NAME}" \
-            dist/main.js \
-            dist/manifest.json \
-            dist/styles.css \
-            --title "Task Hub ${GITHUB_REF_NAME#v}" \
-            --notes "Task Hub release ${GITHUB_REF_NAME#v}."
+          if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
+            gh release edit "${GITHUB_REF_NAME}" \
+              --title "Task Hub ${GITHUB_REF_NAME#v}" \
+              --notes "Task Hub release ${GITHUB_REF_NAME#v}."
+            gh release upload "${GITHUB_REF_NAME}" \
+              dist/main.js \
+              dist/manifest.json \
+              dist/styles.css \
+              --clobber
+          else
+            gh release create "${GITHUB_REF_NAME}" \
+              dist/main.js \
+              dist/manifest.json \
+              dist/styles.css \
+              --title "Task Hub ${GITHUB_REF_NAME#v}" \
+              --notes "Task Hub release ${GITHUB_REF_NAME#v}."
+          fi

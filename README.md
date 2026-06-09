@@ -20,7 +20,7 @@ Task Hub is a desktop-only Obsidian plugin that brings vault tasks, Apple Remind
 - Safely complete vault tasks after verifying that the source line still matches the indexed task.
 - Browse tasks in task, calendar, and tag views.
 - Filter by completion state, source, tags, date bucket, text, and custom AND/OR conditions.
-- Extract due dates written as `📅 YYYY-MM-DD` or `due:: YYYY-MM-DD`.
+- Extract due dates written as `📅 YYYY-MM-DD`, `due:: YYYY-MM-DD`, or a bare `YYYY-MM-DD`.
 - Create and edit recurring tasks with common daily, weekly, monthly, and yearly rules.
 - Show dated tasks and external events in day, week, and month calendar views.
 - Reschedule vault Markdown tasks, Apple Reminders, and Apple Calendar events by dragging calendar cards to another day when the matching writeback option is enabled.
@@ -42,7 +42,7 @@ When Local Apple and Apple Reminders are enabled, the separate **Create Apple Re
 
 When Dida integration is enabled, Task Hub can read Dida/TickTick tasks through the configured API token. Separate settings control task creation, edit/complete writeback, drag rescheduling, deletion, default list, default reminder offset, and per-list colors. Sending a vault Markdown task to Dida is explicit; Task Hub creates the external task first and then removes the source Markdown line.
 
-The calendar view combines dated tasks, public ICS events, Apple Calendar events, and dated Apple Reminders where available. You can switch between month, week, and day layouts. Drag a vault Markdown task card to another day to update its existing `📅 YYYY-MM-DD` or `due:: YYYY-MM-DD` date. When the matching writeback options are enabled, dated Apple Reminder cards and Apple Calendar event cards can also be dragged to change their date.
+The calendar view combines dated tasks, public ICS events, Apple Calendar events, and dated Apple Reminders where available. You can switch between month, week, and day layouts. Drag a vault Markdown task card to another day to update its existing `📅 YYYY-MM-DD`, `due:: YYYY-MM-DD`, or bare `YYYY-MM-DD` date. When the matching writeback options are enabled, dated Apple Reminder cards and Apple Calendar event cards can also be dragged to change their date.
 
 The create task dialog and editable task/event details support common recurrence rules: daily, weekly, monthly, and yearly. Vault Markdown tasks store recurrence as `repeat:: RRULE:FREQ=...`. Completing a recurring vault task marks the current line complete and adds the next open occurrence below it.
 

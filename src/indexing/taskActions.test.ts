@@ -136,6 +136,17 @@ describe("rescheduleTaskInContent", () => {
     });
   });
 
+  it("updates a bare due date on the direct indexed line", () => {
+    const task = taskItem({ line: 0, rawLine: "- [ ] 测试 2026-06-05", dueDate: "2026-06-05" });
+    const result = rescheduleTaskInContent("- [ ] 测试 2026-06-05", task, "2026-06-09");
+
+    expect(result).toEqual({
+      status: "updated",
+      content: "- [ ] 测试 2026-06-09",
+      line: 0
+    });
+  });
+
   it("finds the same task near the indexed line when lines drift", () => {
     const task = taskItem({ line: 1, rawLine: "- [ ] Pay invoice 📅 2026-05-08", dueDate: "2026-05-08" });
     const result = rescheduleTaskInContent("New intro\nIntro\n- [ ] Pay invoice 📅 2026-05-08\nOutro", task, "2026-05-12");
@@ -251,6 +262,22 @@ describe("updateTaskLineInContent", () => {
     expect(result).toEqual({
       status: "updated",
       content: "- [ ] Pay invoice 📅 2026-05-12",
+      line: 0
+    });
+  });
+
+  it("removes a bare date from the edited title and writes the selected date canonically", () => {
+    const task = taskItem({ line: 0, rawLine: "- [ ] 测试 2026-06-05", dueDate: "2026-06-05", tags: [] });
+    const result = updateTaskLineInContent("- [ ] 测试 2026-06-05", task, {
+      title: "测试",
+      date: "2026-06-09",
+      startTime: "",
+      tags: []
+    });
+
+    expect(result).toEqual({
+      status: "updated",
+      content: "- [ ] 测试 📅 2026-06-09",
       line: 0
     });
   });

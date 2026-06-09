@@ -32,6 +32,7 @@ const COMPLETED_TASK_MARKER = /^(\s*)- \[[xX]\]/;
 const TASK_PREFIX = /^(\s*- \[[ xX]\]\s+)(.*)$/;
 const EMOJI_DUE = /(?:^|\s)📅\s*\d{4}-\d{2}-\d{2}(?=\s|$)/u;
 const INLINE_DUE = /(?:^|\s)due::\s*\d{4}-\d{2}-\d{2}(?=\s|$)/u;
+const BARE_DUE = /(?:^|\s)\d{4}-\d{2}-\d{2}(?=\s|$)/u;
 const SCHEDULED_TIME = /(?:^|\s)⏰\s*\d{1,2}:\d{2}(?=\s|$)/u;
 const RECURRENCE = /(?:^|\s)(?:repeat::|🔁)\s*((?:RRULE:)?[A-Z0-9=;,_-]+)(?=\s|$)/iu;
 const TAG = /(^|\s)(#[\p{L}\p{N}_/-]+)/gu;
@@ -287,6 +288,9 @@ function replaceDueDate(line: string, targetDate: string): string | undefined {
   if (INLINE_DUE.test(line)) {
     return line.replace(INLINE_DUE, (match) => match.replace(/\d{4}-\d{2}-\d{2}/, targetDate));
   }
+  if (BARE_DUE.test(line)) {
+    return line.replace(BARE_DUE, (match) => match.replace(/\d{4}-\d{2}-\d{2}/, targetDate));
+  }
   return undefined;
 }
 
@@ -308,6 +312,9 @@ function updateScheduledTime(line: string | undefined, startMinutes: number | un
   if (INLINE_DUE.test(line)) {
     return line.replace(INLINE_DUE, (match) => `${match}${timeToken}`);
   }
+  if (BARE_DUE.test(line)) {
+    return line.replace(BARE_DUE, (match) => `${match}${timeToken}`);
+  }
   return line;
 }
 
@@ -324,7 +331,7 @@ function extractRecurrence(line: string): string | undefined {
 }
 
 function taskLineHasDate(line: string): boolean {
-  return EMOJI_DUE.test(line) || INLINE_DUE.test(line);
+  return EMOJI_DUE.test(line) || INLINE_DUE.test(line) || BARE_DUE.test(line);
 }
 
 function taskHasScheduledTime(task: TaskItem): boolean {
@@ -354,6 +361,7 @@ function cleanTaskBody(body: string): string {
   return body
     .replace(EMOJI_DUE, " ")
     .replace(INLINE_DUE, " ")
+    .replace(BARE_DUE, " ")
     .replace(SCHEDULED_TIME, " ")
     .replace(RECURRENCE, " ")
     .replace(TAG, " ")

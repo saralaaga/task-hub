@@ -19,8 +19,14 @@ export function reminderAlertOptionLabel(minutes: ReminderAlertMinutes, t: Trans
   return t("reminderAlertOneWeekBefore");
 }
 
-export function populateReminderAlertSelect(select: HTMLSelectElement, t: Translator): void {
+export function populateReminderAlertSelect(select: HTMLSelectElement, t: Translator, options: { includeNone?: boolean } = {}): void {
   select.empty();
+  if (options.includeNone) {
+    select.createEl("option", {
+      value: "",
+      text: t("reminderAlertNone")
+    });
+  }
   for (const minutes of REMINDER_ALERT_OPTIONS) {
     select.createEl("option", {
       value: String(minutes),

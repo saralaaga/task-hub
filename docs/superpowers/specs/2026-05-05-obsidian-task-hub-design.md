@@ -163,6 +163,7 @@ Supported due-date syntax:
 
 - `📅 YYYY-MM-DD`
 - `due:: YYYY-MM-DD`
+- `YYYY-MM-DD`
 
 The parser should preserve fields for future compatibility, but not parse the full Obsidian Tasks plugin grammar in version 1.
 

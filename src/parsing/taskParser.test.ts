@@ -33,6 +33,18 @@ describe("parseTasksFromMarkdown", () => {
     });
   });
 
+  it("extracts bare ISO dates from task text", () => {
+    const tasks = parseTasksFromMarkdown({
+      filePath: "Project.md",
+      content: "- [ ] 测试 2026-06-05"
+    });
+
+    expect(tasks[0]).toMatchObject({
+      text: "测试",
+      dueDate: "2026-06-05"
+    });
+  });
+
   it("records indentation for nested tasks", () => {
     const tasks = parseTasksFromMarkdown({
       filePath: "Project.md",

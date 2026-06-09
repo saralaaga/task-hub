@@ -279,6 +279,10 @@ function findElementByText(element: FakeElement, text: string): FakeElement | un
   return collect(element).find((child) => child.text === text);
 }
 
+function leaveTaskDetailEditor(element: FakeElement): void {
+  collect(element).find((child) => child.classes.has("task-hub-detail-editor"))?.dispatchSelf("mouseleave");
+}
+
 function textValues(element: FakeElement): string[] {
   return collect(element).map((child) => child.text).filter(Boolean);
 }
@@ -844,9 +848,11 @@ describe("renderTasksView", () => {
     const date = collect(container).find((element) => element.type === "date");
     const tags = collect(container).find((element) => element.classes.has("task-hub-tag-editor-input"));
     title!.value = "Buy oat milk";
+    title!.input();
     date!.value = "2026-05-09";
+    date!.change();
     tags!.value = "#errand #client-acme";
-    findElementByText(container, "save")!.click();
+    leaveTaskDetailEditor(container);
 
     expect(viewHandlers.onTaskUpdate).toHaveBeenCalledWith(task, {
       kind: "task",
@@ -854,7 +860,6 @@ describe("renderTasksView", () => {
       date: "2026-05-09",
       startTime: undefined,
       tags: ["#home", "#errand", "#client-acme"],
-      reminderListId: undefined,
       alertMinutesBefore: null
     });
   });
@@ -889,7 +894,7 @@ describe("renderTasksView", () => {
 
     input!.value = "#errand";
     input!.dispatch("keydown", { key: " " });
-    findElementByText(container, "save")!.click();
+    leaveTaskDetailEditor(container);
 
     expect(viewHandlers.onTaskUpdate).toHaveBeenCalledWith(task, expect.objectContaining({
       tags: ["#home", "#errand"]
@@ -929,8 +934,10 @@ describe("renderTasksView", () => {
     expect(extra?.classes.has("is-hidden")).toBe(false);
 
     recurrence!.value = "RRULE:FREQ=MONTHLY";
+    recurrence!.change();
     notes!.value = "Updated notes";
-    findElementByText(container, "save")!.click();
+    notes!.input();
+    leaveTaskDetailEditor(container);
 
     expect(viewHandlers.onTaskUpdate).toHaveBeenCalledWith(task, expect.objectContaining({
       notes: "Updated notes",
@@ -955,15 +962,15 @@ describe("renderTasksView", () => {
     );
 
     const time = collect(container).find((element) => element.type === "time");
-    const alertToggle = collect(container).find((element) => element.classes.has("task-hub-reminder-alert-toggle"));
     const alertSelect = collect(container).find((element) => element.classes.has("task-hub-reminder-alert-select"));
     expect(time?.value).toBe("09:30");
-    expect(alertToggle?.disabled).toBe(false);
-    expect(alertToggle?.checked).toBe(true);
+    expect(collect(container).find((element) => element.classes.has("task-hub-reminder-alert-toggle"))).toBeUndefined();
     expect(alertSelect?.value).toBe("15");
+    expect(alertSelect?.disabled).toBe(false);
 
     alertSelect!.value = "30";
-    findElementByText(container, "save")!.click();
+    alertSelect!.change();
+    leaveTaskDetailEditor(container);
     expect(viewHandlers.onTaskUpdate).toHaveBeenCalledWith(task, expect.objectContaining({ startTime: "09:30", alertMinutesBefore: 30 }));
 
     const noTimeContainer = new FakeElement();
@@ -979,13 +986,13 @@ describe("renderTasksView", () => {
     );
 
     const noTime = collect(noTimeContainer).find((element) => element.type === "time");
-    const disabledToggle = collect(noTimeContainer).find((element) => element.classes.has("task-hub-reminder-alert-toggle"));
-    expect(disabledToggle?.disabled).toBe(false);
-    disabledToggle!.checked = true;
-    disabledToggle!.dispatch("change");
+    const noTimeAlertSelect = collect(noTimeContainer).find((element) => element.classes.has("task-hub-reminder-alert-select"));
+    expect(noTimeAlertSelect?.value).toBe("15");
+    noTimeAlertSelect!.value = "0";
+    noTimeAlertSelect!.change();
     expect(noTime?.value).toBe("09:00");
-    disabledToggle!.checked = false;
-    disabledToggle!.dispatch("change");
+    noTimeAlertSelect!.value = "";
+    noTimeAlertSelect!.change();
     expect(noTime?.value).toBe("09:00");
     expect(collect(noTimeContainer).some((element) => element.text === "设置时间后可提醒")).toBe(false);
   });
@@ -1009,6 +1016,8 @@ describe("renderTasksView", () => {
     const editor = collect(container).find((element) => element.classes.has("task-hub-tag-editor"));
     const input = collect(container).find((element) => element.classes.has("task-hub-tag-editor-input"));
     expect(editor).toBeDefined();
+    expect(editor?.type).not.toBe("input");
+    expect(editor?.attrs.get("role")).toBe("textbox");
     expect(collect(editor!).filter((element) => element.classes.has("task-hub-tag-editor-chip")).map((chip) => chip.text)).toEqual(["#home"]);
 
     input!.value = "#errand";
@@ -1020,7 +1029,7 @@ describe("renderTasksView", () => {
     expect(collect(editor!).find((element) => element.classes.has("is-selected"))?.text).toBe("#home");
     input!.dispatch("keydown", { key: "Backspace" });
     expect(collect(editor!).filter((element) => element.classes.has("task-hub-tag-editor-chip")).map((chip) => chip.text)).toEqual(["#errand"]);
-    findElementByText(container, "save")!.click();
+    leaveTaskDetailEditor(container);
     expect(viewHandlers.onTaskUpdate).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ tags: ["#errand"] }));
   });
 
@@ -1098,7 +1107,7 @@ describe("renderTasksView", () => {
     collect(editor!).find((element) => element.classes.has("is-selected"))!.dispatch("keydown", { key: "Delete" });
     expect(collect(editor!).filter((element) => element.classes.has("task-hub-tag-editor-chip")).map((chip) => chip.text)).toEqual(["#比赛"]);
 
-    findElementByText(container, "save")!.click();
+    leaveTaskDetailEditor(container);
     expect(viewHandlers.onTaskUpdate).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ tags: ["#比赛"] }));
   });
 
@@ -1123,9 +1132,12 @@ describe("renderTasksView", () => {
 
     const tags = collect(container).find((element) => element.classes.has("task-hub-tag-editor-input"));
     const title = collect(container).find((element) => element.classes.has("task-hub-detail-title-input"));
+    const placeholder = collect(container).find((element) => element.classes.has("task-hub-tag-editor-placeholder"));
 
     expect(bindTagInputSuggest).toHaveBeenCalledWith(title);
     expect(bindTagInputSuggest).toHaveBeenCalledWith(tags);
+    expect(placeholder?.parent?.classes.has("is-empty")).toBe(true);
+    expect(placeholder?.text).toBe("tagPlaceholder");
   });
 
   it("opens the native date picker when the Apple Reminder date field is clicked", () => {
@@ -1148,7 +1160,7 @@ describe("renderTasksView", () => {
     expect(date?.showPicker).toHaveBeenCalled();
   });
 
-  it("keeps external task completion in the title row and save in the action row", () => {
+  it("keeps external task completion in the title row and removes the save action", () => {
     const container = new FakeElement();
 
     renderTasksView(
@@ -1166,8 +1178,9 @@ describe("renderTasksView", () => {
     const actionTexts = actions ? collect(actions).map((element) => element.text).filter(Boolean) : [];
     const checkbox = collect(container).find((element) => element.classes.has("task-hub-detail-complete-checkbox"));
 
-    expect(actions?.classes.has("has-three-actions")).toBe(true);
-    expect(actionTexts).toEqual(["save"]);
+    expect(actions).toBeUndefined();
+    expect(actionTexts).toEqual([]);
+    expect(findElementByText(container, "save")).toBeUndefined();
     expect(checkbox?.type).toBe("checkbox");
   });
 
@@ -1187,8 +1200,10 @@ describe("renderTasksView", () => {
       { allowAppleReminderWriteback: true }
     );
 
-    collect(container).find((element) => element.classes.has("task-hub-detail-title-input"))!.value = "Buy oat milk";
-    findElementByText(container, "save")!.click();
+    const titleInput = collect(container).find((element) => element.classes.has("task-hub-detail-title-input"))!;
+    titleInput.value = "Buy oat milk";
+    titleInput.input();
+    leaveTaskDetailEditor(container);
 
     expect(viewHandlers.onTaskUpdate).toHaveBeenCalledWith(task, expect.objectContaining({
       startTime: "09:30"
@@ -1251,6 +1266,40 @@ describe("renderTasksView", () => {
     expect(elements.some((element) => element.classes.has("task-hub-detail-context") && element.text === task.contextPreview)).toBe(false);
     expect(extra?.classes.has("is-hidden")).toBe(true);
     expect(collect(extra!).find((element) => element.type === "textarea")?.value).toBe(task.contextPreview);
+  });
+
+  it("keeps source file and vault context inside the hidden edit details section", () => {
+    const container = new FakeElement();
+    const task = {
+      ...baseTask,
+      externalId: undefined,
+      externalSourceName: undefined,
+      filePath: "Project.md",
+      heading: "Project A",
+      rawLine: "- [ ] Prototype",
+      source: "vault" as const,
+      contextPreview: "- [x] 原型开发 📅 2026-05-19 #p/天香居"
+    };
+
+    renderTasksView(
+      container as unknown as HTMLElement,
+      [task],
+      [task],
+      { status: "open", tags: [], sourceQuery: "", textQuery: "" },
+      handlers(),
+      new Date("2026-05-08T12:00:00Z"),
+      (key) => key
+    );
+
+    const extra = collect(container).find((element) => element.classes.has("task-hub-detail-extra"));
+    const source = collect(container).find((element) => element.classes.has("task-hub-detail-source-file"));
+    const context = collect(container).find((element) => element.classes.has("task-hub-detail-context"));
+
+    expect(extra?.classes.has("is-hidden")).toBe(true);
+    expect(source?.text).toBe("Project A");
+    expect(context?.text).toBe(task.contextPreview);
+    expect(source?.parent?.parent?.parent).toBe(extra);
+    expect(context?.parent?.parent?.parent).toBe(extra);
   });
 
   it("keeps task filters visible when active filters match no tasks", () => {
@@ -1542,10 +1591,12 @@ describe("renderTasksView", () => {
     const sendLabel = collect(container).find((element) => element.classes.has("task-hub-send-target-label"));
     const sendIcon = collect(container).find((element) => element.classes.has("task-hub-send-target-icon"));
     expect(testHandlers.onSendToTarget).toHaveBeenCalledWith(task, { type: "dida", projectId: "dida-project" });
-    expect(actions?.classes.has("has-three-actions")).toBe(true);
+    expect(actions?.classes.has("has-send-action")).toBe(true);
     expect(actions?.classes.has("is-long-language")).toBe(true);
     expect(sendButton?.classes.has("mod-cta")).toBe(true);
+    expect(sendButton?.parent?.classes.has("task-hub-send-label-cell")).toBe(true);
     expect(sendPicker).toBeDefined();
+    expect(sendPicker?.parent?.classes.has("task-hub-send-picker-cell")).toBe(true);
     expect(sendLabel?.text).toBe("dida: Work");
     expect(sendIcon).toBeDefined();
   });
@@ -1595,7 +1646,7 @@ describe("renderTasksView", () => {
     );
 
     const actions = collect(container).find((element) => element.classes.has("task-hub-detail-actions"));
-    expect(actions?.classes.has("has-three-actions")).toBe(true);
+    expect(actions?.classes.has("has-send-action")).toBe(true);
     expect(actions?.classes.has("is-compact-language")).toBe(true);
   });
 

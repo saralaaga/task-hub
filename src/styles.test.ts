@@ -169,20 +169,28 @@ describe("Task Hub styles", () => {
     expect(taskListChipRule).toContain("0 1px 2px rgb(0 0 0 / 16%)");
   });
 
-  it("renders editable tag chips in one outer input frame", () => {
+  it("renders editable tag chips as an Obsidian-style property value, not a visible input box", () => {
     const styles = readFileSync(path.join(__dirname, "styles.css"), "utf8");
     const editorRule = styles.match(/\.task-hub-tag-editor\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const hoverRule = styles.match(/\.task-hub-tag-editor:hover\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const focusRule = styles.match(/\.task-hub-tag-editor:focus-within\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const placeholderRule = styles.match(/\.task-hub-tag-editor-placeholder\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const inputRule = styles.match(/\.task-hub-tag-editor-input\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const chipRule = styles.match(/\.task-hub-tag-editor-chip\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
 
-    expect(editorRule).toContain("background: var(--background-primary)");
-    expect(editorRule).toContain("border: 1px solid color-mix(in srgb, var(--task-hub-source-color, var(--interactive-accent)) 34%, var(--background-modifier-border))");
-    expect(editorRule).toContain("padding: 5px 7px");
+    expect(editorRule).toContain("background: transparent");
+    expect(editorRule).toContain("border: 1px solid transparent");
+    expect(editorRule).toContain("border-radius: 4px");
+    expect(editorRule).toContain("cursor: text");
+    expect(editorRule).toContain("padding: 2px 6px");
+    expect(hoverRule).toContain("background: var(--background-modifier-hover)");
+    expect(focusRule).toContain("box-shadow: none");
+    expect(placeholderRule).toContain("color: var(--text-faint)");
     expect(inputRule).toContain("background: transparent !important");
     expect(inputRule).toContain("border: 0 !important");
     expect(inputRule).toContain("min-width: 1ch");
-    expect(chipRule).toContain("background: var(--task-hub-source-color, var(--interactive-accent))");
-    expect(chipRule).toContain("color: white");
+    expect(chipRule).toContain("background: color-mix(in srgb, var(--task-hub-source-color, var(--interactive-accent)) 12%, var(--background-secondary))");
+    expect(chipRule).toContain("color: var(--text-normal)");
   });
 
   it("keeps task content text lightweight in task and calendar cards", () => {
@@ -224,13 +232,23 @@ describe("Task Hub styles", () => {
     const styles = readFileSync(path.join(__dirname, "styles.css"), "utf8");
     const detailsRules = Array.from(styles.matchAll(/\.task-hub-task-details\s*\{(?<body>[^}]+)\}/g)).map((match) => match.groups?.body ?? "");
     const sizingRule = detailsRules.find((body) => body.includes("max-height")) ?? "";
-    const actionRule = styles.match(/\.task-hub-detail-actions\.has-three-actions\.is-long-language\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const shellRule = detailsRules.find((body) => body.includes("--task-hub-detail-label-width")) ?? "";
+    const actionRule = styles.match(/\.task-hub-detail-actions\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const sendButtonRule = styles.match(/\.task-hub-send-control button\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const sendTargetRule = styles.match(/\.task-hub-send-target-trigger\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
 
     expect(sizingRule).toContain("overflow-x: hidden");
     expect(sizingRule).toContain("overflow-y: auto");
     expect(sizingRule).toContain("resize: none");
-    expect(sizingRule).toContain("width: clamp(300px, 24vw, 460px)");
-    expect(actionRule).toContain("grid-template-columns: repeat(3, minmax(72px, 1fr))");
+    expect(sizingRule).toContain("width: clamp(420px, 34vw, 620px)");
+    expect(shellRule).toContain("--task-hub-detail-label-width: 92px");
+    expect(actionRule).toContain("grid-template-columns: minmax(0, 1fr)");
+    expect(sendButtonRule).toContain("border-radius: 8px");
+    expect(sendButtonRule).toContain("height: 38px");
+    expect(sendTargetRule).toContain("border-radius: 8px");
+    expect(sendTargetRule).toContain("height: 38px");
+    expect(sendTargetRule).toContain("min-height: 38px");
+    expect(styles).not.toContain(".task-hub-detail-save");
   });
 
   it("animates completed task rows out when hidden by the open-task filter", () => {

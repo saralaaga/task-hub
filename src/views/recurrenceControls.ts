@@ -7,9 +7,11 @@ export function createRecurrenceSelect(
   value: string | undefined,
   t: Translator
 ): HTMLSelectElement {
-  const field = container.createEl("label", { cls: "task-hub-calendar-detail-field" });
-  field.createSpan({ text: label });
-  const select = field.createEl("select", { cls: "task-hub-recurrence-select" }) as HTMLSelectElement;
+  const row = container.createDiv({ cls: "task-hub-detail-row task-hub-calendar-detail-row" });
+  row.createDiv({ cls: "task-hub-detail-icon-cell" });
+  row.createSpan({ cls: "task-hub-detail-label", text: label });
+  const control = row.createDiv({ cls: "task-hub-detail-control" });
+  const select = control.createEl("select", { cls: "task-hub-recurrence-select" }) as HTMLSelectElement;
   populateRecurrenceSelect(select, value, t);
   return select;
 }

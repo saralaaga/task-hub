@@ -107,7 +107,7 @@ cp src/styles.css /Users/carlos/Coding/testValut/.obsidian/plugins/task-hub/styl
 已实现：
 
 - Markdown 任务语法：`- [ ]`、`- [x]`。
-- 日期语法：`📅 YYYY-MM-DD`、`due:: YYYY-MM-DD`。
+- 日期语法：`📅 YYYY-MM-DD`、`due:: YYYY-MM-DD`、裸写的 `YYYY-MM-DD`。
 - 标签解析：Obsidian 风格 `#tag`。
 - 任务筛选：状态、日期桶、标签、来源路径、文本搜索。
 - 任务跳转：打开源笔记并定位到任务行附近。

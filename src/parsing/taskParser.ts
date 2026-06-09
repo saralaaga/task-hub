@@ -10,6 +10,7 @@ const TASK_LINE = /^(\s*)- \[([ xX])\]\s+(.*)$/;
 const TAG = /(^|\s)(#[\p{L}\p{N}_/-]+)/gu;
 const EMOJI_DUE = /(?:^|\s)📅\s*(\d{4}-\d{2}-\d{2})(?=\s|$)/u;
 const INLINE_DUE = /(?:^|\s)due::\s*(\d{4}-\d{2}-\d{2})(?=\s|$)/u;
+const BARE_DUE = /(?:^|\s)(\d{4}-\d{2}-\d{2})(?=\s|$)/u;
 const EMOJI_TIME = /(?:^|\s)⏰\s*([01]\d|2[0-3]):([0-5]\d)(?=\s|$)/u;
 const RECURRENCE = /(?:^|\s)(?:repeat::|🔁)\s*((?:RRULE:)?[A-Z0-9=;,_-]+)(?=\s|$)/iu;
 const HEADING = /^(#{1,6})\s+(.+)$/;
@@ -82,7 +83,7 @@ function extractTags(text: string): string[] {
 }
 
 function extractDueDate(text: string): string | undefined {
-  return text.match(EMOJI_DUE)?.[1] ?? text.match(INLINE_DUE)?.[1];
+  return text.match(EMOJI_DUE)?.[1] ?? text.match(INLINE_DUE)?.[1] ?? text.match(BARE_DUE)?.[1];
 }
 
 function extractScheduledDate(text: string, dueDate: string): string | undefined {
@@ -99,6 +100,7 @@ function cleanTaskText(text: string): string {
   return text
     .replace(EMOJI_DUE, " ")
     .replace(INLINE_DUE, " ")
+    .replace(BARE_DUE, " ")
     .replace(EMOJI_TIME, " ")
     .replace(RECURRENCE, " ")
     .replace(TAG, " ")

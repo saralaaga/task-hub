@@ -238,6 +238,7 @@ export type TranslationKey =
   | "reminderAlert"
   | "reminderAlertAtTime"
   | "reminderAlertMinutesBefore"
+  | "reminderAlertNone"
   | "reminderAlertOneDayBefore"
   | "reminderAlertOneHourBefore"
   | "reminderAlertOneWeekBefore"
@@ -267,6 +268,7 @@ export type TranslationKey =
   | "sourceDida"
   | "sourceVaultTask"
   | "source"
+  | "sourceFile"
   | "save"
   | "startTime"
   | "endTime"
@@ -298,6 +300,7 @@ export type TranslationKey =
   | "taskHub"
   | "taskSendDefaultTarget"
   | "taskSendDefaultTargetDesc"
+  | "tagPlaceholder"
   | "taskNoteCreated"
   | "taskNotesDefaultMode"
   | "taskNotesDefaultModeDesc"
@@ -593,6 +596,7 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     reminderAlert: "Reminder",
     reminderAlertAtTime: "At time",
     reminderAlertMinutesBefore: "{minutes} minutes before",
+    reminderAlertNone: "No reminder",
     reminderAlertOneDayBefore: "1 day before",
     reminderAlertOneHourBefore: "1 hour before",
     reminderAlertOneWeekBefore: "1 week before",
@@ -626,6 +630,7 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     skipped: "skipped",
     sourceSearch: "Folder or file",
     source: "Source",
+    sourceFile: "Source file",
     startTime: "Start time",
     supportedTaskSyntax: "Supported task syntax",
     supportedTaskSyntaxDesc: "Version 1 supports - [ ], - [x], Obsidian tags, 📅 YYYY-MM-DD, and due:: YYYY-MM-DD.",
@@ -653,6 +658,7 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     taskHub: "Task Hub",
     taskSendDefaultTarget: "Default send destination",
     taskSendDefaultTargetDesc: "Default destination selected beside the Send to button in task details.",
+    tagPlaceholder: "Add tag",
     taskNoteCreated: "Task note created.",
     taskNotesDefaultMode: "Default note format",
     taskNotesDefaultModeDesc: "Create plain Task Hub notes or notes compatible only with Thino multi-file storage.",
@@ -939,9 +945,10 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     recurrenceThis: "仅本次",
     recurrenceWeekly: "每周",
     recurrenceYearly: "每年",
-    reminderAlert: "提前提醒",
+    reminderAlert: "提醒",
     reminderAlertAtTime: "到点提醒",
     reminderAlertMinutesBefore: "{minutes} 分钟前",
+    reminderAlertNone: "不提醒",
     reminderAlertOneDayBefore: "1 天前",
     reminderAlertOneHourBefore: "1 小时前",
     reminderAlertOneWeekBefore: "1 周前",
@@ -974,7 +981,8 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     skipped: "已跳过",
     sourceSearch: "文件夹或文件",
     source: "来源",
-    startTime: "开始时间",
+    sourceFile: "来源文件",
+    startTime: "时间",
     supportedTaskSyntax: "支持的任务语法",
     supportedTaskSyntaxDesc: "版本 1 支持 - [ ]、- [x]、Obsidian 标签、📅 YYYY-MM-DD 和 due:: YYYY-MM-DD。",
     sync: "同步",
@@ -1001,6 +1009,7 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     taskHub: "Task Hub",
     taskSendDefaultTarget: "默认发送地址",
     taskSendDefaultTargetDesc: "任务详情中“发送到”按钮右侧默认选中的清单软件或清单。",
+    tagPlaceholder: "添加标签",
     taskNoteCreated: "任务笔记已创建。",
     taskNotesDefaultMode: "默认笔记格式",
     taskNotesDefaultModeDesc: "创建普通 Task Hub 笔记，或仅兼容 Thino multi-file 存储的笔记。",
