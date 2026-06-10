@@ -71,6 +71,15 @@ describe("tagInputSuggest", () => {
     expect(suggest.getSuggestions("")).toEqual(["#比赛", "#比赛/报名"]);
   });
 
+  it("matches nested tag path segments when suggesting tags", () => {
+    const input = fakeInput();
+    input.value = "#天香居";
+    input.setSelectionRange(4, 4);
+    const suggest = new TaskHubTagInputSuggest({} as never, input, () => ["#p/天香居", "#天香居", "#p/别处"]);
+
+    expect(suggest.getSuggestions("")).toEqual(["#p/天香居"]);
+  });
+
   it("marks the native suggest container for Task Hub layering", () => {
     const suggest = new TaskHubTagInputSuggest({} as never, fakeInput(), () => []);
 

@@ -29,7 +29,7 @@ export class TaskHubTagInputSuggest extends AbstractInputSuggest<string> {
     if (!token) return [];
     const needle = normalizeTag(token.text).toLocaleLowerCase();
     return uniqueSortedTags(this.getTags())
-      .filter((tag) => normalizeTag(tag).toLocaleLowerCase().startsWith(needle))
+      .filter((tag) => isTagSuggestionMatch(tag, needle))
       .filter((tag) => normalizeTag(tag) !== normalizeTag(token.text))
       .slice(0, 20);
   }
@@ -115,6 +115,12 @@ function withHash(tag: string): string {
 
 function normalizeTag(tag: string): string {
   return tag.trim().replace(/^#+/u, "");
+}
+
+function isTagSuggestionMatch(tag: string, needle: string): boolean {
+  const normalized = normalizeTag(tag).toLocaleLowerCase();
+  if (normalized.startsWith(needle)) return true;
+  return normalized.split("/").some((part) => part.startsWith(needle));
 }
 
 function isTextareaElement(inputEl: TaskHubTagInputElement): inputEl is HTMLTextAreaElement {
