@@ -1,4 +1,6 @@
 .omx/
+.superpowers/
+.playwright-mcp/
 node_modules/
 main.js
 apple-helper/build/
