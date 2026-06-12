@@ -1091,8 +1091,6 @@ describe("Apple Reminders migration", () => {
     expect(createAppleCalendarEvent).toHaveBeenCalledWith({
       title: "Design review",
       date: "2026-05-20",
-      startMinutes: 0,
-      durationMinutes: 60,
       calendarId: "work"
     });
   });

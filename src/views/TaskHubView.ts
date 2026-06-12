@@ -29,6 +29,7 @@ export class TaskHubView extends ItemView {
   private completingTaskIds = new Set<string>();
   private selectedTaskIds = new Set<string>();
   private unscheduledPanelOpen = false;
+  private unscheduledPanelOpening = false;
   private unscheduledPanelClosing = false;
   private unscheduledPanelCloseTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -59,7 +60,15 @@ export class TaskHubView extends ItemView {
     }
     const container = this.containerEl.children[1] as HTMLElement;
     const allTasks = this.plugin.getTasks();
-    const unscheduledTasks = collectUnscheduledTasks(allTasks, this.filters, new Date(), (task) => this.canScheduleTask(task));
+    const now = new Date();
+    const unscheduledTasks = collectUnscheduledTasks(allTasks, this.filters, now, (task) => this.canScheduleTask(task));
+    const calendarUnscheduledTasks = collectCalendarUnscheduledTasks(
+      allTasks,
+      this.filters,
+      now,
+      (task) => this.canScheduleTask(task),
+      this.completingTaskIds
+    );
     const calendarSources = this.plugin.getCalendarSources();
     const calendarSourceIds = ["vault", ...calendarSources.map((source) => source.id)];
     syncVisibleSources(this.visibleSourceIds, this.knownCalendarSourceIds, calendarSourceIds);
@@ -277,9 +286,11 @@ export class TaskHubView extends ItemView {
           sources: calendarSources,
           taskNotesEnabled: this.plugin.settings.taskNotes.enabled,
           selectedTaskIds: this.selectedTaskIds,
+          completingTaskIds: this.completingTaskIds,
           unscheduledPanelOpen: this.unscheduledPanelOpen,
+          unscheduledPanelOpening: this.unscheduledPanelOpening,
           unscheduledPanelClosing: this.unscheduledPanelClosing,
-          unscheduledTasks,
+          unscheduledTasks: calendarUnscheduledTasks,
           allowThinoNoteEdit: this.plugin.settings.taskNotes.thinoIntegrationEnabled,
           getTaskNotes: (task) => this.plugin.getTaskNotes(task),
           getEventNotes: (event) => this.plugin.getEventNotes(event),
@@ -338,6 +349,7 @@ export class TaskHubView extends ItemView {
           onOpenTaskNoteInThino: (path) => void this.plugin.openTaskNoteSource(path)
         }
       );
+      this.unscheduledPanelOpening = false;
       this.calendarModeTransition = undefined;
       return;
     }
@@ -357,13 +369,16 @@ export class TaskHubView extends ItemView {
       clearTimeout(this.unscheduledPanelCloseTimer);
       this.unscheduledPanelCloseTimer = undefined;
     }
+    const wasOpen = this.unscheduledPanelOpen;
     this.unscheduledPanelOpen = true;
+    this.unscheduledPanelOpening = !wasOpen;
     this.unscheduledPanelClosing = false;
   }
 
   private closeUnscheduledPanelWithAnimation(): void {
     if (this.unscheduledPanelCloseTimer) clearTimeout(this.unscheduledPanelCloseTimer);
     this.unscheduledPanelOpen = false;
+    this.unscheduledPanelOpening = false;
     this.unscheduledPanelClosing = true;
     this.unscheduledPanelCloseTimer = setTimeout(() => {
       this.unscheduledPanelCloseTimer = undefined;
@@ -522,12 +537,34 @@ export function collectUnscheduledTasks(
 ): TaskItem[] {
   return filterTasks(tasks, filters, now)
     .filter((task) => !task.dueDate && canScheduleTask(task))
-    .sort((left, right) =>
-      taskSourceRank(left) - taskSourceRank(right) ||
-      left.filePath.localeCompare(right.filePath) ||
-      left.line - right.line ||
-      left.text.localeCompare(right.text)
-    );
+    .sort(compareUnscheduledTasks);
+}
+
+export function collectCalendarUnscheduledTasks(
+  tasks: TaskItem[],
+  filters: TaskFilterState,
+  now: Date,
+  canScheduleTask: (task: TaskItem) => boolean,
+  completingTaskIds: ReadonlySet<string>
+): TaskItem[] {
+  const visible = collectUnscheduledTasks(tasks, filters, now, canScheduleTask);
+  if (filters.status !== "open" || completingTaskIds.size === 0) return visible;
+
+  const visibleIds = new Set(visible.map((task) => task.id));
+  const exiting = tasks.filter((task) => {
+    if (!completingTaskIds.has(task.id) || visibleIds.has(task.id) || !task.completed || task.dueDate || !canScheduleTask(task)) return false;
+    return filterTasks([task], { ...filters, status: "all" }, now).length > 0;
+  });
+  return [...visible, ...exiting].sort(compareUnscheduledTasks);
+}
+
+function compareUnscheduledTasks(left: TaskItem, right: TaskItem): number {
+  return (
+    taskSourceRank(left) - taskSourceRank(right) ||
+    left.filePath.localeCompare(right.filePath) ||
+    left.line - right.line ||
+    left.text.localeCompare(right.text)
+  );
 }
 
 function findTaskListPane(container: HTMLElement): HTMLElement | undefined {

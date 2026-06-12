@@ -1,4 +1,4 @@
-import { collectUnscheduledTasks } from "./TaskHubView";
+import { collectCalendarUnscheduledTasks, collectUnscheduledTasks } from "./TaskHubView";
 import type { TaskFilterState } from "../filtering/filters";
 import type { TaskItem } from "../types";
 
@@ -39,6 +39,19 @@ describe("collectUnscheduledTasks", () => {
 
     expect(collectUnscheduledTasks(tasks, baseFilters(), NOW, () => true).map((item) => item.id)).toEqual(["open"]);
     expect(collectUnscheduledTasks(tasks, { ...baseFilters(), status: "all" }, NOW, () => true).map((item) => item.id)).toEqual(["open", "done"]);
+  });
+});
+
+describe("collectCalendarUnscheduledTasks", () => {
+  it("keeps a just-completed unscheduled task available for its row exit animation", () => {
+    const tasks = [
+      task({ id: "open", completed: false }),
+      task({ id: "done", completed: true })
+    ];
+
+    const result = collectCalendarUnscheduledTasks(tasks, baseFilters(), NOW, () => true, new Set(["done"]));
+
+    expect(result.map((item) => item.id)).toEqual(["open", "done"]);
   });
 });
 

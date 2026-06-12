@@ -62,7 +62,9 @@ export type CalendarViewState = {
   getEventNotes?: (event: CalendarEvent) => TaskNote[];
   renderNoteMarkdown?: TaskNoteMarkdownRenderer;
   selectedTaskIds?: ReadonlySet<string>;
+  completingTaskIds?: ReadonlySet<string>;
   unscheduledPanelOpen?: boolean;
+  unscheduledPanelOpening?: boolean;
   unscheduledPanelClosing?: boolean;
   unscheduledTasks?: TaskItem[];
   sources: CalendarSource[];
@@ -115,7 +117,6 @@ const HOUR_HEIGHT_BY_SCALE: Record<Exclude<CalendarTimeScale, "fit">, number> = 
   quarter: 112
 };
 const DEFAULT_TIMED_TASK_DURATION_MINUTES = 60;
-const DEFAULT_MONTH_CREATION_START_MINUTES = 9 * 60;
 const TASK_TIME_POINT_HEIGHT = 28;
 const TASK_TIME_POINT_GAP = 4;
 const MIN_TIMED_ITEM_DURATION_MINUTES = 15;
@@ -130,6 +131,8 @@ let activeDragFeedbackElement: HTMLElement | undefined;
 let activeDragStackElement: HTMLElement | undefined;
 let activeMutedDragElements: HTMLElement[] = [];
 let activeDetailsElement: HTMLElement | undefined;
+let activeDetailsCleanup: (() => void) | undefined;
+let activeDetailsSelectionKey: string | undefined;
 let activeSelectedCalendarItemKey: string | undefined;
 let activeSelectedTaskIds = new Set<string>();
 let activeSelectedCalendarItemKeys = new Set<string>();
@@ -175,8 +178,8 @@ export function renderCalendarView(
   events: CalendarEvent[],
   handlers: CalendarViewHandlers
 ): void {
-  activeDetailsElement?.remove();
-  activeDetailsElement = undefined;
+  const detailsSelectionKeyToRestore = activeDetailsSelectionKey;
+  if (activeDetailsElement) clearActiveCalendarDetails(true);
   activeCalendarItemElements = new Map();
   activeSelectedTaskIds = new Set(state.selectedTaskIds ?? []);
   activeSelectedCalendarItemKeys = new Set([...activeSelectedTaskIds].map((taskId) => `task:${taskId}`));
@@ -235,7 +238,11 @@ export function renderCalendarView(
     cls: ["task-hub-calendar-view-stage", transitionClass].filter(Boolean).join(" ")
   });
   const showUnscheduledPanel = state.unscheduledPanelOpen || state.unscheduledPanelClosing;
-  const sidebarStateClass = state.unscheduledPanelClosing ? "is-unscheduled-closing" : "is-unscheduled-open";
+  const sidebarStateClass = state.unscheduledPanelClosing
+    ? "is-unscheduled-closing"
+    : state.unscheduledPanelOpening
+      ? "is-unscheduled-opening"
+      : "is-unscheduled-open";
   const calendarHost = showUnscheduledPanel ? viewStage.createDiv({ cls: `task-hub-calendar-with-sidebar ${sidebarStateClass}` }) : viewStage;
   const calendarPane = showUnscheduledPanel ? calendarHost.createDiv({ cls: "task-hub-calendar-pane" }) : viewStage;
 
@@ -246,11 +253,13 @@ export function renderCalendarView(
   if (state.mode === "day" || state.mode === "week") {
     renderAgendaGrid(calendarPane, state, range.days, visibleItems, handlers, today);
     if (showUnscheduledPanel) renderUnscheduledPanel(calendarHost, state, handlers);
+    restoreCalendarDetailsPopover(detailsSelectionKeyToRestore, handlers, state);
     return;
   }
 
   renderMonthGrid(calendarPane, state, range.days, visibleItems, handlers, today);
   if (showUnscheduledPanel) renderUnscheduledPanel(calendarHost, state, handlers);
+  restoreCalendarDetailsPopover(detailsSelectionKeyToRestore, handlers, state);
 }
 
 function renderMonthGrid(
@@ -787,10 +796,7 @@ function bindTaskCreation(
 }
 
 function monthCreationTarget(dateKey: string): CalendarDropTarget {
-  return {
-    dateKey,
-    startMinutes: DEFAULT_MONTH_CREATION_START_MINUTES
-  };
+  return dateKey;
 }
 
 function bindTimedTaskCreation(
@@ -886,6 +892,7 @@ function renderCalendarItem(container: HTMLElement, item: CalendarItem, handlers
 
 function renderUnscheduledPanel(container: HTMLElement, state: CalendarViewState, handlers: CalendarViewHandlers): void {
   const panel = container.createEl("aside", { cls: "task-hub-unscheduled-panel" });
+  panel.toggleClass("is-opening", Boolean(state.unscheduledPanelOpening && !state.unscheduledPanelClosing));
   panel.toggleClass("is-closing", Boolean(state.unscheduledPanelClosing));
   const tasks = state.unscheduledTasks ?? [];
   const header = panel.createDiv({ cls: "task-hub-unscheduled-header" });
@@ -906,6 +913,7 @@ function renderUnscheduledPanel(container: HTMLElement, state: CalendarViewState
 function renderUnscheduledTaskRow(container: HTMLElement, task: TaskItem, state: CalendarViewState, handlers: CalendarViewHandlers): void {
   const item = unscheduledTaskCalendarItem(task, state);
   const row = container.createDiv({ cls: calendarItemClass(item, "task-hub-unscheduled-task") });
+  row.toggleClass("is-completing", Boolean(state.completingTaskIds?.has(task.id)));
   registerCalendarItemElement(row, item);
   bindCalendarItemDrag(row, item, state);
   bindCalendarItemContextMenu(row, item, state, handlers);
@@ -1028,22 +1036,24 @@ function calendarItemSelectionKey(item: CalendarItem): string {
 }
 
 function renderCalendarDetailsPopover(anchor: HTMLElement, item: CalendarItem, handlers: CalendarViewHandlers, state: CalendarViewState): void {
-  activeDetailsElement?.remove();
+  clearActiveCalendarDetails();
   const ownerDocument = anchor.ownerDocument;
   const popover = ownerDocument.createElement("div");
   popover.addClass("task-hub-calendar-detail-popover");
   popover.addEventListener("click", (event) => event.stopPropagation());
   ownerDocument.body.appendChild(popover);
   activeDetailsElement = popover;
+  activeDetailsSelectionKey = calendarItemSelectionKey(item);
   if (item.color) popover.style.setProperty("--task-hub-item-color", item.color);
   positionDetailsPopover(popover, anchor);
 
-  const closePopover = () => {
+  const closePopover = () => clearActiveCalendarDetails();
+  const cleanupPopover = () => {
     ownerDocument.removeEventListener("click", closePopover);
     ownerDocument.removeEventListener("keydown", closeOnEscape);
     popover.remove();
-    if (activeDetailsElement === popover) activeDetailsElement = undefined;
   };
+  activeDetailsCleanup = cleanupPopover;
   const closeOnEscape = (event: KeyboardEvent) => {
     if (event.key === "Escape") closePopover();
   };
@@ -1068,8 +1078,32 @@ function renderCalendarDetailsPopover(anchor: HTMLElement, item: CalendarItem, h
   }
 }
 
+function clearActiveCalendarDetails(preserveSelection = false): void {
+  const cleanup = activeDetailsCleanup;
+  const element = activeDetailsElement;
+  activeDetailsCleanup = undefined;
+  activeDetailsElement = undefined;
+  if (!preserveSelection) activeDetailsSelectionKey = undefined;
+  if (cleanup) {
+    cleanup();
+  } else {
+    element?.remove();
+  }
+}
+
+function restoreCalendarDetailsPopover(selectionKey: string | undefined, handlers: CalendarViewHandlers, state: CalendarViewState): void {
+  if (!selectionKey) return;
+  const anchor = activeCalendarItemElements.get(selectionKey)?.values().next().value;
+  const item = anchor ? (anchor as HTMLElement & { taskHubCalendarItem?: CalendarItem }).taskHubCalendarItem : undefined;
+  if (!anchor || !item) {
+    activeDetailsSelectionKey = undefined;
+    return;
+  }
+  renderCalendarDetailsPopover(anchor, item, handlers, state);
+}
+
 function renderTimedTaskOverlapPopover(anchor: HTMLElement, items: CalendarItem[], handlers: CalendarViewHandlers, state: CalendarViewState): void {
-  activeDetailsElement?.remove();
+  clearActiveCalendarDetails();
   const ownerDocument = anchor.ownerDocument;
   const popover = ownerDocument.createElement("div");
   popover.addClass("task-hub-calendar-overlap-popover");
@@ -1241,13 +1275,13 @@ function renderTaskDetailsPopover(
       handlers.onTaskUpdate?.(task, draft);
     };
     lastCommittedSignature = JSON.stringify(buildDraft());
-    for (const field of [title, date, time, tags, recurrence, notes, detailExtra.toggle, alertEditor?.select]) {
+    const editableFields = [title, date, time, tags, recurrence, notes, detailExtra.toggle, alertEditor?.select].filter(Boolean) as HTMLElement[];
+    for (const field of editableFields) {
       if (!field) continue;
       field.addEventListener("input", markDirty);
       field.addEventListener("change", markDirty);
-      field.addEventListener("blur", commit);
+      bindDetailCommitKeys(field, commit);
     }
-    popover.addEventListener("mouseleave", commit);
   }
   const sendTargetOptions = task.source === "vault" ? taskSendOptionsForCalendar(state) : [];
   if (sendTargetOptions.length > 0) {
@@ -1436,13 +1470,13 @@ function renderEventDetailsPopover(
       handlers.onEventUpdate?.(event, draft);
     };
     lastCommittedSignature = JSON.stringify(buildDraft());
-    for (const field of [title, date, start, end, calendar, allDayCheckbox, recurrence, recurrenceScope, notes, detailExtra.toggle]) {
+    const editableFields = [title, date, start, end, calendar, allDayCheckbox, recurrence, recurrenceScope, notes, detailExtra.toggle].filter(Boolean) as HTMLElement[];
+    for (const field of editableFields) {
       if (!field) continue;
       field.addEventListener("input", markDirty);
       field.addEventListener("change", markDirty);
-      field.addEventListener("blur", commit);
+      bindDetailCommitKeys(field, commit);
     }
-    popover.addEventListener("mouseleave", commit);
   }
   if (event.url) {
     const actions = popover.createDiv({ cls: "task-hub-calendar-detail-actions" });
@@ -1471,6 +1505,15 @@ function renderCalendarDetailExtraToggle(container: HTMLElement, state: Calendar
     toggleDetailExtra(extra, toggle!.checked);
   });
   return { toggle: toggle!, extra };
+}
+
+function bindDetailCommitKeys(field: HTMLElement, commit: () => void): void {
+  field.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    event.stopPropagation();
+    commit();
+  });
 }
 
 function toggleDetailExtra(extra: HTMLElement, expanded: boolean): void {

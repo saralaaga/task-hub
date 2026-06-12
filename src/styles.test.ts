@@ -247,17 +247,22 @@ describe("Task Hub styles", () => {
   it("animates the unscheduled side panel open and closed", () => {
     const styles = readFileSync(path.join(__dirname, "styles.css"), "utf8");
     const panelRule = styles.match(/\.task-hub-unscheduled-panel\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const openingRule = styles.match(/\.task-hub-unscheduled-panel\.is-opening\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const closingRule = styles.match(/\.task-hub-unscheduled-panel\.is-closing\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const hostClosingRule = styles.match(/\.task-hub-calendar-with-sidebar\.is-unscheduled-closing\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
-    const paneOpenRule = styles.match(/\.task-hub-calendar-with-sidebar\.is-unscheduled-open\s+\.task-hub-calendar-pane\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const paneOpenRule = styles.match(/\.task-hub-calendar-with-sidebar\.is-unscheduled-opening\s+\.task-hub-calendar-pane\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const paneClosingRule = styles.match(/\.task-hub-calendar-with-sidebar\.is-unscheduled-closing\s+\.task-hub-calendar-pane\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const completedRowRule = styles.match(/\.task-hub-unscheduled-task\.is-completed\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const completingRowRule = styles.match(/\.task-hub-unscheduled-task\.is-completing\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const enterKeyframes = styles.match(/@keyframes task-hub-unscheduled-panel-enter\s*\{(?<body>[\s\S]+?)\n\}/)?.groups?.body ?? "";
     const exitKeyframes = styles.match(/@keyframes task-hub-unscheduled-panel-exit\s*\{(?<body>[\s\S]+?)\n\}/)?.groups?.body ?? "";
+    const rowCompleteKeyframes = styles.match(/@keyframes task-hub-unscheduled-task-complete\s*\{(?<body>[\s\S]+?)\n\}/)?.groups?.body ?? "";
     const paneOpenKeyframes = styles.match(/@keyframes task-hub-calendar-pane-make-room\s*\{(?<body>[\s\S]+?)\n\}/)?.groups?.body ?? "";
     const paneCloseKeyframes = styles.match(/@keyframes task-hub-calendar-pane-restore-room\s*\{(?<body>[\s\S]+?)\n\}/)?.groups?.body ?? "";
     const reducedMotionRule = styles.match(/@media \(prefers-reduced-motion: reduce\)\s*\{(?<body>[\s\S]+?)\n\}/)?.groups?.body ?? "";
 
-    expect(panelRule).toContain("animation: task-hub-unscheduled-panel-enter 220ms cubic-bezier(0.2, 0.85, 0.25, 1) both");
+    expect(panelRule).not.toContain("animation: task-hub-unscheduled-panel-enter");
+    expect(openingRule).toContain("animation: task-hub-unscheduled-panel-enter 220ms cubic-bezier(0.2, 0.85, 0.25, 1) both");
     expect(panelRule).toContain("transform-origin: right center");
     expect(hostClosingRule).toContain("grid-template-columns: minmax(0, 1fr)");
     expect(closingRule).toContain("animation: task-hub-unscheduled-panel-exit 190ms cubic-bezier(0.4, 0, 0.2, 1) both");
@@ -265,12 +270,17 @@ describe("Task Hub styles", () => {
     expect(closingRule).toContain("right: 0");
     expect(paneOpenRule).toContain("animation: task-hub-calendar-pane-make-room 220ms cubic-bezier(0.2, 0.85, 0.25, 1) both");
     expect(paneClosingRule).toContain("animation: task-hub-calendar-pane-restore-room 190ms cubic-bezier(0.4, 0, 0.2, 1) both");
+    expect(completedRowRule).not.toContain("animation:");
+    expect(completingRowRule).toContain("animation: task-hub-unscheduled-task-complete 260ms cubic-bezier(0.2, 0.85, 0.25, 1) both");
+    expect(completingRowRule).toContain("pointer-events: none");
     expect(enterKeyframes).toContain("clip-path: inset(0 0 0 100%)");
     expect(exitKeyframes).toContain("transform: translateX(18px) scaleX(0.96)");
+    expect(rowCompleteKeyframes).toContain("transform: translateX(4px)");
     expect(paneOpenKeyframes).toContain("transform: translateX(12px) scaleX(1.012)");
     expect(paneCloseKeyframes).toContain("transform: translateX(10px) scaleX(1.01)");
-    expect(reducedMotionRule).toContain(".task-hub-calendar-with-sidebar .task-hub-calendar-pane");
+    expect(reducedMotionRule).toContain(".task-hub-calendar-with-sidebar.is-unscheduled-opening .task-hub-calendar-pane");
     expect(reducedMotionRule).toContain(".task-hub-unscheduled-panel");
+    expect(reducedMotionRule).toContain(".task-hub-unscheduled-task.is-completed");
   });
 
   it("animates calendar mode switches horizontally", () => {

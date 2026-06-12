@@ -1336,9 +1336,8 @@ export default class TaskHubPlugin extends Plugin {
         new Notice(t("appleCalendarCreateDisabled"));
         return;
       }
-      const durationMinutes = validCalendarEventDuration(timedTarget.durationMinutes ?? 60);
-      const startMinutes =
-        timedTarget.startMinutes ?? (durationMinutes % (24 * 60) === 0 ? undefined : 0);
+      const hasSpecificTime = timedTarget.startMinutes !== undefined;
+      const durationMinutes = hasSpecificTime ? validCalendarEventDuration(timedTarget.durationMinutes ?? 60) : undefined;
       const eventDates = recurrence
         ? recurrenceDatesBetween(recurrenceStart, recurrence, recurrenceUntil)
         : [timedTarget.dateKey];
@@ -1352,8 +1351,7 @@ export default class TaskHubPlugin extends Plugin {
             title: taskText,
             ...(cleanNotes ? { notes: cleanNotes } : {}),
             date,
-            startMinutes,
-            durationMinutes,
+            ...(hasSpecificTime ? { startMinutes: timedTarget.startMinutes, durationMinutes } : {}),
             calendarId: target.calendarId
           });
         }

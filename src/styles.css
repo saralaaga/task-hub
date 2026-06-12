@@ -1952,7 +1952,7 @@ body .task-hub-view button.task-hub-color-swatch {
   min-width: 0;
 }
 
-.task-hub-calendar-with-sidebar.is-unscheduled-open .task-hub-calendar-pane {
+.task-hub-calendar-with-sidebar.is-unscheduled-opening .task-hub-calendar-pane {
   animation: task-hub-calendar-pane-make-room 220ms cubic-bezier(0.2, 0.85, 0.25, 1) both;
   transform-origin: left center;
   will-change: opacity, transform;
@@ -1990,7 +1990,6 @@ body .task-hub-view button.task-hub-color-swatch {
 
 .task-hub-unscheduled-panel {
   align-content: start;
-  animation: task-hub-unscheduled-panel-enter 220ms cubic-bezier(0.2, 0.85, 0.25, 1) both;
   background: color-mix(in srgb, var(--background-secondary) 76%, var(--background-primary));
   border: 1px solid var(--background-modifier-border);
   border-radius: 8px;
@@ -2004,6 +2003,10 @@ body .task-hub-view button.task-hub-color-swatch {
   top: 8px;
   transform-origin: right center;
   will-change: clip-path, opacity, transform;
+}
+
+.task-hub-unscheduled-panel.is-opening {
+  animation: task-hub-unscheduled-panel-enter 220ms cubic-bezier(0.2, 0.85, 0.25, 1) both;
 }
 
 .task-hub-unscheduled-panel.is-closing {
@@ -2086,6 +2089,40 @@ body .task-hub-view button.task-hub-color-swatch {
 
 .task-hub-unscheduled-task {
   grid-template-columns: 18px minmax(0, 1fr);
+}
+
+.task-hub-unscheduled-task.is-completing {
+  animation: task-hub-unscheduled-task-complete 260ms cubic-bezier(0.2, 0.85, 0.25, 1) both;
+  pointer-events: none;
+}
+
+.task-hub-unscheduled-task.is-completed {
+  background: color-mix(in srgb, var(--background-modifier-success) 16%, var(--background-secondary));
+  border-left-color: color-mix(in srgb, var(--interactive-accent) 44%, transparent);
+  opacity: 0.72;
+}
+
+.task-hub-unscheduled-task.is-completing {
+  background: color-mix(in srgb, var(--background-modifier-success) 16%, var(--background-secondary));
+  border-left-color: color-mix(in srgb, var(--interactive-accent) 44%, transparent);
+  opacity: 0.72;
+}
+
+@keyframes task-hub-unscheduled-task-complete {
+  0% {
+    filter: saturate(1);
+    transform: translateX(0) scale(1);
+  }
+
+  45% {
+    filter: saturate(1.12);
+    transform: translateX(4px) scale(0.99);
+  }
+
+  100% {
+    filter: saturate(0.9);
+    transform: translateX(0) scale(0.985);
+  }
 }
 
 .task-hub-unscheduled-task-body {
@@ -2476,8 +2513,11 @@ body .task-hub-view button.task-hub-color-swatch {
   .task-hub-detail-extra.is-expanding,
   .task-hub-calendar-view-stage.is-slide-left,
   .task-hub-calendar-view-stage.is-slide-right,
-  .task-hub-calendar-with-sidebar .task-hub-calendar-pane,
+  .task-hub-calendar-with-sidebar.is-unscheduled-opening .task-hub-calendar-pane,
+  .task-hub-calendar-with-sidebar.is-unscheduled-closing .task-hub-calendar-pane,
   .task-hub-unscheduled-panel,
+  .task-hub-unscheduled-task.is-completed,
+  .task-hub-unscheduled-task.is-completing,
   .task-hub-calendar-item.is-drag-muted,
   .task-hub-calendar-drag-stack-card,
   .task-hub-calendar-drop-scatter-chip {
