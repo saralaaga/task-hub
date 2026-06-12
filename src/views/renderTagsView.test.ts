@@ -56,6 +56,20 @@ class FakeElement {
   classes = new Set<string>();
   style = { setProperty: jest.fn() };
   listeners = new Map<string, Array<(event: FakeEvent) => void>>();
+  win = {
+    requestAnimationFrame: undefined as ((callback: FrameRequestCallback) => number) | undefined,
+    getComputedStyle: () => ({ lineHeight: "16px" })
+  };
+
+  setCssProps(props: Record<string, string>): void {
+    for (const [name, value] of Object.entries(props)) {
+      this.style.setProperty(name, value);
+    }
+  }
+
+  setCssStyles(styles: Partial<CSSStyleDeclaration>): void {
+    Object.assign(this.style, styles);
+  }
 
   empty(): void {
     this.children = [];

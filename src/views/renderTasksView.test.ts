@@ -45,6 +45,9 @@ import { renderTasksView } from "./renderTasksView";
 import type { TaskItem } from "../types";
 
 const mockMenus: Array<{ items: Array<{ title: string; icon: string; disabled?: boolean; click?: () => void }>; shownAt: unknown }> = [];
+const fakeWindow = {
+  matchMedia: undefined as ((query: string) => MediaQueryList) | undefined
+};
 
 class FakeElement {
   children: FakeElement[] = [];
@@ -64,6 +67,20 @@ class FakeElement {
   style = { setProperty: jest.fn() };
   showPicker = jest.fn();
   listeners = new Map<string, Array<(event: FakeEvent) => void>>();
+
+  get win(): Window {
+    return fakeWindow as unknown as Window;
+  }
+
+  setCssProps(props: Record<string, string>): void {
+    for (const [name, value] of Object.entries(props)) {
+      this.style.setProperty(name, value);
+    }
+  }
+
+  setCssStyles(styles: Partial<CSSStyleDeclaration>): void {
+    Object.assign(this.style, styles);
+  }
 
   empty(): void {
     this.children = [];

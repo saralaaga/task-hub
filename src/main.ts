@@ -1429,7 +1429,7 @@ export default class TaskHubPlugin extends Plugin {
 
   async jumpToTask(task: TaskItem): Promise<void> {
     if (task.source !== "vault") {
-      const result = openExternalTaskSource(task);
+      const result = openExternalTaskSource(task, (url) => this.app.workspace.containerEl.win.open(url));
       if (result !== "opened") {
         new Notice(`${task.externalSourceName ?? task.filePath}: ${createTranslator(this.settings.language)("externalSourceOpenUnavailable")}`);
       }
@@ -1522,7 +1522,7 @@ export default class TaskHubPlugin extends Plugin {
       new Notice(`${t("fileNotFound")}: ${path}`);
       return;
     }
-    await this.app.vault.delete(file);
+    await this.app.fileManager.trashFile(file);
     this.taskNoteIndex.removeFile(path);
     this.refreshOpenViews();
     new Notice(t("taskNoteDeleted"));
@@ -2015,7 +2015,7 @@ export default class TaskHubPlugin extends Plugin {
   }
 
   async deleteTaskNoteFile(file: TFile): Promise<void> {
-    await this.app.vault.delete(file);
+    await this.app.fileManager.trashFile(file);
     this.taskNoteIndex.removeFile(file.path);
     this.refreshOpenViews();
   }
@@ -2336,7 +2336,7 @@ class CreateTaskModal extends Modal {
             void submit();
           }
         });
-        window.setTimeout(() => text.inputEl.focus(), 0);
+        text.inputEl.win.setTimeout(() => text.inputEl.focus(), 0);
       });
 
     if (this.creationKind === "event") {

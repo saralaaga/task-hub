@@ -31,7 +31,7 @@ export class TaskHubView extends ItemView {
   private unscheduledPanelOpen = false;
   private unscheduledPanelOpening = false;
   private unscheduledPanelClosing = false;
-  private unscheduledPanelCloseTimer: ReturnType<typeof setTimeout> | undefined;
+  private unscheduledPanelCloseTimer: number | undefined;
 
   constructor(
     leaf: WorkspaceLeaf,
@@ -366,7 +366,7 @@ export class TaskHubView extends ItemView {
 
   private openUnscheduledPanel(): void {
     if (this.unscheduledPanelCloseTimer) {
-      clearTimeout(this.unscheduledPanelCloseTimer);
+      this.containerEl.win.clearTimeout(this.unscheduledPanelCloseTimer);
       this.unscheduledPanelCloseTimer = undefined;
     }
     const wasOpen = this.unscheduledPanelOpen;
@@ -376,11 +376,11 @@ export class TaskHubView extends ItemView {
   }
 
   private closeUnscheduledPanelWithAnimation(): void {
-    if (this.unscheduledPanelCloseTimer) clearTimeout(this.unscheduledPanelCloseTimer);
+    if (this.unscheduledPanelCloseTimer) this.containerEl.win.clearTimeout(this.unscheduledPanelCloseTimer);
     this.unscheduledPanelOpen = false;
     this.unscheduledPanelOpening = false;
     this.unscheduledPanelClosing = true;
-    this.unscheduledPanelCloseTimer = setTimeout(() => {
+    this.unscheduledPanelCloseTimer = this.containerEl.win.setTimeout(() => {
       this.unscheduledPanelCloseTimer = undefined;
       if (!this.unscheduledPanelClosing) return;
       this.unscheduledPanelClosing = false;
@@ -480,7 +480,7 @@ export class TaskHubView extends ItemView {
       const result = await this.plugin.completeTask(task);
       if (result.status === "updated" && !task.completed && this.filters.status === "open") {
         keepForExitAnimation = true;
-        window.setTimeout(() => {
+        this.containerEl.win.setTimeout(() => {
           this.completingTaskIds.delete(task.id);
           this.render({ preserveTaskListScroll: true });
         }, 360);

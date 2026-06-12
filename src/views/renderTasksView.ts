@@ -11,6 +11,7 @@ import { renderTaskNoteBody, type TaskNoteMarkdownRenderer } from "./renderTaskN
 import { createRecurrenceSelect, recurrenceValueFromSelect } from "./recurrenceControls";
 import { resolveTaskBulkActions, type TaskBulkActionId } from "./taskSelection";
 import { renderSourceLogo, sourceLogoKindForTask } from "./sourceLogos";
+import { setCssProps, setCssStyles } from "./domStyles";
 
 export type TaskRowHandlers = {
   onComplete: (task: TaskItem) => void;
@@ -205,7 +206,7 @@ function renderTaskRow(
   ].filter(Boolean).join(" ");
   const row = container.createDiv({ cls: classes });
   const color = taskDisplayColor(task, options);
-  if (color) row.style.setProperty("--task-hub-source-color", color);
+  if (color) setCssProps(row, { "--task-hub-source-color": color });
   const checkbox = row.createEl("input", { type: "checkbox" });
   checkbox.checked = task.completed;
   checkbox.disabled = task.source !== "vault" && !(task.source === "apple-reminders" && options.allowAppleReminderWriteback) && !(task.source === "dida" && options.allowDidaWriteback);
@@ -343,7 +344,7 @@ function renderTaskDetails(
   const details = container.createDiv({ cls: `task-hub-task-details ${task?.completed ? "is-completed" : ""}` });
   if (task) {
     const color = taskDisplayColor(task, options);
-    if (color) details.style.setProperty("--task-hub-source-color", color);
+    if (color) setCssProps(details, { "--task-hub-source-color": color });
   }
   const header = details.createDiv({ cls: "task-hub-detail-header task-hub-detail-row" });
   const headerIcon = header.createDiv({ cls: "task-hub-detail-icon-cell" });
@@ -506,13 +507,13 @@ function renderTaskDetails(
 }
 
 function toggleDetailExtra(extra: HTMLElement, expanded: boolean): void {
-  const reducedMotion = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  const reducedMotion = extra.win.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
   if (reducedMotion) {
     extra.toggleClass("is-hidden", !expanded);
     extra.removeClass("is-expanding");
     extra.removeClass("is-opening");
     extra.removeClass("is-closing");
-    extra.style.maxHeight = "";
+    setCssStyles(extra, { maxHeight: "" });
     return;
   }
 
@@ -520,18 +521,18 @@ function toggleDetailExtra(extra: HTMLElement, expanded: boolean): void {
 
   if (expanded) {
     extra.addClass("is-opening");
-    extra.style.maxHeight = "0px";
+    setCssStyles(extra, { maxHeight: "0px" });
     extra.removeClass("is-hidden");
     void extra.offsetHeight;
     extra.removeClass("is-opening");
-    extra.style.maxHeight = `${extra.scrollHeight}px`;
+    setCssStyles(extra, { maxHeight: `${extra.scrollHeight}px` });
     let finished = false;
     const finish = (event?: TransitionEvent) => {
       if (finished) return;
       if (event?.propertyName && event.propertyName !== "max-height") return;
       finished = true;
       extra.removeClass("is-expanding");
-      extra.style.maxHeight = "";
+      setCssStyles(extra, { maxHeight: "" });
       extra.removeEventListener?.("transitionend", finish);
     };
     extra.addEventListener("transitionend", finish);
@@ -539,10 +540,10 @@ function toggleDetailExtra(extra: HTMLElement, expanded: boolean): void {
     return;
   }
 
-  extra.style.maxHeight = `${extra.scrollHeight}px`;
+  setCssStyles(extra, { maxHeight: `${extra.scrollHeight}px` });
   void extra.offsetHeight;
   extra.addClass("is-closing");
-  extra.style.maxHeight = "0px";
+  setCssStyles(extra, { maxHeight: "0px" });
   let finished = false;
   const finish = (event?: TransitionEvent) => {
     if (finished) return;
@@ -551,7 +552,7 @@ function toggleDetailExtra(extra: HTMLElement, expanded: boolean): void {
     extra.addClass("is-hidden");
     extra.removeClass("is-expanding");
     extra.removeClass("is-closing");
-    extra.style.maxHeight = "";
+    setCssStyles(extra, { maxHeight: "" });
     extra.removeEventListener?.("transitionend", finish);
   };
   extra.addEventListener("transitionend", finish);
@@ -667,7 +668,7 @@ function renderTaskNotes(
   if (notes.length === 0) return;
   const notesContainer = container.createDiv({ cls: "task-hub-task-notes" });
   const color = taskDisplayColor(task, options);
-  if (color) notesContainer.style.setProperty("--task-hub-source-color", color);
+  if (color) setCssProps(notesContainer, { "--task-hub-source-color": color });
   notesContainer.createEl("h4", { text: t("notes") });
   for (const note of notes) {
     const text = note.body.trim();

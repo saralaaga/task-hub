@@ -2,6 +2,7 @@ import { Menu } from "obsidian";
 import type { Translator } from "../i18n";
 import type { TaskItem } from "../types";
 import { addSourceIndicatorMenuItem, deleteLabelForTaskBulkAction, sourceIndicatorLabelForTask } from "./contextMenuLabels";
+import { setCssProps } from "./domStyles";
 import { resolveTaskBulkActions, type TaskBulkActionId } from "./taskSelection";
 
 export type TagViewHandlers = {
@@ -108,8 +109,10 @@ function renderTagTask(
     cls: ["task-hub-tag-task", task.completed ? "is-completed" : "", contextOnly ? "is-context" : ""].filter(Boolean).join(" ")
   });
   const color = taskDisplayColor(task, options);
-  if (color) item.style.setProperty("--task-hub-source-color", color);
-  item.style.setProperty("--task-hub-task-indent", String(task.indent ?? 0));
+  setCssProps(item, {
+    ...(color ? { "--task-hub-source-color": color } : {}),
+    "--task-hub-task-indent": String(task.indent ?? 0)
+  });
   const checkbox = item.createEl("input", { type: "checkbox" });
   checkbox.checked = task.completed;
   checkbox.disabled = task.source !== "vault" && !(task.source === "apple-reminders" && options.allowAppleReminderWriteback) && !(task.source === "dida" && options.allowDidaWriteback);
@@ -210,8 +213,8 @@ function scheduleWrappedTagLayout(body: HTMLElement, title: HTMLElement): void {
     else body.removeClass("is-title-wrapped");
   };
 
-  if (typeof requestAnimationFrame === "function") {
-    requestAnimationFrame(update);
+  if (typeof body.win.requestAnimationFrame === "function") {
+    body.win.requestAnimationFrame(update);
     return;
   }
 
@@ -219,8 +222,7 @@ function scheduleWrappedTagLayout(body: HTMLElement, title: HTMLElement): void {
 }
 
 function isMultiLine(element: HTMLElement): boolean {
-  if (typeof window === "undefined") return false;
-  const style = window.getComputedStyle(element);
+  const style = element.win.getComputedStyle(element);
   const lineHeight = Number.parseFloat(style.lineHeight);
   if (!Number.isFinite(lineHeight) || lineHeight <= 0) return element.getClientRects().length > 1;
   return element.scrollHeight > lineHeight * 1.5;

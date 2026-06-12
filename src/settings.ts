@@ -4,6 +4,7 @@ import type TaskHubPlugin from "./main";
 import { DEFAULT_DIDA_API_BASE, DIDA_INBOX_PROJECT_NAME } from "./dida/didaMapping";
 import { normalizeTaskSendDefaultTarget, parseTaskSendTarget, serializeTaskSendTarget, taskSendTargetOptions } from "./taskSendTargets";
 import type { AppleCalendarInfo, CalendarCreationKind, CalendarCreationTarget, CalendarEventCreationTarget, CalendarSource, CalendarSourceStatus, CalendarTaskCreationTarget, ExternalTaskSourceTab, LocalAppleSyncStatus, TaskHubSettings } from "./types";
+import { setCssProps } from "./views/domStyles";
 
 export const TASK_HUB_SETTINGS_SCHEMA_VERSION = 2;
 
@@ -285,7 +286,7 @@ const SOFT_LOCAL_APPLE_COLORS = ["#d97757", "#c7925b", "#9aa66f", "#6f9f8f", "#6
 export const TASK_HUB_FEEDBACK_URL = "https://github.com/saralaaga/task-hub/issues/new";
 type LocalAppleTab = "calendar" | "reminders";
 
-export function openTaskHubFeedback(openUrl: (url: string) => void = (url) => window.open(url)): void {
+export function openTaskHubFeedback(openUrl: (url: string) => void): void {
   openUrl(TASK_HUB_FEEDBACK_URL);
 }
 
@@ -309,7 +310,7 @@ export class TaskHubSettingTab extends PluginSettingTab {
         button
           .setButtonText(t("feedbackButton"))
           .setCta()
-          .onClick(() => openTaskHubFeedback());
+          .onClick(() => openTaskHubFeedback((url) => containerEl.win.open(url)));
       });
 
     const basicSettingsGrid = containerEl.createDiv({ cls: "task-hub-settings-grid" });
@@ -925,7 +926,7 @@ export class TaskHubSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName(t("localApple"))
-      .setDesc(this.plugin.settings.localApple.enabled ? createLocalAppleStatusFragment(undefined, this.plugin.localAppleStatus, t) : t("localAppleDisabledDesc"))
+      .setDesc(this.plugin.settings.localApple.enabled ? createLocalAppleStatusFragment(containerEl.doc, undefined, this.plugin.localAppleStatus, t) : t("localAppleDisabledDesc"))
       .addToggle((toggle) => {
         toggle.setValue(this.plugin.settings.localApple.enabled).onChange(async (value) => {
           if (value && !this.plugin.isLocalAppleSupported()) {
@@ -976,7 +977,7 @@ export class TaskHubSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName(t("localAppleCalendar"))
-      .setDesc(createLocalAppleStatusFragment(this.plugin.localAppleStatus.calendar, this.plugin.localAppleStatus, t, t("localAppleCalendarDesc")))
+      .setDesc(createLocalAppleStatusFragment(containerEl.doc, this.plugin.localAppleStatus.calendar, this.plugin.localAppleStatus, t, t("localAppleCalendarDesc")))
       .addToggle((toggle) => {
         toggle.setValue(this.plugin.settings.localApple.calendarEnabled).onChange(async (value) => {
           if (value && !this.plugin.isLocalAppleSupported()) {
@@ -1000,7 +1001,7 @@ export class TaskHubSettingTab extends PluginSettingTab {
       .setName(t("localAppleReminders"))
       .setDesc(
         this.plugin.settings.localApple.remindersEnabled
-          ? createLocalAppleStatusFragment(this.plugin.localAppleStatus.reminders, this.plugin.localAppleStatus, t, t("localAppleRemindersDesc"))
+          ? createLocalAppleStatusFragment(containerEl.doc, this.plugin.localAppleStatus.reminders, this.plugin.localAppleStatus, t, t("localAppleRemindersDesc"))
           : t("localAppleRemindersDisabledDesc")
       )
       .addToggle((toggle) => {
@@ -1344,7 +1345,7 @@ export class TaskHubSettingTab extends PluginSettingTab {
         const icon = button.extraSettingsEl;
         const picker = icon.createEl("input", { cls: "task-hub-color-picker", type: "color" }) as HTMLInputElement;
         const setPreview = (color: string) => {
-          icon.style.setProperty("--task-hub-color-preview", color);
+          setCssProps(icon, { "--task-hub-color-preview": color });
           icon.setAttribute("aria-label", `${name}: ${color}`);
           picker.value = normalizeColor(color, fallback);
         };
@@ -1375,7 +1376,7 @@ export class TaskHubSettingTab extends PluginSettingTab {
               type: "button"
             }
           });
-          swatch.style.setProperty("--task-hub-swatch-color", color);
+          setCssProps(swatch, { "--task-hub-swatch-color": color });
           swatch.addEventListener("click", () => {
             setColor(color);
             void this.plugin.saveSettings().then(() => this.display({ preserveScroll: true }));
@@ -1467,17 +1468,18 @@ export class TaskHubSettingTab extends PluginSettingTab {
 type CalendarErrorType = Extract<CalendarSourceStatus, { state: "error" }>["errorType"];
 
 function createLocalAppleStatusFragment(
+  ownerDocument: Document,
   sourceStatus: CalendarSourceStatus | undefined,
   fallback: LocalAppleSyncStatus,
   t: Translator,
   prefix?: string
 ): DocumentFragment {
   const status = localAppleStatusIndicator(sourceStatus, fallback, t);
-  const fragment = document.createDocumentFragment();
+  const fragment = ownerDocument.createDocumentFragment();
   if (prefix) {
     fragment.append(prefix, " | ");
   }
-  const indicator = document.createElement("span");
+  const indicator = ownerDocument.createElement("span");
   indicator.className = `task-hub-setting-status ${status.cls}`;
   indicator.textContent = status.icon;
   indicator.setAttribute("aria-label", status.label);

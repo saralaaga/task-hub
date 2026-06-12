@@ -22,6 +22,7 @@ import { recurrencePresetFromRule } from "../recurrence";
 import { createRecurrenceSelect, recurrenceValueFromSelect } from "./recurrenceControls";
 import { resolveTaskBulkActions, type TaskBulkActionId } from "./taskSelection";
 import { renderSourceLogo, sourceLogoKindForCalendarItem } from "./sourceLogos";
+import { setCssProps, setCssStyles } from "./domStyles";
 
 export type CalendarViewState = {
   mode: CalendarViewMode;
@@ -127,6 +128,7 @@ let activeDraggedCalendarItemId: string | undefined;
 let activeDragGrabOffsetMinutes = 0;
 let activeDragGrabOffsetXPixels = 0;
 let activeDragGrabOffsetYPixels = 0;
+let activeDraggedElementReference: HTMLElement | undefined;
 let activeDragFeedbackElement: HTMLElement | undefined;
 let activeDragStackElement: HTMLElement | undefined;
 let activeMutedDragElements: HTMLElement[] = [];
@@ -180,6 +182,7 @@ export function renderCalendarView(
 ): void {
   const detailsSelectionKeyToRestore = activeDetailsSelectionKey;
   if (activeDetailsElement) clearActiveCalendarDetails(true);
+  const agendaScrollToRestore = readAgendaScrollPosition(container);
   activeCalendarItemElements = new Map();
   activeSelectedTaskIds = new Set(state.selectedTaskIds ?? []);
   activeSelectedCalendarItemKeys = new Set([...activeSelectedTaskIds].map((taskId) => `task:${taskId}`));
@@ -252,6 +255,7 @@ export function renderCalendarView(
 
   if (state.mode === "day" || state.mode === "week") {
     renderAgendaGrid(calendarPane, state, range.days, visibleItems, handlers, today);
+    restoreAgendaScrollPosition(calendarPane, agendaScrollToRestore);
     if (showUnscheduledPanel) renderUnscheduledPanel(calendarHost, state, handlers);
     restoreCalendarDetailsPopover(detailsSelectionKeyToRestore, handlers, state);
     return;
@@ -260,6 +264,28 @@ export function renderCalendarView(
   renderMonthGrid(calendarPane, state, range.days, visibleItems, handlers, today);
   if (showUnscheduledPanel) renderUnscheduledPanel(calendarHost, state, handlers);
   restoreCalendarDetailsPopover(detailsSelectionKeyToRestore, handlers, state);
+}
+
+type AgendaScrollPosition = {
+  top: number;
+  left: number;
+};
+
+function readAgendaScrollPosition(container: HTMLElement): AgendaScrollPosition | undefined {
+  const agenda = container.querySelector?.(".task-hub-agenda") as HTMLElement | null | undefined;
+  if (!agenda) return undefined;
+  return {
+    top: agenda.scrollTop,
+    left: agenda.scrollLeft
+  };
+}
+
+function restoreAgendaScrollPosition(container: HTMLElement, position: AgendaScrollPosition | undefined): void {
+  if (!position) return;
+  const agenda = container.querySelector?.(".task-hub-agenda") as HTMLElement | null | undefined;
+  if (!agenda) return;
+  agenda.scrollTop = position.top;
+  agenda.scrollLeft = position.left;
 }
 
 function renderMonthGrid(
@@ -340,9 +366,11 @@ function renderAgendaGrid(
   const timeScale = state.calendarTimeScale ?? "hour";
   const agenda = container.createDiv({ cls: `task-hub-agenda task-hub-agenda-${state.mode} is-scale-${timeScale}` });
   const metrics = agendaTimeMetrics(state, hourCount, container);
-  agenda.style.setProperty("--task-hub-agenda-days", String(days.length));
-  agenda.style.setProperty("--task-hub-agenda-hours", String(hourCount));
-  agenda.style.setProperty("--task-hub-hour-height", `${metrics.hourHeight}px`);
+  setCssProps(agenda, {
+    "--task-hub-agenda-days": String(days.length),
+    "--task-hub-agenda-hours": String(hourCount),
+    "--task-hub-hour-height": `${metrics.hourHeight}px`
+  });
   bindAgendaTimeScaleWheel(agenda, state, handlers);
 
   const corner = agenda.createDiv({ cls: "task-hub-agenda-corner" });
@@ -372,7 +400,7 @@ function renderAgendaGrid(
 
   const grid = agenda.createDiv({ cls: "task-hub-agenda-time-grid" });
   const gridLineCount = Math.max(1, (hourCount * 60) / metrics.minorStepMinutes);
-  grid.style.setProperty("--task-hub-agenda-rows", String(gridLineCount));
+  setCssProps(grid, { "--task-hub-agenda-rows": String(gridLineCount) });
   for (let index = 0; index < gridLineCount; index += 1) {
     grid.createDiv({ cls: `task-hub-agenda-hour-line ${metrics.minorStepMinutes < 60 && index % (60 / metrics.minorStepMinutes) !== 0 ? "is-minor" : ""}` });
   }
@@ -613,22 +641,26 @@ function renderTimedCalendarItem(
   const row = container.createDiv({ cls: calendarItemClass(item, "task-hub-calendar-timed-item") });
   registerCalendarItemElement(row, item);
   bindCalendarItemContextMenu(row, item, state, handlers);
-  if (item.color) row.style.setProperty("--task-hub-item-color", item.color);
+  if (item.color) setCssProps(row, { "--task-hub-item-color": item.color });
   const startMinutes = item.startMinutes ?? startHour * 60;
   const endMinutes = itemEndMinutes(item);
   const isTaskPoint = item.kind === "task";
   if (isTaskPoint) row.addClass("is-time-point");
   const baseTop = ((startMinutes - startHour * 60) / 60) * hourHeight;
-  row.style.top = `${baseTop}px`;
-  row.style.height = isTaskPoint ? `${TASK_TIME_POINT_HEIGHT}px` : `${Math.max(30, ((endMinutes - startMinutes) / 60) * hourHeight - 4)}px`;
+  setCssStyles(row, {
+    top: `${baseTop}px`,
+    height: isTaskPoint ? `${TASK_TIME_POINT_HEIGHT}px` : `${Math.max(30, ((endMinutes - startMinutes) / 60) * hourHeight - 4)}px`
+  });
   if (isTaskPoint && (layout?.overlapCount ?? 1) > 1) {
     row.addClass(layout?.isOverlapRepresentative ? "is-overlap-stack" : "is-overlap-hidden");
-    row.style.zIndex = String(10 + (layout?.overlapCount ?? 1));
+    setCssStyles(row, { zIndex: String(10 + (layout?.overlapCount ?? 1)) });
     row.setAttr("data-task-hub-overlap-count", String(layout?.overlapCount ?? 1));
   }
   if (layout && layout.columnCount > 1) {
-    row.style.left = `calc(${(100 * layout.columnIndex) / layout.columnCount}% + 6px)`;
-    row.style.right = `calc(${100 - (100 * (layout.columnIndex + 1)) / layout.columnCount}% + 6px)`;
+    setCssStyles(row, {
+      left: `calc(${(100 * layout.columnIndex) / layout.columnCount}% + 6px)`,
+      right: `calc(${100 - (100 * (layout.columnIndex + 1)) / layout.columnCount}% + 6px)`
+    });
   }
   const timeLabel = isTaskPoint || state.calendarTimeScale === "fit" ? undefined : formatTimeRange(startMinutes, endMinutes);
   renderCalendarItemContent(row, item, handlers, state, timeLabel);
@@ -872,7 +904,7 @@ function renderCalendarItem(container: HTMLElement, item: CalendarItem, handlers
   registerCalendarItemElement(row, item);
   bindCalendarItemDrag(row, item, state);
   bindCalendarItemContextMenu(row, item, state, handlers);
-  if (item.color) row.style.setProperty("--task-hub-item-color", item.color);
+  if (item.color) setCssProps(row, { "--task-hub-item-color": item.color });
   renderCalendarItemContent(row, item, handlers, state);
   const task = item.task;
   if (task) {
@@ -917,7 +949,7 @@ function renderUnscheduledTaskRow(container: HTMLElement, task: TaskItem, state:
   registerCalendarItemElement(row, item);
   bindCalendarItemDrag(row, item, state);
   bindCalendarItemContextMenu(row, item, state, handlers);
-  if (item.color) row.style.setProperty("--task-hub-item-color", item.color);
+  if (item.color) setCssProps(row, { "--task-hub-item-color": item.color });
 
   const checkbox = row.createEl("input", { type: "checkbox" });
   checkbox.checked = task.completed;
@@ -945,7 +977,7 @@ function bindHiddenItemCount(container: HTMLElement): void {
   const update = () => updateHiddenItemCount(container, badge);
   container.addEventListener("scroll", update);
   update();
-  window.requestAnimationFrame?.(update);
+  container.win.requestAnimationFrame?.(update);
 }
 
 function updateHiddenItemCount(container: HTMLElement, badge: HTMLElement): void {
@@ -1044,7 +1076,7 @@ function renderCalendarDetailsPopover(anchor: HTMLElement, item: CalendarItem, h
   ownerDocument.body.appendChild(popover);
   activeDetailsElement = popover;
   activeDetailsSelectionKey = calendarItemSelectionKey(item);
-  if (item.color) popover.style.setProperty("--task-hub-item-color", item.color);
+  if (item.color) setCssProps(popover, { "--task-hub-item-color": item.color });
   positionDetailsPopover(popover, anchor);
 
   const closePopover = () => clearActiveCalendarDetails();
@@ -1121,7 +1153,7 @@ function renderTimedTaskOverlapPopover(anchor: HTMLElement, items: CalendarItem[
 
   for (const item of items) {
     const row = popover.createDiv({ cls: calendarItemClass(item, "task-hub-calendar-overlap-row") });
-    if (item.color) row.style.setProperty("--task-hub-item-color", item.color);
+    if (item.color) setCssProps(row, { "--task-hub-item-color": item.color });
     const task = item.task;
     const checkbox = row.createEl("input", { cls: "task-hub-calendar-overlap-check", type: "checkbox" });
     checkbox.checked = Boolean(task?.completed);
@@ -1151,12 +1183,11 @@ function renderDetailSourceLogo(container: HTMLElement, item: CalendarItem): voi
 function positionDetailsPopover(popover: HTMLElement, anchor: HTMLElement): void {
   const rect = anchor.getBoundingClientRect();
   const width = 320;
-  const viewportWidth = typeof window === "undefined" ? 1024 : window.innerWidth;
-  const viewportHeight = typeof window === "undefined" ? 768 : window.innerHeight;
+  const viewportWidth = anchor.win.innerWidth || 1024;
+  const viewportHeight = anchor.win.innerHeight || 768;
   const left = Math.max(8, Math.min(rect.right + 8, viewportWidth - width - 8));
   const top = Math.max(8, Math.min(rect.top, viewportHeight - 420));
-  popover.style.left = `${left}px`;
-  popover.style.top = `${top}px`;
+  setCssStyles(popover, { left: `${left}px`, top: `${top}px` });
 }
 
 function bindDetailsPopoverDrag(popover: HTMLElement, handle: HTMLElement, ownerDocument: Document): void {
@@ -1166,8 +1197,8 @@ function bindDetailsPopoverDrag(popover: HTMLElement, handle: HTMLElement, owner
     event.preventDefault();
     event.stopPropagation();
 
-    const startLeft = Number.parseFloat(popover.style.left || "0");
-    const startTop = Number.parseFloat(popover.style.top || "0");
+    const startLeft = Number.parseFloat(popover.getCssPropertyValue("left") || "0");
+    const startTop = Number.parseFloat(popover.getCssPropertyValue("top") || "0");
     const startX = event.clientX;
     const startY = event.clientY;
     const pointerId = event.pointerId;
@@ -1176,12 +1207,11 @@ function bindDetailsPopoverDrag(popover: HTMLElement, handle: HTMLElement, owner
     const move = (moveEvent: PointerEvent) => {
       if (moveEvent.pointerId !== pointerId) return;
       moveEvent.preventDefault();
-      const maxLeft = Math.max(8, (window.innerWidth || 1024) - popover.getBoundingClientRect().width - 8);
-      const maxTop = Math.max(8, (window.innerHeight || 768) - popover.getBoundingClientRect().height - 8);
+      const maxLeft = Math.max(8, (popover.win.innerWidth || 1024) - popover.getBoundingClientRect().width - 8);
+      const maxTop = Math.max(8, (popover.win.innerHeight || 768) - popover.getBoundingClientRect().height - 8);
       const left = Math.max(8, Math.min(startLeft + moveEvent.clientX - startX, maxLeft));
       const top = Math.max(8, Math.min(startTop + moveEvent.clientY - startY, maxTop));
-      popover.style.left = `${left}px`;
-      popover.style.top = `${top}px`;
+      setCssStyles(popover, { left: `${left}px`, top: `${top}px` });
     };
 
     const end = (endEvent: PointerEvent) => {
@@ -1480,13 +1510,11 @@ function renderEventDetailsPopover(
   }
   if (event.url) {
     const actions = popover.createDiv({ cls: "task-hub-calendar-detail-actions" });
-    if (event.url) {
-      const open = actions.createEl("button", { text: state.t("openSource") });
-      open.addEventListener("click", () => {
-        window.open(event.url);
-        closePopover();
-      });
-    }
+    const open = actions.createEl("button", { text: state.t("openSource") });
+    open.addEventListener("click", () => {
+      popover.win.open(event.url);
+      closePopover();
+    });
   }
   if (!editable) {
     popover.createDiv({ cls: "task-hub-detail-note", text: state.t("readOnly") });
@@ -1517,13 +1545,13 @@ function bindDetailCommitKeys(field: HTMLElement, commit: () => void): void {
 }
 
 function toggleDetailExtra(extra: HTMLElement, expanded: boolean): void {
-  const reducedMotion = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  const reducedMotion = extra.win.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
   if (reducedMotion) {
     extra.toggleClass("is-hidden", !expanded);
     extra.removeClass("is-expanding");
     extra.removeClass("is-opening");
     extra.removeClass("is-closing");
-    extra.style.maxHeight = "";
+    setCssStyles(extra, { maxHeight: "" });
     return;
   }
 
@@ -1531,18 +1559,18 @@ function toggleDetailExtra(extra: HTMLElement, expanded: boolean): void {
 
   if (expanded) {
     extra.addClass("is-opening");
-    extra.style.maxHeight = "0px";
+    setCssStyles(extra, { maxHeight: "0px" });
     extra.removeClass("is-hidden");
     void extra.offsetHeight;
     extra.removeClass("is-opening");
-    extra.style.maxHeight = `${extra.scrollHeight}px`;
+    setCssStyles(extra, { maxHeight: `${extra.scrollHeight}px` });
     let finished = false;
     const finish = (event?: TransitionEvent) => {
       if (finished) return;
       if (event?.propertyName && event.propertyName !== "max-height") return;
       finished = true;
       extra.removeClass("is-expanding");
-      extra.style.maxHeight = "";
+      setCssStyles(extra, { maxHeight: "" });
       extra.removeEventListener?.("transitionend", finish);
     };
     extra.addEventListener("transitionend", finish);
@@ -1550,10 +1578,10 @@ function toggleDetailExtra(extra: HTMLElement, expanded: boolean): void {
     return;
   }
 
-  extra.style.maxHeight = `${extra.scrollHeight}px`;
+  setCssStyles(extra, { maxHeight: `${extra.scrollHeight}px` });
   void extra.offsetHeight;
   extra.addClass("is-closing");
-  extra.style.maxHeight = "0px";
+  setCssStyles(extra, { maxHeight: "0px" });
   let finished = false;
   const finish = (event?: TransitionEvent) => {
     if (finished) return;
@@ -1562,7 +1590,7 @@ function toggleDetailExtra(extra: HTMLElement, expanded: boolean): void {
     extra.addClass("is-hidden");
     extra.removeClass("is-expanding");
     extra.removeClass("is-closing");
-    extra.style.maxHeight = "";
+    setCssStyles(extra, { maxHeight: "" });
     extra.removeEventListener?.("transitionend", finish);
   };
   extra.addEventListener("transitionend", finish);
@@ -2070,6 +2098,7 @@ function bindCalendarItemDrag(element: HTMLElement, item: CalendarItem, state: C
     activeDragGrabOffsetMinutes = grabOffset?.minutes ?? activeDragGrabOffsetMinutes;
     activeDragGrabOffsetXPixels = grabOffset?.xPixels ?? activeDragGrabOffsetXPixels;
     activeDragGrabOffsetYPixels = grabOffset?.yPixels ?? activeDragGrabOffsetYPixels;
+    activeDraggedElementReference = element;
     activeDetailsElement?.remove();
     activeDetailsElement = undefined;
     element.addClass("is-dragging");
@@ -2089,6 +2118,7 @@ function bindCalendarItemDrag(element: HTMLElement, item: CalendarItem, state: C
     element.removeClass("is-dragging");
     clearCalendarDragFeedback();
     activeDraggedCalendarItemId = undefined;
+    if (activeDraggedElementReference === element) activeDraggedElementReference = undefined;
     activeDragGrabOffsetMinutes = 0;
     activeDragGrabOffsetXPixels = 0;
     activeDragGrabOffsetYPixels = 0;
@@ -2245,21 +2275,23 @@ function startCalendarStackDragFeedback(
   const items = orderedDragStackItems(draggedItem, selectedItems).slice(0, 6);
   if (items.length <= 1) return false;
   muteSelectedCalendarElements(draggedElement, items);
-  const ownerDocument = draggedElement.ownerDocument ?? document;
+  const ownerDocument = draggedElement.doc;
   const body = ownerDocument.body;
   if (!body) return false;
   const stack = ownerDocument.createElement("div");
   stack.addClass("task-hub-calendar-drag-stack");
   stack.setAttr("aria-hidden", "true");
-  stack.style.setProperty("--task-hub-drag-stack-count", String(items.length));
+  setCssProps(stack, { "--task-hub-drag-stack-count": String(items.length) });
   items.forEach((item, index) => {
     const card = stack.createDiv({ cls: `task-hub-calendar-drag-stack-card ${item.kind === "task" ? "is-task" : "is-event"}` });
-    card.style.setProperty("--task-hub-drag-stack-x", `${index * 9}px`);
-    card.style.setProperty("--task-hub-drag-stack-y", `${index * 7}px`);
-    card.style.setProperty("--task-hub-drag-stack-rotate", `${(index - 1) * -1.5}deg`);
-    card.style.setProperty("--task-hub-drag-stack-from-x", `${(index - 2) * -18}px`);
-    card.style.setProperty("--task-hub-drag-stack-from-y", `${(index - 1) * 20}px`);
-    card.style.setProperty("--task-hub-drag-stack-color", item.color ?? "var(--interactive-accent)");
+    setCssProps(card, {
+      "--task-hub-drag-stack-x": `${index * 9}px`,
+      "--task-hub-drag-stack-y": `${index * 7}px`,
+      "--task-hub-drag-stack-rotate": `${(index - 1) * -1.5}deg`,
+      "--task-hub-drag-stack-from-x": `${(index - 2) * -18}px`,
+      "--task-hub-drag-stack-from-y": `${(index - 1) * 20}px`,
+      "--task-hub-drag-stack-color": item.color ?? "var(--interactive-accent)"
+    });
     if (item.startMinutes !== undefined && item.endMinutes !== undefined) {
       card.createSpan({ cls: "task-hub-calendar-drag-stack-time", text: formatTimeRange(item.startMinutes, item.endMinutes) });
     }
@@ -2296,8 +2328,7 @@ function muteSelectedCalendarElements(draggedElement: HTMLElement, items: Calend
 function positionCalendarDragStack(stack: HTMLElement, event: DragEvent): void {
   const x = event.clientX - activeDragGrabOffsetXPixels + 16;
   const y = event.clientY - activeDragGrabOffsetYPixels + 16;
-  stack.style.left = `${Math.max(8, x)}px`;
-  stack.style.top = `${Math.max(8, y)}px`;
+  setCssStyles(stack, { left: `${Math.max(8, x)}px`, top: `${Math.max(8, y)}px` });
 }
 
 function updateCalendarDragStack(event: DragEvent): void {
@@ -2306,12 +2337,12 @@ function updateCalendarDragStack(event: DragEvent): void {
 }
 
 function setNativeDragGhost(dataTransfer: DataTransfer, element: HTMLElement): void {
-  const ownerDocument = element.ownerDocument ?? document;
+  const ownerDocument = element.doc;
   const ghost = ownerDocument.createElement("div");
   ghost.addClass("task-hub-calendar-native-drag-ghost");
   ownerDocument.body.appendChild(ghost);
   dataTransfer.setDragImage?.(ghost, 0, 0);
-  deferredCleanup(() => ghost.remove(), 0);
+  deferredCleanup(element.win, () => ghost.remove(), 0);
 }
 
 function playCalendarDropScatter(targetElement: HTMLElement, selectedItems: CalendarItem[], event?: DragEvent): void {
@@ -2319,7 +2350,7 @@ function playCalendarDropScatter(targetElement: HTMLElement, selectedItems: Cale
     clearCalendarDragStack();
     return;
   }
-  const ownerDocument = targetElement.ownerDocument ?? document;
+  const ownerDocument = targetElement.doc;
   const body = ownerDocument.body;
   if (!body) {
     clearCalendarDragStack();
@@ -2330,25 +2361,25 @@ function playCalendarDropScatter(targetElement: HTMLElement, selectedItems: Cale
   const y = event?.clientY ?? rect.top + Math.min(72, Math.max(24, rect.height / 2));
   const burst = ownerDocument.createElement("div");
   burst.addClass("task-hub-calendar-drop-scatter");
-  burst.style.left = `${Math.max(8, x)}px`;
-  burst.style.top = `${Math.max(8, y)}px`;
+  setCssStyles(burst, { left: `${Math.max(8, x)}px`, top: `${Math.max(8, y)}px` });
   selectedItems.slice(0, 5).forEach((item, index) => {
     const chip = burst.createDiv({ cls: "task-hub-calendar-drop-scatter-chip" });
     const offsetIndex = index - Math.floor(Math.min(5, selectedItems.length) / 2);
-    chip.style.setProperty("--task-hub-drop-scatter-x", `${offsetIndex * 24}px`);
-    chip.style.setProperty("--task-hub-drop-scatter-y", `${Math.abs(offsetIndex) * 12}px`);
-    chip.style.setProperty("--task-hub-drop-scatter-mid-x", `${offsetIndex * 18}px`);
-    chip.style.setProperty("--task-hub-drop-scatter-mid-y", `${Math.abs(offsetIndex) * 9}px`);
-    chip.style.setProperty("--task-hub-drop-scatter-color", item.color ?? "var(--interactive-accent)");
+    setCssProps(chip, {
+      "--task-hub-drop-scatter-x": `${offsetIndex * 24}px`,
+      "--task-hub-drop-scatter-y": `${Math.abs(offsetIndex) * 12}px`,
+      "--task-hub-drop-scatter-mid-x": `${offsetIndex * 18}px`,
+      "--task-hub-drop-scatter-mid-y": `${Math.abs(offsetIndex) * 9}px`,
+      "--task-hub-drop-scatter-color": item.color ?? "var(--interactive-accent)"
+    });
   });
   body.appendChild(burst);
-  deferredCleanup(() => burst.remove(), 520);
+  deferredCleanup(targetElement.win, () => burst.remove(), 520);
   clearCalendarDragStack();
 }
 
-function deferredCleanup(callback: () => void, delay: number): void {
-  const scheduler = window.setTimeout ?? setTimeout;
-  scheduler(callback, delay);
+function deferredCleanup(ownerWindow: Window, callback: () => void, delay: number): void {
+  ownerWindow.setTimeout(callback, delay);
 }
 
 function selectedCalendarDropTarget(
@@ -2487,12 +2518,14 @@ function clearCalendarDragStack(): void {
 }
 
 function activeDraggedElement(): HTMLElement | undefined {
-  return document.querySelector(".task-hub-calendar-item.is-dragging") as HTMLElement | null ?? undefined;
+  if (activeDraggedElementReference?.hasClass("is-dragging")) return activeDraggedElementReference;
+  return undefined;
 }
 
 function dragFeedbackElement(): HTMLElement | undefined {
   if (activeDragFeedbackElement) return activeDragFeedbackElement;
-  const ownerDocument = activeDraggedElement()?.ownerDocument ?? document;
+  const ownerDocument = activeDraggedElement()?.doc;
+  if (!ownerDocument) return undefined;
   const body = ownerDocument.body;
   if (!body) return undefined;
   const feedback = ownerDocument.createElement("div");
@@ -2505,8 +2538,7 @@ function dragFeedbackElement(): HTMLElement | undefined {
 function positionDragMoveFeedback(feedback: HTMLElement, event: DragEvent): void {
   const x = event.clientX - activeDragGrabOffsetXPixels + 48;
   const y = event.clientY - activeDragGrabOffsetYPixels + 44;
-  feedback.style.left = `${Math.max(8, x)}px`;
-  feedback.style.top = `${Math.max(8, y)}px`;
+  setCssStyles(feedback, { left: `${Math.max(8, x)}px`, top: `${Math.max(8, y)}px` });
 }
 
 function validDurationMinutes(value: number | undefined): number {

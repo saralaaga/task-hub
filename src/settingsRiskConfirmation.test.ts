@@ -21,6 +21,16 @@ const toggles: ToggleControl[] = [];
 const swatchClicks: Array<() => void> = [];
 const colorInputs: MockElement[] = [];
 const settings: Array<{ name?: string; desc?: string; toggle?: ToggleControl; text?: TextControl; controlEl?: MockElement }> = [];
+const mockDocument = {
+  createDocumentFragment: () => ({
+    append: jest.fn()
+  }),
+  createElement: () => ({
+    className: "",
+    textContent: "",
+    setAttribute: jest.fn()
+  })
+};
 
 class MockElement {
   children: MockElement[] = [];
@@ -31,6 +41,16 @@ class MockElement {
   value = "";
   style = { setProperty: jest.fn() };
   private listeners = new Map<string, Array<() => void>>();
+
+  get doc(): Document {
+    return mockDocument as unknown as Document;
+  }
+
+  setCssProps(props: Record<string, string>): void {
+    for (const [name, value] of Object.entries(props)) {
+      this.style.setProperty(name, value);
+    }
+  }
 
   empty = jest.fn(() => {
     this.children = [];
@@ -182,18 +202,7 @@ describe("TaskHubSettingTab risky Apple Reminders setting", () => {
     swatchClicks.length = 0;
     colorInputs.length = 0;
     settings.length = 0;
-    Object.assign(globalThis, {
-      document: {
-        createDocumentFragment: () => ({
-          append: jest.fn()
-        }),
-        createElement: () => ({
-          className: "",
-          textContent: "",
-          setAttribute: jest.fn()
-        })
-      }
-    });
+    Object.assign(globalThis, { document: mockDocument });
   });
 
   it("requires confirmation before enabling Apple Reminders migration", async () => {

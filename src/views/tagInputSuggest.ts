@@ -1,5 +1,6 @@
 import { AbstractInputSuggest, type App, getAllTags, parseFrontMatterTags } from "obsidian";
 import type { TaskItem } from "../types";
+import { setCssStyles } from "./domStyles";
 
 export type TaskHubTagInputElement = HTMLInputElement | HTMLTextAreaElement;
 
@@ -128,8 +129,9 @@ function isTextareaElement(inputEl: TaskHubTagInputElement): inputEl is HTMLText
 }
 
 function textareaCaretViewportRect(textarea: HTMLTextAreaElement, originalRect: () => DOMRect): DOMRect {
-  const style = window.getComputedStyle(textarea);
-  const mirror = document.createElement("div");
+  const style = textarea.win.getComputedStyle(textarea);
+  const ownerDocument = textarea.doc;
+  const mirror = ownerDocument.createElement("div");
   mirror.className = "task-hub-textarea-caret-mirror";
   const properties = [
     "borderBottomWidth",
@@ -153,19 +155,20 @@ function textareaCaretViewportRect(textarea: HTMLTextAreaElement, originalRect: 
     "wordSpacing",
     "wordWrap"
   ] as const;
-  for (const property of properties) {
-    mirror.style[property] = style[property];
-  }
-  mirror.style.left = "-9999px";
-  mirror.style.overflow = "hidden";
-  mirror.style.position = "fixed";
-  mirror.style.top = "0";
-  mirror.style.width = `${textarea.clientWidth}px`;
+  const mirrorStyles = Object.fromEntries(properties.map((property) => [property, style[property]])) as Partial<CSSStyleDeclaration>;
+  setCssStyles(mirror, {
+    ...mirrorStyles,
+    left: "-9999px",
+    overflow: "hidden",
+    position: "fixed",
+    top: "0",
+    width: `${textarea.clientWidth}px`
+  });
   mirror.textContent = textarea.value.slice(0, textarea.selectionStart ?? textarea.value.length);
-  const marker = document.createElement("span");
+  const marker = ownerDocument.createElement("span");
   marker.textContent = "\u200b";
   mirror.append(marker);
-  document.body.append(mirror);
+  ownerDocument.body.append(mirror);
   const markerRect = marker.getBoundingClientRect();
   const textareaRect = originalRect();
   const lineHeight = parseFloat(style.lineHeight) || parseFloat(style.fontSize) * 1.4 || 20;

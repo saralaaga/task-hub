@@ -5,7 +5,7 @@ export const APPLE_REMINDERS_URL = "x-apple-reminderkit://";
 
 export type ExternalOpenResult = "opened" | "unsupported" | "no-source";
 
-export function openExternalTaskSource(task: TaskItem, openUrl: (url: string) => void = (url) => window.open(url)): ExternalOpenResult {
+export function openExternalTaskSource(task: TaskItem, openUrl: (url: string) => void): ExternalOpenResult {
   if (task.externalUrl) {
     openUrl(task.externalUrl);
     return "opened";

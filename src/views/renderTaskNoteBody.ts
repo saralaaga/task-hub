@@ -34,11 +34,12 @@ export function decorateRenderedTaskNoteTags(container: HTMLElement): void {
   for (const tagElement of Array.from(container.querySelectorAll(".tag"))) {
     if (tagElement.textContent?.startsWith("#")) tagElement.classList.add("task-hub-task-tag");
   }
-  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
+  const ownerDocument = container.doc;
+  const walker = ownerDocument.createTreeWalker(container, NodeFilter.SHOW_TEXT);
   const textNodes: Text[] = [];
   let current = walker.nextNode();
   while (current) {
-    if (current instanceof Text && current.nodeValue && shouldDecorateTextNode(current)) {
+    if (current.instanceOf(Text) && current.nodeValue && shouldDecorateTextNode(current)) {
       textNodes.push(current);
     }
     current = walker.nextNode();
@@ -67,20 +68,21 @@ function shouldDecorateTextNode(node: Text): boolean {
 function replaceTextNodeTags(node: Text): void {
   const text = node.nodeValue ?? "";
   NOTE_TAG.lastIndex = 0;
-  const fragment = document.createDocumentFragment();
+  const ownerDocument = node.doc;
+  const fragment = ownerDocument.createDocumentFragment();
   let cursor = 0;
   for (const match of text.matchAll(NOTE_TAG)) {
     const start = match.index ?? 0;
     const prefix = match[1] ?? "";
     const tag = match[2] ?? "";
     const tagStart = start + prefix.length;
-    if (tagStart > cursor) fragment.append(document.createTextNode(text.slice(cursor, tagStart)));
-    const tagElement = document.createElement("span");
+    if (tagStart > cursor) fragment.append(ownerDocument.createTextNode(text.slice(cursor, tagStart)));
+    const tagElement = ownerDocument.createElement("span");
     tagElement.className = "task-hub-task-tag";
     tagElement.textContent = tag;
     fragment.append(tagElement);
     cursor = tagStart + tag.length;
   }
-  if (cursor < text.length) fragment.append(document.createTextNode(text.slice(cursor)));
+  if (cursor < text.length) fragment.append(ownerDocument.createTextNode(text.slice(cursor)));
   node.replaceWith(fragment);
 }

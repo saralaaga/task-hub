@@ -89,6 +89,14 @@ class FakeDocument {
 }
 
 const fakeDocument = new FakeDocument();
+const fakeWindow = {
+  innerWidth: 1200,
+  innerHeight: 800,
+  open: jest.fn(),
+  requestAnimationFrame: undefined as ((callback: FrameRequestCallback) => number) | undefined,
+  matchMedia: undefined as ((query: string) => MediaQueryList) | undefined,
+  setTimeout: (callback: () => void, delay?: number) => globalThis.setTimeout(callback, delay)
+};
 let currentTestRoot: FakeElement | undefined;
 
 class FakeElement {
@@ -105,6 +113,7 @@ class FakeElement {
   focused = false;
   clientHeight = 0;
   scrollHeight = 0;
+  scrollLeft = 0;
   scrollTop = 0;
   attributes = new Map<string, string>();
   classes = new Set<string>();
@@ -129,6 +138,28 @@ class FakeElement {
 
   constructor(ownerDocument: Document = fakeDocument as unknown as Document) {
     this.ownerDocument = ownerDocument;
+  }
+
+  get doc(): Document {
+    return this.ownerDocument;
+  }
+
+  get win(): Window {
+    return fakeWindow as unknown as Window;
+  }
+
+  setCssProps(props: Record<string, string>): void {
+    for (const [name, value] of Object.entries(props)) {
+      this.style.setProperty(name, value);
+    }
+  }
+
+  setCssStyles(styles: Partial<CSSStyleDeclaration>): void {
+    Object.assign(this.style, styles);
+  }
+
+  getCssPropertyValue(property: string): string {
+    return String((this.style as unknown as Record<string, unknown>)[property] ?? "");
   }
 
   get classList(): { contains: (cls: string) => boolean } {
@@ -197,6 +228,10 @@ class FakeElement {
     } else {
       this.classes.delete(cls);
     }
+  }
+
+  hasClass(cls: string): boolean {
+    return this.classes.has(cls);
   }
 
   setAttr(name: string, value: string): void {
@@ -427,11 +462,12 @@ describe("renderCalendarView", () => {
         return currentTestRoot?.querySelector(selector) ?? null;
       }
     };
-    (globalThis as unknown as { window: { innerWidth: number; innerHeight: number; open: jest.Mock } }).window = {
-      innerWidth: 1200,
-      innerHeight: 800,
-      open: jest.fn()
-    };
+    fakeWindow.innerWidth = 1200;
+    fakeWindow.innerHeight = 800;
+    fakeWindow.open.mockClear();
+    fakeWindow.requestAnimationFrame = undefined;
+    fakeWindow.matchMedia = undefined;
+    (globalThis as unknown as { window: typeof fakeWindow }).window = fakeWindow;
   });
 
   it("renders Chinese lunar month and day labels in month view when enabled", () => {
@@ -5220,6 +5256,56 @@ describe("renderCalendarView", () => {
       startMinutes: 600,
       durationMinutes: 90
     });
+  });
+
+  it("restores the agenda scroll position after a day view rerender", () => {
+    const container = new FakeElement();
+    const timedEvent = {
+      ...event,
+      start: "2026-05-08T10:00:00",
+      end: "2026-05-08T11:00:00",
+      allDay: false
+    };
+    const render = (events: CalendarEvent[]) => renderCalendarView(
+      container as unknown as HTMLElement,
+      {
+        mode: "day",
+        focusDate: new Date("2026-05-08T12:00:00Z"),
+        weekStart: "monday",
+        visibleSourceIds: new Set(["apple-calendar"]),
+        includeCompletedTasks: false,
+        allowAppleReminderWriteback: false,
+        allowAppleCalendarWriteback: true,
+        allowTaskCreation: false,
+        sources: [source],
+        t: (key) => key
+      },
+      [],
+      events,
+      {
+        onLayerToggle: jest.fn(),
+        onModeChange: jest.fn(),
+        onMove: jest.fn(),
+        onDateCreateTask: jest.fn(),
+        onTaskComplete: jest.fn(),
+        onTaskJump: jest.fn(),
+        onTaskSelect: jest.fn(),
+        onTaskReschedule: jest.fn(),
+        onEventReschedule: jest.fn(),
+        onToday: jest.fn()
+      }
+    );
+
+    render([timedEvent]);
+    const agenda = collect(container).find((element) => element.classes.has("task-hub-agenda"));
+    agenda!.scrollTop = 360;
+    agenda!.scrollLeft = 24;
+
+    render([{ ...timedEvent, end: "2026-05-08T11:30:00" }]);
+
+    const restoredAgenda = collect(container).find((element) => element.classes.has("task-hub-agenda"));
+    expect(restoredAgenda?.scrollTop).toBe(360);
+    expect(restoredAgenda?.scrollLeft).toBe(24);
   });
 
   it("does not create a timed task from the click synthesized after resizing an event", () => {

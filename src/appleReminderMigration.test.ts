@@ -23,6 +23,7 @@ type FakeElement = {
   checked?: boolean;
   disabled?: boolean;
   type?: string;
+  win: { setTimeout: typeof setTimeout };
   children: FakeElement[];
 };
 
@@ -69,7 +70,8 @@ function fakeEl(): FakeElement {
     focus: jest.fn(),
     setAttr: jest.fn(),
     setText: jest.fn(),
-    toggleClass: jest.fn()
+    toggleClass: jest.fn(),
+    win: { setTimeout }
   };
   return element;
 }
@@ -466,8 +468,10 @@ describe("Apple Reminders migration", () => {
     const removeFile = jest.fn();
     plugin.app = {
       vault: {
-        delete: deleteFile,
         process
+      },
+      fileManager: {
+        trashFile: deleteFile
       },
       workspace: {
         getLeavesOfType: jest.fn(() => [])
@@ -500,8 +504,10 @@ describe("Apple Reminders migration", () => {
             title: "Empty",
             createdAt: "2026-05-29T10:30:12"
           })
-        ),
-        delete: deleteFile
+        )
+      },
+      fileManager: {
+        trashFile: deleteFile
       },
       workspace: {
         getLeavesOfType: jest.fn(() => [])
@@ -614,11 +620,13 @@ describe("Apple Reminders migration", () => {
       vault: {
         createFolder: jest.fn(),
         create,
-        delete: deleteFile,
         getFileByPath: jest.fn(() => null),
         getFolderByPath: jest.fn(() => ({ path: "Thino" })),
         on: jest.fn(),
         offref: jest.fn()
+      },
+      fileManager: {
+        trashFile: deleteFile
       },
       workspace: {
         getLeavesOfType: jest.fn(() => [])
@@ -660,11 +668,13 @@ describe("Apple Reminders migration", () => {
         createFolder: jest.fn(),
         create,
         cachedRead: jest.fn(async () => "Body"),
-        delete: deleteFile,
         getFileByPath: jest.fn(() => null),
         getFolderByPath: jest.fn(() => ({ path: "Thino" })),
         on: jest.fn(),
         offref: jest.fn()
+      },
+      fileManager: {
+        trashFile: deleteFile
       },
       workspace: {
         getLeavesOfType: jest.fn(() => [])
