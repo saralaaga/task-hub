@@ -1431,7 +1431,7 @@ function renderEventDetailsPopover(
   const canEdit = editable && Boolean(handlers.onEventUpdate);
   const form = popover.createDiv({ cls: "task-hub-calendar-detail-form" });
   const title = detailInput(form, state.t("eventCreationPlaceholder"), event.title);
-  const date = detailInput(form, state.t("date"), event.start.slice(0, 10), "date");
+  const date = detailInput(form, state.t("date"), dateFromDateTime(event.start), "date");
   const allDayCheckbox = detailCheckbox(form, state.t("allDay"));
   allDayCheckbox.checked = event.allDay;
   const startField = detailInputField(form, state.t("startTime"), event.allDay ? "" : timeFromDateTime(event.start), "time");
@@ -1805,7 +1805,25 @@ function timeFromTask(task: TaskItem): string {
 }
 
 function timeFromDateTime(value: string | undefined): string {
+  const parsed = parseZonedDateTime(value);
+  if (parsed) {
+    return `${String(parsed.getHours()).padStart(2, "0")}:${String(parsed.getMinutes()).padStart(2, "0")}`;
+  }
   return value?.match(/T(\d{2}):(\d{2})/)?.slice(1, 3).join(":") ?? "";
+}
+
+function dateFromDateTime(value: string | undefined): string {
+  const parsed = parseZonedDateTime(value);
+  if (parsed) {
+    return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, "0")}-${String(parsed.getDate()).padStart(2, "0")}`;
+  }
+  return value?.slice(0, 10) ?? "";
+}
+
+function parseZonedDateTime(value: string | undefined): Date | undefined {
+  if (!value || !/(?:Z|[+-]\d{2}:?\d{2})$/.test(value)) return undefined;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? undefined : parsed;
 }
 
 function bindCalendarItemContextMenu(

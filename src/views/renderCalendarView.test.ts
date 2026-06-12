@@ -452,6 +452,14 @@ function styleValue(element: FakeElement, property: string): string | undefined 
   return (element.style as unknown as Record<string, string | undefined>)[property];
 }
 
+function localDateKey(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function localTimeValue(date: Date): string {
+  return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+}
+
 describe("renderCalendarView", () => {
   beforeEach(() => {
     mockMenus.length = 0;
@@ -2314,6 +2322,57 @@ describe("renderCalendarView", () => {
     expect(labels).toEqual(expect.arrayContaining(["date", "allDay", "startTime", "endTime"]));
     expect(collect(popover as FakeElement).some((element) => element.classes.has("task-hub-calendar-detail-check"))).toBe(true);
     expect(detailRows.filter((row) => collect(row).some((element) => element.type === "time"))).toHaveLength(2);
+  });
+
+  it("shows zoned Apple Calendar event times in local time in the details editor", () => {
+    const container = new FakeElement();
+
+    renderCalendarView(
+      container as unknown as HTMLElement,
+      {
+        mode: "day",
+        focusDate: new Date("2026-06-11T12:00:00Z"),
+        weekStart: "monday",
+        visibleSourceIds: new Set(["apple-calendar"]),
+        includeCompletedTasks: false,
+        allowAppleReminderWriteback: false,
+        allowAppleCalendarWriteback: true,
+        allowTaskCreation: false,
+        sources: [source],
+        t: (key) => key
+      },
+      [],
+      [{
+        ...event,
+        start: "2026-06-11T11:30:00.000Z",
+        end: "2026-06-11T12:30:00.000Z",
+        allDay: false
+      }],
+      {
+        onLayerToggle: jest.fn(),
+        onModeChange: jest.fn(),
+        onMove: jest.fn(),
+        onDateCreateTask: jest.fn(),
+        onTaskComplete: jest.fn(),
+        onTaskJump: jest.fn(),
+        onTaskSelect: jest.fn(),
+        onTaskReschedule: jest.fn(),
+        onEventUpdate: jest.fn(),
+        onToday: jest.fn()
+      }
+    );
+
+    collect(container).find((element) => element.classes.has("task-hub-calendar-timed-item"))?.click();
+
+    const popover = collect(fakeDocument.body).find((element) => element.classes.has("task-hub-calendar-detail-popover"));
+    const [start, end] = collect(popover as FakeElement).filter((element) => element.type === "time");
+    const date = collect(popover as FakeElement).find((element) => element.type === "date");
+    const localStart = new Date("2026-06-11T11:30:00.000Z");
+    const localEnd = new Date("2026-06-11T12:30:00.000Z");
+
+    expect(date?.value).toBe(localDateKey(localStart));
+    expect(start?.value).toBe(localTimeValue(localStart));
+    expect(end?.value).toBe(localTimeValue(localEnd));
   });
 
   it("allows dragging the calendar detail popover by its header", () => {
