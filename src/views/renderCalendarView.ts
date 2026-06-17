@@ -317,7 +317,7 @@ function renderMonthGrid(
     bindTaskCreation(cell, monthCreationTarget(day), state, handlers);
     bindCalendarDropTarget(cell, day, visibleItems, handlers, state);
     const header = cell.createDiv({ cls: "task-hub-calendar-date" });
-    header.createSpan({ cls: "task-hub-calendar-weekday", text: shortWeekday(dayDate) });
+    header.createSpan({ cls: "task-hub-calendar-weekday", text: shortWeekday(dayDate, state.t) });
     header.createSpan({ cls: "task-hub-calendar-day-number", text: String(dayDate.getDate()) });
     if (state.showLunarCalendar) {
       const lunarDay = formatLunarDayLabel(dayDate);
@@ -489,7 +489,7 @@ function renderAgendaDayHeader(
   const header = container.createDiv({ cls: `task-hub-agenda-day-header ${isToday ? "is-today" : ""}` });
   bindTaskCreation(header, day, state, handlers);
   bindCalendarDropTarget(header, day, dayItems, handlers, state);
-  header.createSpan({ cls: "task-hub-calendar-weekday", text: shortWeekday(dayDate) });
+  header.createSpan({ cls: "task-hub-calendar-weekday", text: shortWeekday(dayDate, state.t) });
   header.createSpan({ cls: "task-hub-calendar-day-number", text: String(dayDate.getDate()) });
   if (dayItems.length > 0) {
     header.createSpan({ cls: "task-hub-calendar-count", text: itemSummary(taskCount, eventCount, state.t) });
@@ -2742,12 +2742,12 @@ function canToggleCalendarTask(task: TaskItem, state: CalendarViewState): boolea
   );
 }
 
-function shortWeekday(date: Date): string {
-  return date.toLocaleDateString(undefined, { weekday: "short" });
+function shortWeekday(date: Date, t: Translator): string {
+  return date.toLocaleDateString(t.locale ?? "en-US", { weekday: "short" });
 }
 
 function calendarTitle(date: Date, mode: CalendarViewMode, t: Translator, showLunarCalendar?: boolean): string {
-  const locale = t("language") === "语言" ? "zh-CN" : "en-US";
+  const locale = t.locale ?? "en-US";
   if (mode === "day") {
     return date.toLocaleDateString(locale, { year: "numeric", month: "long", day: "numeric" });
   }

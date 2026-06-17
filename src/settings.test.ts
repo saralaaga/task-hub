@@ -77,6 +77,13 @@ describe("normalizeTaskHubSettings", () => {
     expect(settings.externalTaskSourceOrder).toEqual(["dida", "apple-reminders", "apple-calendar"]);
   });
 
+  it("preserves supported interface languages and falls back from unknown stored values", () => {
+    expect(normalizeTaskHubSettings({ language: "ja" }).language).toBe("ja");
+    expect(normalizeTaskHubSettings({ language: "fr" }).language).toBe("fr");
+    expect(normalizeTaskHubSettings({ language: "ko" }).language).toBe("ko");
+    expect(normalizeTaskHubSettings({ language: "de" as never }).language).toBe("en");
+  });
+
   it("migrates cached Dida inbox project names to 收集箱", () => {
     const settings = normalizeTaskHubSettings({
       dida: {

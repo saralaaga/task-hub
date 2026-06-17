@@ -1682,7 +1682,7 @@ describe("renderTasksView", () => {
       { status: "open", tags: [], sourceQuery: "", textQuery: "" },
       handlers(),
       new Date("2026-05-08T12:00:00Z"),
-      (key) => (key === "language" ? "语言" : key),
+      Object.assign((key: string) => key, { isCjk: true }),
       { allowAppleReminderWriteback: true, allowAppleReminderCreate: true, appleReminderLists: [{ id: "apple-list", name: "Inbox" }] }
     );
 

@@ -1,5 +1,5 @@
 import { App, PluginSettingTab, Setting } from "obsidian";
-import { createTranslator, type Translator } from "./i18n";
+import { createTranslator, isLanguage, LANGUAGE_OPTIONS, type Translator } from "./i18n";
 import type TaskHubPlugin from "./main";
 import { DEFAULT_DIDA_API_BASE, DIDA_INBOX_PROJECT_NAME } from "./dida/didaMapping";
 import { normalizeTaskSendDefaultTarget, parseTaskSendTarget, serializeTaskSendTarget, taskSendTargetOptions } from "./taskSendTargets";
@@ -103,6 +103,7 @@ export function normalizeTaskHubSettings(loaded: Partial<TaskHubSettings> | null
     ...DEFAULT_SETTINGS,
     ...(loaded ?? {}),
     settingsSchemaVersion: TASK_HUB_SETTINGS_SCHEMA_VERSION,
+    language: isLanguage(loaded?.language) ? loaded.language : DEFAULT_SETTINGS.language,
     calendarTaskCreationEnabled: loaded?.calendarTaskCreationEnabled ?? DEFAULT_SETTINGS.calendarTaskCreationEnabled,
     calendarCreationDefaultKind: loaded?.calendarCreationDefaultKind ?? DEFAULT_SETTINGS.calendarCreationDefaultKind,
     calendarTimeScale: normalizeCalendarTimeScale(loaded?.calendarTimeScale),
@@ -319,12 +320,13 @@ export class TaskHubSettingTab extends PluginSettingTab {
       .setName(t("language"))
       .setDesc(t("languageDesc"))
       .addDropdown((dropdown) => {
+        for (const option of LANGUAGE_OPTIONS) {
+          dropdown.addOption(option.value, option.label);
+        }
         dropdown
-          .addOption("en", "English")
-          .addOption("zh", "中文")
           .setValue(this.plugin.settings.language)
           .onChange(async (value) => {
-            this.plugin.settings.language = value as TaskHubSettings["language"];
+            this.plugin.settings.language = isLanguage(value) ? value : DEFAULT_SETTINGS.language;
             await this.plugin.saveSettings();
             this.display({ preserveScroll: true });
           });

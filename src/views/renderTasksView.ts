@@ -491,7 +491,7 @@ function renderTaskDetails(
     ? taskSendOptionsForTaskDetails(options, t)
     : [];
   const canSendToExternalTarget = sendTargetOptions.length > 0;
-  const actionLanguageClass = t("language") === "语言" ? "is-compact-language" : "is-long-language";
+  const actionLanguageClass = t.isCjk ? "is-compact-language" : "is-long-language";
   if (canSendToExternalTarget) {
     const actions = details.createDiv({
       cls: ["task-hub-detail-actions", "has-send-action", actionLanguageClass]
