@@ -33,7 +33,7 @@ Task Hub は Markdown タスクを元のノートに残したまま、専用の�
 - macOS ではローカル helper 経由で Apple Reminders と Apple Calendar を読み取り。
 - 設定すると Open API 経由で Dida/TickTick タスクを同期。
 - タスクやカレンダーイベントに紐づくローカル Markdown ノートを作成。
-- プラグイン UI は英語と中国語に切り替え可能。
+- プラグイン UI は英語、中国語、日本語、韓国語、フランス語に切り替え可能。
 
 ## 対応ソース
 
@@ -112,3 +112,20 @@ Task Hub は保守的な範囲を維持しています。
 ## 開発
 
 開発と Release の詳細は英語 README を参照してください: [Development](README.md#development)。
+
+## Release アセット
+
+Obsidian コミュニティプラグインの Release では、GitHub release tag が `manifest.json` の `version` と完全に一致している必要があり、次の添付ファイルを含めます。
+
+- `main.js`
+- `manifest.json`
+- `styles.css`
+
+リポジトリルートには、Obsidian の提出フローで必要なファイルも保持します。
+
+- `README.md`
+- `LICENSE`
+- `manifest.json`
+- `versions.json`
+
+`taskhub-apple-helper` などの追加ファイルをコミュニティプラグインの GitHub Release に添付しないでください。Obsidian は release assets から `main.js`、`manifest.json`、`styles.css` だけをダウンロードします。

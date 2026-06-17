@@ -33,7 +33,7 @@ Task Hub mantiene tus tareas Markdown dentro de sus notas originales y les añad
 - Lee Apple Reminders y Apple Calendar en macOS mediante el helper local.
 - Sincroniza tareas Dida/TickTick mediante la Open API cuando está configurado.
 - Crea notas Markdown locales enlazadas a tareas y eventos.
-- Permite cambiar la interfaz del plugin entre inglés y chino.
+- Permite cambiar la interfaz del plugin entre inglés, chino, japonés, coreano y francés.
 
 ## Fuentes compatibles
 
@@ -112,3 +112,20 @@ Task Hub mantiene un alcance conservador:
 ## Desarrollo
 
 Consulta el README en inglés para los detalles de desarrollo y release: [Development](README.md#development).
+
+## Assets de release
+
+Para una release de plugin comunitario de Obsidian, el tag de GitHub debe coincidir exactamente con la `version` de `manifest.json` e incluir estos archivos adjuntos:
+
+- `main.js`
+- `manifest.json`
+- `styles.css`
+
+La raíz del repositorio también conserva los archivos esperados por el flujo de envío de Obsidian:
+
+- `README.md`
+- `LICENSE`
+- `manifest.json`
+- `versions.json`
+
+No adjuntes archivos adicionales como `taskhub-apple-helper` a las GitHub Releases del plugin comunitario. Obsidian solo descarga `main.js`, `manifest.json` y `styles.css` desde los release assets.

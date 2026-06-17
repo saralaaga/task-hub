@@ -33,7 +33,7 @@ Use it when you want to:
 - Read Apple Reminders and Apple Calendar data on macOS through the local helper.
 - Sync Dida/TickTick tasks through the Open API when configured.
 - Create local Markdown notes linked to tasks and calendar events.
-- Switch the plugin interface between English and Chinese.
+- Switch the plugin interface between English, Chinese, Japanese, Korean, and French.
 
 ## Supported Sources
 

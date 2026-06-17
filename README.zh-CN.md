@@ -33,7 +33,7 @@ Task Hub 让任务继续留在原来的 Markdown 笔记里，同时提供一个�
 - 在 macOS 上通过本地 helper 读取 Apple Reminders 和 Apple Calendar。
 - 配置后可通过 Open API 同步滴答清单 / TickTick 任务。
 - 可为任务和日历事件创建本地 Markdown 关联笔记。
-- 插件界面支持英文和中文。
+- 插件界面支持英文、中文、日语、韩语和法语。
 
 ## 支持的来源
 
@@ -112,3 +112,20 @@ Task Hub 仍然保持保守范围：
 ## 开发
 
 开发和发布命令以英文 README 为准：[Development](README.md#development)。
+
+## Release 附件
+
+Obsidian 社区插件 release 的 GitHub tag 必须和 `manifest.json` 中的 `version` 完全一致，并上传这些附件：
+
+- `main.js`
+- `manifest.json`
+- `styles.css`
+
+仓库根目录还保留 Obsidian 提交流程需要的文件：
+
+- `README.md`
+- `LICENSE`
+- `manifest.json`
+- `versions.json`
+
+不要把 `taskhub-apple-helper` 等额外文件作为社区插件 GitHub Release 附件上传。Obsidian 只会从 release assets 下载 `main.js`、`manifest.json` 和 `styles.css`。

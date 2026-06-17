@@ -33,7 +33,7 @@ Task Hub는 Markdown 작업을 원래 노트에 그대로 두고 전용 작업 �
 - macOS에서 로컬 helper를 통해 Apple Reminders 및 Apple Calendar 읽기.
 - 설정 시 Open API를 통해 Dida/TickTick 작업 동기화.
 - 작업 및 캘린더 이벤트에 연결된 로컬 Markdown 노트 만들기.
-- 플러그인 UI는 영어와 중국어를 지원합니다.
+- 플러그인 UI는 영어, 중국어, 일본어, 한국어, 프랑스어를 지원합니다.
 
 ## 지원되는 소스
 
@@ -112,3 +112,20 @@ Task Hub는 보수적인 범위를 유지합니다.
 ## 개발
 
 개발 및 Release 세부 정보는 영어 README를 참고하세요: [Development](README.md#development).
+
+## Release 자산
+
+Obsidian 커뮤니티 플러그인 release에서는 GitHub release tag가 `manifest.json`의 `version`과 정확히 일치해야 하며, 다음 첨부 파일을 포함해야 합니다.
+
+- `main.js`
+- `manifest.json`
+- `styles.css`
+
+저장소 루트에는 Obsidian 제출 흐름에서 요구하는 파일도 유지합니다.
+
+- `README.md`
+- `LICENSE`
+- `manifest.json`
+- `versions.json`
+
+`taskhub-apple-helper` 같은 추가 파일을 커뮤니티 플러그인 GitHub Release에 첨부하지 마세요. Obsidian은 release assets에서 `main.js`, `manifest.json`, `styles.css`만 다운로드합니다.
