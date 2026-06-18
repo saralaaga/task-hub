@@ -27,6 +27,7 @@ import { setCssProps, setCssStyles } from "./domStyles";
 export type CalendarViewState = {
   mode: CalendarViewMode;
   modeTransition?: CalendarModeTransitionDirection;
+  calendarAgendaScrollPosition?: AgendaScrollPosition;
   focusDate: Date;
   weekStart: WeekStart;
   visibleSourceIds: Set<string>;
@@ -182,7 +183,7 @@ export function renderCalendarView(
 ): void {
   const detailsSelectionKeyToRestore = activeDetailsSelectionKey;
   if (activeDetailsElement) clearActiveCalendarDetails(true);
-  const agendaScrollToRestore = readAgendaScrollPosition(container);
+  const agendaScrollToRestore = state.calendarAgendaScrollPosition ?? readAgendaScrollPosition(container);
   activeCalendarItemElements = new Map();
   activeSelectedTaskIds = new Set(state.selectedTaskIds ?? []);
   activeSelectedCalendarItemKeys = new Set([...activeSelectedTaskIds].map((taskId) => `task:${taskId}`));
@@ -266,7 +267,7 @@ export function renderCalendarView(
   restoreCalendarDetailsPopover(detailsSelectionKeyToRestore, handlers, state);
 }
 
-type AgendaScrollPosition = {
+export type AgendaScrollPosition = {
   top: number;
   left: number;
 };

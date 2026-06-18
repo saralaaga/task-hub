@@ -554,6 +554,43 @@ describe("renderCalendarView", () => {
     expect(stage?.classes.has("is-slide-right")).toBe(false);
   });
 
+  it("restores a saved agenda scroll position when the parent shell was rerendered first", () => {
+    const container = new FakeElement();
+
+    renderCalendarView(
+      container as unknown as HTMLElement,
+      {
+        mode: "week",
+        focusDate: new Date("2026-05-08T12:00:00Z"),
+        weekStart: "monday",
+        visibleSourceIds: new Set(["vault"]),
+        includeCompletedTasks: false,
+        allowAppleReminderWriteback: false,
+        allowTaskCreation: false,
+        calendarAgendaScrollPosition: { top: 340, left: 24 },
+        sources: [],
+        t: (key) => key
+      },
+      [],
+      [],
+      {
+        onLayerToggle: jest.fn(),
+        onModeChange: jest.fn(),
+        onMove: jest.fn(),
+        onDateCreateTask: jest.fn(),
+        onTaskComplete: jest.fn(),
+        onTaskJump: jest.fn(),
+        onTaskSelect: jest.fn(),
+        onTaskReschedule: jest.fn(),
+        onToday: jest.fn()
+      }
+    );
+
+    const agenda = collect(container).find((element) => element.classes.has("task-hub-agenda"));
+    expect(agenda?.scrollTop).toBe(340);
+    expect(agenda?.scrollLeft).toBe(24);
+  });
+
   it("changes the day and week time scale after two command wheel steps only", () => {
     const dayContainer = new FakeElement();
     const onDayTimeScaleChange = jest.fn();

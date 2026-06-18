@@ -6,13 +6,19 @@ import { createTranslator } from "../i18n";
 import type TaskHubPlugin from "../main";
 import type { TaskItem } from "../types";
 import { type CalendarViewMode } from "../calendar/calendarModel";
-import { renderCalendarView, type CalendarModeTransitionDirection } from "./renderCalendarView";
+import { renderCalendarView, type AgendaScrollPosition, type CalendarModeTransitionDirection } from "./renderCalendarView";
 import { renderShell, type DashboardView } from "./renderShell";
 import { syncVisibleSources } from "./sourceVisibility";
 import { renderTagsView } from "./renderTagsView";
 import { renderTasksView } from "./renderTasksView";
 import { decorateRenderedTaskNoteTags, renderPlainTaskNoteBody } from "./renderTaskNoteBody";
 import { bindTaskHubTagInputSuggest, collectObsidianTags } from "./tagInputSuggest";
+
+type TaskHubRenderOptions = {
+  preserveTaskListScroll?: boolean;
+  preserveContentScroll?: boolean;
+  preserveCalendarAgendaScroll?: boolean;
+};
 
 export class TaskHubView extends ItemView {
   private view: DashboardView = this.plugin.settings.defaultView;
@@ -26,6 +32,7 @@ export class TaskHubView extends ItemView {
   private selectedTaskId: string | undefined;
   private taskListScrollTop = 0;
   private contentScrollTop = 0;
+  private calendarAgendaScrollPosition: AgendaScrollPosition | undefined;
   private completingTaskIds = new Set<string>();
   private selectedTaskIds = new Set<string>();
   private unscheduledPanelOpen = false;
@@ -53,10 +60,11 @@ export class TaskHubView extends ItemView {
     return Promise.resolve();
   }
 
-  render(options: { preserveTaskListScroll?: boolean } = {}): void {
-    if (options.preserveTaskListScroll) {
+  render(options: TaskHubRenderOptions = {}): void {
+    if (shouldPreserveScroll(options)) {
       this.captureTaskListScroll();
       this.captureContentScroll();
+      this.captureCalendarAgendaScroll();
     }
     const container = this.containerEl.children[1] as HTMLElement;
     const allTasks = this.plugin.getTasks();
@@ -244,6 +252,7 @@ export class TaskHubView extends ItemView {
           taskColors
         }
       );
+      this.restoreContentScroll(options);
       return;
     }
 
@@ -275,6 +284,7 @@ export class TaskHubView extends ItemView {
           calendarTimeScale: this.plugin.settings.calendarTimeScale,
           calendarDayStartHour: this.plugin.settings.calendarDayStartHour,
           calendarDayEndHour: this.plugin.settings.calendarDayEndHour,
+          calendarAgendaScrollPosition: shouldPreserveScroll(options) ? this.calendarAgendaScrollPosition : undefined,
           defaultTimedTaskDurationMinutes: this.plugin.settings.localApple.calendarDefaultTimedTaskDurationMinutes,
           taskDurationOverrides: this.plugin.settings.localApple.reminderDurationOverrides,
           taskColors,
@@ -331,17 +341,17 @@ export class TaskHubView extends ItemView {
           onTaskSelectionChange: (task, taskIds) => {
             this.updateTaskSelection(task, taskIds);
           },
-          onTaskUpdate: (task, draft) => void this.plugin.updateCalendarTask(task, draft),
-          onTaskReschedule: (task, dateKey) => void this.plugin.rescheduleTask(task, dateKey),
-          onTaskDelete: (task) => void this.plugin.deleteCalendarTask(task),
-          onTaskSendToTarget: (task, target) => void this.plugin.sendTaskToTarget(task, target),
-          onTaskSendToAppleReminders: (task) => void this.plugin.sendTaskToAppleReminders(task),
-          onTaskSendToDida: (task) => void this.plugin.sendTaskToDida(task),
-          onTaskSendToAppleCalendar: (task) => void this.plugin.convertAppleReminderToCalendarEvent(task),
-          onEventReschedule: (event, dateKey) => void this.plugin.rescheduleCalendarEvent(event, dateKey),
-          onEventUpdate: (event, draft) => void this.plugin.updateCalendarEvent(event, draft),
-          onEventDelete: (event) => void this.plugin.deleteCalendarEvent(event),
-          onEventSendToAppleReminders: (event) => void this.plugin.convertAppleCalendarEventToReminder(event),
+          onTaskUpdate: (task, draft) => void this.withPreservedCalendarViewport(() => this.plugin.updateCalendarTask(task, draft)),
+          onTaskReschedule: (task, dateKey) => void this.withPreservedCalendarViewport(() => this.plugin.rescheduleTask(task, dateKey)),
+          onTaskDelete: (task) => void this.withPreservedCalendarViewport(() => this.plugin.deleteCalendarTask(task)),
+          onTaskSendToTarget: (task, target) => void this.withPreservedCalendarViewport(() => this.plugin.sendTaskToTarget(task, target)),
+          onTaskSendToAppleReminders: (task) => void this.withPreservedCalendarViewport(() => this.plugin.sendTaskToAppleReminders(task)),
+          onTaskSendToDida: (task) => void this.withPreservedCalendarViewport(() => this.plugin.sendTaskToDida(task)),
+          onTaskSendToAppleCalendar: (task) => void this.withPreservedCalendarViewport(() => this.plugin.convertAppleReminderToCalendarEvent(task)),
+          onEventReschedule: (event, dateKey) => void this.withPreservedCalendarViewport(() => this.plugin.rescheduleCalendarEvent(event, dateKey)),
+          onEventUpdate: (event, draft) => void this.withPreservedCalendarViewport(() => this.plugin.updateCalendarEvent(event, draft)),
+          onEventDelete: (event) => void this.withPreservedCalendarViewport(() => this.plugin.deleteCalendarEvent(event)),
+          onEventSendToAppleReminders: (event) => void this.withPreservedCalendarViewport(() => this.plugin.convertAppleCalendarEventToReminder(event)),
           onCreateTaskNote: (task) => void this.plugin.createTaskNoteForTask(task),
           onCreateEventNote: (event) => void this.plugin.createTaskNoteForEvent(event),
           onOpenTaskNote: (path) => void this.plugin.openTaskNote(path),
@@ -351,6 +361,7 @@ export class TaskHubView extends ItemView {
       );
       this.unscheduledPanelOpening = false;
       this.calendarModeTransition = undefined;
+      this.restoreContentScroll(options);
       return;
     }
 
@@ -482,7 +493,7 @@ export class TaskHubView extends ItemView {
         keepForExitAnimation = true;
         this.containerEl.win.setTimeout(() => {
           this.completingTaskIds.delete(task.id);
-          this.render({ preserveTaskListScroll: true });
+          this.render({ preserveCalendarAgendaScroll: true, preserveContentScroll: true, preserveTaskListScroll: true });
         }, 360);
         return;
       }
@@ -498,15 +509,32 @@ export class TaskHubView extends ItemView {
     this.contentScrollTop = container?.scrollTop ?? this.contentScrollTop;
   }
 
-  private restoreContentScroll(options: { preserveTaskListScroll?: boolean }): void {
-    if (!options.preserveTaskListScroll) return;
+  private captureCalendarAgendaScroll(): void {
+    if (this.view !== "calendar" || (this.calendarMode !== "day" && this.calendarMode !== "week")) return;
     const container = this.containerEl.children[1] as HTMLElement | undefined;
-    if (container) {
-      container.scrollTop = this.contentScrollTop;
-    }
+    const agenda = container?.querySelector<HTMLElement>(".task-hub-agenda");
+    if (!agenda) return;
+    this.calendarAgendaScrollPosition = {
+      top: agenda.scrollTop,
+      left: agenda.scrollLeft
+    };
   }
 
-  private updateFilters(filters: TaskFilterState, options: { preserveTaskListScroll?: boolean } = {}): void {
+  private restoreContentScroll(options: TaskHubRenderOptions): void {
+    const container = this.containerEl.children[1] as HTMLElement | undefined;
+    restoreContentScrollAfterRender(container, {
+      preserveScroll: shouldPreserveScroll(options),
+      scrollTop: this.contentScrollTop
+    });
+  }
+
+  private async withPreservedCalendarViewport<T>(action: () => Promise<T>): Promise<T> {
+    this.captureContentScroll();
+    this.captureCalendarAgendaScroll();
+    return action();
+  }
+
+  private updateFilters(filters: TaskFilterState, options: TaskHubRenderOptions = {}): void {
     this.filters = cloneTaskFilters(filters);
     this.plugin.settings.taskViewFilters = cloneTaskFilters(this.filters);
     void this.plugin.saveSettings();
@@ -527,6 +555,18 @@ export class TaskHubView extends ItemView {
     this.render();
   }
 
+}
+
+export function restoreContentScrollAfterRender(
+  container: HTMLElement | undefined,
+  options: { preserveScroll?: boolean; scrollTop: number }
+): void {
+  if (!options.preserveScroll || !container) return;
+  container.scrollTop = options.scrollTop;
+}
+
+function shouldPreserveScroll(options: TaskHubRenderOptions): boolean {
+  return Boolean(options.preserveTaskListScroll || options.preserveContentScroll || options.preserveCalendarAgendaScroll);
 }
 
 export function collectUnscheduledTasks(

@@ -1,4 +1,4 @@
-import { collectCalendarUnscheduledTasks, collectUnscheduledTasks } from "./TaskHubView";
+import { collectCalendarUnscheduledTasks, collectUnscheduledTasks, restoreContentScrollAfterRender } from "./TaskHubView";
 import type { TaskFilterState } from "../filtering/filters";
 import type { TaskItem } from "../types";
 
@@ -52,6 +52,24 @@ describe("collectCalendarUnscheduledTasks", () => {
     const result = collectCalendarUnscheduledTasks(tasks, baseFilters(), NOW, () => true, new Set(["done"]));
 
     expect(result.map((item) => item.id)).toEqual(["open", "done"]);
+  });
+});
+
+describe("restoreContentScrollAfterRender", () => {
+  it("restores the saved content scroll position after calendar or tag rerenders", () => {
+    const container = { scrollTop: 0 } as HTMLElement;
+
+    restoreContentScrollAfterRender(container, { preserveScroll: true, scrollTop: 280 });
+
+    expect(container.scrollTop).toBe(280);
+  });
+
+  it("leaves ordinary rerenders at their natural scroll position", () => {
+    const container = { scrollTop: 12 } as HTMLElement;
+
+    restoreContentScrollAfterRender(container, { scrollTop: 280 });
+
+    expect(container.scrollTop).toBe(12);
   });
 });
 
