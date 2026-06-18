@@ -1758,7 +1758,9 @@ describe("renderCalendarView", () => {
     const popover = collect(fakeDocument.body).find((element) => element.classes.has("task-hub-calendar-detail-popover"));
     const toggle = collect(popover as FakeElement).find((element) => element.classes.has("task-hub-detail-extra-toggle"));
     const recurrenceSelect = collect(popover as FakeElement).find((element) => element.classes.has("task-hub-recurrence-select"));
-    const notesInput = collect(popover as FakeElement).find((element) => element.type === "textarea");
+    const notesInput = collect(popover as FakeElement).find((element) =>
+      element.type === "textarea" && !element.classes.has("task-hub-calendar-detail-title-input")
+    );
 
     expect(recurrenceSelect?.value).toBe("RRULE:FREQ=WEEKLY");
     toggle!.checked = true;
@@ -2249,7 +2251,11 @@ describe("renderCalendarView", () => {
 
     collect(container).find((element) => element.classes.has("task-hub-calendar-item"))?.click();
     const popover = collect(fakeDocument.body).find((element) => element.classes.has("task-hub-calendar-detail-popover"));
-    const title = collect(popover as FakeElement).find((element) => element.type === "text");
+    const title = collect(popover as FakeElement).find((element) =>
+      element.type === "textarea" &&
+      element.classes.has("task-hub-calendar-detail-title-input") &&
+      element.classes.has("task-hub-auto-grow-textarea")
+    );
 
     title!.value = "Updated body";
     title!.dispatch("input");
@@ -2259,6 +2265,51 @@ describe("renderCalendarView", () => {
     expect(onTaskUpdate).toHaveBeenCalledWith(reminderTask, expect.objectContaining({
       title: "Updated body"
     }));
+  });
+
+  it("renders the calendar task body as an auto-growing multiline field", () => {
+    const container = new FakeElement();
+    const longTask = {
+      ...task,
+      text: "去旧货市场找一下有没有侧柜，顺便确认尺寸和颜色，必要时补充更多说明"
+    };
+
+    renderCalendarView(
+      container as unknown as HTMLElement,
+      {
+        mode: "month",
+        focusDate: new Date("2026-05-08T12:00:00Z"),
+        weekStart: "monday",
+        visibleSourceIds: new Set(["vault"]),
+        includeCompletedTasks: false,
+        allowAppleReminderWriteback: false,
+        allowTaskCreation: false,
+        sources: [],
+        t: (key) => key
+      },
+      [longTask],
+      [],
+      {
+        onLayerToggle: jest.fn(),
+        onModeChange: jest.fn(),
+        onMove: jest.fn(),
+        onDateCreateTask: jest.fn(),
+        onTaskComplete: jest.fn(),
+        onTaskJump: jest.fn(),
+        onTaskSelect: jest.fn(),
+        onTaskReschedule: jest.fn(),
+        onToday: jest.fn()
+      }
+    );
+
+    collect(container).find((element) => element.classes.has("task-hub-calendar-item"))?.click();
+    const popover = collect(fakeDocument.body).find((element) => element.classes.has("task-hub-calendar-detail-popover"));
+    const body = collect(popover as FakeElement).find((element) => element.classes.has("task-hub-calendar-detail-title-input"));
+
+    expect(body?.type).toBe("textarea");
+    expect(body?.classes.has("task-hub-auto-grow-textarea")).toBe(true);
+    expect(body?.value).toBe(longTask.text);
+    expect(body?.attributes.get("rows")).toBe("1");
   });
 
   it("opens a read-only popover for ICS events", () => {

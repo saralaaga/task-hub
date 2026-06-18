@@ -42,6 +42,8 @@
   flex-wrap: wrap;
   gap: 8px;
   padding: 8px;
+  position: relative;
+  z-index: 30;
 }
 
 .task-hub-duration-unit {
@@ -265,12 +267,14 @@
   margin-left: auto;
   max-width: min(720px, 58vw);
   min-width: 0;
+  position: relative;
+  z-index: 31;
 }
 
 .task-hub-condition-menu {
   flex: 0 0 auto;
   position: relative;
-  z-index: 3;
+  z-index: 40;
 }
 
 .task-hub-condition-trigger {
@@ -328,6 +332,7 @@
   padding: 12px;
   position: absolute;
   top: calc(100% + 6px);
+  z-index: 41;
 }
 
 .task-hub-condition-panel-header,
@@ -3136,6 +3141,13 @@ body .task-hub-view button.task-hub-color-swatch {
 .task-hub-calendar-detail-row .task-hub-detail-control textarea {
   line-height: 1.35;
   min-height: 96px;
+}
+
+.task-hub-calendar-detail-row .task-hub-detail-control textarea.task-hub-auto-grow-textarea {
+  max-height: 160px;
+  min-height: 34px;
+  overflow-y: auto;
+  resize: none;
 }
 
 .task-hub-calendar-detail-actions {

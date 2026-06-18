@@ -23,6 +23,7 @@ import { createRecurrenceSelect, recurrenceValueFromSelect } from "./recurrenceC
 import { resolveTaskBulkActions, type TaskBulkActionId } from "./taskSelection";
 import { renderSourceLogo, sourceLogoKindForCalendarItem } from "./sourceLogos";
 import { setCssProps, setCssStyles } from "./domStyles";
+import type { TaskHubTagInputElement } from "./tagInputSuggest";
 
 export type CalendarViewState = {
   mode: CalendarViewMode;
@@ -57,7 +58,7 @@ export type CalendarViewState = {
   didaProjects?: DidaProject[];
   taskSendDefaultTarget?: TaskSendTarget;
   appleCalendars?: AppleCalendarInfo[];
-  bindTagInputSuggest?: (input: HTMLInputElement) => void;
+  bindTagInputSuggest?: (input: TaskHubTagInputElement) => void;
   taskNotesEnabled?: boolean;
   allowThinoNoteEdit?: boolean;
   getTaskNotes?: (task: TaskItem) => TaskNote[];
@@ -1241,7 +1242,7 @@ function renderTaskDetailsPopover(
   const canEdit = (task.source === "apple-reminders" || task.source === "dida") && editable && Boolean(handlers.onTaskUpdate);
   const canToggle = task.source === "vault" || (task.source === "apple-reminders" && state.allowAppleReminderWriteback) || (task.source === "dida" && Boolean(state.allowDidaWriteback));
   const form = popover.createDiv({ cls: "task-hub-calendar-detail-form" });
-  const title = detailInput(form, state.t("taskCreationBody"), task.text, "text", (icon) => {
+  const title = detailAutoGrowTextarea(form, state.t("taskCreationBody"), task.text, "task-hub-calendar-detail-title-input", (icon) => {
     renderCalendarTaskCompleteCheckbox(icon, task, canToggle, handlers, state);
   });
   state.bindTagInputSuggest?.(title);
@@ -1728,6 +1729,32 @@ function detailTextarea(container: HTMLElement, label: string, value: string | u
   const textarea = row.control.createEl("textarea") as HTMLTextAreaElement;
   textarea.value = value ?? "";
   return textarea;
+}
+
+function detailAutoGrowTextarea(
+  container: HTMLElement,
+  label: string,
+  value: string | undefined,
+  textareaClass?: string,
+  renderIcon?: (icon: HTMLElement) => void
+): HTMLTextAreaElement {
+  const row = detailRow(container, label, renderIcon);
+  const textarea = row.control.createEl("textarea", {
+    cls: ["task-hub-auto-grow-textarea", textareaClass ?? ""].filter(Boolean).join(" ")
+  }) as HTMLTextAreaElement;
+  textarea.value = value ?? "";
+  textarea.setAttr("rows", "1");
+  resizeAutoGrowTextarea(textarea);
+  textarea.addEventListener("input", () => resizeAutoGrowTextarea(textarea));
+  return textarea;
+}
+
+function resizeAutoGrowTextarea(textarea: HTMLTextAreaElement): void {
+  setCssStyles(textarea, { height: "auto" });
+  const nextHeight = textarea.scrollHeight;
+  if (Number.isFinite(nextHeight) && nextHeight > 0) {
+    setCssStyles(textarea, { height: `${nextHeight}px` });
+  }
 }
 
 function detailSelect(

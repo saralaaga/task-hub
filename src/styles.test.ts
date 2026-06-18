@@ -70,6 +70,35 @@ describe("Task Hub styles", () => {
     expect(rule).not.toContain("translate(-50%, -50%)");
   });
 
+  it("keeps the condition filter popover above sticky calendar headers", () => {
+    const styles = readFileSync(path.join(__dirname, "styles.css"), "utf8");
+    const toolbarRule = styles.match(/\.task-hub-toolbar\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const filterStripRule = styles.match(/\.task-hub-filter-strip\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const conditionMenuRule = styles.match(/\.task-hub-condition-menu\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const conditionPanelRule = styles.match(/\.task-hub-condition-panel\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+
+    expect(toolbarRule).toContain("position: relative");
+    expect(toolbarRule).toContain("z-index: 30");
+    expect(filterStripRule).toContain("position: relative");
+    expect(filterStripRule).toContain("z-index: 31");
+    expect(conditionMenuRule).toContain("z-index: 40");
+    expect(conditionPanelRule).toContain("z-index: 41");
+  });
+
+  it("lets auto-growing calendar task body fields stay compact for short text", () => {
+    const styles = readFileSync(path.join(__dirname, "styles.css"), "utf8");
+    const fixedTextareaMatch = /\.task-hub-calendar-detail-row\s+\.task-hub-detail-control\s+textarea\s*\{[^}]*min-height:\s*96px[^}]*\}/.exec(styles);
+    const autoGrowMatch = /\.task-hub-calendar-detail-row\s+\.task-hub-detail-control\s+textarea\.task-hub-auto-grow-textarea\s*\{(?<body>[^}]+)\}/.exec(styles);
+    const fixedTextareaIndex = fixedTextareaMatch?.index ?? -1;
+    const autoGrowIndex = autoGrowMatch?.index ?? -1;
+    const autoGrowRule = autoGrowMatch?.groups?.body ?? "";
+
+    expect(fixedTextareaIndex).toBeGreaterThanOrEqual(0);
+    expect(autoGrowIndex).toBeGreaterThan(fixedTextareaIndex);
+    expect(autoGrowRule).toContain("min-height: 34px");
+    expect(autoGrowRule).toContain("resize: none");
+  });
+
   it("aligns calendar detail date/all-day with the start/end time columns", () => {
     const styles = readFileSync(path.join(__dirname, "styles.css"), "utf8");
     const dateRule = styles.match(/\.task-hub-calendar-detail-date-row\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";

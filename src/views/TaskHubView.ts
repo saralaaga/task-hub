@@ -12,7 +12,7 @@ import { syncVisibleSources } from "./sourceVisibility";
 import { renderTagsView } from "./renderTagsView";
 import { renderTasksView } from "./renderTasksView";
 import { decorateRenderedTaskNoteTags, renderPlainTaskNoteBody } from "./renderTaskNoteBody";
-import { bindTaskHubTagInputSuggest, collectObsidianTags } from "./tagInputSuggest";
+import { bindTaskHubTagInputSuggest, collectObsidianTags, type TaskHubTagInputElement } from "./tagInputSuggest";
 
 type TaskHubRenderOptions = {
   preserveTaskListScroll?: boolean;
@@ -90,7 +90,7 @@ export class TaskHubView extends ItemView {
       ...this.plugin.getAppleReminderListColors(),
       ...this.plugin.getDidaProjectColors()
     };
-    const bindTagInputSuggest = (input: HTMLInputElement) => {
+    const bindTagInputSuggest = (input: TaskHubTagInputElement) => {
       bindTaskHubTagInputSuggest(this.plugin.app, input, () => collectObsidianTags(this.plugin.app, this.plugin.getTasks()));
     };
     const main = renderShell(
