@@ -1850,6 +1850,7 @@ describe("renderCalendarView", () => {
             history: [],
             title: "Calendar note body",
             body: "Calendar note body\nSecond calendar line #tag",
+            bodyStartLine: 10,
             tags: ["#tag"],
             createdAt: "2026-05-29T10:30:12"
           }
@@ -1884,8 +1885,8 @@ describe("renderCalendarView", () => {
     noteCard?.click();
     expect(onOpenTaskNote).not.toHaveBeenCalled();
     expect(collect(noteCard as FakeElement).find((element) => element.classes.has("task-hub-task-note-title"))?.text).toBe("one");
+    expect(collect(noteCard as FakeElement).find((element) => element.classes.has("task-hub-task-note-text"))?.text).toContain("Calendar note body");
     expect(collect(noteCard as FakeElement).find((element) => element.classes.has("task-hub-task-note-text"))?.text).toContain("Second calendar line");
-    expect(collect(noteCard as FakeElement).find((element) => element.classes.has("task-hub-task-note-text"))?.text).not.toContain("Calendar note body");
     expect(collect(popover as FakeElement).find((element) => element.classes.has("task-hub-task-note-date"))?.text).toBe("2026-05-29");
 
     const menuButton = collect(popover as FakeElement).find((element) => element.classes.has("task-hub-task-note-menu"));

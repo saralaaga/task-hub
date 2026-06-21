@@ -60,6 +60,8 @@ export type TaskRenderOptions = {
   getTaskNoteCount?: (task: TaskItem) => number;
   getTaskNotes?: (task: TaskItem) => TaskNote[];
   renderNoteMarkdown?: TaskNoteMarkdownRenderer;
+  expandedTaskIds?: ReadonlySet<string>;
+  onToggleTaskExpanded?: (task: TaskItem) => void;
 };
 
 const BUCKETS = ["overdue", "today", "tomorrow", "thisWeek", "future", "noDate", "otherCompleted"] as const;
@@ -103,7 +105,9 @@ export function renderTasksView(
     return;
   }
 
-  const groups = groupSortedTasksByDateBucket(sortedTasks, now);
+  const childTasksByParentId = buildChildTasksByParentId(sortedTasks);
+  const topLevelTasks = sortedTasks.filter((task) => !task.parentId || !childTasksByParentId.has(task.parentId));
+  const groups = groupSortedTasksByDateBucket(topLevelTasks, now);
   const rowsByTaskId = new Map<string, HTMLElement>();
   let detailsHost: HTMLElement | undefined;
   const selectTask = (task: TaskItem, event?: MouseEvent) => {
@@ -155,23 +159,76 @@ export function renderTasksView(
     const cards = section.createDiv({ cls: "task-hub-task-list-flow" });
 
     for (const task of bucketTasks) {
-      const row = renderTaskRow(
+      renderTaskTree(
         cards,
         task,
+        childTasksByParentId,
         handlers,
         options,
         t,
-        task.id === selectedTask?.id,
-        selectedTaskIds.has(task.id),
         selectTask,
-        selectContextTasks
+        selectContextTasks,
+        rowsByTaskId,
+        selectedTask?.id,
+        selectedTaskIds,
+        0
       );
-      rowsByTaskId.set(task.id, row);
     }
   }
   restoreTaskListScroll(list, options);
   detailsHost = workbench.createDiv({ cls: "task-hub-task-details-host" });
   renderTaskDetails(detailsHost, selectedTask, handlers, options, t);
+}
+
+function renderTaskTree(
+  container: HTMLElement,
+  task: TaskItem,
+  childTasksByParentId: Map<string, TaskItem[]>,
+  handlers: TaskRowHandlers,
+  options: TaskRenderOptions,
+  t: Translator,
+  onSelect: (task: TaskItem, event?: MouseEvent) => void,
+  contextTasks: (task: TaskItem) => TaskItem[],
+  rowsByTaskId: Map<string, HTMLElement>,
+  selectedTaskId: string | undefined,
+  selectedTaskIds: Set<string>,
+  depth: number
+): void {
+  const children = childTasksByParentId.get(task.id) ?? [];
+  const isExpanded = options.expandedTaskIds?.has(task.id) ?? false;
+  const row = renderTaskRow(
+    container,
+    task,
+    handlers,
+    options,
+    t,
+    task.id === selectedTaskId,
+    selectedTaskIds.has(task.id),
+    onSelect,
+    contextTasks,
+    children.length,
+    isExpanded,
+    depth
+  );
+  rowsByTaskId.set(task.id, row);
+  if (children.length === 0 || !isExpanded) return;
+  const childContainer = container.createDiv({ cls: "task-hub-subtask-list" });
+  for (const child of children) {
+    renderTaskTree(
+      childContainer,
+      child,
+      childTasksByParentId,
+      handlers,
+      options,
+      t,
+      onSelect,
+      contextTasks,
+      rowsByTaskId,
+      selectedTaskId,
+      selectedTaskIds,
+      depth + 1
+    );
+  }
 }
 
 function normalizedSelectedTaskIds(options: TaskRenderOptions, selectedTask: TaskItem | undefined): Set<string> {
@@ -195,7 +252,10 @@ function renderTaskRow(
   selected: boolean,
   multiSelected: boolean,
   onSelect: (task: TaskItem, event?: MouseEvent) => void,
-  contextTasks: (task: TaskItem) => TaskItem[]
+  contextTasks: (task: TaskItem) => TaskItem[],
+  childCount = 0,
+  expanded = false,
+  depth = 0
 ): HTMLElement {
   const classes = [
     "task-hub-task-row",
@@ -205,6 +265,7 @@ function renderTaskRow(
     options.exitingTaskIds?.has(task.id) ? "is-exiting" : ""
   ].filter(Boolean).join(" ");
   const row = container.createDiv({ cls: classes });
+  row.setAttr("data-task-depth", String(depth));
   const color = taskDisplayColor(task, options);
   if (color) setCssProps(row, { "--task-hub-source-color": color });
   const checkbox = row.createEl("input", { type: "checkbox" });
@@ -229,6 +290,21 @@ function renderTaskRow(
   if (options.taskNotesEnabled && options.getTaskNoteCount && options.getTaskNoteCount(task) > 0) {
     body.createSpan({ cls: "task-hub-task-note-count", text: String(options.getTaskNoteCount(task)) });
   }
+  if (childCount > 0) {
+    const toggle = row.createEl("button", {
+      cls: `task-hub-subtask-toggle ${expanded ? "is-expanded" : ""}`,
+      attr: {
+        "aria-label": expanded ? "Collapse subtasks" : "Expand subtasks",
+        "aria-expanded": String(expanded)
+      }
+    });
+    setIcon(toggle, "chevron-right");
+    toggle.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      options.onToggleTaskExpanded?.(task);
+    });
+  }
 
   row.addEventListener("click", (event) => onSelect(task, event));
   row.addEventListener("dblclick", () => {
@@ -243,6 +319,16 @@ function renderTaskRow(
     menu.showAtMouseEvent(event);
   });
   return row;
+}
+
+function buildChildTasksByParentId(tasks: TaskItem[]): Map<string, TaskItem[]> {
+  const taskIds = new Set(tasks.map((task) => task.id));
+  const children = new Map<string, TaskItem[]>();
+  for (const task of tasks) {
+    if (!task.parentId || !taskIds.has(task.parentId)) continue;
+    children.set(task.parentId, [...(children.get(task.parentId) ?? []), task]);
+  }
+  return children;
 }
 
 function addTaskBulkMenuItems(

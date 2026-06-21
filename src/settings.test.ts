@@ -63,7 +63,8 @@ describe("normalizeTaskHubSettings", () => {
       thinoFolder: "Thino",
       openNoteAfterCreate: true,
       showCountsInTaskList: true,
-      showFrontmatterInNoteModal: false
+      showFrontmatterInNoteModal: false,
+      linkedNoteSubtasksEnabled: false
     });
     expect(settings.taskViewFilters).toEqual({ status: "open", tags: [], sourceQuery: "", textQuery: "" });
     expect(settings.ignoredPaths).toEqual(["Archive/"]);

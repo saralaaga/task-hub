@@ -35,12 +35,7 @@ export function taskNotePreviewTitle(sourcePath: string): string {
 }
 
 export function taskNotePreviewBody(body: string): string {
-  return body
-    .trim()
-    .split(/\r?\n/u)
-    .slice(1)
-    .join("\n")
-    .trim();
+  return body.trim();
 }
 
 export function decorateRenderedTaskNoteTags(container: HTMLElement): void {

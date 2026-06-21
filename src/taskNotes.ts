@@ -11,6 +11,7 @@ export type TaskNoteSettings = {
   openNoteAfterCreate: boolean;
   showCountsInTaskList: boolean;
   showFrontmatterInNoteModal: boolean;
+  linkedNoteSubtasksEnabled: boolean;
 };
 
 export type TaskNote = {
@@ -20,6 +21,7 @@ export type TaskNote = {
   history: string[];
   title: string;
   body: string;
+  bodyStartLine: number;
   tags: string[];
   createdAt?: string;
   updatedAt?: string;
@@ -30,6 +32,7 @@ export type TaskNoteFrontmatter = {
   related: string[];
   history: string[];
   body: string;
+  bodyStartLine: number;
   tags: string[];
   createdAt?: string;
   updatedAt?: string;
@@ -132,11 +135,13 @@ export function parseTaskNoteFrontmatter(content: string): TaskNoteFrontmatter |
   const history = parseYamlArray(frontmatter.block, "taskhub-related-history");
   const isTaskHubNote = scalars["taskhub-note"] === "true" || related.length > 0;
   if (!isTaskHubNote) return undefined;
+  const normalizedBody = normalizeNoteBodyWithStartLine(frontmatter.body, frontmatter.bodyStartLine);
   return {
     noteId: unquoteYamlString(scalars["taskhub-note-id"]),
     related,
     history,
-    body: normalizeNoteBody(frontmatter.body),
+    body: normalizedBody.body,
+    bodyStartLine: normalizedBody.bodyStartLine,
     tags: extractNoteTags(frontmatter.body),
     createdAt: scalars["taskhub-created"],
     updatedAt: scalars["taskhub-updated"]
@@ -241,6 +246,7 @@ export class TaskNoteIndex {
           history: parsed.history,
           title: firstBodyLine(parsed.body) ?? titleFromPath(file.path),
           body: parsed.body,
+          bodyStartLine: parsed.bodyStartLine,
           tags: parsed.tags,
           createdAt: parsed.createdAt,
           updatedAt: parsed.updatedAt
@@ -339,7 +345,7 @@ function stripManagedFrontmatterLines(block: string): string[] {
 function extractFrontmatter(content: string):
   | { status: "none" }
   | { status: "malformed" }
-  | { status: "found"; block: string; body: string } {
+  | { status: "found"; block: string; body: string; bodyStartLine: number } {
   if (!content.startsWith("---")) return { status: "none" };
   const lines = content.split(/\r?\n/u);
   if (lines[0].trim() !== "---") return { status: "none" };
@@ -348,7 +354,8 @@ function extractFrontmatter(content: string):
       return {
         status: "found",
         block: lines.slice(1, index).join("\n"),
-        body: lines.slice(index + 1).join("\n")
+        body: lines.slice(index + 1).join("\n"),
+        bodyStartLine: index + 1
       };
     }
   }
@@ -423,6 +430,15 @@ function titleFromPath(path: string): string {
 
 function normalizeNoteBody(body: string): string {
   return body.replace(/^\s*\n/u, "").replace(/\s+$/u, "");
+}
+
+function normalizeNoteBodyWithStartLine(body: string, bodyStartLine: number): { body: string; bodyStartLine: number } {
+  const withoutTrailingWhitespace = body.replace(/\s+$/u, "");
+  const leadingBlankLines = withoutTrailingWhitespace.match(/^([ \t]*\r?\n)+/u)?.[0] ?? "";
+  return {
+    body: withoutTrailingWhitespace.slice(leadingBlankLines.length),
+    bodyStartLine: bodyStartLine + leadingBlankLines.split(/\r?\n/u).length - 1
+  };
 }
 
 function firstBodyLine(body: string): string | undefined {

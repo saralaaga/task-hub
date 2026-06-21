@@ -335,6 +335,8 @@ export type TranslationKey =
   | "taskNotesEnableDesc"
   | "taskNotesFolder"
   | "taskNotesFolderDesc"
+  | "taskNotesLinkedSubtasks"
+  | "taskNotesLinkedSubtasksDesc"
   | "taskNotesOpenAfterCreate"
   | "taskNotesOpenAfterCreateDesc"
   | "taskNotesSection"
@@ -481,6 +483,8 @@ const JA_SETTINGS_TRANSLATIONS: Partial<Record<TranslationKey, string>> = {
   taskNotesEnableDesc: "タスクやカレンダーイベントに紐づく Markdown ノートを作成します。",
   taskNotesFolder: "Task Hub ノートフォルダー",
   taskNotesFolderDesc: "通常の Task Hub 関連ノートを保存するフォルダー。",
+  taskNotesLinkedSubtasks: "関連ノートからサブタスクを検出",
+  taskNotesLinkedSubtasksDesc: "有効にすると、関連ノート本文内の Markdown タスクを親タスクのサブタスク候補として読み取ります。",
   taskNotesOpenAfterCreate: "作成後にノートを開く",
   taskNotesOpenAfterCreateDesc: "作成した Markdown ノートを新しいタブで開きます。",
   taskNotesSection: "タスクノート",
@@ -608,6 +612,8 @@ const FR_SETTINGS_TRANSLATIONS: Partial<Record<TranslationKey, string>> = {
   taskNotesEnableDesc: "Crée des notes Markdown liées aux tâches et événements du calendrier.",
   taskNotesFolder: "Dossier des notes Task Hub",
   taskNotesFolderDesc: "Dossier des notes liées Task Hub classiques.",
+  taskNotesLinkedSubtasks: "Détecter les sous-tâches dans les notes liées",
+  taskNotesLinkedSubtasksDesc: "Lorsque cette option est activée, les tâches Markdown dans le corps des notes liées peuvent être lues comme sous-tâches de la tâche parente.",
   taskNotesOpenAfterCreate: "Ouvrir la note après création",
   taskNotesOpenAfterCreateDesc: "Ouvre la note Markdown créée dans un nouvel onglet.",
   taskNotesSection: "Notes de tâche",
@@ -735,6 +741,8 @@ const KO_SETTINGS_TRANSLATIONS: Partial<Record<TranslationKey, string>> = {
   taskNotesEnableDesc: "작업과 캘린더 이벤트에 연결된 Markdown 노트를 생성합니다.",
   taskNotesFolder: "Task Hub 노트 폴더",
   taskNotesFolderDesc: "일반 Task Hub 연결 노트를 저장할 폴더입니다.",
+  taskNotesLinkedSubtasks: "연결된 노트에서 하위 작업 감지",
+  taskNotesLinkedSubtasksDesc: "켜면 연결된 노트 본문의 Markdown 작업을 부모 작업의 하위 작업 후보로 읽습니다.",
   taskNotesOpenAfterCreate: "생성 후 노트 열기",
   taskNotesOpenAfterCreateDesc: "생성한 Markdown 노트를 새 탭에서 엽니다.",
   taskNotesSection: "작업 노트",
@@ -1075,6 +1083,8 @@ const TRANSLATIONS: Record<"en" | "zh", Record<TranslationKey, string>> &
     taskNotesEnableDesc: "Create Markdown notes linked to tasks and calendar events.",
     taskNotesFolder: "Task Hub notes folder",
     taskNotesFolderDesc: "Folder for regular Task Hub linked notes.",
+    taskNotesLinkedSubtasks: "Detect subtasks in linked notes",
+    taskNotesLinkedSubtasksDesc: "When enabled, Markdown tasks in linked note bodies can be read as subtasks of the parent task.",
     taskNotesOpenAfterCreate: "Open note after creation",
     taskNotesOpenAfterCreateDesc: "Open the created Markdown note in a new tab.",
     taskNotesSection: "Task notes",
@@ -1426,6 +1436,8 @@ const TRANSLATIONS: Record<"en" | "zh", Record<TranslationKey, string>> &
     taskNotesEnableDesc: "创建与任务和日历事件关联的 Markdown 笔记。",
     taskNotesFolder: "Task Hub 笔记文件夹",
     taskNotesFolderDesc: "普通 Task Hub 关联笔记保存到这个文件夹。",
+    taskNotesLinkedSubtasks: "从关联笔记检索子任务",
+    taskNotesLinkedSubtasksDesc: "开启后，关联笔记正文里的 Markdown 任务可作为父任务的子任务候选读取。",
     taskNotesOpenAfterCreate: "创建后打开笔记",
     taskNotesOpenAfterCreateDesc: "创建 Markdown 笔记后在新标签页打开。",
     taskNotesSection: "任务笔记",

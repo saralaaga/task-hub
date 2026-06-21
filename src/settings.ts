@@ -33,7 +33,8 @@ export const DEFAULT_SETTINGS: TaskHubSettings = {
     thinoFolder: "Thino",
     openNoteAfterCreate: true,
     showCountsInTaskList: true,
-    showFrontmatterInNoteModal: false
+    showFrontmatterInNoteModal: false,
+    linkedNoteSubtasksEnabled: false
   },
   taskViewFilters: {
     status: "open",
@@ -239,7 +240,8 @@ function normalizeTaskNotesSettings(loaded: Partial<TaskHubSettings["taskNotes"]
     defaultMode: loaded?.defaultMode === "thino-multi-file" ? "thino-multi-file" : DEFAULT_SETTINGS.taskNotes.defaultMode,
     notesFolder: loaded?.notesFolder ?? DEFAULT_SETTINGS.taskNotes.notesFolder,
     thinoFolder: loaded?.thinoFolder ?? DEFAULT_SETTINGS.taskNotes.thinoFolder,
-    showFrontmatterInNoteModal: loaded?.showFrontmatterInNoteModal ?? DEFAULT_SETTINGS.taskNotes.showFrontmatterInNoteModal
+    showFrontmatterInNoteModal: loaded?.showFrontmatterInNoteModal ?? DEFAULT_SETTINGS.taskNotes.showFrontmatterInNoteModal,
+    linkedNoteSubtasksEnabled: loaded?.linkedNoteSubtasksEnabled ?? DEFAULT_SETTINGS.taskNotes.linkedNoteSubtasksEnabled
   };
 }
 
@@ -585,6 +587,16 @@ export class TaskHubSettingTab extends PluginSettingTab {
         .addToggle((toggle) => {
           toggle.setValue(this.plugin.settings.taskNotes.showCountsInTaskList).onChange(async (value) => {
             this.plugin.settings.taskNotes.showCountsInTaskList = value;
+            await this.plugin.saveSettings();
+          });
+        });
+
+      new Setting(taskNotesGrid)
+        .setName(t("taskNotesLinkedSubtasks"))
+        .setDesc(t("taskNotesLinkedSubtasksDesc"))
+        .addToggle((toggle) => {
+          toggle.setValue(this.plugin.settings.taskNotes.linkedNoteSubtasksEnabled).onChange(async (value) => {
+            this.plugin.settings.taskNotes.linkedNoteSubtasksEnabled = value;
             await this.plugin.saveSettings();
           });
         });

@@ -5,6 +5,7 @@ import { filterTasks, type TaskFilterState } from "../filtering/filters";
 import { createTranslator } from "../i18n";
 import type TaskHubPlugin from "../main";
 import type { TaskItem } from "../types";
+import { parseTasksFromMarkdown } from "../parsing/taskParser";
 import { type CalendarViewMode } from "../calendar/calendarModel";
 import { renderCalendarView, type AgendaScrollPosition, type CalendarModeTransitionDirection } from "./renderCalendarView";
 import { renderShell, type DashboardView } from "./renderShell";
@@ -39,6 +40,7 @@ export class TaskHubView extends ItemView {
   private unscheduledPanelOpening = false;
   private unscheduledPanelClosing = false;
   private unscheduledPanelCloseTimer: number | undefined;
+  private expandedTaskIds = new Set<string>();
 
   constructor(
     leaf: WorkspaceLeaf,
@@ -67,7 +69,8 @@ export class TaskHubView extends ItemView {
       this.captureCalendarAgendaScroll();
     }
     const container = this.containerEl.children[1] as HTMLElement;
-    const allTasks = this.plugin.getTasks();
+    const baseTasks = this.plugin.getTasks();
+    const allTasks = this.withLinkedNoteSubtasks(baseTasks);
     const now = new Date();
     const unscheduledTasks = collectUnscheduledTasks(allTasks, this.filters, now, (task) => this.canScheduleTask(task));
     const calendarUnscheduledTasks = collectCalendarUnscheduledTasks(
@@ -193,6 +196,7 @@ export class TaskHubView extends ItemView {
           taskSendDefaultTarget: this.plugin.defaultTaskSendTarget(),
           selectedTaskId: this.selectedTaskId,
           selectedTaskIds: this.selectedTaskIds,
+          expandedTaskIds: this.expandedTaskIds,
           sourceColors,
           taskColors,
           bindTagInputSuggest,
@@ -203,6 +207,10 @@ export class TaskHubView extends ItemView {
           getTaskNoteCount: (task) =>
             this.plugin.settings.taskNotes.showCountsInTaskList ? this.plugin.getTaskNoteCount(task) : 0,
           getTaskNotes: (task) => this.plugin.getTaskNotes(task),
+          onToggleTaskExpanded: (task) => {
+            this.expandedTaskIds = toggleSetValue(this.expandedTaskIds, task.id);
+            this.render({ preserveTaskListScroll: true, preserveContentScroll: true });
+          },
           renderNoteMarkdown: (noteContainer, body, sourcePath) => this.renderNoteMarkdown(noteContainer, body, sourcePath)
         }
       );
@@ -445,6 +453,60 @@ export class TaskHubView extends ItemView {
     return [...visibleTasks, ...exitingTasks];
   }
 
+  private withLinkedNoteSubtasks(tasks: TaskItem[]): TaskItem[] {
+    if (!this.plugin.settings.taskNotes.enabled || !this.plugin.settings.taskNotes.linkedNoteSubtasksEnabled) return tasks;
+    const tasksByNoteLine = new Map(tasks.map((task) => [taskLocationKey(task.filePath, task.line, task.rawLine), task]));
+    const tasksByNoteRawLine = groupTasksByRawLine(tasks);
+    const usedExistingTaskIds = new Set<string>();
+    const linkedUpdates = new Map<string, Pick<TaskItem, "parentId" | "indent" | "heading">>();
+    const syntheticSubtasks: TaskItem[] = [];
+
+    for (const task of tasks) {
+      for (const note of this.plugin.getTaskNotes(task)) {
+        const parsed = parseTasksFromMarkdown({ filePath: note.path, content: note.body });
+        const noteTaskIds = new Map<string, string>();
+        const existingTasks = new Map<string, TaskItem | undefined>();
+        for (const noteTask of parsed) {
+          const line = note.bodyStartLine + noteTask.line;
+          const existing = findExistingLinkedNoteTask(note.path, line, noteTask, tasksByNoteLine, tasksByNoteRawLine, usedExistingTaskIds);
+          if (existing) usedExistingTaskIds.add(existing.id);
+          existingTasks.set(noteTask.id, existing);
+          noteTaskIds.set(noteTask.id, existing?.id ?? linkedNoteSubtaskId(task, note.path, noteTask));
+        }
+
+        for (const noteTask of parsed) {
+          const line = note.bodyStartLine + noteTask.line;
+          const parentId = noteTask.parentId ? noteTaskIds.get(noteTask.parentId) ?? task.id : task.id;
+          const childShape = {
+            parentId,
+            indent: (task.indent ?? 0) + (noteTask.indent ?? 0) + 1,
+            heading: note.title
+          };
+          const existing = existingTasks.get(noteTask.id);
+          if (existing) {
+            linkedUpdates.set(existing.id, childShape);
+          } else {
+            syntheticSubtasks.push({
+              ...noteTask,
+              ...childShape,
+              id: noteTaskIds.get(noteTask.id) ?? linkedNoteSubtaskId(task, note.path, noteTask),
+              line
+            });
+          }
+        }
+      }
+    }
+
+    if (linkedUpdates.size === 0 && syntheticSubtasks.length === 0) return tasks;
+    return [
+      ...tasks.map((task) => {
+        const update = linkedUpdates.get(task.id);
+        return update ? { ...task, ...update } : task;
+      }),
+      ...syntheticSubtasks
+    ];
+  }
+
   private pruneSelectedTaskIds(visibleTasks: TaskItem[]): void {
     const visibleIds = new Set(visibleTasks.map((task) => task.id));
     this.selectedTaskIds = new Set([...this.selectedTaskIds].filter((taskId) => visibleIds.has(taskId)));
@@ -658,6 +720,56 @@ function toggleSetValue(values: Set<string>, value: string): Set<string> {
     next.add(value);
   }
   return next;
+}
+
+function linkedNoteSubtaskId(parentTask: TaskItem, notePath: string, noteTask: TaskItem): string {
+  return `note-subtask:${parentTask.id}:${notePath}:${noteTask.line}:${hashTaskLine(noteTask.rawLine)}`;
+}
+
+function taskLocationKey(filePath: string, line: number, rawLine: string): string {
+  return `${filePath}:${line}:${normalizeTaskRawLineForMatch(rawLine)}`;
+}
+
+function groupTasksByRawLine(tasks: TaskItem[]): Map<string, TaskItem[]> {
+  const grouped = new Map<string, TaskItem[]>();
+  for (const task of tasks) {
+    if (!task.rawLine) continue;
+    const key = taskRawLineKey(task.filePath, task.rawLine);
+    grouped.set(key, [...(grouped.get(key) ?? []), task]);
+  }
+  return grouped;
+}
+
+function findExistingLinkedNoteTask(
+  notePath: string,
+  line: number,
+  noteTask: TaskItem,
+  tasksByNoteLine: Map<string, TaskItem>,
+  tasksByNoteRawLine: Map<string, TaskItem[]>,
+  usedTaskIds: ReadonlySet<string>
+): TaskItem | undefined {
+  const exact = tasksByNoteLine.get(taskLocationKey(notePath, line, noteTask.rawLine));
+  if (exact && !usedTaskIds.has(exact.id)) return exact;
+
+  return (tasksByNoteRawLine.get(taskRawLineKey(notePath, noteTask.rawLine)) ?? [])
+    .filter((task) => !usedTaskIds.has(task.id))
+    .sort((left, right) => Math.abs(left.line - line) - Math.abs(right.line - line))[0];
+}
+
+function taskRawLineKey(filePath: string, rawLine: string): string {
+  return `${filePath}:${normalizeTaskRawLineForMatch(rawLine)}`;
+}
+
+function normalizeTaskRawLineForMatch(rawLine: string): string {
+  return rawLine.trimEnd();
+}
+
+function hashTaskLine(value: string): string {
+  let result = 5381;
+  for (let index = 0; index < value.length; index += 1) {
+    result = (result * 33) ^ value.charCodeAt(index);
+  }
+  return (result >>> 0).toString(36);
 }
 
 function taskSourceRank(task: TaskItem): number {

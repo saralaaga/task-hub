@@ -1017,6 +1017,62 @@ body .task-hub-view button.task-hub-color-swatch {
   padding-right: 34px;
 }
 
+.task-hub-task-row:has(.task-hub-subtask-toggle) .task-hub-task-body {
+  padding-right: 34px;
+}
+
+.task-hub-task-row:has(.task-hub-subtask-toggle):has(.task-hub-task-note-count) .task-hub-task-body {
+  padding-right: 66px;
+}
+
+.task-hub-task-row:has(.task-hub-subtask-toggle) .task-hub-task-note-count {
+  right: 38px;
+}
+
+.task-hub-subtask-toggle {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: inline-flex;
+  height: 24px;
+  justify-content: center;
+  padding: 0;
+  position: absolute;
+  right: 7px;
+  top: 7px;
+  width: 24px;
+}
+
+.task-hub-subtask-toggle:hover,
+.task-hub-subtask-toggle:focus-visible {
+  background: var(--background-modifier-hover);
+  color: var(--text-normal);
+}
+
+.task-hub-subtask-toggle svg {
+  height: 16px;
+  transition: transform 120ms ease;
+  width: 16px;
+}
+
+.task-hub-subtask-toggle.is-expanded svg {
+  transform: rotate(90deg);
+}
+
+.task-hub-subtask-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-left: clamp(22px, 4vw, 42px);
+}
+
+.task-hub-subtask-list .task-hub-task-row {
+  background: color-mix(in srgb, var(--background-secondary) 34%, var(--background-primary));
+}
+
 .task-hub-task-notes {
   --task-hub-source-color: var(--interactive-accent);
   background: transparent;

@@ -365,6 +365,98 @@ describe("renderTasksView", () => {
     expect(findCheckbox(container)?.disabled).toBe(false);
   });
 
+  it("renders a subtask chevron and expands child rows under the parent", () => {
+    const container = new FakeElement();
+    const parent: TaskItem = {
+      ...baseTask,
+      id: "parent",
+      source: "vault",
+      filePath: "Project.md",
+      rawLine: "- [ ] Parent",
+      text: "Parent"
+    };
+    const child: TaskItem = {
+      ...parent,
+      id: "child",
+      line: 1,
+      rawLine: "  - [ ] Child",
+      text: "Child",
+      dueDate: undefined,
+      indent: 1,
+      parentId: "parent"
+    };
+    const viewHandlers = handlers();
+    const onToggleTaskExpanded = jest.fn();
+
+    renderTasksView(
+      container as unknown as HTMLElement,
+      [parent, child],
+      [parent, child],
+      { status: "open", tags: [], sourceQuery: "", textQuery: "" },
+      viewHandlers,
+      new Date("2026-05-08T12:00:00Z"),
+      (key) => key,
+      { allowAppleReminderWriteback: true, onToggleTaskExpanded }
+    );
+
+    expect(collect(container).filter((element) => element.classes.has("task-hub-task-row"))).toHaveLength(1);
+    collect(container).find((element) => element.classes.has("task-hub-subtask-toggle"))?.click();
+    expect(onToggleTaskExpanded).toHaveBeenCalledWith(parent);
+
+    renderTasksView(
+      container as unknown as HTMLElement,
+      [parent, child],
+      [parent, child],
+      { status: "open", tags: [], sourceQuery: "", textQuery: "" },
+      viewHandlers,
+      new Date("2026-05-08T12:00:00Z"),
+      (key) => key,
+      { allowAppleReminderWriteback: true, expandedTaskIds: new Set(["parent"]), onToggleTaskExpanded }
+    );
+
+    const rows = collect(container).filter((element) => element.classes.has("task-hub-task-row"));
+    expect(rows.map(taskRowTitle)).toEqual(["Parent", "Child"]);
+    expect(rows[1].attrs.get("data-task-depth")).toBe("1");
+  });
+
+  it("keeps linked-note subtasks out of the no-date top-level bucket after reparenting", () => {
+    const container = new FakeElement();
+    const parent: TaskItem = {
+      ...baseTask,
+      id: "parent",
+      source: "vault",
+      filePath: "Project.md",
+      rawLine: "- [ ] Parent 📅 2026-05-08",
+      text: "Parent"
+    };
+    const linkedSubtask: TaskItem = {
+      ...parent,
+      id: "linked-subtask",
+      filePath: "Thino/20260621141201.md",
+      line: 14,
+      rawLine: "- [ ] 测试多任务关联 #p/论文 ",
+      text: "测试多任务关联",
+      tags: ["#p/论文"],
+      dueDate: undefined,
+      parentId: "parent",
+      indent: 1
+    };
+
+    renderTasksView(
+      container as unknown as HTMLElement,
+      [parent, linkedSubtask],
+      [parent, linkedSubtask],
+      { status: "open", tags: [], sourceQuery: "", textQuery: "" },
+      handlers(),
+      new Date("2026-05-08T12:00:00Z"),
+      (key) => key,
+      { allowAppleReminderWriteback: true }
+    );
+
+    expect(textValues(container)).not.toContain("noDate (1)");
+    expect(collect(container).filter((element) => element.classes.has("task-hub-task-row"))).toHaveLength(1);
+  });
+
   it("applies source colors to Apple Reminders task rows", () => {
     const container = new FakeElement();
 
@@ -695,6 +787,7 @@ describe("renderTasksView", () => {
             history: [],
             title: "Remember to attach the receipt.",
             body: "Remember to attach the receipt.\nSecond line #比赛 #client/acme",
+            bodyStartLine: 10,
             tags: ["#比赛", "#client/acme"],
             createdAt: "2026-05-29T10:30:12"
           },
@@ -704,6 +797,7 @@ describe("renderTasksView", () => {
             history: [],
             title: "Two",
             body: "Call vendor after payment.",
+            bodyStartLine: 10,
             tags: [],
             createdAt: "2026-05-28T09:00:00"
           }
@@ -719,8 +813,8 @@ describe("renderTasksView", () => {
     noteCard?.click();
     expect(viewHandlers.onOpenTaskNote).not.toHaveBeenCalled();
     expect(collect(noteCard as FakeElement).find((element) => element.classes.has("task-hub-task-note-title"))?.text).toBe("one");
+    expect(collect(noteCard as FakeElement).find((element) => element.classes.has("task-hub-task-note-text"))?.text).toContain("Remember to attach");
     expect(collect(noteCard as FakeElement).find((element) => element.classes.has("task-hub-task-note-text"))?.text).toContain("Second line");
-    expect(collect(noteCard as FakeElement).find((element) => element.classes.has("task-hub-task-note-text"))?.text).not.toContain("Remember to attach");
     expect(collect(container).find((element) => element.classes.has("task-hub-task-note-date"))?.text).toBe("2026-05-29");
     expect(collect(container).filter((element) => element.classes.has("task-hub-task-tag")).map((element) => element.text)).toEqual([
       "#比赛",
@@ -757,6 +851,7 @@ describe("renderTasksView", () => {
             history: [],
             title: "One",
             body: "Body",
+            bodyStartLine: 10,
             tags: [],
             createdAt: "2026-05-29T10:30:12"
           }
@@ -796,6 +891,7 @@ describe("renderTasksView", () => {
             history: [],
             title: "One",
             body: "测试一下\n正文 #标签",
+            bodyStartLine: 10,
             tags: ["#标签"],
             createdAt: "2026-05-29T10:30:12"
           }
@@ -806,6 +902,40 @@ describe("renderTasksView", () => {
     expect(collect(container).filter((element) => element.classes.has("task-hub-task-note-tags"))).toHaveLength(0);
     expect(collect(container).filter((element) => element.classes.has("task-hub-task-tag")).map((element) => element.text)).toEqual(["#标签"]);
     expect(collect(container).find((element) => element.classes.has("task-hub-task-note-date"))?.text).toBe("2026-05-29");
+  });
+
+  it("keeps a single-line task note body visible in the preview", () => {
+    const container = new FakeElement();
+
+    renderTasksView(
+      container as unknown as HTMLElement,
+      [baseTask],
+      [baseTask],
+      { status: "open", tags: [], sourceQuery: "", textQuery: "" },
+      handlers(),
+      new Date("2026-05-08T12:00:00Z"),
+      (key) => key,
+      {
+        allowAppleReminderWriteback: true,
+        taskNotesEnabled: true,
+        getTaskNoteCount: () => 1,
+        getTaskNotes: () => [
+          {
+            path: "Thino/20260621142421.md",
+            related: [],
+            history: [],
+            title: "20260621142421",
+            body: "- [ ] 子任务的任务",
+            bodyStartLine: 13,
+            tags: [],
+            createdAt: "2026-06-21T14:24:21"
+          }
+        ]
+      }
+    );
+
+    expect(collect(container).find((element) => element.classes.has("task-hub-task-note-title"))?.text).toBe("20260621142421");
+    expect(collect(container).find((element) => element.classes.has("task-hub-task-note-text"))?.text).toBe("- [ ] 子任务的任务");
   });
 
   it("uses the supplied Markdown renderer for note bodies", () => {
@@ -834,6 +964,7 @@ describe("renderTasksView", () => {
             history: [],
             title: "List",
             body: "- item one\n- item two",
+            bodyStartLine: 10,
             tags: [],
             createdAt: "2026-05-29T10:30:12"
           }
@@ -841,9 +972,9 @@ describe("renderTasksView", () => {
       }
     );
 
-    expect(renderNoteMarkdown).toHaveBeenCalledWith(expect.anything(), "- item two", "Task Hub Notes/list.md");
+    expect(renderNoteMarkdown).toHaveBeenCalledWith(expect.anything(), "- item one\n- item two", "Task Hub Notes/list.md");
     expect(collect(container).find((element) => element.classes.has("task-hub-task-note-title"))?.text).toBe("list");
-    expect(collect(container).find((element) => element.type === "ul")?.text).toBe("- item two");
+    expect(collect(container).find((element) => element.type === "ul")?.text).toBe("- item one\n- item two");
   });
 
   it("adds a right-click task note action only when task notes are enabled", () => {
