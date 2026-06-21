@@ -1037,7 +1037,7 @@ body .task-hub-view button.task-hub-color-swatch {
   font: inherit;
   min-height: 30px;
   overflow: visible;
-  padding: 8px 12px;
+  padding: 14px 16px 12px;
   position: relative;
   text-align: left;
   white-space: pre-wrap;
@@ -1046,7 +1046,7 @@ body .task-hub-view button.task-hub-color-swatch {
 
 .task-hub-task-note-body {
   line-height: 1.45;
-  padding-right: 34px;
+  padding: 0 34px 0 2px;
   white-space: pre-wrap;
 }
 
@@ -1092,12 +1092,16 @@ body .task-hub-view button.task-hub-color-swatch {
 .task-hub-task-note-body p,
 .task-hub-task-note-body ul,
 .task-hub-task-note-body ol {
-  margin-block: 0 6px;
+  margin-block: 0 4px;
 }
 
 .task-hub-task-note-body ul,
 .task-hub-task-note-body ol {
   padding-inline-start: 1.35em;
+}
+
+.task-hub-task-note-body li {
+  margin-block: 0 3px;
 }
 
 .task-hub-task-note-body > :last-child {

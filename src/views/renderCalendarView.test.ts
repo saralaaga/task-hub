@@ -1563,6 +1563,54 @@ describe("renderCalendarView", () => {
     expect(itemArea.classes.has("has-hidden-items")).toBe(false);
   });
 
+  it("does not treat unmeasured month day item geometry as hidden items", () => {
+    const container = new FakeElement();
+    const manyTasks = Array.from({ length: 3 }, (_, index) => ({
+      ...task,
+      id: `unmeasured-month-${index}`,
+      text: `Unmeasured month ${index + 1}`,
+      dueDate: "2026-05-08"
+    }));
+
+    renderCalendarView(
+      container as unknown as HTMLElement,
+      {
+        mode: "month",
+        focusDate: new Date("2026-05-08T12:00:00Z"),
+        weekStart: "monday",
+        visibleSourceIds: new Set(["vault"]),
+        includeCompletedTasks: false,
+        allowAppleReminderWriteback: false,
+        allowAppleCalendarWriteback: false,
+        allowTaskCreation: false,
+        sources: [],
+        t: (key) => key
+      },
+      manyTasks,
+      [],
+      {
+        onLayerToggle: jest.fn(),
+        onModeChange: jest.fn(),
+        onMove: jest.fn(),
+        onDateCreateTask: jest.fn(),
+        onTaskComplete: jest.fn(),
+        onTaskJump: jest.fn(),
+        onTaskSelect: jest.fn(),
+        onTaskReschedule: jest.fn(),
+        onEventReschedule: jest.fn(),
+        onToday: jest.fn()
+      }
+    );
+
+    const itemArea = collect(container)
+      .filter((element) => element.classes.has("task-hub-calendar-day-items"))
+      .find((element) => collect(element).filter((child) => child.classes.has("task-hub-calendar-item")).length === 3)!;
+    const badge = collect(itemArea).find((element) => element.classes.has("task-hub-hidden-count"));
+
+    expect(badge?.text).toBe("");
+    expect(itemArea.classes.has("has-hidden-items")).toBe(false);
+  });
+
   it("does not create a task from a month day when calendar task creation is disabled", () => {
     const container = new FakeElement();
     const onDateCreateTask = jest.fn();

@@ -209,6 +209,19 @@ describe("Task Hub styles", () => {
     expect(styles).toContain("display: none !important");
   });
 
+  it("keeps task note cards padded and Markdown paragraphs compact", () => {
+    const styles = readFileSync(path.join(__dirname, "styles.css"), "utf8");
+    const noteCardRule = styles.match(/\.task-hub-task-note-card\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const noteBodyRule = styles.match(/\.task-hub-task-note-body\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const blockRule = styles.match(/\.task-hub-task-note-body p,\s*\.task-hub-task-note-body ul,\s*\.task-hub-task-note-body ol\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const listItemRule = styles.match(/\.task-hub-task-note-body li\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+
+    expect(noteCardRule).toContain("padding: 14px 16px 12px");
+    expect(noteBodyRule).toContain("padding: 0 34px 0 2px");
+    expect(blockRule).toContain("margin-block: 0 4px");
+    expect(listItemRule).toContain("margin-block: 0 3px");
+  });
+
   it("renders tag view chips with white lightweight text and lifted shadows", () => {
     const styles = readFileSync(path.join(__dirname, "styles.css"), "utf8");
     const tagViewChipRule = styles.match(/\.task-hub-tag-task\s+\.task-hub-task-tag\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";

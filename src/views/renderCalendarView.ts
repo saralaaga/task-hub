@@ -988,6 +988,11 @@ function updateHiddenItemCount(container: HTMLElement, badge: HTMLElement): void
   const items = Array.from(container.children).filter((child): child is HTMLElement =>
     "classList" in child && child.classList.contains("task-hub-calendar-item")
   );
+  if (visibleBottom <= containerRect.top || items.every((item) => item.getBoundingClientRect().height === 0)) {
+    badge.textContent = "";
+    container.removeClass("has-hidden-items");
+    return;
+  }
   const hiddenCount = items.filter((item) => item.getBoundingClientRect().top >= visibleBottom).length;
   if (hiddenCount > 0) {
     badge.textContent = `+${hiddenCount}`;
