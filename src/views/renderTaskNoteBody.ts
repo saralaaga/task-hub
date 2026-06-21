@@ -30,6 +30,19 @@ export function renderPlainTaskNoteBody(container: HTMLElement, body: string): v
   appendNoteText(container, body.slice(cursor));
 }
 
+export function taskNotePreviewTitle(sourcePath: string): string {
+  return sourcePath.split("/").pop()?.replace(/\.md$/iu, "") ?? sourcePath;
+}
+
+export function taskNotePreviewBody(body: string): string {
+  return body
+    .trim()
+    .split(/\r?\n/u)
+    .slice(1)
+    .join("\n")
+    .trim();
+}
+
 export function decorateRenderedTaskNoteTags(container: HTMLElement): void {
   for (const tagElement of Array.from(container.querySelectorAll(".tag"))) {
     if (tagElement.textContent?.startsWith("#")) tagElement.classList.add("task-hub-task-tag");

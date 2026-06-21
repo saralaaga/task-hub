@@ -17,7 +17,7 @@ import {
   sourceIndicatorLabelForEvent,
   sourceIndicatorLabelForTask
 } from "./contextMenuLabels";
-import { renderTaskNoteBody, type TaskNoteMarkdownRenderer } from "./renderTaskNoteBody";
+import { renderTaskNoteBody, taskNotePreviewBody, taskNotePreviewTitle, type TaskNoteMarkdownRenderer } from "./renderTaskNoteBody";
 import { recurrencePresetFromRule } from "../recurrence";
 import { createRecurrenceSelect, recurrenceValueFromSelect } from "./recurrenceControls";
 import { resolveTaskBulkActions, type TaskBulkActionId } from "./taskSelection";
@@ -1669,7 +1669,8 @@ function renderCalendarNotes(
       }
       menu.showAtMouseEvent(event as MouseEvent);
     });
-    renderTaskNoteBody(card.createDiv({ cls: "task-hub-task-note-body" }), note.body.trim(), note.path, state.renderNoteMarkdown);
+    card.createDiv({ cls: "task-hub-task-note-title", text: taskNotePreviewTitle(note.path) });
+    renderTaskNoteBody(card.createDiv({ cls: "task-hub-task-note-body" }), taskNotePreviewBody(note.body), note.path, state.renderNoteMarkdown);
     if (note.createdAt) card.createDiv({ cls: "task-hub-task-note-date", text: note.createdAt.slice(0, 10) });
   }
 }

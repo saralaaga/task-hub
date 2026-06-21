@@ -1046,8 +1046,17 @@ body .task-hub-view button.task-hub-color-swatch {
 
 .task-hub-task-note-body {
   line-height: 1.45;
+  margin-top: 10px;
   padding: 0 34px 0 2px;
-  white-space: pre-wrap;
+  white-space: normal;
+}
+
+.task-hub-task-note-title {
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+  font-weight: 600;
+  line-height: 1.25;
+  padding-right: 34px;
 }
 
 .task-hub-task-note-date {
@@ -1089,10 +1098,10 @@ body .task-hub-view button.task-hub-color-swatch {
   white-space: pre-wrap;
 }
 
-.task-hub-task-note-body p,
-.task-hub-task-note-body ul,
-.task-hub-task-note-body ol {
-  margin-block: 0 4px;
+.task-hub-task-note-card .task-hub-task-note-body p,
+.task-hub-task-note-card .task-hub-task-note-body ul,
+.task-hub-task-note-card .task-hub-task-note-body ol {
+  margin-block: 0 2px !important;
 }
 
 .task-hub-task-note-body ul,
@@ -1100,8 +1109,8 @@ body .task-hub-view button.task-hub-color-swatch {
   padding-inline-start: 1.35em;
 }
 
-.task-hub-task-note-body li {
-  margin-block: 0 3px;
+.task-hub-task-note-card .task-hub-task-note-body li {
+  margin-block: 0 2px !important;
 }
 
 .task-hub-task-note-body > :last-child {

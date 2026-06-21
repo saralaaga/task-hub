@@ -213,13 +213,20 @@ describe("Task Hub styles", () => {
     const styles = readFileSync(path.join(__dirname, "styles.css"), "utf8");
     const noteCardRule = styles.match(/\.task-hub-task-note-card\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const noteBodyRule = styles.match(/\.task-hub-task-note-body\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
-    const blockRule = styles.match(/\.task-hub-task-note-body p,\s*\.task-hub-task-note-body ul,\s*\.task-hub-task-note-body ol\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
-    const listItemRule = styles.match(/\.task-hub-task-note-body li\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const noteTitleRule = styles.match(/\.task-hub-task-note-title\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const plainTextRule = styles.match(/\.task-hub-task-note-text\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const blockRule = styles.match(/\.task-hub-task-note-card\s+\.task-hub-task-note-body p,\s*\.task-hub-task-note-card\s+\.task-hub-task-note-body ul,\s*\.task-hub-task-note-card\s+\.task-hub-task-note-body ol\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const listItemRule = styles.match(/\.task-hub-task-note-card\s+\.task-hub-task-note-body li\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
 
     expect(noteCardRule).toContain("padding: 14px 16px 12px");
+    expect(noteTitleRule).toContain("color: var(--text-muted)");
+    expect(noteTitleRule).toContain("font-size: var(--font-ui-small)");
     expect(noteBodyRule).toContain("padding: 0 34px 0 2px");
-    expect(blockRule).toContain("margin-block: 0 4px");
-    expect(listItemRule).toContain("margin-block: 0 3px");
+    expect(noteBodyRule).toContain("margin-top: 10px");
+    expect(noteBodyRule).toContain("white-space: normal");
+    expect(plainTextRule).toContain("white-space: pre-wrap");
+    expect(blockRule).toContain("margin-block: 0 2px !important");
+    expect(listItemRule).toContain("margin-block: 0 2px !important");
   });
 
   it("renders tag view chips with white lightweight text and lifted shadows", () => {

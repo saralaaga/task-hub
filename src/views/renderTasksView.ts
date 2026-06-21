@@ -7,7 +7,7 @@ import type { TaskNote } from "../taskNotes";
 import { parseTaskSendTarget, preferredTaskSendTarget, taskSendTargetOptions } from "../taskSendTargets";
 import type { AppleReminderList, CalendarItemEditDraft, DidaProject, TaskItem, TaskSendTarget } from "../types";
 import { addSourceIndicatorMenuItem, deleteLabelForTaskBulkAction, sourceIndicatorLabelForTask } from "./contextMenuLabels";
-import { renderTaskNoteBody, type TaskNoteMarkdownRenderer } from "./renderTaskNoteBody";
+import { renderTaskNoteBody, taskNotePreviewBody, taskNotePreviewTitle, type TaskNoteMarkdownRenderer } from "./renderTaskNoteBody";
 import { createRecurrenceSelect, recurrenceValueFromSelect } from "./recurrenceControls";
 import { resolveTaskBulkActions, type TaskBulkActionId } from "./taskSelection";
 import { renderSourceLogo, sourceLogoKindForTask } from "./sourceLogos";
@@ -671,7 +671,7 @@ function renderTaskNotes(
   if (color) setCssProps(notesContainer, { "--task-hub-source-color": color });
   notesContainer.createEl("h4", { text: t("notes") });
   for (const note of notes) {
-    const text = note.body.trim();
+    const text = taskNotePreviewBody(note.body);
     const card = notesContainer.createDiv({ cls: "task-hub-task-note-card" });
     const menuButton = card.createEl("button", { cls: "task-hub-task-note-menu" });
     menuButton.setAttr("aria-label", t("more"));
@@ -702,6 +702,7 @@ function renderTaskNotes(
       }
       menu.showAtMouseEvent(event as MouseEvent);
     });
+    card.createDiv({ cls: "task-hub-task-note-title", text: taskNotePreviewTitle(note.path) });
     renderTaskNoteBody(card.createDiv({ cls: "task-hub-task-note-body" }), text, note.path, options.renderNoteMarkdown);
     if (note.createdAt) card.createDiv({ cls: "task-hub-task-note-date", text: note.createdAt.slice(0, 10) });
   }

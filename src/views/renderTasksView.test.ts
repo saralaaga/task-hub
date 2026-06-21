@@ -693,8 +693,8 @@ describe("renderTasksView", () => {
             path: "Task Hub Notes/one.md",
             related: [],
             history: [],
-            title: "One",
-            body: "Remember to attach the receipt. #比赛 #client/acme",
+            title: "Remember to attach the receipt.",
+            body: "Remember to attach the receipt.\nSecond line #比赛 #client/acme",
             tags: ["#比赛", "#client/acme"],
             createdAt: "2026-05-29T10:30:12"
           },
@@ -718,7 +718,9 @@ describe("renderTasksView", () => {
     const noteCard = collect(container).find((element) => element.classes.has("task-hub-task-note-card"));
     noteCard?.click();
     expect(viewHandlers.onOpenTaskNote).not.toHaveBeenCalled();
-    expect(collect(container).find((element) => element.classes.has("task-hub-task-note-text"))?.text).toContain("Remember to attach");
+    expect(collect(noteCard as FakeElement).find((element) => element.classes.has("task-hub-task-note-title"))?.text).toBe("one");
+    expect(collect(noteCard as FakeElement).find((element) => element.classes.has("task-hub-task-note-text"))?.text).toContain("Second line");
+    expect(collect(noteCard as FakeElement).find((element) => element.classes.has("task-hub-task-note-text"))?.text).not.toContain("Remember to attach");
     expect(collect(container).find((element) => element.classes.has("task-hub-task-note-date"))?.text).toBe("2026-05-29");
     expect(collect(container).filter((element) => element.classes.has("task-hub-task-tag")).map((element) => element.text)).toEqual([
       "#比赛",
@@ -793,7 +795,7 @@ describe("renderTasksView", () => {
             related: [],
             history: [],
             title: "One",
-            body: "测试一下 #标签",
+            body: "测试一下\n正文 #标签",
             tags: ["#标签"],
             createdAt: "2026-05-29T10:30:12"
           }
@@ -839,8 +841,9 @@ describe("renderTasksView", () => {
       }
     );
 
-    expect(renderNoteMarkdown).toHaveBeenCalledWith(expect.anything(), "- item one\n- item two", "Task Hub Notes/list.md");
-    expect(collect(container).find((element) => element.type === "ul")?.text).toBe("- item one\n- item two");
+    expect(renderNoteMarkdown).toHaveBeenCalledWith(expect.anything(), "- item two", "Task Hub Notes/list.md");
+    expect(collect(container).find((element) => element.classes.has("task-hub-task-note-title"))?.text).toBe("list");
+    expect(collect(container).find((element) => element.type === "ul")?.text).toBe("- item two");
   });
 
   it("adds a right-click task note action only when task notes are enabled", () => {
