@@ -99,6 +99,20 @@ describe("Task Hub styles", () => {
     expect(autoGrowRule).toContain("resize: none");
   });
 
+  it("aligns native date and time picker icons at the start of detail inputs", () => {
+    const styles = readFileSync(path.join(__dirname, "styles.css"), "utf8");
+    const dateTimeInputRule = styles.match(/\.task-hub-detail-control input\[type="date"\],\s*\.task-hub-detail-control input\[type="time"\]\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const pickerIndicatorRule = styles.match(/\.task-hub-detail-control input\[type="date"\]::-webkit-calendar-picker-indicator,\s*\.task-hub-detail-control input\[type="time"\]::-webkit-calendar-picker-indicator\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+
+    expect(dateTimeInputRule).toContain("position: relative");
+    expect(styles).toContain('.task-hub-detail-control input[type="date"] {\n  padding-left: calc(36px + 4ch);\n}');
+    expect(styles).toContain('.task-hub-detail-control input[type="time"] {\n  padding-left: 36px;\n}');
+    expect(styles).toContain('.task-hub-detail-control input[type="date"]::-webkit-datetime-edit {\n  padding-left: 2ch;\n}');
+    expect(pickerIndicatorRule).toContain("left: 10px");
+    expect(pickerIndicatorRule).toContain("right: auto");
+    expect(pickerIndicatorRule).toContain("position: absolute");
+  });
+
   it("aligns calendar detail date/all-day with the start/end time columns", () => {
     const styles = readFileSync(path.join(__dirname, "styles.css"), "utf8");
     const dateRule = styles.match(/\.task-hub-calendar-detail-date-row\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
@@ -164,6 +178,7 @@ describe("Task Hub styles", () => {
     const pickerRule = styles.match(/\.task-hub-create-picker\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const datePickerRule = styles.match(/\.task-hub-create-date-picker\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const pickerInputRule = styles.match(/\.task-hub-create-picker\s+input\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const datePickerDatetimeEditRule = styles.match(/\.task-hub-create-date-picker\s+input::-webkit-datetime-edit,\s*\.task-hub-create-date-picker\s+input::-webkit-datetime-edit-fields-wrapper\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const pickerIndicatorRule = styles.match(/\.task-hub-create-picker\s+input::-webkit-calendar-picker-indicator\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const pickerControlInputRule = styles.match(/\.task-hub-create-modal\s+\.setting-item-control\s+\.task-hub-create-picker\s+input\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const alertSettingRule = styles.match(/\.task-hub-create-alert-setting\s+\.setting-item-control\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
@@ -177,13 +192,14 @@ describe("Task Hub styles", () => {
     expect(rowRule).toContain("grid-template-columns: minmax(0, 1fr) minmax(220px, 280px)");
     expect(infoRule).toContain("text-align: left");
     expect(controlRule).toContain("justify-content: end");
-    expect(scheduleControlRule).toContain("grid-template-columns: minmax(0, 1fr) minmax(0, 1fr)");
+    expect(scheduleControlRule).toContain("grid-template-columns: minmax(0, 1.14fr) minmax(96px, 0.86fr)");
     expect(pickerRule).toContain("width: min(132px, 100%)");
     expect(datePickerRule).toContain("width: min(164px, 100%)");
     expect(pickerInputRule).toContain("appearance: none");
     expect(pickerInputRule).toContain("font-family: var(--font-interface)");
     expect(pickerInputRule).toContain("font-variant-numeric: tabular-nums");
     expect(pickerInputRule).toContain("padding: 0 10px 0 36px");
+    expect(datePickerDatetimeEditRule).toContain("padding-left: 0.75ch");
     expect(pickerIndicatorRule).toContain("display: none");
     expect(pickerIndicatorRule).toContain("-webkit-appearance: none");
     expect(pickerIndicatorRule).toContain("width: 0");
