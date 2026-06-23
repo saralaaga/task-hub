@@ -191,13 +191,17 @@ function normalizeDidaApiBase(value: unknown): string {
 function normalizeDidaProjects(value: unknown): TaskHubSettings["dida"]["projects"] {
   if (!Array.isArray(value)) return DEFAULT_SETTINGS.dida.projects;
   return value
-    .filter((project): project is { id: string; name: string } =>
-      Boolean(project) && typeof project.id === "string" && typeof project.name === "string"
-    )
+    .filter(isDidaProjectSetting)
     .map((project) => ({
-      ...project,
+      id: project.id,
       name: project.name === "未在清单中" ? DIDA_INBOX_PROJECT_NAME : project.name
     }));
+}
+
+function isDidaProjectSetting(value: unknown): value is { id: string; name: string } {
+  if (!value || typeof value !== "object") return false;
+  const candidate = value as Record<string, unknown>;
+  return typeof candidate.id === "string" && typeof candidate.name === "string";
 }
 
 function normalizeCalendarTimeScale(value: unknown): TaskHubSettings["calendarTimeScale"] {
@@ -1366,10 +1370,11 @@ export class TaskHubSettingTab extends PluginSettingTab {
         button.setIcon("circle").setTooltip(name);
         icon.addClass("task-hub-color-preview");
         setPreview(value);
-        picker.addEventListener("input", async () => {
+        picker.addEventListener("input", () => {
           setColor(normalizeColor(picker.value, fallback));
-          await this.plugin.saveSettings();
-          this.display({ preserveScroll: true });
+          void this.plugin.saveSettings().then(() => {
+            this.display({ preserveScroll: true });
+          });
         });
       })
       .addText((text) => {

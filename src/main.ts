@@ -1,7 +1,7 @@
 import { ButtonComponent, Editor, EventRef, MarkdownView, Menu, Modal, Notice, Platform, Plugin, requestUrl, Setting, TFile, WorkspaceLeaf } from "obsidian";
 import { PLUGIN_DISPLAY_NAME, TASK_HUB_VIEW_TYPE } from "./constants";
 import { appleCalendarEventToReminderInput, appleReminderToCalendarEventInput } from "./calendar/appleConversion";
-import { calendarDropTargetParts, withCalendarDropTargetDate, type CalendarDropTarget, type TimedCalendarTarget } from "./calendar/calendarDropTarget";
+import { calendarDropTargetParts, withCalendarDropTargetDate, type CalendarDropTarget } from "./calendar/calendarDropTarget";
 import { extractAppleReminderTitleTags, normalizeAppleReminderTags } from "./appleReminderTags";
 import { fetchIcsSource } from "./calendar/icsClient";
 import { DidaClient } from "./dida/didaClient";
@@ -98,10 +98,6 @@ function parseTimeInputValue(value: string): number | undefined {
 function startMinutesFromTask(task: TaskItem): number | undefined {
   const time = task.scheduledDate?.match(/T(\d{2}):(\d{2})/);
   return time ? parseTimeInputValue(`${time[1]}:${time[2]}`) : undefined;
-}
-
-function eventDateKey(value: string): string {
-  return value.slice(0, 10);
 }
 
 function eventDurationFromDraft(draft: Extract<CalendarItemEditDraft, { kind: "event" }>): number | undefined {
@@ -2153,7 +2149,11 @@ class TaskNoteModal extends Modal {
     this.focusBodyStart();
   }
 
-  async onClose(): Promise<void> {
+  onClose(): void {
+    void this.closeNoteModal();
+  }
+
+  private async closeNoteModal(): Promise<void> {
     this.isClosed = true;
     const leaf = this.leaf;
     this.leaf = undefined;
@@ -2447,13 +2447,14 @@ class CreateTaskModal extends Modal {
     }
 
     if (this.detailsExpanded && (this.target.type === "apple-reminders" || this.target.type === "apple-calendar" || this.target.type === "dida")) {
-      new Setting(this.contentEl)
+      const notesSetting = new Setting(this.contentEl)
         .setName(t("notes"))
         .addTextArea((text) => {
           text.setValue(this.notes).onChange((value) => {
             this.notes = value;
           });
         });
+      notesSetting.settingEl.addClass("task-hub-create-textarea-setting");
     }
 
     new Setting(this.contentEl)

@@ -226,7 +226,7 @@ describe("Task Hub styles", () => {
     expect(alertCheckboxRule).toContain("height: 18px");
     expect(alertCheckboxRule).toContain("max-width: 18px");
     expect(alertCheckboxRule).toContain("min-width: 18px");
-    expect(alertCheckboxRule).toContain("width: 18px !important");
+    expect(alertCheckboxRule).toContain("width: 18px");
     expect(textareaRule).toContain("min-height: 96px");
   });
 
@@ -240,7 +240,7 @@ describe("Task Hub styles", () => {
     expect(styles).toContain(".task-hub-note-modal-hide-frontmatter .metadata-properties");
     expect(styles).toContain(".task-hub-note-modal-hide-frontmatter .metadata-add-button");
     expect(styles).toContain(".task-hub-note-modal-hide-frontmatter .frontmatter-container");
-    expect(styles).toContain("display: none !important");
+    expect(styles).toContain("display: none");
   });
 
   it("keeps task note cards padded and Markdown paragraphs compact", () => {
@@ -259,8 +259,8 @@ describe("Task Hub styles", () => {
     expect(noteBodyRule).toContain("margin-top: 10px");
     expect(noteBodyRule).toContain("white-space: normal");
     expect(plainTextRule).toContain("white-space: pre-wrap");
-    expect(blockRule).toContain("margin-block: 0 2px !important");
-    expect(listItemRule).toContain("margin-block: 0 2px !important");
+    expect(blockRule).toContain("margin-block: 0 2px");
+    expect(listItemRule).toContain("margin-block: 0 2px");
   });
 
   it("renders tag view chips with white lightweight text and lifted shadows", () => {
@@ -292,7 +292,7 @@ describe("Task Hub styles", () => {
     const hoverRule = styles.match(/\.task-hub-tag-editor:hover\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const focusRule = styles.match(/\.task-hub-tag-editor:focus-within\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const placeholderRule = styles.match(/\.task-hub-tag-editor-placeholder\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
-    const inputRule = styles.match(/\.task-hub-tag-editor-input\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const inputRule = styles.match(/input\.task-hub-tag-editor-input\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const chipRule = styles.match(/\.task-hub-tag-editor-chip\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
 
     expect(editorRule).toContain("background: transparent");
@@ -303,8 +303,8 @@ describe("Task Hub styles", () => {
     expect(hoverRule).toContain("background: var(--background-modifier-hover)");
     expect(focusRule).toContain("box-shadow: none");
     expect(placeholderRule).toContain("color: var(--text-faint)");
-    expect(inputRule).toContain("background: transparent !important");
-    expect(inputRule).toContain("border: 0 !important");
+    expect(inputRule).toContain("background: transparent");
+    expect(inputRule).toContain("border: 0");
     expect(inputRule).toContain("min-width: 1ch");
     expect(chipRule).toContain("background: color-mix(in srgb, var(--task-hub-source-color, var(--interactive-accent)) 12%, var(--background-secondary))");
     expect(chipRule).toContain("color: var(--text-normal)");
@@ -363,8 +363,8 @@ describe("Task Hub styles", () => {
     expect(completedRowRule).not.toContain("animation:");
     expect(completingRowRule).toContain("animation: task-hub-unscheduled-task-complete 260ms cubic-bezier(0.2, 0.85, 0.25, 1) both");
     expect(completingRowRule).toContain("pointer-events: none");
-    expect(enterKeyframes).toContain("clip-path: inset(0 0 0 100%)");
-    expect(exitKeyframes).toContain("transform: translateX(18px) scaleX(0.96)");
+    expect(enterKeyframes).toContain("transform: translateX(18px) scale(0.98)");
+    expect(exitKeyframes).toContain("transform: translateX(18px) scale(0.98)");
     expect(rowCompleteKeyframes).toContain("transform: translateX(4px)");
     expect(paneOpenKeyframes).toContain("transform: translateX(12px) scaleX(1.012)");
     expect(paneCloseKeyframes).toContain("transform: translateX(10px) scaleX(1.01)");

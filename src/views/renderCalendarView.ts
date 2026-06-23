@@ -1356,7 +1356,7 @@ function renderTaskDetailsPopover(
       handlers.onTaskUpdate?.(task, draft);
     };
     lastCommittedSignature = JSON.stringify(buildDraft());
-    const editableFields = [title, date, time, tags, recurrence, notes, detailExtra.toggle, alertEditor?.select].filter(Boolean) as HTMLElement[];
+    const editableFields = [title, date, time, tags, recurrence, notes, detailExtra.toggle, alertEditor?.select].filter(isHTMLElement);
     for (const field of editableFields) {
       if (!field) continue;
       field.addEventListener("input", markDirty);
@@ -1553,7 +1553,7 @@ function renderEventDetailsPopover(
       handlers.onEventUpdate?.(event, draft);
     };
     lastCommittedSignature = JSON.stringify(buildDraft());
-    const editableFields = [title, date, start, end, calendar, allDayCheckbox, recurrence, recurrenceScope, location, notes, detailExtra.toggle].filter(Boolean) as HTMLElement[];
+    const editableFields = [title, date, start, end, calendar, allDayCheckbox, recurrence, recurrenceScope, location, notes, detailExtra.toggle].filter(isHTMLElement);
     for (const field of editableFields) {
       if (!field) continue;
       field.addEventListener("input", markDirty);
@@ -1583,10 +1583,16 @@ function renderCalendarDetailExtraToggle(container: HTMLElement, state: Calendar
   toggleRow.row.addClass("task-hub-detail-toggle-row");
   toggleRow.row.addClass("task-hub-calendar-detail-toggle");
   const extra = container.createDiv({ cls: "task-hub-detail-extra task-hub-calendar-detail-extra is-hidden" });
-  toggle!.addEventListener("change", () => {
-    toggleDetailExtra(extra, toggle!.checked);
+  if (!toggle) throw new Error("Detail toggle failed to render.");
+  const renderedToggle = toggle;
+  renderedToggle.addEventListener("change", () => {
+    toggleDetailExtra(extra, renderedToggle.checked);
   });
-  return { toggle: toggle!, extra };
+  return { toggle: renderedToggle, extra };
+}
+
+function isHTMLElement(value: HTMLElement | undefined): value is HTMLElement {
+  return value !== undefined;
 }
 
 function bindDetailCommitKeys(field: HTMLElement, commit: () => void): void {
@@ -1628,7 +1634,7 @@ function toggleDetailExtra(extra: HTMLElement, expanded: boolean): void {
       extra.removeEventListener?.("transitionend", finish);
     };
     extra.addEventListener("transitionend", finish);
-    globalThis.setTimeout?.(() => finish(), 280);
+    setTimeout(() => finish(), 280);
     return;
   }
 
@@ -1648,7 +1654,7 @@ function toggleDetailExtra(extra: HTMLElement, expanded: boolean): void {
     extra.removeEventListener?.("transitionend", finish);
   };
   extra.addEventListener("transitionend", finish);
-  globalThis.setTimeout?.(() => finish(), 280);
+  setTimeout(() => finish(), 280);
 }
 
 function renderRecurrenceScopeSelect(container: HTMLElement, state: CalendarViewState): HTMLSelectElement {
@@ -1770,7 +1776,8 @@ function detailCheckbox(container: HTMLElement, label: string): HTMLInputElement
   detailRow(container, label, (icon) => {
     checkbox = icon.createEl("input", { cls: "task-hub-calendar-detail-check", type: "checkbox" }) as HTMLInputElement;
   });
-  return checkbox!;
+  if (!checkbox) throw new Error("Detail checkbox failed to render.");
+  return checkbox;
 }
 
 function openNativeDatePicker(input: HTMLInputElement): void {
@@ -1866,19 +1873,6 @@ function reminderAlertEditor(
       return normalizeReminderAlertMinutes(Number(select.value)) ?? 0;
     }
   };
-}
-
-function detailCompactSelect(
-  container: HTMLElement,
-  options: Array<{ id: string; name: string }>,
-  value: string | undefined
-): HTMLSelectElement {
-  const select = container.createEl("select", { cls: "task-hub-calendar-detail-header-select" }) as HTMLSelectElement;
-  for (const option of options) {
-    select.createEl("option", { value: option.id, text: option.name });
-  }
-  if (value) select.value = value;
-  return select;
 }
 
 function timeFromTask(task: TaskItem): string {

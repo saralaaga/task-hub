@@ -288,7 +288,7 @@ export class TaskNoteIndex {
   }
 
   getNotesForKey(key: string): TaskNote[] {
-    return ((this.notePathsByKey.get(key) ?? []).map((path) => this.notesByPath.get(path)).filter(Boolean) as TaskNote[]).sort(
+    return (this.notePathsByKey.get(key) ?? []).map((path) => this.notesByPath.get(path)).filter(isTaskNote).sort(
       (left, right) => (right.createdAt ?? "").localeCompare(left.createdAt ?? "") || right.path.localeCompare(left.path)
     );
   }
@@ -304,6 +304,10 @@ export class TaskNoteIndex {
   private nowIso(): string {
     return (this.options.now?.() ?? new Date()).toISOString();
   }
+}
+
+function isTaskNote(value: TaskNote | undefined): value is TaskNote {
+  return value !== undefined;
 }
 
 function buildManagedTaskNoteLines(input: {

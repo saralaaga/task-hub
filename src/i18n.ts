@@ -19,7 +19,9 @@ const LANGUAGE_METADATA: Record<Language, Omit<LanguageOption, "value">> = {
 
 export const LANGUAGE_OPTIONS: LanguageOption[] = SUPPORTED_LANGUAGES.map((value) => ({
   value,
-  ...LANGUAGE_METADATA[value]
+  label: LANGUAGE_METADATA[value].label,
+  locale: LANGUAGE_METADATA[value].locale,
+  isCjk: LANGUAGE_METADATA[value].isCjk
 }));
 
 export function isLanguage(value: unknown): value is Language {

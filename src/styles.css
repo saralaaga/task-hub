@@ -226,7 +226,7 @@
   margin: 0;
   max-width: 18px;
   min-width: 18px;
-  width: 18px !important;
+  width: 18px;
 }
 
 .task-hub-reminder-alert-row,
@@ -253,12 +253,12 @@
   min-width: 0;
 }
 
-.task-hub-create-modal .setting-item:has(textarea) {
+.task-hub-create-textarea-setting {
   align-items: start;
 }
 
-.task-hub-create-modal .setting-item:has(textarea) .setting-item-info,
-.task-hub-create-modal .setting-item:has(textarea) .setting-item-control {
+.task-hub-create-textarea-setting .setting-item-info,
+.task-hub-create-textarea-setting .setting-item-control {
   padding-top: 4px;
 }
 
@@ -584,10 +584,7 @@
 }
 
 .task-hub-task-details.is-send-menu-open,
-.task-hub-task-details:has(.task-hub-send-target-menu[open]),
-.task-hub-task-details-host:has(.task-hub-send-target-menu[open]),
-.task-hub-calendar-detail-popover.is-send-menu-open,
-.task-hub-calendar-detail-popover:has(.task-hub-send-target-menu[open]) {
+.task-hub-calendar-detail-popover.is-send-menu-open {
   overflow: visible;
   z-index: 1010;
 }
@@ -1041,19 +1038,19 @@ body .task-hub-view button.task-hub-color-swatch {
   position: relative;
 }
 
-.task-hub-task-row:has(.task-hub-task-note-count) .task-hub-task-body {
+.task-hub-task-row.has-task-note-count .task-hub-task-body {
   padding-right: 34px;
 }
 
-.task-hub-task-row:has(.task-hub-subtask-toggle) .task-hub-task-body {
+.task-hub-task-row.has-subtask-toggle .task-hub-task-body {
   padding-right: 34px;
 }
 
-.task-hub-task-row:has(.task-hub-subtask-toggle):has(.task-hub-task-note-count) .task-hub-task-body {
+.task-hub-task-row.has-subtask-toggle.has-task-note-count .task-hub-task-body {
   padding-right: 66px;
 }
 
-.task-hub-task-row:has(.task-hub-subtask-toggle) .task-hub-task-note-count {
+.task-hub-task-row.has-subtask-toggle .task-hub-task-note-count {
   right: 38px;
 }
 
@@ -1152,12 +1149,12 @@ body .task-hub-view button.task-hub-color-swatch {
   margin-top: 6px;
 }
 
-.task-hub-task-note-menu {
+button.task-hub-task-note-menu {
   align-items: center;
   appearance: none;
-  background: transparent !important;
-  border: 0 !important;
-  box-shadow: none !important;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
   color: var(--text-muted);
   cursor: pointer;
   display: inline-flex;
@@ -1173,9 +1170,9 @@ body .task-hub-view button.task-hub-color-swatch {
   width: 26px;
 }
 
-.task-hub-task-note-menu:hover,
-.task-hub-task-note-menu:focus-visible {
-  background: transparent !important;
+button.task-hub-task-note-menu:hover,
+button.task-hub-task-note-menu:focus-visible {
+  background: transparent;
   color: var(--text-normal);
 }
 
@@ -1186,7 +1183,7 @@ body .task-hub-view button.task-hub-color-swatch {
 .task-hub-task-note-card .task-hub-task-note-body p,
 .task-hub-task-note-card .task-hub-task-note-body ul,
 .task-hub-task-note-card .task-hub-task-note-body ol {
-  margin-block: 0 2px !important;
+  margin-block: 0 2px;
 }
 
 .task-hub-task-note-body ul,
@@ -1195,7 +1192,7 @@ body .task-hub-view button.task-hub-color-swatch {
 }
 
 .task-hub-task-note-card .task-hub-task-note-body li {
-  margin-block: 0 2px !important;
+  margin-block: 0 2px;
 }
 
 .task-hub-task-note-body > :last-child {
@@ -1244,7 +1241,7 @@ body .task-hub-view button.task-hub-color-swatch {
 .task-hub-note-modal-hide-frontmatter .metadata-properties,
 .task-hub-note-modal-hide-frontmatter .metadata-add-button,
 .task-hub-note-modal-hide-frontmatter .frontmatter-container {
-  display: none !important;
+  display: none;
 }
 
 .task-hub-note-modal-actions {
@@ -1554,17 +1551,17 @@ body .task-hub-view button.task-hub-color-swatch {
   display: none;
 }
 
-.task-hub-tag-editor-input {
-  background: transparent !important;
-  border: 0 !important;
-  box-shadow: none !important;
+input.task-hub-tag-editor-input {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
   flex: 1 1 1ch;
   min-width: 1ch;
   padding: 3px 0;
 }
 
-.task-hub-tag-editor-input:focus {
-  box-shadow: none !important;
+input.task-hub-tag-editor-input:focus {
+  box-shadow: none;
 }
 
 .task-hub-tag-editor-chip {
@@ -2152,7 +2149,7 @@ body .task-hub-view button.task-hub-color-swatch {
   position: sticky;
   top: 8px;
   transform-origin: right center;
-  will-change: clip-path, opacity, transform;
+  will-change: opacity, transform;
 }
 
 .task-hub-unscheduled-panel.is-opening {
@@ -2171,29 +2168,25 @@ body .task-hub-view button.task-hub-color-swatch {
 
 @keyframes task-hub-unscheduled-panel-enter {
   from {
-    clip-path: inset(0 0 0 100%);
     opacity: 0;
-    transform: translateX(18px) scaleX(0.96);
+    transform: translateX(18px) scale(0.98);
   }
 
   to {
-    clip-path: inset(0 0 0 0);
     opacity: 1;
-    transform: translateX(0) scaleX(1);
+    transform: translateX(0) scale(1);
   }
 }
 
 @keyframes task-hub-unscheduled-panel-exit {
   from {
-    clip-path: inset(0 0 0 0);
     opacity: 1;
-    transform: translateX(0) scaleX(1);
+    transform: translateX(0) scale(1);
   }
 
   to {
-    clip-path: inset(0 0 0 100%);
     opacity: 0;
-    transform: translateX(18px) scaleX(0.96);
+    transform: translateX(18px) scale(0.98);
   }
 }
 

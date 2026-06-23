@@ -257,11 +257,14 @@ function renderTaskRow(
   expanded = false,
   depth = 0
 ): HTMLElement {
+  const taskNoteCount = options.taskNotesEnabled && options.getTaskNoteCount ? options.getTaskNoteCount(task) : 0;
   const classes = [
     "task-hub-task-row",
     selected ? "is-selected" : "",
     multiSelected ? "is-multi-selected" : "",
     task.completed ? "is-completed" : "",
+    taskNoteCount > 0 ? "has-task-note-count" : "",
+    childCount > 0 ? "has-subtask-toggle" : "",
     options.exitingTaskIds?.has(task.id) ? "is-exiting" : ""
   ].filter(Boolean).join(" ");
   const row = container.createDiv({ cls: classes });
@@ -287,8 +290,8 @@ function renderTaskRow(
       handlers.onTagSelect(tag);
     });
   }
-  if (options.taskNotesEnabled && options.getTaskNoteCount && options.getTaskNoteCount(task) > 0) {
-    body.createSpan({ cls: "task-hub-task-note-count", text: String(options.getTaskNoteCount(task)) });
+  if (taskNoteCount > 0) {
+    body.createSpan({ cls: "task-hub-task-note-count", text: String(taskNoteCount) });
   }
   if (childCount > 0) {
     const toggle = row.createEl("button", {
@@ -537,8 +540,10 @@ function renderTaskDetails(
       });
       toggleRow.row.addClass("task-hub-detail-toggle-row");
       const extra = editor.createDiv({ cls: "task-hub-detail-extra is-hidden" });
-      detailsToggle!.addEventListener("change", () => {
-        toggleDetailExtra(extra, detailsToggle!.checked);
+      const toggle = detailsToggle;
+      if (!toggle) throw new Error("Detail toggle failed to render.");
+      toggle.addEventListener("change", () => {
+        toggleDetailExtra(extra, toggle.checked);
       });
       renderReadonlyDetailValue(extra, t("sourceFile"), taskDetailSourceFileLabel(task), "task-hub-detail-source-file");
       if (task.contextPreview && !canEditExternalTask) {
@@ -625,7 +630,7 @@ function toggleDetailExtra(extra: HTMLElement, expanded: boolean): void {
       extra.removeEventListener?.("transitionend", finish);
     };
     extra.addEventListener("transitionend", finish);
-    globalThis.setTimeout?.(() => finish(), 280);
+    setTimeout(() => finish(), 280);
     return;
   }
 
@@ -645,7 +650,7 @@ function toggleDetailExtra(extra: HTMLElement, expanded: boolean): void {
     extra.removeEventListener?.("transitionend", finish);
   };
   extra.addEventListener("transitionend", finish);
-  globalThis.setTimeout?.(() => finish(), 280);
+  setTimeout(() => finish(), 280);
 }
 
 function renderTaskDetailCompleteCheckbox(
@@ -1064,8 +1069,4 @@ function renderTaskDetailSourceLogo(container: HTMLElement, task: TaskItem | und
   const source = sourceLogoKindForTask(task);
   if (!source) return;
   renderSourceLogo(container, "task-hub-detail-source-logo", source);
-}
-
-function canOpenSource(task: TaskItem): boolean {
-  return task.source === "vault" || task.source === "apple-reminders" || task.source === "dida";
 }

@@ -13,14 +13,14 @@ export class TaskHubTagInputSuggest extends AbstractInputSuggest<string> {
     inputEl: TaskHubTagInputElement,
     private readonly getTags: () => string[]
   ) {
-    const originalGetBoundingClientRect = isTextareaElement(inputEl)
-      ? inputEl.getBoundingClientRect.bind(inputEl)
-      : undefined;
-    if (originalGetBoundingClientRect) {
-      inputEl.getBoundingClientRect = () => textareaCaretViewportRect(inputEl as HTMLTextAreaElement, originalGetBoundingClientRect);
+    let originalGetBoundingClientRect: (() => DOMRect) | undefined;
+    if (isTextareaElement(inputEl)) {
+      const original = inputEl.getBoundingClientRect.bind(inputEl);
+      originalGetBoundingClientRect = original;
+      inputEl.getBoundingClientRect = () => textareaCaretViewportRect(inputEl, original);
     }
     super(app, inputEl as HTMLInputElement);
-    (this as unknown as { suggestEl?: HTMLElement }).suggestEl?.classList.add("task-hub-tag-suggest");
+    tagSuggestElement(this)?.classList.add("task-hub-tag-suggest");
     this.sourceEl = inputEl;
     this.originalGetBoundingClientRect = originalGetBoundingClientRect;
   }
@@ -125,7 +125,11 @@ function isTagSuggestionMatch(tag: string, needle: string): boolean {
 }
 
 function isTextareaElement(inputEl: TaskHubTagInputElement): inputEl is HTMLTextAreaElement {
-  return (inputEl as HTMLElement).tagName === "TEXTAREA";
+  return inputEl.tagName === "TEXTAREA";
+}
+
+function tagSuggestElement(suggest: AbstractInputSuggest<string>): HTMLElement | undefined {
+  return (suggest as AbstractInputSuggest<string> & { suggestEl?: HTMLElement }).suggestEl;
 }
 
 function textareaCaretViewportRect(textarea: HTMLTextAreaElement, originalRect: () => DOMRect): DOMRect {
