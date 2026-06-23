@@ -432,11 +432,16 @@ function renderTaskDetails(
     const color = taskDisplayColor(task, options);
     if (color) setCssProps(details, { "--task-hub-source-color": color });
   }
-  const header = details.createDiv({ cls: "task-hub-detail-header task-hub-detail-row" });
+  const header = details.createDiv({ cls: "task-hub-detail-header task-hub-detail-row task-hub-detail-title-header" });
   const headerIcon = header.createDiv({ cls: "task-hub-detail-icon-cell" });
-  renderTaskDetailSourceLogo(headerIcon, task);
+  if (task) {
+    const canHeaderToggle = task.source === "vault" || (task.source === "apple-reminders" && options.allowAppleReminderWriteback) || (task.source === "dida" && Boolean(options.allowDidaWriteback));
+    renderTaskDetailCompleteCheckbox(headerIcon, task, canHeaderToggle, handlers, t);
+  }
   header.createEl("h3", { cls: "task-hub-detail-label", text: t("taskDetails") });
-  header.createDiv({ cls: "task-hub-detail-control" });
+  const headerLogo = header.createDiv({ cls: "task-hub-detail-header-logo-cell" });
+  renderTaskDetailSourceLogo(headerLogo, task);
+  header.createDiv({ cls: "task-hub-detail-control task-hub-detail-header-spacer" });
   if (!task) {
     details.createDiv({ cls: "task-hub-empty", text: t("noMatchingTasks") });
     return;
@@ -449,9 +454,7 @@ function renderTaskDetails(
   const canEditTask = canEditVaultTask || canEditExternalTask;
   const canToggle = task.source === "vault" || (task.source === "apple-reminders" && options.allowAppleReminderWriteback) || (task.source === "dida" && Boolean(options.allowDidaWriteback));
   if (!canEditTask) {
-    const titleRow = detailRow(details, t("taskCreationBody"), (icon) => {
-      renderTaskDetailCompleteCheckbox(icon, task, canToggle, handlers, t);
-    });
+    const titleRow = detailRow(details, t("taskCreationBody"));
     titleRow.control.createDiv({ cls: `task-hub-detail-title ${task.completed ? "is-completed" : ""}`, text: task.text });
   }
   const facts = details.createDiv({ cls: "task-hub-detail-facts" });
@@ -513,8 +516,7 @@ function renderTaskDetails(
         t("taskCreationBody"),
         task.text,
         "text",
-        "task-hub-detail-title-input",
-        (icon) => renderTaskDetailCompleteCheckbox(icon, task, canToggle, handlers, t)
+        "task-hub-detail-title-input"
       );
     }
     if (canEditTask) {
@@ -530,8 +532,9 @@ function renderTaskDetails(
       ? tagChipEditor(editor, t("tags"), t("tagPlaceholder"), task.tags, options.bindTagInputSuggest, markDirty)
       : undefined;
     if (canEditTask) {
-      const toggleRow = detailRow(editor, t("editDetails"));
-      detailsToggle = toggleRow.control.createEl("input", { cls: "task-hub-detail-extra-toggle", type: "checkbox" }) as HTMLInputElement;
+      const toggleRow = detailRow(editor, t("editDetails"), (icon) => {
+        detailsToggle = icon.createEl("input", { cls: "task-hub-detail-extra-toggle", type: "checkbox" }) as HTMLInputElement;
+      });
       toggleRow.row.addClass("task-hub-detail-toggle-row");
       const extra = editor.createDiv({ cls: "task-hub-detail-extra is-hidden" });
       detailsToggle!.addEventListener("change", () => {

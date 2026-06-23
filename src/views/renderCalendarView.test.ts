@@ -1954,9 +1954,16 @@ describe("renderCalendarView", () => {
     collect(container).find((element) => element.classes.has("task-hub-calendar-item"))?.click();
     const popover = collect(fakeDocument.body).find((element) => element.classes.has("task-hub-calendar-detail-popover"));
     const header = collect(popover as FakeElement).find((element) => element.classes.has("task-hub-calendar-detail-header"));
-    const headerTitle = collect(header as FakeElement).find((element) => element.text === "taskDetails");
+    const headerTitle = collect(header as FakeElement).find((element) => element.classes.has("task-hub-calendar-detail-title"));
+    const headerTitleText = collect(headerTitle as FakeElement).find((element) => element.text === "taskDetails");
+    const headerComplete = collect(headerTitle as FakeElement).find((element) => element.classes.has("task-hub-detail-complete-checkbox"));
+    const headerLogo = collect(headerTitle as FakeElement).find((element) => element.classes.has("task-hub-calendar-detail-logo"));
     const extra = collect(popover as FakeElement).find((element) => element.classes.has("task-hub-calendar-detail-extra"));
     const toggle = collect(popover as FakeElement).find((element) => element.classes.has("task-hub-detail-extra-toggle"));
+    const bodyLabel = collect(popover as FakeElement).find((element) => element.classes.has("task-hub-detail-label") && element.text === "taskCreationBody");
+    const bodyRow = bodyLabel?.parent;
+    const editDetailsLabel = collect(popover as FakeElement).find((element) => element.classes.has("task-hub-detail-label") && element.text === "editDetails");
+    const editDetailsRow = editDetailsLabel?.parent;
     const notesInput = collect(extra as FakeElement).find((element) => element.type === "textarea");
     const recurrenceSelect = collect(extra as FakeElement).find((element) => element.classes.has("task-hub-recurrence-select"));
     const formListRow = collect(popover as FakeElement).find((element) => element.text === "appleReminderList");
@@ -1964,7 +1971,12 @@ describe("renderCalendarView", () => {
     const deleteButton = collect(popover as FakeElement).find((element) => element.text === "delete");
 
     expect(header?.classes.has("has-calendar-select")).toBe(false);
-    expect(headerTitle).toBeDefined();
+    expect(headerTitleText).toBeDefined();
+    expect(headerTitle?.children.map((child) => child.classes.has("task-hub-calendar-detail-title-check-cell") ? "check-cell" : child.text || (child.classes.has("task-hub-calendar-detail-logo") ? "logo" : ""))).toEqual(["check-cell", "taskDetails", "logo"]);
+    expect(headerComplete?.parent?.classes.has("task-hub-calendar-detail-title-check-cell")).toBe(true);
+    expect(collect(bodyRow as FakeElement).some((element) => element.classes.has("task-hub-detail-complete-checkbox"))).toBe(false);
+    expect(toggle?.parent?.classes.has("task-hub-detail-icon-cell")).toBe(true);
+    expect(editDetailsRow?.classes.has("task-hub-calendar-detail-toggle")).toBe(true);
     expect(formListRow).toBeUndefined();
     expect(save).toBeUndefined();
     expect(extra?.classes.has("is-hidden")).toBe(true);
@@ -2877,6 +2889,7 @@ describe("renderCalendarView", () => {
       end: "2026-05-08T10:00",
       allDay: false,
       description: "Original event notes",
+      location: "Room 516",
       calendarId: "calendar-1",
       calendarName: "提醒"
     };
@@ -2926,6 +2939,8 @@ describe("renderCalendarView", () => {
     const extra = collect(popover as FakeElement).find((element) => element.classes.has("task-hub-calendar-detail-extra"));
     const toggle = collect(popover as FakeElement).find((element) => element.classes.has("task-hub-detail-extra-toggle"));
     const notesInput = collect(extra as FakeElement).find((element) => element.type === "textarea");
+    const locationLabel = collect(extra as FakeElement).find((element) => element.classes.has("task-hub-detail-label") && element.text === "location");
+    const locationInput = collect(locationLabel?.parent as FakeElement).find((element) => element.type === "text");
     const recurrenceSelect = collect(extra as FakeElement).find((element) => element.classes.has("task-hub-recurrence-select"));
     const formCalendarLabel = collect(popover as FakeElement).find((element) => element.classes.has("task-hub-detail-label") && element.text === "localAppleCalendar");
     const formCalendarRow = formCalendarLabel?.parent;
@@ -2936,6 +2951,7 @@ describe("renderCalendarView", () => {
     const recurrenceScope = collect(extra as FakeElement).find((element) => element.type === "select" && element.value === "this");
     expect(extra?.classes.has("is-hidden")).toBe(true);
     expect(collect(extra as FakeElement).find((element) => element.text === "recurrenceApplyTo")).toBeDefined();
+    expect(locationInput?.value).toBe("Room 516");
     expect(notesInput?.value).toBe("Original event notes");
     expect(recurrenceSelect?.value).toBe("");
     expect(formCalendarRow?.classes.has("task-hub-calendar-detail-row")).toBe(true);
@@ -2953,11 +2969,14 @@ describe("renderCalendarView", () => {
     recurrenceSelect!.dispatch("change");
     recurrenceScope!.value = "future";
     recurrenceScope!.dispatch("change");
+    locationInput!.value = "Room 518";
+    locationInput!.dispatch("input");
     notesInput!.value = "Updated event notes";
     notesInput!.dispatch("input");
     notesInput!.dispatch("keydown", { key: "Enter" });
     expect(onEventUpdate).toHaveBeenCalledWith(timedEvent, expect.objectContaining({
       notes: "Updated event notes",
+      location: "Room 518",
       recurrence: "RRULE:FREQ=MONTHLY",
       recurrenceScope: "future",
       calendarId: "calendar-1"

@@ -892,6 +892,9 @@ func setCalendarEventDetails(store: EKEventStore) {
     if hasArgument("--notes") {
         event.notes = argumentValue("--notes")
     }
+    if hasArgument("--location") {
+        event.location = argumentValue("--location")
+    }
     if let calendarId = argumentValue("--calendar-id"), !calendarId.isEmpty {
         guard let calendar = store.calendar(withIdentifier: calendarId), calendar.allowsContentModifications else {
             fail("not_found", "Apple Calendar no longer exists or is not writable.", exitCode: 9)

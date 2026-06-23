@@ -128,6 +128,10 @@ describe("Task Hub styles", () => {
     const timeRule = styles.match(/\.task-hub-calendar-detail-time-row\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const alertRule = styles.match(/\.task-hub-reminder-alert-row,\s*\.task-hub-create-alert-row\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const headerWithSelectRule = styles.match(/\.task-hub-calendar-detail-header\.has-calendar-select\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const titleWithCheckboxRule = styles.match(/\.task-hub-calendar-detail-title\.has-complete-checkbox\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const titleCheckboxCellRule = styles.match(/\.task-hub-calendar-detail-title-check-cell\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const titleCheckboxRule = styles.match(/\.task-hub-calendar-detail-title-check-cell\s+\.task-hub-detail-complete-checkbox\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const titleTextRule = styles.match(/\.task-hub-calendar-detail-title-text\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const headerControlsRule = styles.match(/\.task-hub-calendar-detail-header-controls\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const headerSelectRule = styles.match(/\.task-hub-calendar-detail-header-select\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const closeRule = styles.match(/\.task-hub-calendar-detail-header\s*>\s*\.task-hub-icon-button\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
@@ -150,6 +154,11 @@ describe("Task Hub styles", () => {
     expect(timeRule).toContain("grid-template-columns: minmax(0, 1fr) minmax(0, 1fr)");
     expect(alertRule).toContain("grid-template-columns: minmax(0, 1fr) minmax(0, 1fr)");
     expect(headerWithSelectRule).toContain("grid-template-columns: minmax(0, 1fr) minmax(96px, 148px) 32px");
+    expect(titleWithCheckboxRule).toContain("gap: 10px");
+    expect(titleCheckboxCellRule).toContain("flex: 0 0 36px");
+    expect(titleCheckboxCellRule).toContain("justify-content: center");
+    expect(titleCheckboxRule).toContain("accent-color: var(--task-hub-item-color");
+    expect(titleTextRule).toContain("text-overflow: ellipsis");
     expect(headerControlsRule).toContain("grid-column: 2");
     expect(headerControlsRule).toContain("grid-row: 1");
     expect(headerControlsRule).not.toContain("grid-column: 1 / -1");
@@ -304,12 +313,19 @@ describe("Task Hub styles", () => {
   it("keeps task detail reminder controls aligned with the shared input column", () => {
     const styles = readFileSync(path.join(__dirname, "styles.css"), "utf8");
     const detailRowRule = styles.match(/\.task-hub-detail-row\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const detailHeaderRule = styles.match(/\.task-hub-detail-header\.task-hub-detail-title-header\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const detailHeaderLogoRule = styles.match(/\.task-hub-detail-header-logo-cell\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const detailHeaderSpacerRule = styles.match(/\.task-hub-detail-header-spacer\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const reminderDetailOverride = styles.match(/\.task-hub-reminder-alert-row\.task-hub-detail-row\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const detailExtraExpandingRule = styles.match(/\.task-hub-detail-extra\.is-expanding\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const detailExtraHiddenRule = styles.match(/\.task-hub-detail-extra\.is-hidden,\s*\.task-hub-detail-extra\.is-opening,\s*\.task-hub-detail-extra\.is-closing\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const reducedMotionRule = styles.match(/@media \(prefers-reduced-motion: reduce\)\s*\{(?<body>[\s\S]+?)\n\}/)?.groups?.body ?? "";
 
     expect(detailRowRule).toContain("grid-template-columns: 36px var(--task-hub-detail-label-width, 128px) minmax(0, 1fr)");
+    expect(detailHeaderRule).toContain("grid-template-columns: 36px max-content 28px minmax(0, 1fr)");
+    expect(detailHeaderLogoRule).toContain("justify-content: flex-start");
+    expect(detailHeaderLogoRule).toContain("min-height: 32px");
+    expect(detailHeaderSpacerRule).toContain("min-width: 0");
     expect(reminderDetailOverride).not.toContain("grid-template-columns");
     expect(detailExtraExpandingRule).toContain("max-height 220ms cubic-bezier(0.2, 0.85, 0.25, 1)");
     expect(detailExtraExpandingRule).toContain("overflow: clip");

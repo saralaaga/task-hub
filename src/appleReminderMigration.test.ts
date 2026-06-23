@@ -1963,7 +1963,8 @@ describe("Apple Reminders migration", () => {
       title: "Design review",
       start: "2026-05-20T09:30:00",
       end: "2026-05-20T10:30:00",
-      allDay: false
+      allDay: false,
+      location: "Room 516"
     }, {
       kind: "event",
       title: "Updated review",
@@ -1972,7 +1973,8 @@ describe("Apple Reminders migration", () => {
       endTime: "11:15",
       allDay: false,
       calendarId: "calendar-1",
-      notes: "Discuss launch scope"
+      notes: "Discuss launch scope",
+      location: "Room 518"
     });
 
     expect(setAppleCalendarEventDetails).toHaveBeenCalledWith({
@@ -1985,7 +1987,8 @@ describe("Apple Reminders migration", () => {
       end: "2026-05-20T10:30:00",
       allDay: false,
       calendarId: "calendar-1",
-      notes: "Discuss launch scope"
+      notes: "Discuss launch scope",
+      location: "Room 518"
     });
     expect(notices).toContain("Event updated.");
   });

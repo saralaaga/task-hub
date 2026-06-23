@@ -897,6 +897,7 @@ export default class TaskHubPlugin extends Plugin {
         allDay: draft.allDay,
         calendarId: draft.calendarId || undefined,
         notes: draft.notes,
+        location: draft.location,
         ...(draft.recurrence !== undefined || event.recurrence
           ? {
               recurrence: draft.recurrence === undefined ? event.recurrence : draft.recurrence,

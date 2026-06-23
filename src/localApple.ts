@@ -255,6 +255,7 @@ export type AppleCalendarEventDetailsUpdate = AppleCalendarEventDateUpdate & {
   title: string;
   calendarId?: string;
   notes?: string;
+  location?: string;
   recurrence?: string | null;
   recurrenceScope?: "this" | "future";
 };
@@ -283,6 +284,7 @@ export async function setAppleCalendarEventDetails(input: AppleCalendarEventDeta
   args.splice(3, 0, "--title", input.title);
   if (input.calendarId) args.splice(args.length - 2, 0, "--calendar-id", input.calendarId);
   if (input.notes !== undefined) args.splice(args.length - 2, 0, "--notes", input.notes);
+  if (input.location !== undefined) args.splice(args.length - 2, 0, "--location", input.location);
   addRecurrenceArgs(args, input.recurrence, args.length - 2);
   if (input.recurrenceScope) args.splice(args.length - 2, 0, "--span", input.recurrenceScope);
   parseHelperJson<{ ok: boolean }>(await runAppleHelper(args));

@@ -91,6 +91,7 @@ export type CalendarItemEditDraft =
       allDay: boolean;
       calendarId?: string;
       notes?: string;
+      location?: string;
       recurrence?: string | null;
       recurrenceScope?: RecurrenceEditScope;
     };

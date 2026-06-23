@@ -88,6 +88,7 @@ describe("Apple helper source", () => {
     expect(source).toContain("case \"set-calendar-event-details\"");
     expect(source).toContain("func setCalendarEventDetails(store: EKEventStore)");
     expect(source).toContain("event.title = title");
+    expect(source).toContain("event.location = argumentValue(\"--location\")");
     expect(source).toContain("event.calendar = calendar");
   });
 

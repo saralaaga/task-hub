@@ -162,6 +162,7 @@ export type TranslationKey =
   | "lineMismatchConflict"
   | "lineNoLongerOpen"
   | "lineOutsideFile"
+  | "location"
   | "localApple"
   | "localAppleError"
   | "localAppleCalendar"
@@ -897,6 +898,7 @@ const TRANSLATIONS: Record<"en" | "zh", Record<TranslationKey, string>> &
     lineMismatchConflict: "The indexed task line no longer matches the file.",
     lineNoLongerOpen: "The indexed line is no longer an open task.",
     lineOutsideFile: "The indexed task line is outside the file.",
+    location: "Location",
     localApple: "Local Apple",
     localAppleError: "Local Apple error",
     localAppleCalendar: "Apple Calendar",
@@ -1256,6 +1258,7 @@ const TRANSLATIONS: Record<"en" | "zh", Record<TranslationKey, string>> &
     lineMismatchConflict: "索引中的任务行和文件内容不再匹配。",
     lineNoLongerOpen: "索引中的这一行已经不再是未完成任务。",
     lineOutsideFile: "索引中的任务行超出了文件范围。",
+    location: "地点",
     localApple: "本地 Apple",
     localAppleError: "本地 Apple 错误",
     localAppleCalendar: "Apple 日历",
@@ -1510,6 +1513,7 @@ const TRANSLATIONS: Record<"en" | "zh", Record<TranslationKey, string>> &
     language: "言語",
     languageDesc: "Task Hub の表示言語を選択します。",
     lastScan: "前回のスキャン",
+    location: "場所",
     layers: "レイヤー",
     markComplete: "完了にする",
     markOpen: "未完了に戻す",
@@ -1625,6 +1629,7 @@ const TRANSLATIONS: Record<"en" | "zh", Record<TranslationKey, string>> &
     language: "Langue",
     languageDesc: "Choisissez la langue de l'interface de Task Hub.",
     lastScan: "Dernier scan",
+    location: "Lieu",
     layers: "Calques",
     markComplete: "Marquer comme terminée",
     markOpen: "Marquer comme ouverte",
@@ -1740,6 +1745,7 @@ const TRANSLATIONS: Record<"en" | "zh", Record<TranslationKey, string>> &
     language: "언어",
     languageDesc: "Task Hub 인터페이스 언어를 선택합니다.",
     lastScan: "마지막 스캔",
+    location: "장소",
     layers: "레이어",
     markComplete: "완료로 표시",
     markOpen: "미완료로 표시",

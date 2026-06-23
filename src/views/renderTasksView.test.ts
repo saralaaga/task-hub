@@ -1098,9 +1098,24 @@ describe("renderTasksView", () => {
 
     const extra = collect(container).find((element) => element.classes.has("task-hub-detail-extra"));
     const toggle = collect(container).find((element) => element.classes.has("task-hub-detail-extra-toggle"));
+    const header = collect(container).find((element) => element.classes.has("task-hub-detail-title-header"));
+    const headerCheckbox = collect(header!).find((element) => element.classes.has("task-hub-detail-complete-checkbox"));
+    const headerTitle = collect(header!).find((element) => element.text === "taskDetails");
+    const headerLogo = collect(header!).find((element) => element.classes.has("task-hub-detail-source-logo"));
+    const bodyLabel = collect(container).find((element) => element.classes.has("task-hub-detail-label") && element.text === "taskCreationBody");
+    const bodyRow = bodyLabel?.parent;
+    const editDetailsLabel = collect(container).find((element) => element.classes.has("task-hub-detail-label") && element.text === "editDetails");
+    const editDetailsRow = editDetailsLabel?.parent;
     const recurrence = collect(extra!).find((element) => element.classes.has("task-hub-recurrence-select"));
     const notes = collect(extra!).find((element) => element.type === "textarea");
 
+    expect(header?.children.map((child) => child.classes.has("task-hub-detail-icon-cell") ? "check-cell" : child.text || (child.classes.has("task-hub-detail-header-logo-cell") ? "logo-cell" : ""))).toEqual(["check-cell", "taskDetails", "logo-cell", ""]);
+    expect(headerCheckbox?.parent?.classes.has("task-hub-detail-icon-cell")).toBe(true);
+    expect(headerTitle).toBeDefined();
+    expect(headerLogo?.parent?.classes.has("task-hub-detail-header-logo-cell")).toBe(true);
+    expect(collect(bodyRow!).some((element) => element.classes.has("task-hub-detail-complete-checkbox"))).toBe(false);
+    expect(toggle?.parent?.classes.has("task-hub-detail-icon-cell")).toBe(true);
+    expect(editDetailsRow?.classes.has("task-hub-detail-toggle-row")).toBe(true);
     expect(extra?.classes.has("is-hidden")).toBe(true);
     expect(textValues(container)).not.toContain("Original notes");
 

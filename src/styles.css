@@ -650,6 +650,22 @@
   padding-bottom: 8px;
 }
 
+.task-hub-detail-header.task-hub-detail-title-header {
+  grid-template-columns: 36px max-content 28px minmax(0, 1fr);
+}
+
+.task-hub-detail-header-logo-cell {
+  align-items: center;
+  display: flex;
+  justify-content: flex-start;
+  min-height: 32px;
+  min-width: 0;
+}
+
+.task-hub-detail-header-spacer {
+  min-width: 0;
+}
+
 .task-hub-detail-icon-cell {
   align-items: center;
   display: flex;
@@ -3086,7 +3102,24 @@ body .task-hub-view button.task-hub-color-swatch {
   min-width: 0;
 }
 
-.task-hub-calendar-detail-title > span:not(.task-hub-calendar-detail-logo) {
+.task-hub-calendar-detail-title.has-complete-checkbox {
+  gap: 10px;
+}
+
+.task-hub-calendar-detail-title-check-cell {
+  align-items: center;
+  display: inline-flex;
+  flex: 0 0 36px;
+  justify-content: center;
+  min-height: 32px;
+}
+
+.task-hub-calendar-detail-title-check-cell .task-hub-detail-complete-checkbox {
+  accent-color: var(--task-hub-item-color, var(--task-hub-source-color, var(--interactive-accent)));
+  flex: 0 0 auto;
+}
+
+.task-hub-calendar-detail-title-text {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

@@ -500,7 +500,8 @@ describe("local Apple mapping", () => {
         end: "2026-05-06T10:30:00.000Z",
         allDay: false,
         calendarId: "calendar-1",
-        notes: "Discuss launch scope"
+        notes: "Discuss launch scope",
+        location: "Room 516"
       })
     );
 
@@ -524,6 +525,8 @@ describe("local Apple mapping", () => {
       "calendar-1",
       "--notes",
       "Discuss launch scope",
+      "--location",
+      "Room 516",
       "--all-day",
       "false"
     ]);
