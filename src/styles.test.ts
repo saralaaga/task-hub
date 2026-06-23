@@ -103,6 +103,11 @@ describe("Task Hub styles", () => {
     const styles = readFileSync(path.join(__dirname, "styles.css"), "utf8");
     const dateTimeInputRule = styles.match(/\.task-hub-detail-control input\[type="date"\],\s*\.task-hub-detail-control input\[type="time"\]\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const pickerIndicatorRule = styles.match(/\.task-hub-detail-control input\[type="date"\]::-webkit-calendar-picker-indicator,\s*\.task-hub-detail-control input\[type="time"\]::-webkit-calendar-picker-indicator\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const calendarRowInputMatch = /\.task-hub-calendar-detail-row\s+\.task-hub-detail-control\s+input,\s*\.task-hub-calendar-detail-row\s+\.task-hub-detail-control\s+select,\s*\.task-hub-calendar-detail-row\s+\.task-hub-detail-control\s+textarea\s*\{[^}]*padding:\s*6px 9px[^}]*\}/.exec(styles);
+    const calendarRowDateInputMatch = /\.task-hub-calendar-detail-row\s+\.task-hub-detail-control\s+input\[type="date"\]\s*\{(?<body>[^}]+)\}/.exec(styles);
+    const calendarRowTimeInputMatch = /\.task-hub-calendar-detail-row\s+\.task-hub-detail-control\s+input\[type="time"\]\s*\{(?<body>[^}]+)\}/.exec(styles);
+    const calendarRowDateInputRule = calendarRowDateInputMatch?.groups?.body ?? "";
+    const calendarRowTimeInputRule = calendarRowTimeInputMatch?.groups?.body ?? "";
 
     expect(dateTimeInputRule).toContain("position: relative");
     expect(styles).toContain('.task-hub-detail-control input[type="date"] {\n  padding-left: calc(36px + 4ch);\n}');
@@ -111,6 +116,10 @@ describe("Task Hub styles", () => {
     expect(pickerIndicatorRule).toContain("left: 10px");
     expect(pickerIndicatorRule).toContain("right: auto");
     expect(pickerIndicatorRule).toContain("position: absolute");
+    expect(calendarRowDateInputMatch?.index ?? -1).toBeGreaterThan(calendarRowInputMatch?.index ?? -1);
+    expect(calendarRowTimeInputMatch?.index ?? -1).toBeGreaterThan(calendarRowInputMatch?.index ?? -1);
+    expect(calendarRowDateInputRule).toContain("padding-left: calc(36px + 4ch)");
+    expect(calendarRowTimeInputRule).toContain("padding-left: 42px");
   });
 
   it("aligns calendar detail date/all-day with the start/end time columns", () => {

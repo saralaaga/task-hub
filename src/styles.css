@@ -3267,6 +3267,14 @@ body .task-hub-view button.task-hub-color-swatch {
   padding: 6px 9px;
 }
 
+.task-hub-calendar-detail-row .task-hub-detail-control input[type="date"] {
+  padding-left: calc(36px + 4ch);
+}
+
+.task-hub-calendar-detail-row .task-hub-detail-control input[type="time"] {
+  padding-left: 42px;
+}
+
 .task-hub-calendar-detail-row .task-hub-detail-control textarea {
   line-height: 1.35;
   min-height: 96px;
