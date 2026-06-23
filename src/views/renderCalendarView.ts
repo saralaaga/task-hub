@@ -175,6 +175,11 @@ type AgendaTimeMetrics = {
   minorStepMinutes: 120 | 60 | 30 | 15;
 };
 
+type ResizePreviewStyles = {
+  top: string;
+  height: string;
+};
+
 export function renderCalendarView(
   container: HTMLElement,
   state: CalendarViewState,
@@ -713,6 +718,7 @@ function bindCalendarItemResize(
   const feedback = row.createDiv({ cls: "task-hub-calendar-resize-feedback" });
   for (const edge of ["start", "end"] as const) {
     let lastTarget: CalendarDropTarget | undefined;
+    let previewOriginalStyles: ResizePreviewStyles | undefined;
     const handle = row.createDiv({ cls: `task-hub-calendar-resize-handle is-${edge}` });
     handle.setAttr("aria-hidden", "true");
     handle.addEventListener("click", (event) => {
@@ -723,10 +729,12 @@ function bindCalendarItemResize(
       event.preventDefault();
       event.stopPropagation();
       const ownerDocument = handle.ownerDocument;
+      previewOriginalStyles = captureResizePreviewStyles(row);
       lastTarget = resizeDropTarget(column, event, item, startHour, hourHeight, edge);
       row.removeClass("is-resizing");
       row.addClass("is-resizing");
       updateResizeFeedback(feedback, row, lastTarget ? resizeDeltaMinutes(item, lastTarget, edge) : 0);
+      updateResizePreview(row, item, lastTarget, startHour, hourHeight);
 
       const onPointerMove = (moveEvent: PointerEvent) => {
         moveEvent.preventDefault();
@@ -734,6 +742,7 @@ function bindCalendarItemResize(
         if (!target) return;
         lastTarget = target;
         updateResizeFeedback(feedback, row, resizeDeltaMinutes(item, target, edge));
+        updateResizePreview(row, item, target, startHour, hourHeight);
       };
       const finishResize = () => {
         ownerDocument.removeEventListener("pointermove", onPointerMove);
@@ -741,6 +750,8 @@ function bindCalendarItemResize(
         ownerDocument.removeEventListener("pointercancel", onPointerCancel);
         row.removeClass("is-resizing");
         clearResizeFeedback(feedback, row);
+        restoreResizePreviewStyles(row, previewOriginalStyles);
+        previewOriginalStyles = undefined;
       };
       const onPointerUp = (upEvent: PointerEvent) => {
         upEvent.preventDefault();
@@ -767,6 +778,37 @@ function bindCalendarItemResize(
       ownerDocument.addEventListener("pointercancel", onPointerCancel);
     });
   }
+}
+
+function captureResizePreviewStyles(row: HTMLElement): ResizePreviewStyles {
+  return {
+    top: row.style.top,
+    height: row.style.height
+  };
+}
+
+function updateResizePreview(
+  row: HTMLElement,
+  item: CalendarItem,
+  target: CalendarDropTarget | undefined,
+  startHour: number,
+  hourHeight: number
+): void {
+  if (!target || typeof target === "string" || target.startMinutes === undefined || item.startMinutes === undefined) return;
+  const top = ((target.startMinutes - startHour * 60) / 60) * hourHeight;
+  const height = Math.max(30, (validDurationMinutes(target.durationMinutes) / 60) * hourHeight - 4);
+  setCssStyles(row, {
+    top: `${top}px`,
+    height: `${height}px`
+  });
+}
+
+function restoreResizePreviewStyles(row: HTMLElement, previewOriginalStyles: ResizePreviewStyles | undefined): void {
+  if (!previewOriginalStyles) return;
+  setCssStyles(row, {
+    top: previewOriginalStyles.top,
+    height: previewOriginalStyles.height
+  });
 }
 
 function updateResizeFeedback(feedback: HTMLElement, row: HTMLElement, deltaMinutes: number): void {

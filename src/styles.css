@@ -3429,6 +3429,8 @@ body .task-hub-view button.task-hub-color-swatch {
 .task-hub-calendar-timed-item.is-resizing {
   outline: 2px solid color-mix(in srgb, var(--task-hub-item-color) 70%, transparent);
   outline-offset: 1px;
+  transition: box-shadow 120ms ease, height 90ms linear, top 90ms linear;
+  will-change: height, top;
 }
 
 @keyframes task-hub-external-send-scan {

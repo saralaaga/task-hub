@@ -5333,6 +5333,8 @@ describe("renderCalendarView", () => {
     const column = collect(container).find((element) => element.classes.has("task-hub-agenda-column"));
     const topHandle = collect(container).find((element) => element.classes.has("task-hub-calendar-resize-handle") && element.classes.has("is-start"));
     const feedback = collect(container).find((element) => element.classes.has("task-hub-calendar-resize-feedback"));
+    const originalTop = styleValue(row!, "top");
+    const originalHeight = styleValue(row!, "height");
     column!.boundingRect = { top: 0 };
 
     topHandle?.dispatch("pointerdown", { clientY: 224 });
@@ -5340,11 +5342,15 @@ describe("renderCalendarView", () => {
 
     expect(row?.classes.has("has-resize-feedback")).toBe(true);
     expect((feedback as unknown as { textContent: string }).textContent).toBe("-30m");
+    expect(styleValue(row!, "top")).toBe("196px");
+    expect(styleValue(row!, "height")).toBe("80px");
 
     fakeDocument.dispatch("pointerup", { clientY: 196 });
 
     expect(row?.classes.has("has-resize-feedback")).toBe(false);
     expect((feedback as unknown as { textContent: string }).textContent).toBe("");
+    expect(styleValue(row!, "top")).toBe(originalTop);
+    expect(styleValue(row!, "height")).toBe(originalHeight);
   });
 
   it("commits the last snapped resize target when pointerup reports a stale pointer position", () => {
@@ -5443,10 +5449,17 @@ describe("renderCalendarView", () => {
     );
 
     const column = collect(container).find((element) => element.classes.has("task-hub-agenda-column"));
+    const row = collect(container).find((element) => element.classes.has("task-hub-calendar-timed-item"));
     const bottomHandle = collect(container).find((element) => element.classes.has("task-hub-calendar-resize-handle") && element.classes.has("is-end"));
+    const originalTop = styleValue(row!, "top");
+    const originalHeight = styleValue(row!, "height");
     column!.boundingRect = { top: 0 };
     bottomHandle?.dispatch("pointerdown", { clientY: 280 });
     fakeDocument.dispatch("pointermove", { clientY: 308 });
+
+    expect(styleValue(row!, "top")).toBe(originalTop);
+    expect(styleValue(row!, "height")).toBe("80px");
+
     fakeDocument.dispatch("pointerup", { clientY: 308 });
 
     expect(onEventReschedule).toHaveBeenCalledWith(timedEvent, {
@@ -5454,6 +5467,8 @@ describe("renderCalendarView", () => {
       startMinutes: 600,
       durationMinutes: 90
     });
+    expect(styleValue(row!, "top")).toBe(originalTop);
+    expect(styleValue(row!, "height")).toBe(originalHeight);
   });
 
   it("restores the agenda scroll position after a day view rerender", () => {
