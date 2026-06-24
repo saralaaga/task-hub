@@ -3099,6 +3099,24 @@ input.task-hub-tag-editor-input:focus {
   gap: 10px;
 }
 
+.task-hub-calendar-detail-title.is-event {
+  display: grid;
+  gap: 9px;
+  grid-template-columns: 36px minmax(0, max-content) 28px minmax(0, 1fr);
+}
+
+.task-hub-calendar-detail-title.is-event::before {
+  content: "";
+}
+
+.task-hub-calendar-detail-title.is-event .task-hub-calendar-detail-title-text {
+  grid-column: 2;
+}
+
+.task-hub-calendar-detail-title.is-event .task-hub-calendar-detail-logo {
+  grid-column: 3;
+}
+
 .task-hub-calendar-detail-title-check-cell {
   align-items: center;
   display: inline-flex;
@@ -3109,7 +3127,13 @@ input.task-hub-tag-editor-input:focus {
 
 .task-hub-calendar-detail-title-check-cell .task-hub-detail-complete-checkbox {
   accent-color: var(--task-hub-item-color, var(--task-hub-source-color, var(--interactive-accent)));
+  box-sizing: border-box;
   flex: 0 0 auto;
+  height: 18px;
+  margin: 0;
+  min-height: 18px;
+  padding: 0;
+  width: 18px;
 }
 
 .task-hub-calendar-detail-title-text {

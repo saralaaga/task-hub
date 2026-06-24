@@ -2875,7 +2875,11 @@ describe("renderCalendarView", () => {
 
     expect(onDateCreateTask).not.toHaveBeenCalled();
     const popover = collect(fakeDocument.body).find((element) => element.classes.has("task-hub-calendar-detail-popover"));
+    const headerTitle = collect(popover as FakeElement).find((element) => element.classes.has("task-hub-calendar-detail-title"));
     const logo = collect(popover as FakeElement).find((element) => element.classes.has("task-hub-calendar-detail-logo"));
+    expect(headerTitle?.classes.has("is-event")).toBe(true);
+    expect(headerTitle?.classes.has("has-complete-checkbox")).toBe(false);
+    expect(collect(headerTitle as FakeElement).find((element) => element.text === "calendarDetails")).toBeDefined();
     expect(logo?.classes.has("is-apple")).toBe(true);
   });
 

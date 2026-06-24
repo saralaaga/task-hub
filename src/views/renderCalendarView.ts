@@ -1143,6 +1143,7 @@ function renderCalendarDetailsPopover(anchor: HTMLElement, item: CalendarItem, h
 
   const header = popover.createDiv({ cls: "task-hub-calendar-detail-header" });
   const title = header.createDiv({ cls: "task-hub-calendar-detail-title" });
+  title.addClass(item.task ? "is-task" : "is-event");
   if (item.task) {
     title.addClass("has-complete-checkbox");
     const checkboxCell = title.createSpan({ cls: "task-hub-calendar-detail-title-check-cell" });
