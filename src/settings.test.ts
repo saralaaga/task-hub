@@ -78,6 +78,22 @@ describe("normalizeTaskHubSettings", () => {
     expect(settings.externalTaskSourceOrder).toEqual(["dida", "apple-reminders", "apple-calendar"]);
   });
 
+  it("keeps the default timed task duration within the five-minute minimum", () => {
+    expect(normalizeTaskHubSettings({
+      localApple: {
+        ...normalizeTaskHubSettings(null).localApple,
+        calendarDefaultTimedTaskDurationMinutes: 5
+      }
+    }).localApple.calendarDefaultTimedTaskDurationMinutes).toBe(5);
+
+    expect(normalizeTaskHubSettings({
+      localApple: {
+        ...normalizeTaskHubSettings(null).localApple,
+        calendarDefaultTimedTaskDurationMinutes: 1
+      }
+    }).localApple.calendarDefaultTimedTaskDurationMinutes).toBe(5);
+  });
+
   it("preserves supported interface languages and falls back from unknown stored values", () => {
     expect(normalizeTaskHubSettings({ language: "ja" }).language).toBe("ja");
     expect(normalizeTaskHubSettings({ language: "fr" }).language).toBe("fr");

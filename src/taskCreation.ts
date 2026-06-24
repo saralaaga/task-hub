@@ -1,4 +1,5 @@
 import { normalizeRecurrenceRule } from "./recurrence";
+import { snapDayStartMinutes } from "./timeGranularity";
 
 export const DEFAULT_TASK_CREATION_FILE_PATH = "Task Hub.md";
 
@@ -27,7 +28,7 @@ function normalizeVaultPath(path: string): string {
 }
 
 function formatTaskTime(startMinutes: number): string {
-  const safeMinutes = Math.max(0, Math.min(23 * 60 + 45, Math.round(startMinutes / 15) * 15));
+  const safeMinutes = snapDayStartMinutes(startMinutes);
   const hours = String(Math.floor(safeMinutes / 60)).padStart(2, "0");
   const minutes = String(safeMinutes % 60).padStart(2, "0");
   return `${hours}:${minutes}`;

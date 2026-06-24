@@ -19,6 +19,7 @@ import {
 } from "./contextMenuLabels";
 import { renderTaskNoteBody, taskNotePreviewBody, taskNotePreviewTitle, type TaskNoteMarkdownRenderer } from "./renderTaskNoteBody";
 import { recurrencePresetFromRule } from "../recurrence";
+import { MIN_TIME_GRANULARITY_MINUTES, snapDayStartMinutes, snapToTimeGranularity, validTimedDurationMinutes } from "../timeGranularity";
 import { createRecurrenceSelect, recurrenceValueFromSelect } from "./recurrenceControls";
 import { resolveTaskBulkActions, type TaskBulkActionId } from "./taskSelection";
 import { renderSourceLogo, sourceLogoKindForCalendarItem } from "./sourceLogos";
@@ -122,7 +123,7 @@ const HOUR_HEIGHT_BY_SCALE: Record<Exclude<CalendarTimeScale, "fit">, number> = 
 const DEFAULT_TIMED_TASK_DURATION_MINUTES = 60;
 const TASK_TIME_POINT_HEIGHT = 28;
 const TASK_TIME_POINT_GAP = 4;
-const MIN_TIMED_ITEM_DURATION_MINUTES = 15;
+const MIN_TIMED_ITEM_DURATION_MINUTES = MIN_TIME_GRANULARITY_MINUTES;
 const TIME_SCALE_WHEEL_STEP_THRESHOLD = 2;
 const CALENDAR_ITEM_DRAG_MIME = "application/x-task-hub-calendar-item-id";
 const TASK_DRAG_MIME = "application/x-task-hub-task-id";
@@ -2524,7 +2525,7 @@ function sharedCalendarTimedDropTarget(
   state: CalendarViewState
 ): CalendarDropTarget {
   const originalStartMinutes = item.startMinutes ?? draggedStartMinutes;
-  const relativeStartMinutes = snapDayQuarterHour(targetStartMinutes + originalStartMinutes - draggedStartMinutes);
+  const relativeStartMinutes = snapDayStartTime(targetStartMinutes + originalStartMinutes - draggedStartMinutes);
   if (item.kind === "event") {
     return {
       dateKey,
@@ -2574,7 +2575,7 @@ function timedDropTarget(
 function adjustedDraggedStartMinutes(element: HTMLElement, event: DragEvent, item: CalendarItem, startHour: number, hourHeight: number): number {
   const pointerMinutes = minutesFromColumnEvent(element, event, startHour, hourHeight);
   const offsetMinutes = item.startMinutes === undefined ? 0 : activeDragGrabOffsetMinutes;
-  return snapDayQuarterHour(pointerMinutes - offsetMinutes);
+  return snapDayStartTime(pointerMinutes - offsetMinutes);
 }
 
 function updateDragMoveFeedback(item: CalendarItem, target: CalendarDropTarget, event: DragEvent): void {
@@ -2636,8 +2637,7 @@ function positionDragMoveFeedback(feedback: HTMLElement, event: DragEvent): void
 }
 
 function validDurationMinutes(value: number | undefined): number {
-  if (!Number.isFinite(value) || value === undefined) return DEFAULT_TIMED_TASK_DURATION_MINUTES;
-  return Math.max(MIN_TIMED_ITEM_DURATION_MINUTES, Math.min(24 * 60, Math.round(value)));
+  return validTimedDurationMinutes(value, DEFAULT_TIMED_TASK_DURATION_MINUTES);
 }
 
 function itemDurationMinutes(item: CalendarItem, state: CalendarViewState): number {
@@ -2652,7 +2652,7 @@ function minutesFromColumnEvent(element: HTMLElement, event: { clientY: number }
   const rect = element.getBoundingClientRect();
   const offset = Math.max(0, event.clientY - rect.top);
   const rawMinutes = startHour * 60 + (offset / hourHeight) * 60;
-  return snapDayQuarterHour(rawMinutes);
+  return snapDayStartTime(rawMinutes);
 }
 
 function dragGrabOffset(element: HTMLElement, event: { clientX: number; clientY: number }, item: CalendarItem, hourHeight: number): { minutes: number; xPixels: number; yPixels: number } | undefined {
@@ -2663,14 +2663,14 @@ function dragGrabOffset(element: HTMLElement, event: { clientX: number; clientY:
   if (!Number.isFinite(offsetYPixels) || offsetYPixels < 0) return undefined;
   const durationMinutes = Math.max(MIN_TIMED_ITEM_DURATION_MINUTES, itemEndMinutes(item) - item.startMinutes);
   return {
-    minutes: Math.max(0, Math.min(durationMinutes, Math.round((offsetYPixels / hourHeight) * 60 / 15) * 15)),
+    minutes: Math.max(0, Math.min(durationMinutes, snapToTimeGranularity((offsetYPixels / hourHeight) * 60))),
     xPixels: Number.isFinite(offsetXPixels) && offsetXPixels > 0 ? offsetXPixels : 0,
     yPixels: offsetYPixels
   };
 }
 
-function snapDayQuarterHour(value: number): number {
-  return Math.max(0, Math.min(23 * 60 + 45, Math.round(value / 15) * 15));
+function snapDayStartTime(value: number): number {
+  return snapDayStartMinutes(value);
 }
 
 function clampDayMinutes(value: number): number {

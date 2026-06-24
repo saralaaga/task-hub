@@ -48,6 +48,17 @@ describe("task creation helpers", () => {
     ]);
   });
 
+  it("keeps timed task creation to five-minute precision", () => {
+    const content = appendTaskToContent("", createTaskLine("Buy milk", "2026-05-08", 9 * 60 + 7));
+
+    expect(content).toBe("- [ ] Buy milk 📅 2026-05-08 ⏰ 09:05\n");
+    expect(parseTasksFromMarkdown({ filePath: "Task Hub.md", content })).toMatchObject([
+      {
+        scheduledDate: "2026-05-08T09:05"
+      }
+    ]);
+  });
+
   it("creates recurring task lines that the parser can read", () => {
     const content = appendTaskToContent("", createTaskLine("Review budget", "2026-06-08", undefined, "RRULE:FREQ=WEEKLY"));
 

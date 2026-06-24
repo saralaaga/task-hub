@@ -3113,6 +3113,69 @@ describe("renderCalendarView", () => {
     expect(collect(fakeDocument.body).find((element) => element.classes.has("task-hub-calendar-detail-popover"))).toBeDefined();
   });
 
+  it("submits five-minute Apple Calendar event time edits from the detail popover", () => {
+    const container = new FakeElement();
+    const onEventUpdate = jest.fn();
+    const timedEvent = {
+      ...event,
+      start: "2026-05-08T09:00",
+      end: "2026-05-08T10:00",
+      allDay: false,
+      calendarId: "calendar-1",
+      calendarName: "提醒"
+    };
+
+    renderCalendarView(
+      container as unknown as HTMLElement,
+      {
+        mode: "day",
+        focusDate: new Date("2026-05-08T12:00:00Z"),
+        weekStart: "monday",
+        visibleSourceIds: new Set(["apple-calendar:calendar-1"]),
+        includeCompletedTasks: false,
+        allowAppleReminderWriteback: false,
+        allowAppleCalendarWriteback: true,
+        allowTaskCreation: false,
+        appleCalendars: [{ id: "calendar-1", name: "提醒", writable: true }],
+        sources: [{
+          ...source,
+          id: "apple-calendar:calendar-1",
+          name: "Apple 日历 / 提醒"
+        }],
+        t: (key) => key
+      },
+      [],
+      [timedEvent],
+      {
+        onLayerToggle: jest.fn(),
+        onModeChange: jest.fn(),
+        onMove: jest.fn(),
+        onDateCreateTask: jest.fn(),
+        onTaskComplete: jest.fn(),
+        onTaskJump: jest.fn(),
+        onTaskSelect: jest.fn(),
+        onTaskReschedule: jest.fn(),
+        onEventUpdate,
+        onToday: jest.fn()
+      }
+    );
+
+    collect(container).find((element) => element.classes.has("task-hub-calendar-timed-item"))?.click();
+    const popover = collect(fakeDocument.body).find((element) => element.classes.has("task-hub-calendar-detail-popover"));
+    const [start, end] = collect(popover as FakeElement).filter((element) => element.type === "time");
+
+    start!.value = "10:05";
+    end!.value = "11:10";
+    start!.dispatch("input");
+    end!.dispatch("input");
+    end!.dispatch("keydown", { key: "Enter" });
+
+    expect(onEventUpdate).toHaveBeenCalledWith(timedEvent, expect.objectContaining({
+      startTime: "10:05",
+      endTime: "11:10"
+    }));
+  });
+
   it("makes vault calendar tasks draggable", () => {
     const container = new FakeElement();
 
@@ -4269,6 +4332,51 @@ describe("renderCalendarView", () => {
     expect(onTaskReschedule).toHaveBeenCalledWith(task, {
       dateKey: "2026-05-08",
       startMinutes: 570
+    });
+  });
+
+  it("snaps dragged vault tasks to five-minute increments on the day time grid", () => {
+    const container = new FakeElement();
+    const onTaskReschedule = jest.fn();
+
+    renderCalendarView(
+      container as unknown as HTMLElement,
+      {
+        mode: "day",
+        focusDate: new Date("2026-05-08T12:00:00Z"),
+        weekStart: "monday",
+        visibleSourceIds: new Set(["vault"]),
+        includeCompletedTasks: false,
+        allowAppleReminderWriteback: false,
+        allowTaskCreation: false,
+        sources: [],
+        t: (key) => key
+      },
+      [task],
+      [],
+      {
+        onLayerToggle: jest.fn(),
+        onModeChange: jest.fn(),
+        onMove: jest.fn(),
+        onDateCreateTask: jest.fn(),
+        onTaskComplete: jest.fn(),
+        onTaskJump: jest.fn(),
+        onTaskSelect: jest.fn(),
+        onTaskReschedule,
+        onToday: jest.fn()
+      }
+    );
+
+    const item = collect(container).find((element) => element.classes.has("task-hub-calendar-item"));
+    const column = collect(container).find((element) => element.classes.has("task-hub-agenda-column"));
+    column!.boundingRect = { top: 0 };
+    const dataTransfer = new FakeDataTransfer();
+    item?.dispatch("dragstart", { dataTransfer });
+    column?.dispatch("drop", { dataTransfer, clientY: 174 });
+
+    expect(onTaskReschedule).toHaveBeenCalledWith(task, {
+      dateKey: "2026-05-08",
+      startMinutes: 545
     });
   });
 

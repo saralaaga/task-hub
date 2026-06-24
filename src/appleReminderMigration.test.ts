@@ -1825,6 +1825,35 @@ describe("Apple Reminders migration", () => {
     expect(notices).toContain("Task updated.");
   });
 
+  it("preserves five-minute Apple Reminder detail times through the helper", async () => {
+    const plugin = new TaskHubPlugin({} as never, {} as never);
+    plugin.app = { workspace: { getLeavesOfType: jest.fn(() => []) } } as never;
+    plugin.settings = {
+      ...DEFAULT_SETTINGS,
+      localApple: {
+        ...DEFAULT_SETTINGS.localApple,
+        enabled: true,
+        remindersEnabled: true,
+        remindersWritebackEnabled: true,
+        remindersCreateEnabled: true
+      }
+    };
+    plugin.syncLocalApple = jest.fn(async () => undefined) as never;
+
+    await plugin.updateCalendarTask(appleReminderTask(), {
+      kind: "task",
+      title: "Send invoice",
+      date: "2026-05-21",
+      startTime: "09:05",
+      reminderListId: "list-1",
+      notes: "Bring the signed copy"
+    });
+
+    expect(setAppleReminderDetails).toHaveBeenCalledWith(expect.objectContaining({
+      startMinutes: 545
+    }));
+  });
+
   it("updates Apple Reminder recurrence through task details", async () => {
     const plugin = new TaskHubPlugin({} as never, {} as never);
     plugin.app = { workspace: { getLeavesOfType: jest.fn(() => []) } } as never;
@@ -1991,6 +2020,44 @@ describe("Apple Reminders migration", () => {
       location: "Room 518"
     });
     expect(notices).toContain("Event updated.");
+  });
+
+  it("preserves five-minute Apple Calendar event detail times through the helper", async () => {
+    const plugin = new TaskHubPlugin({} as never, {} as never);
+    plugin.app = { workspace: { getLeavesOfType: jest.fn(() => []) } } as never;
+    plugin.settings = {
+      ...DEFAULT_SETTINGS,
+      localApple: {
+        ...DEFAULT_SETTINGS.localApple,
+        enabled: true,
+        calendarEnabled: true,
+        calendarWritebackEnabled: true
+      }
+    };
+    plugin.syncLocalApple = jest.fn(async () => undefined) as never;
+
+    await plugin.updateCalendarEvent({
+      id: "event-1",
+      sourceId: "apple-calendar",
+      title: "Design review",
+      start: "2026-05-20T09:30:00",
+      end: "2026-05-20T10:30:00",
+      allDay: false,
+      calendarId: "calendar-1"
+    }, {
+      kind: "event",
+      title: "Updated review",
+      date: "2026-05-21",
+      startTime: "10:05",
+      endTime: "11:10",
+      allDay: false,
+      calendarId: "calendar-1"
+    });
+
+    expect(setAppleCalendarEventDetails).toHaveBeenCalledWith(expect.objectContaining({
+      startMinutes: 605,
+      durationMinutes: 65
+    }));
   });
 
   it("updates recurring Apple Calendar event details with a future span when selected", async () => {

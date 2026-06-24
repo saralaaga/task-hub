@@ -3,6 +3,7 @@ import { createTranslator, isLanguage, LANGUAGE_OPTIONS, type Translator } from 
 import type TaskHubPlugin from "./main";
 import { DEFAULT_DIDA_API_BASE, DIDA_INBOX_PROJECT_NAME } from "./dida/didaMapping";
 import { normalizeTaskSendDefaultTarget, parseTaskSendTarget, serializeTaskSendTarget, taskSendTargetOptions } from "./taskSendTargets";
+import { validTimedDurationMinutes } from "./timeGranularity";
 import type { AppleCalendarInfo, CalendarCreationKind, CalendarCreationTarget, CalendarEventCreationTarget, CalendarSource, CalendarSourceStatus, CalendarTaskCreationTarget, ExternalTaskSourceTab, LocalAppleSyncStatus, TaskHubSettings } from "./types";
 import { setCssProps } from "./views/domStyles";
 
@@ -148,9 +149,10 @@ export function normalizeTaskHubSettings(loaded: Partial<TaskHubSettings> | null
       calendarColor: loadedLocalApple?.calendarColor ?? DEFAULT_SETTINGS.localApple.calendarColor,
       calendarColorOverrides: loadedLocalApple?.calendarColorOverrides ?? DEFAULT_SETTINGS.localApple.calendarColorOverrides,
       calendars: loadedLocalApple?.calendars ?? DEFAULT_SETTINGS.localApple.calendars,
-      calendarDefaultTimedTaskDurationMinutes:
-        loadedLocalApple?.calendarDefaultTimedTaskDurationMinutes ??
+      calendarDefaultTimedTaskDurationMinutes: validTimedDurationMinutes(
+        loadedLocalApple?.calendarDefaultTimedTaskDurationMinutes,
         DEFAULT_SETTINGS.localApple.calendarDefaultTimedTaskDurationMinutes
+      )
     },
     dida: {
       ...DEFAULT_SETTINGS.dida,
@@ -1171,7 +1173,7 @@ export class TaskHubSettingTab extends PluginSettingTab {
       .addText((text) => {
         text.setValue(String(this.plugin.settings.localApple.calendarDefaultTimedTaskDurationMinutes)).onChange(async (value) => {
           const minutes = Number.parseInt(value, 10);
-          if (Number.isFinite(minutes) && minutes >= 15 && minutes <= 1440) {
+          if (Number.isFinite(minutes) && minutes >= 5 && minutes <= 1440) {
             this.plugin.settings.localApple.calendarDefaultTimedTaskDurationMinutes = minutes;
             await this.plugin.saveSettings();
           }

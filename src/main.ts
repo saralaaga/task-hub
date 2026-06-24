@@ -23,6 +23,7 @@ import { appendTaskToContent, createTaskLine, normalizeTaskCreationFilePath } fr
 import { bindTaskHubTagInputSuggest, collectObsidianTags } from "./views/tagInputSuggest";
 import { normalizeReminderAlertMinutes, populateReminderAlertSelect, type ReminderAlertMinutes } from "./reminderAlerts";
 import { preferredTaskSendTarget, taskSendTargetOptions } from "./taskSendTargets";
+import { snapDayStartMinutes } from "./timeGranularity";
 import { recurrenceDatesBetween } from "./recurrence";
 import {
   TaskNoteIndex,
@@ -82,7 +83,7 @@ function validCalendarEventDuration(value: number | undefined): number {
 
 function timeInputValue(startMinutes: number | undefined): string {
   if (startMinutes === undefined) return "";
-  const safeMinutes = Math.max(0, Math.min(23 * 60 + 45, Math.round(startMinutes / 15) * 15));
+  const safeMinutes = snapDayStartMinutes(startMinutes);
   return `${String(Math.floor(safeMinutes / 60)).padStart(2, "0")}:${String(safeMinutes % 60).padStart(2, "0")}`;
 }
 
@@ -92,7 +93,7 @@ function parseTimeInputValue(value: string): number | undefined {
   const hours = Number(match[1]);
   const minutes = Number(match[2]);
   if (hours > 23 || minutes > 59) return undefined;
-  return Math.max(0, Math.min(23 * 60 + 45, Math.round((hours * 60 + minutes) / 15) * 15));
+  return snapDayStartMinutes(hours * 60 + minutes);
 }
 
 function startMinutesFromTask(task: TaskItem): number | undefined {
@@ -2509,7 +2510,7 @@ class CreateTaskModal extends Modal {
       type: "time",
       value: timeInputValue(calendarDropTargetParts(this.calendarTarget).startMinutes)
     }) as HTMLInputElement;
-    timeInput.step = "900";
+    timeInput.step = "300";
     timeInput.addEventListener("click", () => {
       try {
         timeInput.showPicker?.();
