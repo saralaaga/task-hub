@@ -149,6 +149,8 @@ export default class TaskHubPlugin extends Plugin {
   localAppleStatus: LocalAppleSyncStatus = { state: "never" };
   didaTasks: TaskItem[] = [];
   private appleReminderWriteQueue: Promise<unknown> = Promise.resolve();
+  private lastTaskUndoAction: { undo: () => Promise<boolean> } | undefined;
+  private isUndoingTaskChange = false;
 
   isLocalAppleSupported(): boolean {
     return Platform.isDesktopApp && process.platform === "darwin";
@@ -312,6 +314,12 @@ export default class TaskHubPlugin extends Plugin {
     });
 
     this.addCommand({
+      id: "undo-last-task-change",
+      name: createTranslator(this.settings.language)("undoLastTaskChange"),
+      callback: () => void this.undoLastTaskChange()
+    });
+
+    this.addCommand({
       id: "send-current-task-to-apple-reminders",
       name: createTranslator(this.settings.language)("sendCurrentTaskToAppleReminders"),
       editorCallback: (editor: Editor, view: MarkdownView) => {
@@ -380,6 +388,7 @@ export default class TaskHubPlugin extends Plugin {
           await client.completeTask(task.externalListId, task.externalId);
         }
         await this.syncDida({ silent: true });
+        this.rememberTaskCompletionUndo(task, this.resolveUndoTask(task, { status: "updated", content: "", line: 0 }));
         new Notice(task.completed ? t("taskReopened") : t("taskCompleted"));
         this.refreshOpenViews();
         return { status: "updated", content: "", line: 0 };
@@ -407,6 +416,7 @@ export default class TaskHubPlugin extends Plugin {
         const reminderId = task.externalId;
         await this.writeAppleReminderWithAccessRetry(() => setAppleReminderCompleted(reminderId, !task.completed));
         await this.syncLocalApple({ silent: true });
+        this.rememberTaskCompletionUndo(task, this.resolveUndoTask(task, { status: "updated", content: "", line: 0 }));
         new Notice(task.completed ? t("taskReopened") : t("taskCompleted"));
         this.refreshOpenViews();
         return { status: "updated", content: "", line: 0 };
@@ -453,6 +463,10 @@ export default class TaskHubPlugin extends Plugin {
     const completionResult = completion.result;
     if (completionResult.status === "updated") {
       await this.reindexVaultFile(file);
+      const updatedTask = this.resolveUndoTask(task, completionResult);
+      const noteMigration = updatedTask ? await this.transferTaskNotesToUpdatedTask(task, updatedTask) : { ok: true as const };
+      if (!noteMigration.ok) new Notice(noteMigration.message);
+      this.rememberTaskCompletionUndo(task, this.resolveUndoTask(task, completionResult));
       new Notice(task.completed ? t("taskReopened") : t("taskCompleted"));
     } else if (completionResult.status === "already_in_state") {
       new Notice(task.completed ? t("taskReopened") : t("taskAlreadyCompleted"));
@@ -499,6 +513,7 @@ export default class TaskHubPlugin extends Plugin {
           })
         );
         await this.syncDida({ silent: true });
+        this.rememberTaskDraftUndo(task, this.resolveUndoTask(task, { status: "updated", content: "", line: 0 }));
         new Notice(t("taskDateUpdated"));
         this.refreshOpenViews();
         return { status: "updated", content: "", line: 0 };
@@ -533,6 +548,7 @@ export default class TaskHubPlugin extends Plugin {
           setAppleReminderDueDate(reminderId, timedTarget.dateKey, timedTarget.startMinutes)
         );
         await this.syncLocalApple({ silent: true });
+        this.rememberTaskDraftUndo(task, this.resolveUndoTask(task, { status: "updated", content: "", line: 0 }));
         new Notice(t("taskDateUpdated"));
         this.refreshOpenViews();
         return { status: "updated", content: "", line: 0 };
@@ -580,6 +596,10 @@ export default class TaskHubPlugin extends Plugin {
     const updateResult = update.result;
     if (updateResult.status === "updated") {
       await this.reindexVaultFile(file);
+      const updatedTask = this.resolveUndoTask(task, updateResult);
+      const noteMigration = updatedTask ? await this.transferTaskNotesToUpdatedTask(task, updatedTask) : { ok: true as const };
+      if (!noteMigration.ok) new Notice(noteMigration.message);
+      this.rememberTaskDraftUndo(task, this.resolveUndoTask(task, updateResult));
       new Notice(t("taskDateUpdated"));
     } else if (updateResult.status === "already_in_state") {
       new Notice(t("taskDateAlreadySet"));
@@ -602,6 +622,7 @@ export default class TaskHubPlugin extends Plugin {
       try {
         await this.createDidaClient().deleteTask(task.externalListId, task.externalId);
         await this.syncDida({ silent: true });
+        this.clearLastTaskUndoAction();
         new Notice(t("calendarItemDeleted"));
         this.refreshOpenViews();
         return { status: "updated", content: "", line: 0 };
@@ -622,6 +643,7 @@ export default class TaskHubPlugin extends Plugin {
         const reminderId = task.externalId as string;
         await this.runAppleReminderWrite(() => deleteAppleReminder(reminderId));
         await this.syncLocalApple({ silent: true });
+        this.clearLastTaskUndoAction();
         new Notice(t("calendarItemDeleted"));
         this.refreshOpenViews();
         return { status: "updated", content: "", line: 0 };
@@ -657,6 +679,7 @@ export default class TaskHubPlugin extends Plugin {
     });
     if (deletion.result.status === "updated") {
       await this.reindexVaultFile(file);
+      this.clearLastTaskUndoAction();
       new Notice(t("calendarItemDeleted"));
     } else if (deletion.result.status === "conflict") {
       new Notice(deletion.result.message);
@@ -775,6 +798,7 @@ export default class TaskHubPlugin extends Plugin {
           })
         );
         await this.syncDida({ silent: true });
+        this.rememberTaskDraftUndo(task, this.resolveUndoTask(task, { status: "updated", content: "", line: 0 }));
         new Notice(t("taskUpdated"));
         this.refreshOpenViews();
         return { status: "updated", content: "", line: 0 };
@@ -812,6 +836,7 @@ export default class TaskHubPlugin extends Plugin {
       try {
         await this.runAppleReminderWrite(() => setAppleReminderDetails(input));
         await this.syncLocalApple({ silent: true });
+        this.rememberTaskDraftUndo(task, this.resolveUndoTask(task, { status: "updated", content: "", line: 0 }));
         new Notice(t("taskUpdated"));
         this.refreshOpenViews();
         return { status: "updated", content: "", line: 0 };
@@ -854,6 +879,10 @@ export default class TaskHubPlugin extends Plugin {
     });
     if (update.result.status === "updated") {
       await this.reindexVaultFile(file);
+      const updatedTask = this.resolveUndoTask(task, update.result);
+      const noteMigration = updatedTask ? await this.transferTaskNotesToUpdatedTask(task, updatedTask) : { ok: true as const };
+      if (!noteMigration.ok) new Notice(noteMigration.message);
+      this.rememberTaskDraftUndo(task, this.resolveUndoTask(task, update.result));
       new Notice(t("taskUpdated"));
     } else if (update.result.status === "conflict") {
       new Notice(update.result.message);
@@ -1016,6 +1045,7 @@ export default class TaskHubPlugin extends Plugin {
       }
 
       await this.syncLocalApple({ silent: true });
+      this.clearLastTaskUndoAction();
       if (deletion.result.status === "updated") {
         new Notice(t("appleReminderCreatedAndTaskRemoved"));
       } else if (deletion.result.status === "conflict") {
@@ -1085,6 +1115,7 @@ export default class TaskHubPlugin extends Plugin {
         await this.reindexVaultFile(file);
       }
       await this.syncDida({ silent: true });
+      this.clearLastTaskUndoAction();
       new Notice(deletion.result.status === "updated" ? t("didaTaskCreatedAndTaskRemoved") : t("didaTaskCreated"));
     } catch (error) {
       new Notice(error instanceof Error ? error.message : String(error));
@@ -1115,6 +1146,7 @@ export default class TaskHubPlugin extends Plugin {
         return;
       }
       await this.syncLocalApple({ silent: true });
+      this.clearLastTaskUndoAction();
       new Notice(t("appleCalendarReminderConverted"));
     } catch (error) {
       new Notice(error instanceof Error ? error.message : String(error));
@@ -1152,6 +1184,7 @@ export default class TaskHubPlugin extends Plugin {
         return;
       }
       await this.syncLocalApple({ silent: true });
+      this.clearLastTaskUndoAction();
       new Notice(t("appleCalendarReminderConverted"));
     } catch (error) {
       new Notice(error instanceof Error ? error.message : String(error));
@@ -1220,6 +1253,7 @@ export default class TaskHubPlugin extends Plugin {
       const reminderId = task.externalId;
       await this.writeAppleReminderWithAccessRetry(() => setAppleReminderList(reminderId, listId));
       await this.syncLocalApple({ silent: true });
+      this.rememberTaskDraftUndo(task, this.resolveUndoTask(task, { status: "updated", content: "", line: 0 }));
       new Notice(t("appleReminderListUpdated"));
     } catch (error) {
       new Notice(error instanceof Error ? error.message : String(error));
@@ -1249,6 +1283,7 @@ export default class TaskHubPlugin extends Plugin {
         })
       );
       await this.syncDida({ silent: true });
+      this.rememberTaskDraftUndo(task, this.resolveUndoTask(task, { status: "updated", content: "", line: 0 }));
       new Notice(t("taskUpdated"));
     } catch (error) {
       new Notice(error instanceof Error ? error.message : String(error));
@@ -1295,6 +1330,7 @@ export default class TaskHubPlugin extends Plugin {
       try {
         const reminderId = await this.writeAppleReminderWithAccessRetry(() => createAppleReminder(input));
         await this.syncLocalApple({ silent: true });
+        this.clearLastTaskUndoAction();
         new Notice(`${t("appleReminderCreated")}: ${reminderId}`);
       } catch (error) {
         new Notice(this.localAppleErrorMessage(error, "reminders"));
@@ -1322,6 +1358,7 @@ export default class TaskHubPlugin extends Plugin {
           })
         );
         await this.syncDida({ silent: true });
+        this.clearLastTaskUndoAction();
         new Notice(`${t("didaTaskCreated")}: ${created.id}`);
       } catch (error) {
         new Notice(error instanceof Error ? error.message : String(error));
@@ -1354,6 +1391,7 @@ export default class TaskHubPlugin extends Plugin {
           });
         }
         await this.syncLocalApple({ silent: true });
+        this.clearLastTaskUndoAction();
         new Notice(t("appleCalendarEventCreated"));
       } catch (error) {
         new Notice(this.localAppleErrorMessage(error, "calendar"));
@@ -1371,6 +1409,7 @@ export default class TaskHubPlugin extends Plugin {
       await this.app.vault.process(file, (content) => appendTaskToContent(content, taskLine));
     }
     await this.reindexVaultFile(file);
+    this.clearLastTaskUndoAction();
     new Notice(t("taskCreated"));
   }
 
@@ -1479,6 +1518,32 @@ export default class TaskHubPlugin extends Plugin {
     ];
   }
 
+  canUndoLastTaskChange(): boolean {
+    return Boolean(this.lastTaskUndoAction);
+  }
+
+  async undoLastTaskChange(): Promise<boolean> {
+    const t = createTranslator(this.settings.language);
+    const action = this.lastTaskUndoAction;
+    if (!action) {
+      new Notice(t("taskUndoUnavailable"));
+      return false;
+    }
+
+    this.lastTaskUndoAction = undefined;
+    this.isUndoingTaskChange = true;
+    try {
+      const undone = await action.undo();
+      if (undone) new Notice(t("taskUndoApplied"));
+      return undone;
+    } catch (error) {
+      new Notice(error instanceof Error ? error.message : String(error));
+      return false;
+    } finally {
+      this.isUndoingTaskChange = false;
+    }
+  }
+
   getTaskNotes(task: TaskItem) {
     return this.settings.taskNotes.enabled ? this.taskNoteIndex.getNotesForKey(buildTaskNoteKey(task)) : [];
   }
@@ -1489,6 +1554,77 @@ export default class TaskHubPlugin extends Plugin {
 
   getEventNotes(event: CalendarEvent) {
     return this.settings.taskNotes.enabled ? this.taskNoteIndex.getNotesForKey(buildCalendarEventNoteKey(event)) : [];
+  }
+
+  private clearLastTaskUndoAction(): void {
+    if (this.isUndoingTaskChange) return;
+    this.lastTaskUndoAction = undefined;
+  }
+
+  private rememberTaskCompletionUndo(originalTask: TaskItem, updatedTask: TaskItem | undefined): void {
+    if (this.isUndoingTaskChange || !updatedTask) return;
+    if (originalTask.source === "vault" && Boolean(originalTask.recurrence)) {
+      this.lastTaskUndoAction = undefined;
+      return;
+    }
+
+    this.lastTaskUndoAction = {
+      undo: async () => {
+        const currentTask = this.findTaskForUndo(updatedTask) ?? updatedTask;
+        const result = await this.completeTask(currentTask);
+        return result.status === "updated";
+      }
+    };
+  }
+
+  private rememberTaskDraftUndo(originalTask: TaskItem, updatedTask: TaskItem | undefined): void {
+    if (this.isUndoingTaskChange || !updatedTask) return;
+    const draft = this.undoDraftFromTask(originalTask);
+    this.lastTaskUndoAction = {
+      undo: async () => {
+        const currentTask = this.findTaskForUndo(updatedTask) ?? updatedTask;
+        const result = await this.updateCalendarTask(currentTask, draft);
+        return result.status === "updated" || result.status === "already_in_state";
+      }
+    };
+  }
+
+  private resolveUndoTask(task: TaskItem, result: CompletionResult): TaskItem | undefined {
+    if (task.source === "vault") {
+      if (result.status !== "updated" || !result.content) return undefined;
+      return parseTaskAtLine({
+        filePath: task.filePath,
+        content: result.content,
+        line: result.line
+      });
+    }
+
+    return task.externalId
+      ? this.getTasks().find((candidate) => candidate.source === task.source && candidate.externalId === task.externalId)
+      : undefined;
+  }
+
+  private findTaskForUndo(task: TaskItem): TaskItem | undefined {
+    return this.getTasks().find((candidate) => {
+      if (candidate.source !== task.source) return false;
+      if (task.externalId) return candidate.externalId === task.externalId;
+      return candidate.filePath === task.filePath && candidate.rawLine === task.rawLine;
+    });
+  }
+
+  private undoDraftFromTask(task: TaskItem): Extract<CalendarItemEditDraft, { kind: "task" }> {
+    const startMinutes = startMinutesFromTask(task);
+    return {
+      kind: "task",
+      title: task.text,
+      date: task.dueDate ?? "",
+      startTime: startMinutes === undefined ? "" : timeInputValue(startMinutes),
+      tags: [...task.tags],
+      reminderListId: task.externalListId,
+      notes: task.contextPreview,
+      alertMinutesBefore: task.alertMinutesBefore ?? null,
+      recurrence: task.recurrence ?? null
+    };
   }
 
   async openTaskNote(path: string): Promise<void> {
@@ -1949,6 +2085,41 @@ export default class TaskHubPlugin extends Plugin {
     if (!this.settings.taskNotes.enabled) return { ok: true };
     const fromKey = buildTaskNoteKey(task);
     const toKey = `task:apple-reminders:${reminderId}`;
+    const notes = this.taskNoteIndex.getNotesForKey(fromKey);
+    if (notes.length === 0) return { ok: true };
+
+    const updatedAt = new Date().toISOString();
+    for (const note of notes) {
+      const noteFile = this.app.vault.getFileByPath(note.path);
+      if (!noteFile) {
+        return { ok: false, message: `Task note file not found: ${note.path}` };
+      }
+      const transfer = {
+        result: { status: "conflict", message: "Task note transfer failed." } as ReturnType<
+          typeof transferTaskNoteRelationship
+        >
+      };
+      await this.app.vault.process(noteFile, (content) => {
+        transfer.result = transferTaskNoteRelationship(content, { fromKey, toKey, updatedAt });
+        return transfer.result.status === "updated" ? transfer.result.content : content;
+      });
+      if (transfer.result.status !== "updated") {
+        return { ok: false, message: transfer.result.message };
+      }
+      await this.taskNoteIndex.reindexFile(this.toIndexableFile(noteFile));
+    }
+    return { ok: true };
+  }
+
+  private async transferTaskNotesToUpdatedTask(
+    fromTask: TaskItem,
+    toTask: TaskItem
+  ): Promise<{ ok: true } | { ok: false; message: string }> {
+    if (!this.settings.taskNotes.enabled) return { ok: true };
+    const fromKey = buildTaskNoteKey(fromTask);
+    const toKey = buildTaskNoteKey(toTask);
+    if (fromKey === toKey) return { ok: true };
+
     const notes = this.taskNoteIndex.getNotesForKey(fromKey);
     if (notes.length === 0) return { ok: true };
 

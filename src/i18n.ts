@@ -319,6 +319,8 @@ export type TranslationKey =
   | "taskDateAlreadySet"
   | "taskDateTokenMissing"
   | "taskDateUpdated"
+  | "taskUndoApplied"
+  | "taskUndoUnavailable"
   | "taskUpdated"
   | "taskCreationFile"
   | "taskCreationFileDesc"
@@ -331,6 +333,7 @@ export type TranslationKey =
   | "taskCreationTarget"
   | "taskDetails"
   | "taskHub"
+  | "undoLastTaskChange"
   | "taskSendDefaultTarget"
   | "taskSendDefaultTargetDesc"
   | "tagPlaceholder"
@@ -1072,6 +1075,8 @@ const TRANSLATIONS: Record<"en" | "zh", Record<TranslationKey, string>> &
     taskDateAlreadySet: "Task is already on that date.",
     taskDateTokenMissing: "The task line does not contain a supported due date.",
     taskDateUpdated: "Task date updated.",
+    taskUndoApplied: "Undid the last task change.",
+    taskUndoUnavailable: "No recent task change is available to undo.",
     taskUpdated: "Task updated.",
     taskCreationDefaultTarget: "Default task destination",
     taskCreationDefaultTargetDesc: "Default task destination selected when you create a task from the calendar.",
@@ -1084,6 +1089,7 @@ const TRANSLATIONS: Record<"en" | "zh", Record<TranslationKey, string>> &
     taskCreationTarget: "Create in",
     taskDetails: "Task details",
     taskHub: "Task Hub",
+    undoLastTaskChange: "Undo last task change",
     taskSendDefaultTarget: "Default send destination",
     taskSendDefaultTargetDesc: "Default destination selected beside the Send to button in task details.",
     tagPlaceholder: "Add tag",
@@ -1430,6 +1436,8 @@ const TRANSLATIONS: Record<"en" | "zh", Record<TranslationKey, string>> &
     taskDateAlreadySet: "任务已经在这个日期。",
     taskDateTokenMissing: "任务行中没有可支持的日期标记。",
     taskDateUpdated: "任务日期已更新。",
+    taskUndoApplied: "已撤销刚才的任务修改。",
+    taskUndoUnavailable: "没有可撤销的最近任务修改。",
     taskUpdated: "任务已更新。",
     taskCreationDefaultTarget: "默认任务创建位置",
     taskCreationDefaultTargetDesc: "从日历新建任务时默认选中的任务创建位置。",
@@ -1442,6 +1450,7 @@ const TRANSLATIONS: Record<"en" | "zh", Record<TranslationKey, string>> &
     taskCreationTarget: "创建到",
     taskDetails: "任务详情",
     taskHub: "Task Hub",
+    undoLastTaskChange: "撤销刚才的任务修改",
     taskSendDefaultTarget: "默认发送地址",
     taskSendDefaultTargetDesc: "任务详情中“发送到”按钮右侧默认选中的清单软件或清单。",
     tagPlaceholder: "添加标签",
@@ -1592,6 +1601,9 @@ const TRANSLATIONS: Record<"en" | "zh", Record<TranslationKey, string>> &
     taskDateUpdated: "タスクの日付を更新しました。",
     taskDetails: "タスク詳細",
     taskHub: "Task Hub",
+    undoLastTaskChange: "直前のタスク変更を元に戻す",
+    taskUndoApplied: "直前のタスク変更を元に戻しました。",
+    taskUndoUnavailable: "元に戻せる最近のタスク変更はありません。",
     taskUpdateFailed: "Task Hub はタスクを更新できませんでした。",
     tasks: "タスク",
     tasksIndexed: "件のタスクを索引化",
@@ -1712,6 +1724,9 @@ const TRANSLATIONS: Record<"en" | "zh", Record<TranslationKey, string>> &
     taskDateUpdated: "Date de la tâche mise à jour.",
     taskDetails: "Détails de la tâche",
     taskHub: "Task Hub",
+    undoLastTaskChange: "Annuler la dernière modification de tâche",
+    taskUndoApplied: "La dernière modification de tâche a été annulée.",
+    taskUndoUnavailable: "Aucune modification de tâche récente ne peut être annulée.",
     taskUpdateFailed: "Task Hub n'a pas pu mettre à jour la tâche.",
     tasks: "Tâches",
     tasksIndexed: "tâches indexées",
@@ -1832,6 +1847,9 @@ const TRANSLATIONS: Record<"en" | "zh", Record<TranslationKey, string>> &
     taskDateUpdated: "작업 날짜가 업데이트되었습니다.",
     taskDetails: "작업 세부 정보",
     taskHub: "Task Hub",
+    undoLastTaskChange: "마지막 작업 변경 되돌리기",
+    taskUndoApplied: "방금 작업 변경을 되돌렸습니다.",
+    taskUndoUnavailable: "되돌릴 최근 작업 변경이 없습니다.",
     taskUpdateFailed: "Task Hub가 작업을 업데이트할 수 없습니다.",
     tasks: "작업",
     tasksIndexed: "개 작업 인덱싱됨",

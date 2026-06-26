@@ -700,10 +700,6 @@ function renderTaskDetails(
     }
   }
 
-  if (progressInfo && options.showSubtaskProgressBars !== false) {
-    renderTaskProgressDetails(details, progressInfo, t);
-  }
-
   const sendTargetOptions = task.source === "vault"
     ? taskSendOptionsForTaskDetails(options, t)
     : [];
@@ -729,13 +725,6 @@ function renderTaskProgressRow(container: HTMLElement, progressInfo: TaskProgres
   const fill = bar.createDiv({ cls: "task-hub-task-progress-fill" });
   setCssStyles(fill, { width: `${progressInfo.roundedPercent}%` });
   progress.createSpan({ cls: "task-hub-task-progress-value", text: `${progressInfo.roundedPercent}%` });
-}
-
-function renderTaskProgressDetails(container: HTMLElement, progressInfo: TaskProgressInfo, t: Translator): void {
-  const section = container.createDiv({ cls: "task-hub-detail-progress" });
-  section.createDiv({ cls: "task-hub-detail-progress-label", text: t("subtaskProgress") });
-  renderTaskProgressRow(section, progressInfo);
-  section.createDiv({ cls: "task-hub-detail-progress-hint", text: t("subtaskProgressTreeHint") });
 }
 
 function toggleDetailExtra(extra: HTMLElement, expanded: boolean): void {

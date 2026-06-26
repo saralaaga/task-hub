@@ -495,8 +495,8 @@ describe("renderTasksView", () => {
 
     expect(firstProgressValue(taskRowByTitle(container, "Parent")!)).toBe("25%");
     expect(firstProgressValue(taskRowByTitle(container, "Nested parent")!)).toBe("50%");
-    expect(collect(container).find((element) => element.classes.has("task-hub-detail-progress-label"))?.text).toBe("subtaskProgress");
-    expect(textValues(container)).toContain("subtaskProgressTreeHint");
+    expect(collect(container).find((element) => element.classes.has("task-hub-detail-progress"))).toBeUndefined();
+    expect(textValues(container)).not.toContain("subtaskProgressTreeHint");
   });
 
   it("places parent progress bars on the same row content lane instead of under the title block", () => {

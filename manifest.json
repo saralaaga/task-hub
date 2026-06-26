@@ -1,7 +1,7 @@
 {
   "id": "task-hub",
   "name": "Task Hub",
-  "version": "0.3.40",
+  "version": "0.3.41",
   "minAppVersion": "1.7.2",
   "description": "Manage vault, Apple Reminders, Apple Calendar, and Dida/TickTick tasks in one workspace.",
   "author": "Carlos",

@@ -43,6 +43,12 @@ export class TaskHubView extends ItemView {
   private expandedTaskIds = new Set<string>();
   private pendingExpandedTaskScrollId: string | undefined;
   private pendingExpandedTaskScrollTimers: number[] = [];
+  private readonly undoShortcutHandler = (event: KeyboardEvent) => {
+    if (!shouldHandleTaskHubUndoShortcut(event)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    void this.plugin.undoLastTaskChange();
+  };
 
   constructor(
     leaf: WorkspaceLeaf,
@@ -60,7 +66,13 @@ export class TaskHubView extends ItemView {
   }
 
   onOpen(): Promise<void> {
+    this.containerEl.addEventListener("keydown", this.undoShortcutHandler);
     this.render({ preserveTaskListScroll: true });
+    return Promise.resolve();
+  }
+
+  onClose(): Promise<void> {
+    this.containerEl.removeEventListener("keydown", this.undoShortcutHandler);
     return Promise.resolve();
   }
 
@@ -717,6 +729,25 @@ export function collectCalendarUnscheduledTasks(
     return filterTasks([task], { ...filters, status: "all" }, now).length > 0;
   });
   return [...visible, ...exiting].sort(compareUnscheduledTasks);
+}
+
+export function shouldHandleTaskHubUndoShortcut(event: KeyboardEvent): boolean {
+  if (event.defaultPrevented) return false;
+  if (event.altKey || event.shiftKey) return false;
+  if (!event.ctrlKey && !event.metaKey) return false;
+  if (event.key.toLowerCase() !== "z") return false;
+  return !isEditableUndoTarget(event.target);
+}
+
+function isEditableUndoTarget(target: EventTarget | null): boolean {
+  if (!target || typeof target !== "object") return false;
+  const element = target as EventTarget & {
+    tagName?: string;
+    isContentEditable?: boolean;
+  };
+  if (element.isContentEditable) return true;
+  const tagName = element.tagName?.toLowerCase();
+  return tagName === "input" || tagName === "textarea" || tagName === "select";
 }
 
 function compareUnscheduledTasks(left: TaskItem, right: TaskItem): number {

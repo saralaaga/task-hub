@@ -1,4 +1,10 @@
-import { collectCalendarUnscheduledTasks, collectUnscheduledTasks, restoreContentScrollAfterRender, scrollExpandedTaskIntoView } from "./TaskHubView";
+import {
+  collectCalendarUnscheduledTasks,
+  collectUnscheduledTasks,
+  restoreContentScrollAfterRender,
+  scrollExpandedTaskIntoView,
+  shouldHandleTaskHubUndoShortcut
+} from "./TaskHubView";
 import type { TaskFilterState } from "../filtering/filters";
 import type { TaskItem } from "../types";
 
@@ -117,6 +123,37 @@ describe("scrollExpandedTaskIntoView", () => {
   });
 });
 
+describe("shouldHandleTaskHubUndoShortcut", () => {
+  it("handles ctrl/cmd+z inside Task Hub when focus is not in an editable field", () => {
+    expect(shouldHandleTaskHubUndoShortcut(keyboardEvent({ ctrlKey: true, key: "z" }))).toBe(true);
+    expect(shouldHandleTaskHubUndoShortcut(keyboardEvent({ metaKey: true, key: "Z" }))).toBe(true);
+  });
+
+  it("ignores undo shortcuts while typing in editable controls", () => {
+    expect(shouldHandleTaskHubUndoShortcut(keyboardEvent({
+      ctrlKey: true,
+      key: "z",
+      target: editableTarget("input")
+    }))).toBe(false);
+    expect(shouldHandleTaskHubUndoShortcut(keyboardEvent({
+      metaKey: true,
+      key: "z",
+      target: editableTarget("textarea")
+    }))).toBe(false);
+    expect(shouldHandleTaskHubUndoShortcut(keyboardEvent({
+      ctrlKey: true,
+      key: "z",
+      target: editableTarget("div", true)
+    }))).toBe(false);
+  });
+
+  it("ignores other modifier combinations and keys", () => {
+    expect(shouldHandleTaskHubUndoShortcut(keyboardEvent({ ctrlKey: true, shiftKey: true, key: "z" }))).toBe(false);
+    expect(shouldHandleTaskHubUndoShortcut(keyboardEvent({ ctrlKey: true, altKey: true, key: "z" }))).toBe(false);
+    expect(shouldHandleTaskHubUndoShortcut(keyboardEvent({ ctrlKey: true, key: "y" }))).toBe(false);
+  });
+});
+
 function baseFilters(): TaskFilterState {
   return {
     status: "open",
@@ -194,4 +231,23 @@ function wrapperElement(
     child.parentElement = wrapper;
   }
   return wrapper;
+}
+
+function keyboardEvent(overrides: Partial<KeyboardEvent> & { target?: EventTarget | null }): KeyboardEvent {
+  return {
+    key: "",
+    ctrlKey: false,
+    metaKey: false,
+    altKey: false,
+    shiftKey: false,
+    target: null,
+    ...overrides
+  } as KeyboardEvent;
+}
+
+function editableTarget(tagName: string, isContentEditable = false): EventTarget {
+  return {
+    tagName: tagName.toUpperCase(),
+    isContentEditable
+  } as unknown as EventTarget;
 }

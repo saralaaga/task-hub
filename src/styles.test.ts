@@ -433,6 +433,7 @@ describe("Task Hub styles", () => {
     expect(contentRule).toContain("display: flex");
     expect(contentRule).toContain("align-items: center");
     expect(titleRule).toContain("flex-wrap: nowrap");
+    expect(titleRule).toContain("overflow: visible");
     expect(titleRule).toContain("white-space: nowrap");
     expect(rowRule).toContain("grid-template-columns: minmax(0, 1fr) auto");
     expect(barRule).toContain("border-radius: 999px");

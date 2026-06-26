@@ -335,8 +335,10 @@ const {
   deleteAppleCalendarEvent,
   deleteAppleReminder,
   requestLocalAppleAccess,
+  setAppleReminderCompleted,
   setAppleCalendarEventDetails,
   setAppleReminderDetails,
+  setAppleReminderList,
   setAppleReminderDueDate
 } = jest.requireMock("./localApple");
 
@@ -1571,6 +1573,76 @@ describe("Apple Reminders migration", () => {
     expect(notices).toContain("Task completed.");
   });
 
+  it("undoes the last Apple Reminder completion change", async () => {
+    const plugin = new TaskHubPlugin({} as never, {} as never);
+    plugin.app = { workspace: { getLeavesOfType: jest.fn(() => []) } } as never;
+    plugin.settings = {
+      ...DEFAULT_SETTINGS,
+      localApple: {
+        ...DEFAULT_SETTINGS.localApple,
+        enabled: true,
+        remindersEnabled: true,
+        remindersWritebackEnabled: true
+      }
+    };
+    plugin.localAppleTasks = [appleReminderTask({ completed: false, externalId: "reminder-1" })];
+    plugin.syncLocalApple = jest.fn(async () => {
+      plugin.localAppleTasks = [appleReminderTask({ completed: true, externalId: "reminder-1" })];
+    }) as never;
+
+    const result = await plugin.completeTask(appleReminderTask({ completed: false, externalId: "reminder-1" }));
+
+    expect(result.status).toBe("updated");
+    expect(plugin.canUndoLastTaskChange()).toBe(true);
+
+    plugin.syncLocalApple = jest.fn(async () => {
+      plugin.localAppleTasks = [appleReminderTask({ completed: false, externalId: "reminder-1" })];
+    }) as never;
+
+    await plugin.undoLastTaskChange();
+
+    expect(setAppleReminderCompleted).toHaveBeenNthCalledWith(1, "reminder-1", true);
+    expect(setAppleReminderCompleted).toHaveBeenNthCalledWith(2, "reminder-1", false);
+    expect(notices).toContain("Undid the last task change.");
+    expect(plugin.canUndoLastTaskChange()).toBe(false);
+  });
+
+  it("undoes the last Apple Reminder list move", async () => {
+    const plugin = new TaskHubPlugin({} as never, {} as never);
+    plugin.app = { workspace: { getLeavesOfType: jest.fn(() => []) } } as never;
+    plugin.settings = {
+      ...DEFAULT_SETTINGS,
+      localApple: {
+        ...DEFAULT_SETTINGS.localApple,
+        enabled: true,
+        remindersEnabled: true,
+        remindersWritebackEnabled: true,
+        remindersCreateEnabled: true
+      }
+    };
+    plugin.localAppleTasks = [appleReminderTask({ externalId: "reminder-1", externalListId: "inbox" })];
+    plugin.syncLocalApple = jest.fn(async () => {
+      plugin.localAppleTasks = [appleReminderTask({ externalId: "reminder-1", externalListId: "work" })];
+    }) as never;
+
+    await plugin.moveAppleReminderToList(appleReminderTask({ externalId: "reminder-1", externalListId: "inbox" }), "work");
+
+    expect(plugin.canUndoLastTaskChange()).toBe(true);
+
+    plugin.syncLocalApple = jest.fn(async () => {
+      plugin.localAppleTasks = [appleReminderTask({ externalId: "reminder-1", externalListId: "inbox" })];
+    }) as never;
+
+    await plugin.undoLastTaskChange();
+
+    expect(setAppleReminderList).toHaveBeenCalledWith("reminder-1", "work");
+    expect(setAppleReminderDetails).toHaveBeenCalledWith(expect.objectContaining({
+      id: "reminder-1",
+      listId: "inbox"
+    }));
+    expect(notices).toContain("Undid the last task change.");
+  });
+
   it("requests Reminders access and retries when creating an Apple Reminder before permission is granted", async () => {
     const notDetermined = Object.assign(new Error("Apple access has not been requested yet."), { code: "not_determined" });
     createAppleReminder.mockRejectedValueOnce(notDetermined).mockResolvedValueOnce("reminder-created-after-access");
@@ -1755,6 +1827,69 @@ describe("Apple Reminders migration", () => {
 
     await expect(process.mock.results[0].value).resolves.toBe("- [ ] Send invoice 📅 2026-05-21 ⏰ 09:30 #finance\nNext");
     expect(notices).toContain("Task updated.");
+  });
+
+  it("transfers linked note YAML when a vault task update changes the task key", async () => {
+    const taskFile = { path: "Inbox.md", extension: "md", stat: { ctime: 1, mtime: 2, size: 3 } };
+    const noteFile = { path: "Task Hub Notes/pay.md", extension: "md", stat: { ctime: 4, mtime: 5, size: 6 } };
+    const plugin = new TaskHubPlugin({} as never, {} as never);
+    const currentTask = task();
+    const oldKey = buildTaskNoteKey(currentTask);
+    const noteContent = createTaskNoteContent({
+      noteId: "thn_1",
+      relatedKey: oldKey,
+      title: "Pay invoice",
+      createdAt: "2026-05-29T10:30:12"
+    });
+    const writes: Array<{ path: string; content: string }> = [];
+    const process = jest.fn(async (file, update) => {
+      const content = file.path === noteFile.path
+        ? noteContent
+        : "- [ ] Pay invoice 📅 2026-05-20\nNext";
+      const next = update(content);
+      writes.push({ path: file.path, content: next });
+      return next;
+    });
+    plugin.app = {
+      vault: {
+        adapter: {},
+        getFileByPath: jest.fn((path: string) => (path === noteFile.path ? noteFile : taskFile)),
+        process,
+        cachedRead: jest.fn(async () => "Next")
+      },
+      workspace: { getLeavesOfType: jest.fn(() => []) }
+    } as never;
+    plugin.settings = {
+      ...DEFAULT_SETTINGS,
+      taskNotes: {
+        ...DEFAULT_SETTINGS.taskNotes,
+        enabled: true
+      }
+    };
+    plugin.taskIndex = { reindexFile: jest.fn(async () => undefined) } as never;
+    plugin.taskNoteIndex = {
+      getNotesForKey: jest.fn((key: string) => (key === oldKey ? [{ path: noteFile.path, related: [oldKey], history: [], title: "pay" }] : [])),
+      reindexFile: jest.fn(async () => undefined)
+    } as never;
+
+    await plugin.updateCalendarTask(currentTask, {
+      kind: "task",
+      title: "Send invoice",
+      date: "2026-05-20",
+      tags: ["#finance"]
+    });
+
+    expect(writes.map((write) => write.path)).toEqual([taskFile.path, noteFile.path]);
+    const parsed = parseTaskNoteFrontmatter(writes[1].content);
+    expect(parsed?.related).toEqual([
+      buildTaskNoteKey({
+        ...currentTask,
+        rawLine: "- [ ] Send invoice 📅 2026-05-20 #finance",
+        text: "Send invoice",
+        tags: ["#finance"]
+      })
+    ]);
+    expect(parsed?.history).toContain(oldKey);
   });
 
   it("updates Markdown task recurrence from calendar task details", async () => {
