@@ -4,7 +4,7 @@ import { toLocalDateKey } from "../calendar/dateBuckets";
 import { filterTasks, type TaskFilterState } from "../filtering/filters";
 import { createTranslator } from "../i18n";
 import type TaskHubPlugin from "../main";
-import type { TaskItem } from "../types";
+import type { TaskHubLastSessionState, TaskHubSettings, TaskItem } from "../types";
 import { parseTasksFromMarkdown } from "../parsing/taskParser";
 import { type CalendarViewMode } from "../calendar/calendarModel";
 import { renderCalendarView, type AgendaScrollPosition, type CalendarModeTransitionDirection } from "./renderCalendarView";
@@ -22,12 +22,12 @@ type TaskHubRenderOptions = {
 };
 
 export class TaskHubView extends ItemView {
-  private view: DashboardView = this.plugin.settings.defaultView;
-  private filters: TaskFilterState = cloneTaskFilters(this.plugin.settings.taskViewFilters);
-  private calendarMode: CalendarViewMode = "month";
+  private view: DashboardView;
+  private filters: TaskFilterState;
+  private calendarMode: CalendarViewMode;
   private calendarModeTransition: CalendarModeTransitionDirection | undefined;
-  private calendarFocusDate = new Date();
-  private visibleSourceIds = new Set<string>(["vault"]);
+  private calendarFocusDate: Date;
+  private visibleSourceIds: Set<string>;
   private knownCalendarSourceIds = new Set<string>(["vault"]);
   private isRefreshing = false;
   private selectedTaskId: string | undefined;
@@ -36,7 +36,7 @@ export class TaskHubView extends ItemView {
   private calendarAgendaScrollPosition: AgendaScrollPosition | undefined;
   private completingTaskIds = new Set<string>();
   private selectedTaskIds = new Set<string>();
-  private unscheduledPanelOpen = false;
+  private unscheduledPanelOpen: boolean;
   private unscheduledPanelOpening = false;
   private unscheduledPanelClosing = false;
   private unscheduledPanelCloseTimer: number | undefined;
@@ -55,6 +55,13 @@ export class TaskHubView extends ItemView {
     private readonly plugin: TaskHubPlugin
   ) {
     super(leaf);
+    const restoredState = restoreTaskHubSessionState(this.plugin.settings);
+    this.view = restoredState.view;
+    this.filters = restoredState.filters;
+    this.calendarMode = restoredState.calendarMode;
+    this.calendarFocusDate = restoredState.calendarFocusDate;
+    this.visibleSourceIds = restoredState.visibleSourceIds;
+    this.unscheduledPanelOpen = restoredState.unscheduledPanelOpen;
   }
 
   getViewType(): string {
@@ -73,7 +80,8 @@ export class TaskHubView extends ItemView {
 
   onClose(): Promise<void> {
     this.containerEl.removeEventListener("keydown", this.undoShortcutHandler);
-    return Promise.resolve();
+    this.syncSessionStateToSettings();
+    return this.plugin.saveData(this.plugin.settings);
   }
 
   render(options: TaskHubRenderOptions = {}): void {
@@ -126,6 +134,7 @@ export class TaskHubView extends ItemView {
       {
         onViewChange: (view) => {
           this.view = view;
+          this.syncSessionStateToSettings();
           this.render();
         },
         onRescan: () => void this.refreshData(),
@@ -137,6 +146,7 @@ export class TaskHubView extends ItemView {
           } else {
             this.toggleUnscheduledPanel();
           }
+          this.syncSessionStateToSettings();
           this.render();
         },
         onStatusChange: (status) => {
@@ -342,14 +352,17 @@ export class TaskHubView extends ItemView {
           onModeChange: (mode) => {
             this.calendarModeTransition = calendarModeTransitionDirection(this.calendarMode, mode);
             this.calendarMode = mode;
+            this.syncSessionStateToSettings();
             this.render();
           },
           onMove: (direction) => {
             this.calendarFocusDate = moveDate(this.calendarFocusDate, this.calendarMode, direction);
+            this.syncSessionStateToSettings();
             this.render();
           },
           onToday: () => {
             this.calendarFocusDate = new Date();
+            this.syncSessionStateToSettings();
             this.render();
           },
           onTimeScaleChange: (scale) => {
@@ -358,6 +371,7 @@ export class TaskHubView extends ItemView {
           },
           onLayerToggle: (sourceId) => {
             this.visibleSourceIds = toggleSetValue(this.visibleSourceIds, sourceId);
+            this.syncSessionStateToSettings();
             this.render();
           },
           onDateCreateTask: (dateKey) => this.plugin.openCreateTaskModal(dateKey),
@@ -634,8 +648,21 @@ export class TaskHubView extends ItemView {
   private updateFilters(filters: TaskFilterState, options: TaskHubRenderOptions = {}): void {
     this.filters = cloneTaskFilters(filters);
     this.plugin.settings.taskViewFilters = cloneTaskFilters(this.filters);
+    this.syncSessionStateToSettings();
     void this.plugin.saveSettings();
     this.render(options);
+  }
+
+  private syncSessionStateToSettings(): void {
+    this.plugin.settings.taskViewFilters = cloneTaskFilters(this.filters);
+    this.plugin.settings.lastSessionState = createTaskHubSessionSnapshot({
+      view: this.view,
+      filters: this.filters,
+      calendarMode: this.calendarMode,
+      calendarFocusDate: this.calendarFocusDate,
+      visibleSourceIds: this.visibleSourceIds,
+      unscheduledPanelOpen: this.unscheduledPanelOpen
+    });
   }
 
   private async reorderTagCards(sourceTag: string, targetTag: string): Promise<void> {
@@ -947,4 +974,51 @@ function cloneTaskFilters(filters: TaskFilterState): TaskFilterState {
     tags: [...filters.tags],
     conditions: filters.conditions ? { ...filters.conditions } : undefined
   };
+}
+
+type RestoredTaskHubSessionState = {
+  view: DashboardView;
+  filters: TaskFilterState;
+  calendarMode: CalendarViewMode;
+  calendarFocusDate: Date;
+  visibleSourceIds: Set<string>;
+  unscheduledPanelOpen: boolean;
+};
+
+export function restoreTaskHubSessionState(
+  settings: Pick<TaskHubSettings, "defaultView" | "taskViewFilters" | "lastSessionState">,
+  getNow: () => Date = () => new Date()
+): RestoredTaskHubSessionState {
+  return {
+    view: settings.lastSessionState?.view ?? settings.defaultView,
+    filters: cloneTaskFilters(settings.lastSessionState?.taskViewFilters ?? settings.taskViewFilters),
+    calendarMode: settings.lastSessionState?.calendarMode ?? "month",
+    calendarFocusDate: parseTaskHubSessionDate(settings.lastSessionState?.calendarFocusDate) ?? getNow(),
+    visibleSourceIds: new Set(settings.lastSessionState?.visibleSourceIds?.length ? settings.lastSessionState.visibleSourceIds : ["vault"]),
+    unscheduledPanelOpen: settings.lastSessionState?.unscheduledPanelOpen ?? false
+  };
+}
+
+export function createTaskHubSessionSnapshot(input: {
+  view: DashboardView;
+  filters: TaskFilterState;
+  calendarMode: CalendarViewMode;
+  calendarFocusDate: Date;
+  visibleSourceIds: ReadonlySet<string>;
+  unscheduledPanelOpen: boolean;
+}): TaskHubLastSessionState {
+  return {
+    view: input.view,
+    taskViewFilters: cloneTaskFilters(input.filters),
+    calendarMode: input.calendarMode,
+    calendarFocusDate: input.calendarFocusDate.toISOString(),
+    visibleSourceIds: [...input.visibleSourceIds],
+    unscheduledPanelOpen: input.unscheduledPanelOpen
+  };
+}
+
+function parseTaskHubSessionDate(value: string | undefined): Date | undefined {
+  if (!value) return undefined;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? undefined : parsed;
 }

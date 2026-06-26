@@ -4,7 +4,7 @@ import type TaskHubPlugin from "./main";
 import { DEFAULT_DIDA_API_BASE, DIDA_INBOX_PROJECT_NAME } from "./dida/didaMapping";
 import { normalizeTaskSendDefaultTarget, parseTaskSendTarget, serializeTaskSendTarget, taskSendTargetOptions } from "./taskSendTargets";
 import { validTimedDurationMinutes } from "./timeGranularity";
-import type { AppleCalendarInfo, CalendarCreationKind, CalendarCreationTarget, CalendarEventCreationTarget, CalendarSource, CalendarSourceStatus, CalendarTaskCreationTarget, ExternalTaskSourceTab, LocalAppleSyncStatus, TaskHubSettings } from "./types";
+import type { AppleCalendarInfo, CalendarCreationKind, CalendarCreationTarget, CalendarEventCreationTarget, CalendarSource, CalendarSourceStatus, CalendarTaskCreationTarget, ExternalTaskSourceTab, LocalAppleSyncStatus, TaskHubLastSessionState, TaskHubSettings } from "./types";
 import { setCssProps } from "./views/domStyles";
 
 export const TASK_HUB_SETTINGS_SCHEMA_VERSION = 3;
@@ -13,6 +13,7 @@ export const DEFAULT_SETTINGS: TaskHubSettings = {
   settingsSchemaVersion: TASK_HUB_SETTINGS_SCHEMA_VERSION,
   language: "en",
   defaultView: "tasks",
+  lastSessionState: undefined,
   weekStart: "monday",
   showCompletedByDefault: false,
   showSubtaskProgressBars: true,
@@ -107,6 +108,8 @@ export function normalizeTaskHubSettings(loaded: Partial<TaskHubSettings> | null
     ...(loaded ?? {}),
     settingsSchemaVersion: TASK_HUB_SETTINGS_SCHEMA_VERSION,
     language: isLanguage(loaded?.language) ? loaded.language : DEFAULT_SETTINGS.language,
+    defaultView: normalizeDefaultView(loaded?.defaultView),
+    lastSessionState: normalizeTaskHubLastSessionState(loaded?.lastSessionState, loaded?.defaultView, loaded?.taskViewFilters, loaded?.showCompletedByDefault),
     calendarTaskCreationEnabled: loaded?.calendarTaskCreationEnabled ?? DEFAULT_SETTINGS.calendarTaskCreationEnabled,
     calendarCreationDefaultKind: loaded?.calendarCreationDefaultKind ?? DEFAULT_SETTINGS.calendarCreationDefaultKind,
     calendarTimeScale: normalizeCalendarTimeScale(loaded?.calendarTimeScale),
@@ -252,6 +255,49 @@ function normalizeTaskNotesSettings(loaded: Partial<TaskHubSettings["taskNotes"]
   };
 }
 
+function normalizeTaskHubLastSessionState(
+  loaded: unknown,
+  defaultView: unknown,
+  taskViewFilters: Partial<TaskHubSettings["taskViewFilters"]> | undefined,
+  showCompletedByDefault: boolean | undefined
+): TaskHubSettings["lastSessionState"] {
+  if (!loaded || typeof loaded !== "object") return undefined;
+  const candidate = loaded as Partial<TaskHubLastSessionState>;
+  const view = candidate.view === "tasks" || candidate.view === "calendar" || candidate.view === "tags"
+    ? candidate.view
+    : normalizeDefaultView(defaultView);
+  const calendarMode =
+    candidate.calendarMode === "day" || candidate.calendarMode === "week" || candidate.calendarMode === "month"
+      ? candidate.calendarMode
+      : "month";
+  const calendarFocusDate = normalizePersistedDate(candidate.calendarFocusDate);
+  return {
+    view,
+    taskViewFilters: normalizeTaskViewFilters(candidate.taskViewFilters ?? taskViewFilters, showCompletedByDefault),
+    calendarMode,
+    ...(calendarFocusDate ? { calendarFocusDate } : {}),
+    visibleSourceIds: normalizeVisibleSourceIds(candidate.visibleSourceIds),
+    unscheduledPanelOpen: typeof candidate.unscheduledPanelOpen === "boolean" ? candidate.unscheduledPanelOpen : false
+  };
+}
+
+function normalizeDefaultView(value: unknown): TaskHubSettings["defaultView"] {
+  return value === "calendar" || value === "tags" || value === "tasks" ? value : DEFAULT_SETTINGS.defaultView;
+}
+
+function normalizePersistedDate(value: unknown): string | undefined {
+  if (typeof value !== "string" || value.trim().length === 0) return undefined;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return undefined;
+  return parsed.toISOString();
+}
+
+function normalizeVisibleSourceIds(value: unknown): string[] {
+  if (!Array.isArray(value)) return ["vault"];
+  const visibleSourceIds = value.filter((item): item is string => typeof item === "string" && item.trim().length > 0);
+  return visibleSourceIds.length > 0 ? visibleSourceIds : ["vault"];
+}
+
 function normalizeTaskViewFilters(
   loaded: Partial<TaskHubSettings["taskViewFilters"]> | undefined,
   showCompletedByDefault: boolean | undefined
@@ -260,17 +306,24 @@ function normalizeTaskViewFilters(
   return {
     ...DEFAULT_SETTINGS.taskViewFilters,
     ...(loaded ?? {}),
-    status: loaded?.status ?? (showCompletedByDefault ? "all" : DEFAULT_SETTINGS.taskViewFilters.status),
+    status:
+      loaded?.status === "open" || loaded?.status === "completed" || loaded?.status === "all"
+        ? loaded.status
+        : showCompletedByDefault
+          ? "all"
+          : DEFAULT_SETTINGS.taskViewFilters.status,
     ...(dateBucket ? { dateBucket } : { dateBucket: undefined }),
-    tags: Array.isArray(loaded?.tags) ? loaded.tags : DEFAULT_SETTINGS.taskViewFilters.tags,
-    sourceQuery: loaded?.sourceQuery ?? DEFAULT_SETTINGS.taskViewFilters.sourceQuery,
-    textQuery: loaded?.textQuery ?? DEFAULT_SETTINGS.taskViewFilters.textQuery,
+    tags: Array.isArray(loaded?.tags)
+      ? loaded.tags.filter((tag): tag is string => typeof tag === "string")
+      : DEFAULT_SETTINGS.taskViewFilters.tags,
+    sourceQuery: typeof loaded?.sourceQuery === "string" ? loaded.sourceQuery : DEFAULT_SETTINGS.taskViewFilters.sourceQuery,
+    textQuery: typeof loaded?.textQuery === "string" ? loaded.textQuery : DEFAULT_SETTINGS.taskViewFilters.textQuery,
     conditions: loaded?.conditions
       ? {
           operator: loaded.conditions.operator === "or" ? "or" : "and",
-          tag: loaded.conditions.tag ?? "",
+          tag: typeof loaded.conditions.tag === "string" ? loaded.conditions.tag : "",
           dateBucket: normalizeStoredDateBucket(loaded.conditions.dateBucket) ?? "",
-          text: loaded.conditions.text ?? ""
+          text: typeof loaded.conditions.text === "string" ? loaded.conditions.text : ""
         }
       : undefined
   };

@@ -1,11 +1,14 @@
 import {
+  createTaskHubSessionSnapshot,
   collectCalendarUnscheduledTasks,
   collectUnscheduledTasks,
   restoreContentScrollAfterRender,
+  restoreTaskHubSessionState,
   scrollExpandedTaskIntoView,
   shouldHandleTaskHubUndoShortcut
 } from "./TaskHubView";
 import type { TaskFilterState } from "../filtering/filters";
+import type { TaskViewFilterSettings } from "../types";
 import type { TaskItem } from "../types";
 
 jest.mock("obsidian", () => ({
@@ -76,6 +79,92 @@ describe("restoreContentScrollAfterRender", () => {
     restoreContentScrollAfterRender(container, { scrollTop: 280 });
 
     expect(container.scrollTop).toBe(12);
+  });
+});
+
+describe("Task Hub session state", () => {
+  it("restores the last closed view state ahead of the default view", () => {
+    const restored = restoreTaskHubSessionState(
+      {
+        defaultView: "tasks",
+        taskViewFilters: fallbackFilters(),
+        lastSessionState: {
+          view: "calendar",
+          taskViewFilters: {
+            status: "all",
+            tags: ["#work"],
+            sourceQuery: "apple-reminders",
+            textQuery: "invoice"
+          },
+          calendarMode: "week",
+          calendarFocusDate: "2026-06-04T08:30:00.000Z",
+          visibleSourceIds: ["vault", "apple-reminders"],
+          unscheduledPanelOpen: true
+        }
+      },
+      () => new Date("2026-06-01T00:00:00.000Z")
+    );
+
+    expect(restored.view).toBe("calendar");
+    expect(restored.filters).toEqual({
+      status: "all",
+      tags: ["#work"],
+      sourceQuery: "apple-reminders",
+      textQuery: "invoice"
+    });
+    expect(restored.calendarMode).toBe("week");
+    expect(restored.calendarFocusDate.toISOString()).toBe("2026-06-04T08:30:00.000Z");
+    expect([...restored.visibleSourceIds]).toEqual(["vault", "apple-reminders"]);
+    expect(restored.unscheduledPanelOpen).toBe(true);
+  });
+
+  it("falls back to the default open state when no last session is stored", () => {
+    const restored = restoreTaskHubSessionState(
+      {
+        defaultView: "tags",
+        taskViewFilters: fallbackFilters()
+      },
+      () => new Date("2026-06-01T00:00:00.000Z")
+    );
+
+    expect(restored.view).toBe("tags");
+    expect(restored.filters).toEqual(fallbackFilters());
+    expect(restored.calendarMode).toBe("month");
+    expect(restored.calendarFocusDate.toISOString()).toBe("2026-06-01T00:00:00.000Z");
+    expect([...restored.visibleSourceIds]).toEqual(["vault"]);
+    expect(restored.unscheduledPanelOpen).toBe(false);
+  });
+
+  it("serializes the current view state into persisted settings data", () => {
+    const snapshot = createTaskHubSessionSnapshot({
+      view: "calendar",
+      filters: {
+        status: "all",
+        tags: ["#ops"],
+        sourceQuery: "dida",
+        textQuery: "follow up",
+        conditions: { operator: "or", tag: "#client", dateBucket: "today", text: "ping" }
+      },
+      calendarMode: "day",
+      calendarFocusDate: new Date("2026-06-09T09:15:00.000Z"),
+      visibleSourceIds: new Set(["vault", "dida"]),
+      unscheduledPanelOpen: true
+    });
+
+    expect(snapshot).toEqual({
+      view: "calendar",
+      taskViewFilters: {
+        status: "all",
+        tags: ["#ops"],
+        sourceQuery: "dida",
+        textQuery: "follow up",
+        conditions: { operator: "or", tag: "#client", dateBucket: "today", text: "ping" }
+      },
+      calendarMode: "day",
+      calendarFocusDate: "2026-06-09T09:15:00.000Z",
+      visibleSourceIds: ["vault", "dida"],
+      unscheduledPanelOpen: true
+    });
   });
 });
 
@@ -161,6 +250,15 @@ function baseFilters(): TaskFilterState {
     sourceQuery: "",
     textQuery: "",
     conditions: { operator: "and", tag: "", dateBucket: "", text: "" }
+  };
+}
+
+function fallbackFilters(): TaskViewFilterSettings {
+  return {
+    status: "open",
+    tags: [],
+    sourceQuery: "",
+    textQuery: ""
   };
 }
 

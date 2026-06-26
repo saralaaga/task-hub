@@ -54,6 +54,15 @@ export type TaskViewFilterSettings = {
   textQuery: string;
 };
 
+export type TaskHubLastSessionState = {
+  view: DefaultView;
+  taskViewFilters: TaskViewFilterSettings;
+  calendarMode: "day" | "week" | "month";
+  calendarFocusDate?: string;
+  visibleSourceIds: string[];
+  unscheduledPanelOpen: boolean;
+};
+
 export type CalendarEvent = {
   id: string;
   sourceId: string;
@@ -213,6 +222,7 @@ export type TaskHubSettings = {
   settingsSchemaVersion: number;
   language: Language;
   defaultView: DefaultView;
+  lastSessionState?: TaskHubLastSessionState;
   weekStart: WeekStart;
   showCompletedByDefault: boolean;
   showSubtaskProgressBars: boolean;

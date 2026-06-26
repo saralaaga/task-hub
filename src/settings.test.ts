@@ -161,6 +161,83 @@ describe("normalizeTaskHubSettings", () => {
     });
   });
 
+  it("restores the last Task Hub session state when present", () => {
+    const settings = normalizeTaskHubSettings({
+      defaultView: "tags",
+      taskViewFilters: {
+        status: "open",
+        tags: [],
+        sourceQuery: "",
+        textQuery: ""
+      },
+      lastSessionState: {
+        view: "calendar",
+        taskViewFilters: {
+          status: "all",
+          tags: ["#work"],
+          sourceQuery: "apple-reminders",
+          textQuery: "invoice"
+        },
+        calendarMode: "week",
+        calendarFocusDate: "2026-06-26T10:00:00.000Z",
+        visibleSourceIds: ["vault", "apple-reminders"],
+        unscheduledPanelOpen: true
+      }
+    });
+
+    expect(settings.lastSessionState).toEqual({
+      view: "calendar",
+      taskViewFilters: {
+        status: "all",
+        tags: ["#work"],
+        sourceQuery: "apple-reminders",
+        textQuery: "invoice"
+      },
+      calendarMode: "week",
+      calendarFocusDate: "2026-06-26T10:00:00.000Z",
+      visibleSourceIds: ["vault", "apple-reminders"],
+      unscheduledPanelOpen: true
+    });
+  });
+
+  it("falls back to safe defaults for invalid persisted Task Hub session state", () => {
+    const settings = normalizeTaskHubSettings({
+      defaultView: "tags",
+      taskViewFilters: {
+        status: "open",
+        tags: ["#fallback"],
+        sourceQuery: "",
+        textQuery: ""
+      },
+      lastSessionState: {
+        view: "board" as never,
+        taskViewFilters: {
+          status: "maybe" as never,
+          tags: "#oops" as never,
+          sourceQuery: 42 as never,
+          textQuery: undefined as never
+        },
+        calendarMode: "year" as never,
+        calendarFocusDate: "not-a-date",
+        visibleSourceIds: [],
+        unscheduledPanelOpen: "yes" as never
+      }
+    });
+
+    expect(settings.lastSessionState).toEqual({
+      view: "tags",
+      taskViewFilters: {
+        status: "open",
+        tags: [],
+        sourceQuery: "",
+        textQuery: ""
+      },
+      calendarMode: "month",
+      visibleSourceIds: ["vault"],
+      unscheduledPanelOpen: false
+    });
+  });
+
   it("keeps explicit subtask progress bar settings while defaulting older settings to enabled", () => {
     expect(normalizeTaskHubSettings({ ignoredPaths: [] }).showSubtaskProgressBars).toBe(true);
     expect(normalizeTaskHubSettings({ showSubtaskProgressBars: false }).showSubtaskProgressBars).toBe(false);
