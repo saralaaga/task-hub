@@ -16,6 +16,7 @@ const TASKS: TaskItem[] = [
 const BASE_FILTERS: TaskFilterState = {
   status: "open",
   tags: [],
+  tagQuery: "",
   sourceQuery: "",
   textQuery: ""
 };
@@ -60,6 +61,12 @@ describe("filterTasks", () => {
 
   it("matches nested tags when filtering by their parent tag", () => {
     const results = filterTasks(TASKS, { ...BASE_FILTERS, tags: ["#client"] }, NOW);
+
+    expect(results.map((item) => item.id)).toEqual(["today"]);
+  });
+
+  it("supports a quick tag query that can be cleared independently of the saved tag list", () => {
+    const results = filterTasks(TASKS, { ...BASE_FILTERS, tagQuery: "#client" }, NOW);
 
     expect(results.map((item) => item.id)).toEqual(["today"]);
   });

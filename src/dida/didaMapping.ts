@@ -15,6 +15,7 @@ export function didaTaskToTaskItem(task: DidaTaskRecord, project: DidaProject, i
   const tags = task.tags ? didaTagsForTaskHub(task.tags) : extractHashtags(task.title);
   return {
     id: `${DIDA_SOURCE_ID}:${task.id}`,
+    stableId: `${DIDA_SOURCE_ID}:${task.id}`,
     filePath: `${DIDA_SOURCE_NAME}/${project.name}`,
     line: index,
     rawLine: task.title,

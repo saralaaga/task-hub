@@ -77,6 +77,7 @@ function baseFilters(): TaskFilterState {
   return {
     status: "open",
     tags: [],
+    tagQuery: "",
     sourceQuery: "",
     textQuery: "",
     conditions: { operator: "and", tag: "", dateBucket: "", text: "" }
@@ -93,6 +94,8 @@ function renderForTest(overrides: Partial<TaskFilterState> = {}) {
     onUnscheduledToggle: jest.fn(),
     onStatusChange: jest.fn(),
     onConditionChange: jest.fn(),
+    onClearFilters: jest.fn(),
+    onTagQueryChange: jest.fn(),
     onSourceFilterChange: jest.fn(),
     onTextQueryChange: jest.fn()
   };
@@ -128,6 +131,8 @@ function renderShellForState(stateOverrides: Partial<Parameters<typeof renderShe
     onUnscheduledToggle: jest.fn(),
     onStatusChange: jest.fn(),
     onConditionChange: jest.fn(),
+    onClearFilters: jest.fn(),
+    onTagQueryChange: jest.fn(),
     onSourceFilterChange: jest.fn(),
     onTextQueryChange: jest.fn()
   };
@@ -196,6 +201,29 @@ describe("renderShell", () => {
       dateBucket: "",
       text: ""
     });
+  });
+
+  it("clears quick tag filters from the condition panel clear action", () => {
+    const { container, handlers } = renderForTest({ tagQuery: "#work" });
+    const clearButton = collect(container).find((element) => element.text === "clearFilters");
+    const activeCount = collect(container).find((element) => element.classes.has("task-hub-condition-count"));
+
+    expect(activeCount?.text).toBe("1");
+    clearButton?.trigger("click");
+    expect(handlers.onClearFilters).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows quick tag filters in the condition panel and lets them be cleared inline", () => {
+    const { container, handlers } = renderForTest({ tagQuery: "#work" });
+    const label = collect(container).find((element) => element.text === "quickTagFilter");
+    const chip = collect(container).find((element) => element.classes.has("task-hub-condition-quick-tag-chip"));
+    const clearButton = collect(container).find((element) => element.classes.has("task-hub-condition-quick-tag-clear"));
+
+    expect(label).toBeDefined();
+    expect(chip?.text).toBe("#work");
+
+    clearButton?.trigger("click");
+    expect(handlers.onTagQueryChange).toHaveBeenCalledWith("");
   });
 
   it("places the condition operator with the date and text labels", () => {

@@ -1,4 +1,6 @@
 import { TaskIndex, type IndexableFile } from "./taskIndex";
+import { parseTasksFromMarkdown } from "../parsing/taskParser";
+import type { PersistedVaultTaskStableRecord } from "../types";
 
 describe("TaskIndex", () => {
   it("skips unchanged files based on mtime and size", async () => {
@@ -72,6 +74,57 @@ describe("TaskIndex", () => {
     expect(index.getTasks().map((task) => task.text)).toEqual(["Good task"]);
     expect(index.getFileState("Broken.md")?.lastError).toContain("read failed");
     expect(index.getStats().failed).toBe(1);
+  });
+
+  it("persists stable ids across file line changes", async () => {
+    const contents = ["- [ ] First task", "\n- [ ] First task"];
+    const persistedByPath: Record<string, PersistedVaultTaskStableRecord[]> = {};
+    const index = new TaskIndex({
+      ignoredPaths: [],
+      readFile: () => contents.shift() ?? "",
+      loadPersistedTaskState: (path) => persistedByPath[path],
+      savePersistedTaskState: (path, records) => {
+        persistedByPath[path] = records;
+      }
+    });
+
+    await index.scanFiles([markdownFile({ path: "Inbox.md", mtime: 1, size: 16 })]);
+    const firstStableId = index.getTasks()[0].stableId;
+    await index.scanFiles([markdownFile({ path: "Inbox.md", mtime: 2, size: 18 })]);
+
+    expect(index.getTasks()[0].stableId).toBe(firstStableId);
+    expect(persistedByPath["Inbox.md"][0].stableId).toBe(firstStableId);
+  });
+
+  it("honors remembered stable ids for task hub initiated updates", async () => {
+    const contents = ["- [ ] First task", "- [ ] Renamed task"];
+    const persistedByPath: Record<string, PersistedVaultTaskStableRecord[]> = {};
+    const index = new TaskIndex({
+      ignoredPaths: [],
+      readFile: () => contents.shift() ?? "",
+      loadPersistedTaskState: (path) => persistedByPath[path],
+      savePersistedTaskState: (path, records) => {
+        persistedByPath[path] = records;
+      }
+    });
+
+    await index.scanFiles([markdownFile({ path: "Inbox.md", mtime: 1, size: 16 })]);
+    const firstTask = index.getTasks()[0];
+    const renamedTaskId = parseTasksFromMarkdown({
+      filePath: "Inbox.md",
+      content: "- [ ] Renamed task"
+    })[0].id;
+    index.rememberStableIdForTask(
+      {
+        filePath: "Inbox.md",
+        id: renamedTaskId
+      },
+      firstTask.stableId as string
+    );
+
+    await index.scanFiles([markdownFile({ path: "Inbox.md", mtime: 2, size: 18 })]);
+
+    expect(index.getTasks()[0].stableId).toBe(firstTask.stableId);
   });
 });
 

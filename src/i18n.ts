@@ -74,6 +74,7 @@ export type TranslationKey =
   | "conditionMatch"
   | "conditionTag"
   | "conditionText"
+  | "quickTagFilter"
   | "createTaskNote"
   | "day"
   | "defaultView"
@@ -817,6 +818,7 @@ const TRANSLATIONS: Record<"en" | "zh", Record<TranslationKey, string>> &
     conditionMatch: "Match",
     conditionTag: "Tag",
     conditionText: "Text",
+    quickTagFilter: "Quick tag",
     createTaskNote: "Create linked note",
     day: "Day",
     defaultView: "Default view",
@@ -1184,6 +1186,7 @@ const TRANSLATIONS: Record<"en" | "zh", Record<TranslationKey, string>> &
     conditionMatch: "条件匹配",
     conditionTag: "标签",
     conditionText: "文本",
+    quickTagFilter: "快捷标签",
     createTaskNote: "创建关联笔记",
     day: "日",
     defaultView: "默认视图",

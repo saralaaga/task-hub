@@ -21,12 +21,14 @@ export type TaskConditionFilters = {
 export function filterTasks(tasks: TaskItem[], filters: TaskFilterState, now: Date): TaskItem[] {
   const sourceQuery = filters.sourceQuery.toLowerCase();
   const textQuery = filters.textQuery.toLowerCase();
+  const tagQuery = filters.tagQuery?.trim();
 
   return sortTasksByCompletion(tasks.filter((task) => {
     if (filters.status === "open" && task.completed) return false;
     if (filters.status === "completed" && !task.completed) return false;
     if (filters.dateBucket && getTaskBucket(task, now) !== filters.dateBucket) return false;
     if (filters.tags.length > 0 && !filters.tags.every((tag) => task.tags.some((taskTag) => isTagMatch(taskTag, tag)))) return false;
+    if (tagQuery && !task.tags.some((taskTag) => isTagMatch(taskTag, tagQuery))) return false;
     if (sourceQuery === "vault" || sourceQuery === "apple-reminders" || sourceQuery === "dida") {
       if (task.source !== sourceQuery) return false;
     } else if (sourceQuery && !task.filePath.toLowerCase().includes(sourceQuery)) {

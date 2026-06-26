@@ -155,6 +155,16 @@ export class TaskHubView extends ItemView {
         onConditionChange: (conditions) => {
           this.updateFilters({ ...this.filters, conditions });
         },
+        onClearFilters: () => {
+          this.updateFilters({
+            ...this.filters,
+            tagQuery: "",
+            conditions: { operator: "and", tag: "", dateBucket: "", text: "" }
+          }, { preserveTaskListScroll: true });
+        },
+        onTagQueryChange: (tagQuery) => {
+          this.updateFilters({ ...this.filters, tagQuery }, { preserveTaskListScroll: true });
+        },
         onSourceFilterChange: (source) => {
           this.updateFilters({ ...this.filters, sourceQuery: source === "all" ? "" : source });
         },
@@ -187,9 +197,7 @@ export class TaskHubView extends ItemView {
           onTagSelect: (tag) => {
             this.updateFilters({
               ...this.filters,
-              tags: this.filters.tags.includes(tag)
-                ? this.filters.tags.filter((existing) => existing !== tag)
-                : [...this.filters.tags, tag]
+              tagQuery: this.filters.tagQuery === tag ? "" : tag
             }, { preserveTaskListScroll: true });
           },
           onSourceSelect: (source) => {
@@ -197,6 +205,16 @@ export class TaskHubView extends ItemView {
           },
           onAppleReminderListChange: (task, listId) => void this.plugin.moveAppleReminderToList(task, listId),
           onDidaProjectChange: (task, projectId) => void this.plugin.moveDidaTaskToProject(task, projectId),
+          onTaskReschedule: (task, target) => {
+            this.captureTaskListScroll();
+            this.captureContentScroll();
+            void this.plugin.rescheduleTask(task, target);
+          },
+          onTaskReorder: (task, anchorTask, position) => {
+            this.captureTaskListScroll();
+            this.captureContentScroll();
+            void this.plugin.reorderTaskListDate(task, anchorTask, position);
+          },
           onTaskUpdate: (task, draft) => void this.plugin.updateCalendarTask(task, draft),
           onTaskDelete: (task) => void this.plugin.deleteCalendarTask(task),
           onSendToTarget: (task, target) => void this.plugin.sendTaskToTarget(task, target),
@@ -211,6 +229,7 @@ export class TaskHubView extends ItemView {
           allowAppleReminderWriteback: this.plugin.settings.localApple.remindersWritebackEnabled,
           allowAppleReminderCreate: this.plugin.canCreateAppleReminders(),
           allowDidaWriteback: this.plugin.settings.dida.tasksWritebackEnabled,
+          allowDidaDragReschedule: this.plugin.settings.dida.tasksDragRescheduleEnabled,
           allowDidaCreate: this.plugin.canCreateDidaTasks(),
           allowDidaDelete: this.plugin.settings.dida.tasksDeleteEnabled,
           allowAppleCalendarReminderConversion:
@@ -226,6 +245,7 @@ export class TaskHubView extends ItemView {
           taskColors,
           bindTagInputSuggest,
           taskListScrollTop: this.taskListScrollTop,
+          taskListManualOrder: this.plugin.settings.taskListManualOrder,
           exitingTaskIds: this.exitingTaskIds(allTasks),
           taskNotesEnabled: this.plugin.settings.taskNotes.enabled,
           allowThinoNoteEdit: this.plugin.settings.taskNotes.thinoIntegrationEnabled,
@@ -257,14 +277,14 @@ export class TaskHubView extends ItemView {
         {
           onTagSelect: (tag) => {
             this.view = "tasks";
-            this.updateFilters({ ...this.filters, tags: [tag] });
+            this.updateFilters({ ...this.filters, tagQuery: tag });
           },
           onTaskComplete: (task) => void this.completeTaskFromView(task),
           onTaskSelect: (task) => {
             this.view = "tasks";
             this.selectedTaskId = task.id;
             this.selectedTaskIds = new Set([task.id]);
-            this.updateFilters({ ...this.filters, tags: [] });
+            this.updateFilters({ ...this.filters, tagQuery: "" });
           },
           onTaskJump: (task) => void this.plugin.jumpToTask(task),
           onTaskDelete: (task) => void this.plugin.deleteCalendarTask(task),
@@ -444,6 +464,11 @@ export class TaskHubView extends ItemView {
 
   private async refreshData(): Promise<void> {
     if (this.isRefreshing) return;
+    if (this.filters.tagQuery) {
+      this.filters = cloneTaskFilters({ ...this.filters, tagQuery: "" });
+      this.syncSessionStateToSettings();
+      void this.plugin.saveSettings();
+    }
     this.isRefreshing = true;
     this.render({ preserveTaskListScroll: true });
     try {

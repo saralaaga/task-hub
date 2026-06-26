@@ -67,7 +67,17 @@ describe("normalizeTaskHubSettings", () => {
       showFrontmatterInNoteModal: false,
       linkedNoteSubtasksEnabled: false
     });
-    expect(settings.taskViewFilters).toEqual({ status: "open", tags: [], sourceQuery: "", textQuery: "" });
+    expect(settings.taskViewFilters).toEqual({
+      status: "open",
+      dateBucket: undefined,
+      tags: [],
+      conditions: undefined,
+      tagQuery: "",
+      sourceQuery: "",
+      textQuery: ""
+    });
+    expect(settings.taskListManualOrder).toEqual({});
+    expect(settings.vaultTaskStableState).toEqual({});
     expect(settings.ignoredPaths).toEqual(["Archive/"]);
   });
 
@@ -136,6 +146,7 @@ describe("normalizeTaskHubSettings", () => {
       taskViewFilters: {
         status: "all",
         tags: ["#work"],
+        tagQuery: "#focus",
         sourceQuery: "apple-reminders",
         textQuery: "invoice",
         conditions: {
@@ -150,6 +161,7 @@ describe("normalizeTaskHubSettings", () => {
     expect(settings.taskViewFilters).toEqual({
       status: "all",
       tags: ["#work"],
+      tagQuery: "#focus",
       sourceQuery: "apple-reminders",
       textQuery: "invoice",
       conditions: {
@@ -167,6 +179,7 @@ describe("normalizeTaskHubSettings", () => {
       taskViewFilters: {
         status: "open",
         tags: [],
+        tagQuery: "",
         sourceQuery: "",
         textQuery: ""
       },
@@ -175,6 +188,7 @@ describe("normalizeTaskHubSettings", () => {
         taskViewFilters: {
           status: "all",
           tags: ["#work"],
+          tagQuery: "#focus",
           sourceQuery: "apple-reminders",
           textQuery: "invoice"
         },
@@ -190,6 +204,9 @@ describe("normalizeTaskHubSettings", () => {
       taskViewFilters: {
         status: "all",
         tags: ["#work"],
+        tagQuery: "#focus",
+        dateBucket: undefined,
+        conditions: undefined,
         sourceQuery: "apple-reminders",
         textQuery: "invoice"
       },
@@ -206,6 +223,7 @@ describe("normalizeTaskHubSettings", () => {
       taskViewFilters: {
         status: "open",
         tags: ["#fallback"],
+        tagQuery: "",
         sourceQuery: "",
         textQuery: ""
       },
@@ -228,7 +246,10 @@ describe("normalizeTaskHubSettings", () => {
       view: "tags",
       taskViewFilters: {
         status: "open",
+        dateBucket: undefined,
         tags: [],
+        conditions: undefined,
+        tagQuery: "",
         sourceQuery: "",
         textQuery: ""
       },
@@ -241,6 +262,55 @@ describe("normalizeTaskHubSettings", () => {
   it("keeps explicit subtask progress bar settings while defaulting older settings to enabled", () => {
     expect(normalizeTaskHubSettings({ ignoredPaths: [] }).showSubtaskProgressBars).toBe(true);
     expect(normalizeTaskHubSettings({ showSubtaskProgressBars: false }).showSubtaskProgressBars).toBe(false);
+  });
+
+  it("normalizes task manual ordering and vault stable records", () => {
+    const settings = normalizeTaskHubSettings({
+      taskListManualOrder: {
+        "2026-05-08": ["vault:th_a", "vault:th_a", "bad stable id"],
+        invalid: ["vault:th_b"]
+      },
+      vaultTaskStableState: {
+        "Project.md": [
+          {
+            stableId: "vault:th_a",
+            currentId: "Project.md:1:abc",
+            text: "Task A",
+            line: 4.8,
+            tags: ["#a", "#a"],
+            completed: false
+          },
+          {
+            stableId: "broken",
+            currentId: 42,
+            text: "Task B",
+            line: 1,
+            tags: [],
+            completed: false
+          }
+        ]
+      } as never
+    });
+
+    expect(settings.taskListManualOrder).toEqual({
+      "2026-05-08": ["vault:th_a"]
+    });
+    expect(settings.vaultTaskStableState).toEqual({
+      "Project.md": [
+        {
+          stableId: "vault:th_a",
+          currentId: "Project.md:1:abc",
+          text: "Task A",
+          line: 4,
+          heading: undefined,
+          indent: undefined,
+          dueDate: undefined,
+          scheduledDate: undefined,
+          tags: ["#a"],
+          completed: false
+        }
+      ]
+    });
   });
 
   it("migrates the previous completed date bucket to other completed", () => {
@@ -276,6 +346,20 @@ describe("normalizeTaskHubSettings", () => {
     });
 
     expect(settings.taskViewFilters.dateBucket).toBe("tomorrow");
+  });
+
+  it("persists quick tag query filters across settings normalization", () => {
+    const settings = normalizeTaskHubSettings({
+      taskViewFilters: {
+        status: "open",
+        tags: [],
+        tagQuery: "#focus",
+        sourceQuery: "",
+        textQuery: ""
+      }
+    });
+
+    expect(settings.taskViewFilters.tagQuery).toBe("#focus");
   });
 
   it("migrates the old Apple Reminder tag creation default to enabled", () => {

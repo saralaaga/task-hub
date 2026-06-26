@@ -23,6 +23,7 @@ import { appendTaskToContent, createTaskLine, normalizeTaskCreationFilePath } fr
 import { bindTaskHubTagInputSuggest, collectObsidianTags } from "./views/tagInputSuggest";
 import { normalizeReminderAlertMinutes, populateReminderAlertSelect, type ReminderAlertMinutes } from "./reminderAlerts";
 import { preferredTaskSendTarget, taskSendTargetOptions } from "./taskSendTargets";
+import { cleanupTaskListManualOrder, reorderTaskListDate, sortTasksForTaskList, taskListDateKey, type TaskListDropPosition } from "./taskListOrdering";
 import { snapDayStartMinutes } from "./timeGranularity";
 import { recurrenceDatesBetween } from "./recurrence";
 import {
@@ -350,8 +351,23 @@ export default class TaskHubPlugin extends Plugin {
   }
 
   async saveSettings(): Promise<void> {
+    this.cleanupTaskListManualOrderState();
     await this.saveData(this.settings);
     this.refreshOpenViews();
+  }
+
+  private cleanupTaskListManualOrderState(): boolean {
+    if (!this.taskIndex || typeof this.taskIndex.getTasks !== "function") return false;
+    const cleaned = cleanupTaskListManualOrder(this.settings.taskListManualOrder, this.getTasks());
+    if (JSON.stringify(cleaned) === JSON.stringify(this.settings.taskListManualOrder)) return false;
+    this.settings.taskListManualOrder = cleaned;
+    return true;
+  }
+
+  private async persistTaskIndexStateIfNeeded(): Promise<void> {
+    if (!this.taskIndex || typeof this.taskIndex.consumePersistenceDirty !== "function") return;
+    if (!this.taskIndex.consumePersistenceDirty()) return;
+    await this.saveData(this.settings);
   }
 
   private configureLocalAppleHelper(): void {
@@ -368,6 +384,8 @@ export default class TaskHubPlugin extends Plugin {
     await this.taskIndex.scanFiles(files);
     await this.taskNoteIndex.scanFiles(files);
     await Promise.all([this.syncLocalApple({ silent: true }), this.syncDida({ silent: true })]);
+    this.cleanupTaskListManualOrderState();
+    await this.persistTaskIndexStateIfNeeded();
     this.refreshOpenViews();
   }
 
@@ -462,6 +480,7 @@ export default class TaskHubPlugin extends Plugin {
 
     const completionResult = completion.result;
     if (completionResult.status === "updated") {
+      this.rememberReindexedVaultTaskStableId(task, completionResult);
       await this.reindexVaultFile(file);
       const updatedTask = this.resolveUndoTask(task, completionResult);
       const noteMigration = updatedTask ? await this.transferTaskNotesToUpdatedTask(task, updatedTask) : { ok: true as const };
@@ -595,6 +614,7 @@ export default class TaskHubPlugin extends Plugin {
 
     const updateResult = update.result;
     if (updateResult.status === "updated") {
+      this.rememberReindexedVaultTaskStableId(task, updateResult);
       await this.reindexVaultFile(file);
       const updatedTask = this.resolveUndoTask(task, updateResult);
       const noteMigration = updatedTask ? await this.transferTaskNotesToUpdatedTask(task, updatedTask) : { ok: true as const };
@@ -609,6 +629,26 @@ export default class TaskHubPlugin extends Plugin {
 
     this.refreshOpenViews();
     return updateResult;
+  }
+
+  async reorderTaskListDate(task: TaskItem, anchorTask: TaskItem, position: TaskListDropPosition): Promise<void> {
+    const dateKey = taskListDateKey(task);
+    if (!dateKey || dateKey !== taskListDateKey(anchorTask)) return;
+
+    const tasksOnDate = sortTasksForTaskList(this.getTasks()).filter((candidate) => taskListDateKey(candidate) === dateKey);
+    if (tasksOnDate.length <= 1) return;
+
+    const nextOrder = reorderTaskListDate(tasksOnDate, this.settings.taskListManualOrder, task, anchorTask, position);
+    const nextManualOrder = cleanupTaskListManualOrder(
+      {
+        ...this.settings.taskListManualOrder,
+        [dateKey]: nextOrder
+      },
+      this.getTasks()
+    );
+    if (JSON.stringify(nextManualOrder) === JSON.stringify(this.settings.taskListManualOrder)) return;
+    this.settings.taskListManualOrder = nextManualOrder;
+    await this.saveSettings();
   }
 
   async deleteCalendarTask(task: TaskItem): Promise<CompletionResult> {
@@ -878,6 +918,7 @@ export default class TaskHubPlugin extends Plugin {
       return update.result.status === "updated" ? update.result.content : content;
     });
     if (update.result.status === "updated") {
+      this.rememberReindexedVaultTaskStableId(task, update.result);
       await this.reindexVaultFile(file);
       const updatedTask = this.resolveUndoTask(task, update.result);
       const noteMigration = updatedTask ? await this.transferTaskNotesToUpdatedTask(task, updatedTask) : { ok: true as const };
@@ -1604,6 +1645,25 @@ export default class TaskHubPlugin extends Plugin {
       : undefined;
   }
 
+  private rememberReindexedVaultTaskStableId(task: TaskItem, result: CompletionResult): void {
+    if (
+      task.source !== "vault" ||
+      result.status !== "updated" ||
+      !result.content ||
+      !this.taskIndex ||
+      typeof this.taskIndex.rememberStableIdForTask !== "function"
+    ) {
+      return;
+    }
+    const updatedTask = parseTaskAtLine({
+      filePath: task.filePath,
+      content: result.content,
+      line: result.line
+    });
+    if (!updatedTask) return;
+    this.taskIndex.rememberStableIdForTask(updatedTask, task.stableId ?? task.id);
+  }
+
   private findTaskForUndo(task: TaskItem): TaskItem | undefined {
     return this.getTasks().find((candidate) => {
       if (candidate.source !== task.source) return false;
@@ -1745,6 +1805,7 @@ export default class TaskHubPlugin extends Plugin {
     if (!enabled) {
       this.didaTasks = [];
       this.settings.dida.syncStatus = { state: "never" };
+      if (this.cleanupTaskListManualOrderState()) await this.saveData(this.settings);
       this.refreshOpenViews();
       return;
     }
@@ -1754,6 +1815,7 @@ export default class TaskHubPlugin extends Plugin {
       this.didaTasks = [];
       this.settings.dida.syncStatus = { state: "error", errorType: "local_error", message, lastAttemptAt: attemptedAt };
       if (!options.silent) new Notice(`${t("failedSync")} ${t("dida")}: ${message}`);
+      if (this.cleanupTaskListManualOrderState()) await this.saveData(this.settings);
       this.refreshOpenViews();
       return;
     }
@@ -1817,6 +1879,7 @@ export default class TaskHubPlugin extends Plugin {
       this.localAppleTasks = [];
       this.localAppleEvents = [];
       this.localAppleStatus = { state: "never" };
+      if (this.cleanupTaskListManualOrderState()) await this.saveData(this.settings);
       this.refreshOpenViews();
       return;
     }
@@ -1838,6 +1901,7 @@ export default class TaskHubPlugin extends Plugin {
       if (!options.silent) {
         new Notice(`${t("failedSync")} ${t("localApple")}: ${this.localAppleStatus.message}`);
       }
+      if (this.cleanupTaskListManualOrderState()) await this.saveData(this.settings);
       this.refreshOpenViews();
       return;
     }
@@ -1923,6 +1987,7 @@ export default class TaskHubPlugin extends Plugin {
         new Notice(`${t("synced")} ${t("localApple")}: ${this.localAppleStatus.itemCount}`);
       }
     }
+    if (this.cleanupTaskListManualOrderState()) await this.saveData(this.settings);
     this.refreshOpenViews();
   }
 
@@ -2063,6 +2128,18 @@ export default class TaskHubPlugin extends Plugin {
         const vaultFile = this.app.vault.getFileByPath(file.path);
         if (!vaultFile) throw new Error(`File not found: ${file.path}`);
         return this.app.vault.cachedRead(vaultFile);
+      },
+      loadPersistedTaskState: (path) => this.settings.vaultTaskStableState[path],
+      savePersistedTaskState: (path, records) => {
+        this.settings.vaultTaskStableState = {
+          ...this.settings.vaultTaskStableState,
+          [path]: records
+        };
+      },
+      deletePersistedTaskState: (path) => {
+        if (!this.settings.vaultTaskStableState[path]) return;
+        const { [path]: _removed, ...rest } = this.settings.vaultTaskStableState;
+        this.settings.vaultTaskStableState = rest;
       }
     });
   }
@@ -2216,7 +2293,8 @@ export default class TaskHubPlugin extends Plugin {
       this.app.vault.on("delete", (file) => {
         this.taskIndex.removeFile(file.path);
         this.taskNoteIndex.removeFile(file.path);
-        this.refreshOpenViews();
+        this.cleanupTaskListManualOrderState();
+        void this.persistTaskIndexStateIfNeeded().then(() => this.refreshOpenViews());
       })
     );
 
@@ -2224,7 +2302,9 @@ export default class TaskHubPlugin extends Plugin {
       this.app.vault.on("rename", (file, oldPath) => {
         this.taskIndex.removeFile(oldPath);
         this.taskNoteIndex.removeFile(oldPath);
+        this.cleanupTaskListManualOrderState();
         if (file instanceof TFile) void this.reindexVaultFile(file);
+        else void this.persistTaskIndexStateIfNeeded().then(() => this.refreshOpenViews());
       })
     );
   }
@@ -2233,6 +2313,8 @@ export default class TaskHubPlugin extends Plugin {
     const indexableFile = this.toIndexableFile(file);
     await this.taskIndex.reindexFile(indexableFile);
     await this.taskNoteIndex.reindexFile(indexableFile);
+    this.cleanupTaskListManualOrderState();
+    await this.persistTaskIndexStateIfNeeded();
     this.refreshOpenViews();
   }
 

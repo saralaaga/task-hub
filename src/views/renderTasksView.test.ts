@@ -54,6 +54,7 @@ class FakeElement {
   attrs = new Map<string, string>();
   checked = false;
   disabled = false;
+  draggable = false;
   open = false;
   text = "";
   type = "";
@@ -63,6 +64,7 @@ class FakeElement {
   parent?: FakeElement;
   focused = false;
   scrollTop = 0;
+  clientY = 0;
   classes = new Set<string>();
   style = { setProperty: jest.fn() };
   showPicker = jest.fn();
@@ -236,6 +238,10 @@ class FakeElement {
     return event;
   }
 
+  getBoundingClientRect(): { top: number; height: number } {
+    return { top: this.clientY, height: 40 };
+  }
+
   private append(options: { cls?: string; text?: string } = {}): FakeElement {
     const child = new FakeElement();
     child.parent = this;
@@ -253,6 +259,13 @@ type FakeEvent = {
   isComposing?: boolean;
   ctrlKey?: boolean;
   metaKey?: boolean;
+  clientY?: number;
+  dataTransfer?: {
+    effectAllowed?: string;
+    dropEffect?: string;
+    setData(type: string, value: string): void;
+    getData(type: string): string;
+  };
   target?: FakeElement;
   stopped?: boolean;
   preventDefault(): void;
@@ -261,6 +274,7 @@ type FakeEvent = {
 
 const baseTask: TaskItem = {
   id: "apple-reminders:1",
+  stableId: "apple-reminders:1",
   externalId: "reminder-1",
   externalSourceName: "Reminders",
   filePath: "Apple Reminders/Reminders",
@@ -296,6 +310,20 @@ function findElementByText(element: FakeElement, text: string): FakeElement | un
   return collect(element).find((child) => child.text === text);
 }
 
+function fakeDataTransfer() {
+  const store = new Map<string, string>();
+  return {
+    effectAllowed: "",
+    dropEffect: "",
+    setData(type: string, value: string) {
+      store.set(type, value);
+    },
+    getData(type: string) {
+      return store.get(type) ?? "";
+    }
+  };
+}
+
 function leaveTaskDetailEditor(element: FakeElement): void {
   collect(element).find((child) => child.classes.has("task-hub-detail-editor"))?.dispatchSelf("mouseleave");
 }
@@ -326,6 +354,8 @@ describe("renderTasksView", () => {
   const handlers = () => ({
     onComplete: jest.fn(),
     onJump: jest.fn(),
+    onTaskReschedule: jest.fn(),
+    onTaskReorder: jest.fn(),
     onSendToAppleReminders: jest.fn(),
     onSendToDida: jest.fn(),
     onSendToTarget: jest.fn(),
@@ -1881,6 +1911,278 @@ describe("renderTasksView", () => {
 
     expect(row?.classes.has("is-completing")).toBe(true);
     expect(viewHandlers.onComplete).toHaveBeenCalledWith(baseTask);
+  });
+
+  it("reschedules a dragged task to today without changing its existing time", () => {
+    const container = new FakeElement();
+    const viewHandlers = handlers();
+    const overdueTask: TaskItem = {
+      ...baseTask,
+      id: "overdue",
+      source: "vault",
+      externalId: undefined,
+      externalSourceName: undefined,
+      filePath: "Project.md",
+      rawLine: "- [ ] Overdue 📅 2026-05-07 ⏰ 08:15",
+      text: "Overdue",
+      dueDate: "2026-05-07",
+      scheduledDate: "2026-05-07T08:15"
+    };
+
+    renderTasksView(
+      container as unknown as HTMLElement,
+      [overdueTask],
+      [overdueTask],
+      { status: "open", tags: [], sourceQuery: "", textQuery: "" },
+      viewHandlers,
+      new Date("2026-05-08T12:00:00Z"),
+      (key) => key,
+      { allowAppleReminderWriteback: true }
+    );
+
+    const dragRow = taskRowByTitle(container, "Overdue");
+    const todaySection = collect(container).find((element) => element.classes.has("task-hub-task-section") && collect(element).some((child) => child.text === "today (0)"));
+    const dataTransfer = fakeDataTransfer();
+
+    expect(dragRow?.draggable).toBe(true);
+    dragRow?.dispatch("dragstart", { dataTransfer });
+    todaySection?.dispatch("drop", { dataTransfer });
+
+    expect(viewHandlers.onTaskReschedule).toHaveBeenCalledWith(overdueTask, {
+      dateKey: "2026-05-08",
+      startMinutes: 495
+    });
+  });
+
+  it("hides the overdue section when it has no tasks so today is first", () => {
+    const container = new FakeElement();
+    const todayTask: TaskItem = {
+      ...baseTask,
+      id: "today-only",
+      text: "Today only",
+      dueDate: "2026-05-08"
+    };
+
+    renderTasksView(
+      container as unknown as HTMLElement,
+      [todayTask],
+      [todayTask],
+      { status: "open", tags: [], sourceQuery: "", textQuery: "" },
+      handlers(),
+      new Date("2026-05-08T12:00:00Z"),
+      (key) => key,
+      { allowAppleReminderWriteback: true }
+    );
+
+    const sections = collect(container).filter((element) => element.classes.has("task-hub-task-section"));
+    const sectionTitles = sections
+      .map((section) => collect(section).find((child) => child.type === "h3")?.text)
+      .filter((title): title is string => Boolean(title));
+
+    expect(sectionTitles[0]).toBe("today (1)");
+    expect(sectionTitles).not.toContain("overdue (0)");
+  });
+
+  it("drops a task onto this week by moving it to the day after tomorrow", () => {
+    const container = new FakeElement();
+    const viewHandlers = handlers();
+    const todayTask: TaskItem = {
+      ...baseTask,
+      id: "today",
+      source: "vault",
+      externalId: undefined,
+      externalSourceName: undefined,
+      filePath: "Project.md",
+      rawLine: "- [ ] Today 📅 2026-05-08",
+      text: "Today",
+      dueDate: "2026-05-08",
+      scheduledDate: undefined
+    };
+
+    renderTasksView(
+      container as unknown as HTMLElement,
+      [todayTask],
+      [todayTask],
+      { status: "open", tags: [], sourceQuery: "", textQuery: "" },
+      viewHandlers,
+      new Date("2026-05-08T12:00:00Z"),
+      (key) => key,
+      { allowAppleReminderWriteback: true }
+    );
+
+    const dragRow = taskRowByTitle(container, "Today");
+    const thisWeekSection = collect(container).find((element) => element.classes.has("task-hub-task-section") && collect(element).some((child) => child.text === "thisWeek (0)"));
+    const dataTransfer = fakeDataTransfer();
+
+    dragRow?.dispatch("dragstart", { dataTransfer });
+    thisWeekSection?.dispatch("drop", { dataTransfer });
+
+    expect(viewHandlers.onTaskReschedule).toHaveBeenCalledWith(todayTask, "2026-05-10");
+  });
+
+  it("does not reschedule when a task is dropped back into its current bucket", () => {
+    const container = new FakeElement();
+    const viewHandlers = handlers();
+    const todayTask: TaskItem = {
+      ...baseTask,
+      id: "today",
+      source: "vault",
+      externalId: undefined,
+      externalSourceName: undefined,
+      filePath: "Project.md",
+      rawLine: "- [ ] Today 📅 2026-05-08",
+      text: "Today",
+      dueDate: "2026-05-08"
+    };
+
+    renderTasksView(
+      container as unknown as HTMLElement,
+      [todayTask],
+      [todayTask],
+      { status: "open", tags: [], sourceQuery: "", textQuery: "" },
+      viewHandlers,
+      new Date("2026-05-08T12:00:00Z"),
+      (key) => key,
+      { allowAppleReminderWriteback: true }
+    );
+
+    const dragRow = taskRowByTitle(container, "Today");
+    const todaySection = collect(container).find((element) => element.classes.has("task-hub-task-section") && collect(element).some((child) => child.text === "today (1)"));
+    const dataTransfer = fakeDataTransfer();
+
+    dragRow?.dispatch("dragstart", { dataTransfer });
+    const dragover = todaySection?.dispatch("dragover", { dataTransfer });
+    todaySection?.dispatch("drop", { dataTransfer });
+
+    expect(dragover?.preventDefault).not.toHaveBeenCalled();
+    expect(viewHandlers.onTaskReschedule).not.toHaveBeenCalled();
+  });
+
+  it("reorders tasks within the same date when dropped onto another row", () => {
+    const container = new FakeElement();
+    const viewHandlers = handlers();
+    const firstTask: TaskItem = {
+      ...baseTask,
+      id: "vault:1",
+      stableId: "vault:th_first",
+      source: "vault",
+      externalId: undefined,
+      externalSourceName: undefined,
+      filePath: "Project.md",
+      rawLine: "- [ ] First 📅 2026-05-08",
+      text: "First",
+      dueDate: "2026-05-08"
+    };
+    const secondTask: TaskItem = {
+      ...baseTask,
+      id: "vault:2",
+      stableId: "vault:th_second",
+      source: "vault",
+      externalId: undefined,
+      externalSourceName: undefined,
+      filePath: "Project.md",
+      rawLine: "- [ ] Second 📅 2026-05-08",
+      text: "Second",
+      dueDate: "2026-05-08"
+    };
+    const thirdTask: TaskItem = {
+      ...baseTask,
+      id: "vault:3",
+      stableId: "vault:th_third",
+      source: "vault",
+      externalId: undefined,
+      externalSourceName: undefined,
+      filePath: "Project.md",
+      rawLine: "- [ ] Third 📅 2026-05-08",
+      text: "Third",
+      dueDate: "2026-05-08"
+    };
+
+    renderTasksView(
+      container as unknown as HTMLElement,
+      [firstTask, secondTask, thirdTask],
+      [firstTask, secondTask, thirdTask],
+      { status: "open", tags: [], sourceQuery: "", textQuery: "" },
+      viewHandlers,
+      new Date("2026-05-08T12:00:00Z"),
+      (key) => key,
+      { allowAppleReminderWriteback: true }
+    );
+
+    const dragRow = taskRowByTitle(container, "First");
+    const dropRow = taskRowByTitle(container, "Third");
+    const dataTransfer = fakeDataTransfer();
+
+    dragRow!.clientY = 0;
+    dropRow!.clientY = 0;
+    dragRow?.dispatch("dragstart", { dataTransfer });
+    dropRow?.dispatch("drop", { dataTransfer, clientY: 30 });
+
+    expect(viewHandlers.onTaskReorder).toHaveBeenCalledWith(firstTask, thirdTask, "after");
+    expect(viewHandlers.onTaskReschedule).not.toHaveBeenCalled();
+  });
+
+  it("renders same-date tasks using the saved manual order before default order", () => {
+    const container = new FakeElement();
+    const firstTask: TaskItem = {
+      ...baseTask,
+      id: "vault:1",
+      stableId: "vault:th_first",
+      source: "vault",
+      externalId: undefined,
+      externalSourceName: undefined,
+      filePath: "Project.md",
+      rawLine: "- [ ] First 📅 2026-05-08",
+      text: "First",
+      dueDate: "2026-05-08"
+    };
+    const secondTask: TaskItem = {
+      ...baseTask,
+      id: "vault:2",
+      stableId: "vault:th_second",
+      source: "vault",
+      externalId: undefined,
+      externalSourceName: undefined,
+      filePath: "Project.md",
+      rawLine: "- [ ] Second 📅 2026-05-08",
+      text: "Second",
+      dueDate: "2026-05-08"
+    };
+    const thirdTask: TaskItem = {
+      ...baseTask,
+      id: "vault:3",
+      stableId: "vault:th_third",
+      source: "vault",
+      externalId: undefined,
+      externalSourceName: undefined,
+      filePath: "Project.md",
+      rawLine: "- [ ] Third 📅 2026-05-08",
+      text: "Third",
+      dueDate: "2026-05-08"
+    };
+
+    renderTasksView(
+      container as unknown as HTMLElement,
+      [firstTask, secondTask, thirdTask],
+      [firstTask, secondTask, thirdTask],
+      { status: "open", tags: [], sourceQuery: "", textQuery: "" },
+      handlers(),
+      new Date("2026-05-08T12:00:00Z"),
+      (key) => key,
+      {
+        allowAppleReminderWriteback: true,
+        taskListManualOrder: {
+          "2026-05-08": ["vault:th_third", "vault:th_first"]
+        }
+      }
+    );
+
+    const titles = collect(container)
+      .filter((element) => element.classes.has("task-hub-task-row"))
+      .map((row) => taskRowTitle(row))
+      .filter(Boolean);
+
+    expect(titles.slice(0, 3)).toEqual(["Third", "First", "Second"]);
   });
 
   it("keeps completed overdue tasks in other completed while current completed tasks stay in date sections", () => {

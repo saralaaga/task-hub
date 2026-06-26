@@ -12,6 +12,7 @@ export type ExternalTaskSourceTab = "apple-calendar" | "apple-reminders" | "dida
 
 export type TaskItem = {
   id: string;
+  stableId?: string;
   filePath: string;
   line: number;
   rawLine: string;
@@ -218,6 +219,21 @@ export type IndexedFileState = {
   lastError?: string;
 };
 
+export type TaskListManualOrder = Record<string, string[]>;
+
+export type PersistedVaultTaskStableRecord = {
+  stableId: string;
+  currentId: string;
+  text: string;
+  line: number;
+  heading?: string;
+  indent?: number;
+  dueDate?: string;
+  scheduledDate?: string;
+  tags: string[];
+  completed: boolean;
+};
+
 export type TaskHubSettings = {
   settingsSchemaVersion: number;
   language: Language;
@@ -239,6 +255,8 @@ export type TaskHubSettings = {
   taskCreationFilePath: string;
   taskNotes: TaskNoteSettings;
   taskViewFilters: TaskViewFilterSettings;
+  taskListManualOrder: TaskListManualOrder;
+  vaultTaskStableState: Record<string, PersistedVaultTaskStableRecord[]>;
   ignoredPaths: string[];
   tagViewOrder: string[];
   calendarSources: CalendarSource[];

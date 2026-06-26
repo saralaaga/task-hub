@@ -489,6 +489,7 @@ export function reminderToTask(record: AppleReminderRecord, index: number): Task
   const parsedTitle = extractAppleReminderTitleTags(record.name ?? "Untitled reminder");
   return {
     id: `apple-reminders:${record.id ?? index}`,
+    stableId: `apple-reminders:${record.id ?? index}`,
     externalId: record.id,
     externalListId: record.listId,
     externalSourceName: record.list ?? APPLE_REMINDERS_SOURCE_NAME,

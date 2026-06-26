@@ -109,6 +109,7 @@ describe("Task Hub session state", () => {
     expect(restored.filters).toEqual({
       status: "all",
       tags: ["#work"],
+      conditions: undefined,
       sourceQuery: "apple-reminders",
       textQuery: "invoice"
     });
@@ -141,6 +142,7 @@ describe("Task Hub session state", () => {
       filters: {
         status: "all",
         tags: ["#ops"],
+        tagQuery: "#focus",
         sourceQuery: "dida",
         textQuery: "follow up",
         conditions: { operator: "or", tag: "#client", dateBucket: "today", text: "ping" }
@@ -156,6 +158,7 @@ describe("Task Hub session state", () => {
       taskViewFilters: {
         status: "all",
         tags: ["#ops"],
+        tagQuery: "#focus",
         sourceQuery: "dida",
         textQuery: "follow up",
         conditions: { operator: "or", tag: "#client", dateBucket: "today", text: "ping" }
@@ -247,6 +250,7 @@ function baseFilters(): TaskFilterState {
   return {
     status: "open",
     tags: [],
+    tagQuery: "",
     sourceQuery: "",
     textQuery: "",
     conditions: { operator: "and", tag: "", dateBucket: "", text: "" }
@@ -257,6 +261,7 @@ function fallbackFilters(): TaskViewFilterSettings {
   return {
     status: "open",
     tags: [],
+    tagQuery: "",
     sourceQuery: "",
     textQuery: ""
   };

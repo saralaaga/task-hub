@@ -100,6 +100,7 @@ cp src/styles.css /Users/carlos/Coding/testValut/.obsidian/plugins/task-hub/styl
 - `README.md`：用户和开发基本说明。
 - `docs/manual-test-vault.md`：Obsidian 手工测试清单。
 - `docs/superpowers/specs/2026-05-05-obsidian-task-hub-design.md`：需求和设计背景。
+- `docs/superpowers/specs/2026-06-26-task-identity-and-manual-order-design.zh-CN.md`：任务稳定身份、列表手动排序、外部任务源命名空间，以及 `data.json` 的脏数据恢复、失败降级和增长控制的稳定协议文档。后续如果修改 stableId、列表手动排序、任务迁移追踪或接入新的外部任务源，先读这份文档，再动实现。
 - `docs/superpowers/plans/2026-05-05-obsidian-task-hub-implementation.md`：第一版实现计划记录。
 
 ## 当前能力边界
@@ -142,6 +143,7 @@ cp src/styles.css /Users/carlos/Coding/testValut/.obsidian/plugins/task-hub/styl
 - 任务写回必须保守：不能确认源行时，宁可报冲突，也不要改错行。
 - vault 扫描要避免阻塞 Obsidian：优先使用 `mtime + size` 缓存判断，只扫描 Markdown 文件。
 - 日历外部源默认只读。失败时保留最后一次成功缓存，并展示错误状态。
+- 如果改动涉及任务稳定身份、同日期手动排序、Task Hub 内编辑后的任务追踪、或新增外部任务源，必须先阅读 `docs/superpowers/specs/2026-06-26-task-identity-and-manual-order-design.zh-CN.md`，并遵守其中的 stableId 命名空间、继承策略和 `data.json` 清理约定；不要为单个来源临时发明一套独立身份模型。
 - 新增用户可见文案时同步更新 `src/i18n.ts` 的英文和中文。
 - 插件本体必须长期维护英文和中文两个语言版本；新增按钮、设置、状态、错误提示、空状态和可访问标题时，都要同步补齐 `en` 与 `zh`。
 - 面向用户的文档默认维护中英双语，尤其是 `README.md`、安装说明、发布说明和手工测试清单。

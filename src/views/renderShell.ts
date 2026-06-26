@@ -31,6 +31,8 @@ export type ShellHandlers = {
   onUnscheduledToggle: () => void;
   onStatusChange: (status: TaskFilterState["status"]) => void;
   onConditionChange: (conditions: NonNullable<TaskFilterState["conditions"]>) => void;
+  onClearFilters?: () => void;
+  onTagQueryChange?: (query: string) => void;
   onSourceFilterChange?: (source: SourceFilterOption["id"]) => void;
   onTextQueryChange: (query: string) => void;
 };
@@ -117,8 +119,16 @@ function renderFilters(container: HTMLElement, state: ShellState, handlers: Shel
 
 function renderConditionMenu(container: HTMLElement, state: ShellState, handlers: ShellHandlers, options: ShellRenderOptions): void {
   const conditions = state.filters.conditions ?? { operator: "and" as const, tag: "", dateBucket: "" as const, text: "" };
+  const conditionTag = conditions.tag.trim();
+  const quickTagQuery = state.filters.tagQuery?.trim() ?? "";
   const sourceActive = state.filters.sourceQuery === "vault" || state.filters.sourceQuery === "apple-reminders" || state.filters.sourceQuery === "dida";
-  const activeConditionCount = [conditions.tag.trim(), conditions.dateBucket, conditions.text.trim(), sourceActive ? state.filters.sourceQuery : ""].filter(Boolean).length;
+  const activeConditionCount = [
+    conditionTag,
+    conditions.dateBucket,
+    conditions.text.trim(),
+    sourceActive ? state.filters.sourceQuery : "",
+    quickTagQuery && quickTagQuery !== conditionTag ? quickTagQuery : ""
+  ].filter(Boolean).length;
   const menu = container.createEl("details", { cls: "task-hub-condition-menu" });
 
   const trigger = menu.createEl("summary", { cls: activeConditionCount > 0 ? "task-hub-condition-trigger is-active" : "task-hub-condition-trigger" });
@@ -141,6 +151,22 @@ function renderConditionMenu(container: HTMLElement, state: ShellState, handlers
     value: conditions.tag
   });
   options.bindTagInputSuggest?.(tag);
+
+  if (quickTagQuery && quickTagQuery !== conditionTag && handlers.onTagQueryChange) {
+    const quickTagRow = panel.createDiv({ cls: "task-hub-condition-row task-hub-condition-quick-tag-row" });
+    quickTagRow.createSpan({ text: state.t("quickTagFilter") });
+    const quickTagControl = quickTagRow.createDiv({ cls: "task-hub-condition-quick-tag-control" });
+    quickTagControl.createSpan({ cls: "task-hub-task-tag task-hub-condition-quick-tag-chip", text: quickTagQuery });
+    const quickTagClear = quickTagControl.createEl("button", {
+      cls: "task-hub-condition-quick-tag-clear",
+      attr: { "aria-label": state.t("clearFilters") }
+    });
+    setIcon(quickTagClear, "x");
+    quickTagClear.addEventListener("click", (event) => {
+      event.preventDefault();
+      handlers.onTagQueryChange?.("");
+    });
+  }
 
   const dateRow = panel.createEl("label", { cls: "task-hub-condition-row" });
   const dateLabel = dateRow.createSpan({ cls: "task-hub-condition-label-with-operator" });
@@ -208,6 +234,10 @@ function renderConditionMenu(container: HTMLElement, state: ShellState, handlers
   const actions = panel.createDiv({ cls: "task-hub-condition-actions" });
   const clear = actions.createEl("button", { text: state.t("clearFilters") });
   clear.addEventListener("click", () => {
+    if (handlers.onClearFilters) {
+      handlers.onClearFilters();
+      return;
+    }
     handlers.onConditionChange({ operator: "and", tag: "", dateBucket: "", text: "" });
   });
 

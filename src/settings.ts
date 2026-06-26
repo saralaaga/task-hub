@@ -4,10 +4,10 @@ import type TaskHubPlugin from "./main";
 import { DEFAULT_DIDA_API_BASE, DIDA_INBOX_PROJECT_NAME } from "./dida/didaMapping";
 import { normalizeTaskSendDefaultTarget, parseTaskSendTarget, serializeTaskSendTarget, taskSendTargetOptions } from "./taskSendTargets";
 import { validTimedDurationMinutes } from "./timeGranularity";
-import type { AppleCalendarInfo, CalendarCreationKind, CalendarCreationTarget, CalendarEventCreationTarget, CalendarSource, CalendarSourceStatus, CalendarTaskCreationTarget, ExternalTaskSourceTab, LocalAppleSyncStatus, TaskHubLastSessionState, TaskHubSettings } from "./types";
+import type { AppleCalendarInfo, CalendarCreationKind, CalendarCreationTarget, CalendarEventCreationTarget, CalendarSource, CalendarSourceStatus, CalendarTaskCreationTarget, ExternalTaskSourceTab, LocalAppleSyncStatus, PersistedVaultTaskStableRecord, TaskHubLastSessionState, TaskHubSettings } from "./types";
 import { setCssProps } from "./views/domStyles";
 
-export const TASK_HUB_SETTINGS_SCHEMA_VERSION = 3;
+export const TASK_HUB_SETTINGS_SCHEMA_VERSION = 4;
 
 export const DEFAULT_SETTINGS: TaskHubSettings = {
   settingsSchemaVersion: TASK_HUB_SETTINGS_SCHEMA_VERSION,
@@ -42,9 +42,12 @@ export const DEFAULT_SETTINGS: TaskHubSettings = {
   taskViewFilters: {
     status: "open",
     tags: [],
+    tagQuery: "",
     sourceQuery: "",
     textQuery: ""
   },
+  taskListManualOrder: {},
+  vaultTaskStableState: {},
   ignoredPaths: ["Templates/", "Archive/"],
   tagViewOrder: [],
   calendarSources: [],
@@ -138,6 +141,8 @@ export function normalizeTaskHubSettings(loaded: Partial<TaskHubSettings> | null
     taskCreationFilePath: loaded?.taskCreationFilePath ?? DEFAULT_SETTINGS.taskCreationFilePath,
     taskNotes: normalizeTaskNotesSettings(loaded?.taskNotes),
     taskViewFilters: normalizeTaskViewFilters(loaded?.taskViewFilters, loaded?.showCompletedByDefault),
+    taskListManualOrder: normalizeTaskListManualOrder(loaded?.taskListManualOrder),
+    vaultTaskStableState: normalizeVaultTaskStableState(loaded?.vaultTaskStableState),
     externalTaskSourceOrder: normalizeExternalTaskSourceOrder(loaded?.externalTaskSourceOrder),
     localApple: {
       ...DEFAULT_SETTINGS.localApple,
@@ -177,6 +182,65 @@ export function normalizeTaskHubSettings(loaded: Partial<TaskHubSettings> | null
     appleReminderLinks: loaded?.appleReminderLinks ?? {},
     didaTaskLinks: loaded?.didaTaskLinks ?? {}
   };
+}
+
+function normalizeTaskListManualOrder(value: unknown): TaskHubSettings["taskListManualOrder"] {
+  if (!value || typeof value !== "object") return {};
+  const result: TaskHubSettings["taskListManualOrder"] = {};
+  for (const [dateKey, stableIds] of Object.entries(value as Record<string, unknown>)) {
+    if (!/^\d{4}-\d{2}-\d{2}$/u.test(dateKey) || !Array.isArray(stableIds)) continue;
+    const normalized = Array.from(
+      new Set(stableIds.filter((stableId): stableId is string => isTaskStableId(stableId)))
+    );
+    if (normalized.length > 0) result[dateKey] = normalized;
+  }
+  return result;
+}
+
+function normalizeVaultTaskStableState(value: unknown): TaskHubSettings["vaultTaskStableState"] {
+  if (!value || typeof value !== "object") return {};
+  const result: TaskHubSettings["vaultTaskStableState"] = {};
+  for (const [path, records] of Object.entries(value as Record<string, unknown>)) {
+    if (typeof path !== "string" || !Array.isArray(records)) continue;
+    const normalized = records
+      .map(normalizeVaultTaskStableRecord)
+      .filter((record): record is PersistedVaultTaskStableRecord => Boolean(record))
+      .slice(0, 1000);
+    if (normalized.length > 0) result[path] = normalized;
+  }
+  return result;
+}
+
+function normalizeVaultTaskStableRecord(value: unknown): PersistedVaultTaskStableRecord | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const candidate = value as Record<string, unknown>;
+  if (
+    !isTaskStableId(candidate.stableId) ||
+    typeof candidate.currentId !== "string" ||
+    typeof candidate.text !== "string" ||
+    typeof candidate.line !== "number" ||
+    !Array.isArray(candidate.tags) ||
+    typeof candidate.completed !== "boolean"
+  ) {
+    return undefined;
+  }
+  return {
+    stableId: candidate.stableId,
+    currentId: candidate.currentId,
+    text: candidate.text,
+    line: Math.max(0, Math.floor(candidate.line)),
+    heading: typeof candidate.heading === "string" ? candidate.heading : undefined,
+    indent: typeof candidate.indent === "number" ? Math.max(0, Math.floor(candidate.indent)) : undefined,
+    dueDate: typeof candidate.dueDate === "string" ? candidate.dueDate : undefined,
+    scheduledDate: typeof candidate.scheduledDate === "string" ? candidate.scheduledDate : undefined,
+    tags: Array.from(new Set(candidate.tags.filter((tag): tag is string => typeof tag === "string"))),
+    completed: candidate.completed
+  };
+}
+
+function isTaskStableId(value: unknown): value is string {
+  if (typeof value !== "string") return false;
+  return /^(vault:th_[a-z0-9]+|[a-z0-9-]+:.+)$/u.test(value);
 }
 
 function normalizeExternalTaskSourceOrder(value: unknown): ExternalTaskSourceTab[] {
@@ -316,6 +380,7 @@ function normalizeTaskViewFilters(
     tags: Array.isArray(loaded?.tags)
       ? loaded.tags.filter((tag): tag is string => typeof tag === "string")
       : DEFAULT_SETTINGS.taskViewFilters.tags,
+    tagQuery: typeof loaded?.tagQuery === "string" ? loaded.tagQuery : DEFAULT_SETTINGS.taskViewFilters.tagQuery,
     sourceQuery: typeof loaded?.sourceQuery === "string" ? loaded.sourceQuery : DEFAULT_SETTINGS.taskViewFilters.sourceQuery,
     textQuery: typeof loaded?.textQuery === "string" ? loaded.textQuery : DEFAULT_SETTINGS.taskViewFilters.textQuery,
     conditions: loaded?.conditions

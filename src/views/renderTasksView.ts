@@ -1,12 +1,14 @@
 import { Menu, setIcon } from "obsidian";
-import { type DateBucket } from "../calendar/dateBuckets";
+import { toLocalDateKey, type DateBucket } from "../calendar/dateBuckets";
+import type { CalendarDropTarget } from "../calendar/calendarDropTarget";
 import { getTaskBucket, type TaskFilterState } from "../filtering/filters";
 import type { Translator } from "../i18n";
 import { normalizeReminderAlertMinutes, populateReminderAlertSelect, type ReminderAlertMinutes } from "../reminderAlerts";
 import { buildSubtaskProgressIndex, type TaskProgressInfo } from "../subtaskProgress";
 import type { TaskNote } from "../taskNotes";
 import { parseTaskSendTarget, preferredTaskSendTarget, taskSendTargetOptions } from "../taskSendTargets";
-import type { AppleReminderList, CalendarItemEditDraft, DidaProject, TaskItem, TaskSendTarget } from "../types";
+import { applyTaskListManualOrder, taskListDateKey, type TaskListDropPosition } from "../taskListOrdering";
+import type { AppleReminderList, CalendarItemEditDraft, DidaProject, TaskItem, TaskListManualOrder, TaskSendTarget } from "../types";
 import { addSourceIndicatorMenuItem, deleteLabelForTaskBulkAction, sourceIndicatorLabelForTask } from "./contextMenuLabels";
 import { renderTaskNoteBody, taskNotePreviewBody, taskNotePreviewTitle, type TaskNoteMarkdownRenderer } from "./renderTaskNoteBody";
 import { createRecurrenceSelect, recurrenceValueFromSelect } from "./recurrenceControls";
@@ -17,6 +19,8 @@ import { setCssProps, setCssStyles } from "./domStyles";
 export type TaskRowHandlers = {
   onComplete: (task: TaskItem) => void;
   onJump: (task: TaskItem) => void;
+  onTaskReschedule?: (task: TaskItem, target: CalendarDropTarget) => void;
+  onTaskReorder?: (task: TaskItem, anchorTask: TaskItem, position: TaskListDropPosition) => void;
   onSendToAppleReminders: (task: TaskItem) => void;
   onSendToDida?: (task: TaskItem) => void;
   onSendToTarget?: (task: TaskItem, target: TaskSendTarget) => void;
@@ -43,6 +47,7 @@ export type TaskRenderOptions = {
   allowAppleReminderCreate?: boolean;
   allowAppleReminderWriteback: boolean;
   allowDidaCreate?: boolean;
+  allowDidaDragReschedule?: boolean;
   allowDidaWriteback?: boolean;
   allowDidaDelete?: boolean;
   allowAppleCalendarReminderConversion?: boolean;
@@ -64,9 +69,15 @@ export type TaskRenderOptions = {
   renderNoteMarkdown?: TaskNoteMarkdownRenderer;
   expandedTaskIds?: ReadonlySet<string>;
   onToggleTaskExpanded?: (task: TaskItem) => void;
+  taskListManualOrder?: TaskListManualOrder;
 };
 
 const BUCKETS = ["overdue", "today", "tomorrow", "thisWeek", "future", "noDate", "otherCompleted"] as const;
+const TASK_LIST_DRAG_MIME = "application/x-task-hub-task-list-id";
+const TASK_LIST_RESCHEDULE_BUCKETS = ["overdue", "today", "tomorrow", "thisWeek"] as const;
+let activeDraggedTaskListItemId: string | undefined;
+let activeTaskListTasksById = new Map<string, TaskItem>();
+let activeDraggableTaskListItemIds = new Set<string>();
 
 export function renderTasksView(
   container: HTMLElement,
@@ -95,12 +106,16 @@ export function renderTasksView(
     return;
   }
 
-  const sortedTasks = sortTasksForTaskList(tasks);
+  const sortedTasks = applyTaskListManualOrder(tasks, options.taskListManualOrder ?? {});
   const progressByTaskId = options.showSubtaskProgressBars === false ? new Map<string, TaskProgressInfo>() : buildSubtaskProgressIndex(allTasks);
   let selectedTask = sortedTasks.find((task) => task.id === options.selectedTaskId) ?? sortedTasks.find((task) => !task.completed) ?? sortedTasks[0];
   const selectedTaskIds = normalizedSelectedTaskIds(options, selectedTask);
   const workbench = container.createDiv({ cls: "task-hub-task-workbench" });
   const list = workbench.createDiv({ cls: "task-hub-task-list-pane" });
+  const draggableTaskIds = new Set(sortedTasks.filter((task) => canDragTaskRowInList(task, options, handlers)).map((task) => task.id));
+  activeTaskListTasksById = new Map(sortedTasks.map((task) => [task.id, task]));
+  activeDraggableTaskListItemIds = new Set(draggableTaskIds);
+  const showListDragTargets = draggableTaskIds.size > 0 && Boolean(handlers.onTaskReschedule);
 
   if (sortedTasks.length === 0) {
     list.createDiv({ cls: "task-hub-empty", text: t("noMatchingTasks") });
@@ -155,11 +170,20 @@ export function renderTasksView(
 
   for (const bucket of BUCKETS) {
     const bucketTasks = groups[bucket];
-    if (bucketTasks.length === 0) continue;
+    const shouldRenderEmptyDropTarget = showListDragTargets
+      && bucketTasks.length === 0
+      && isTaskListRescheduleBucket(bucket)
+      && bucket !== "overdue";
+    if (bucketTasks.length === 0 && !shouldRenderEmptyDropTarget) continue;
 
-    const section = list.createDiv({ cls: "task-hub-task-section" });
+    const section = list.createDiv({ cls: `task-hub-task-section ${shouldRenderEmptyDropTarget ? "is-empty-drop-zone" : ""}` });
+    section.setAttr("data-task-bucket", bucket);
     section.createEl("h3", { text: `${t(bucket)} (${bucketTasks.length})` });
     const cards = section.createDiv({ cls: "task-hub-task-list-flow" });
+    if (shouldRenderEmptyDropTarget) {
+      cards.addClass("is-empty-drop-zone");
+    }
+    bindTaskListBucketDropTarget(section, bucket, sortedTasks, draggableTaskIds, handlers, now);
 
     for (const task of bucketTasks) {
       renderTaskTree(
@@ -374,6 +398,8 @@ function renderTaskRow(
   row.setAttr("data-task-id", task.id);
   const color = taskDisplayColor(task, options);
   if (color) setCssProps(row, { "--task-hub-source-color": color });
+  bindTaskRowDrag(row, task, handlers, options);
+  bindTaskRowReorderDropTarget(row, task, handlers, options);
   const checkbox = row.createEl("input", { type: "checkbox" });
   checkbox.checked = task.completed;
   checkbox.disabled = task.source !== "vault" && !(task.source === "apple-reminders" && options.allowAppleReminderWriteback) && !(task.source === "dida" && options.allowDidaWriteback);
@@ -492,26 +518,6 @@ function runTaskBulkAction(action: TaskBulkActionId, tasks: TaskItem[], handlers
   }
 }
 
-function sortTasksForTaskList(tasks: TaskItem[]): TaskItem[] {
-  return tasks
-    .map((task, index) => ({ task, index }))
-    .sort((left, right) => compareTaskListDates(left.task, right.task) || left.index - right.index)
-    .map(({ task }) => task);
-}
-
-function compareTaskListDates(left: TaskItem, right: TaskItem): number {
-  const leftDate = taskListDateKey(left);
-  const rightDate = taskListDateKey(right);
-  if (!leftDate && !rightDate) return 0;
-  if (!leftDate) return 1;
-  if (!rightDate) return -1;
-  return leftDate.localeCompare(rightDate);
-}
-
-function taskListDateKey(task: TaskItem): string | undefined {
-  return task.scheduledDate?.slice(0, 10) ?? task.dueDate ?? task.startDate?.slice(0, 10);
-}
-
 function groupSortedTasksByDateBucket(tasks: TaskItem[], now: Date): Record<DateBucket, TaskItem[]> {
   return tasks.reduce<Record<DateBucket, TaskItem[]>>(
     (groups, task) => {
@@ -520,6 +526,186 @@ function groupSortedTasksByDateBucket(tasks: TaskItem[], now: Date): Record<Date
     },
     { overdue: [], today: [], tomorrow: [], thisWeek: [], future: [], noDate: [], otherCompleted: [] }
   );
+}
+
+function bindTaskRowDrag(
+  row: HTMLElement,
+  task: TaskItem,
+  handlers: TaskRowHandlers,
+  options: TaskRenderOptions
+): void {
+  if (!canDragTaskRowInList(task, options, handlers)) return;
+  row.draggable = true;
+  row.setAttr("draggable", "true");
+  row.setAttr("aria-grabbed", "false");
+  row.addEventListener("dragstart", (event) => {
+    activeDraggedTaskListItemId = task.id;
+    row.addClass("is-dragging");
+    row.setAttr("aria-grabbed", "true");
+    if (event.dataTransfer) {
+      event.dataTransfer.effectAllowed = "move";
+      event.dataTransfer.setData(TASK_LIST_DRAG_MIME, task.id);
+    }
+  });
+  row.addEventListener("dragend", () => {
+    if (activeDraggedTaskListItemId === task.id) activeDraggedTaskListItemId = undefined;
+    row.removeClass("is-dragging");
+    row.setAttr("aria-grabbed", "false");
+  });
+}
+
+function bindTaskRowReorderDropTarget(
+  row: HTMLElement,
+  task: TaskItem,
+  handlers: TaskRowHandlers,
+  options: TaskRenderOptions
+): void {
+  if (!handlers.onTaskReorder) return;
+
+  row.addEventListener("dragover", (event) => {
+    const draggedTask = activeTaskListTaskFromDragEvent(event);
+    const position = taskRowDropPosition(row, event);
+    if (!canReorderTaskRow(draggedTask, task, handlers, options)) return;
+    event.preventDefault();
+    if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+    setTaskRowDropClasses(row, position);
+  });
+
+  row.addEventListener("dragleave", () => clearTaskRowDropClasses(row));
+  row.addEventListener("drop", (event) => {
+    const draggedTask = activeTaskListTaskFromDragEvent(event);
+    const position = taskRowDropPosition(row, event);
+    clearTaskRowDropClasses(row);
+    if (!canReorderTaskRow(draggedTask, task, handlers, options)) return;
+    activeDraggedTaskListItemId = undefined;
+    event.preventDefault();
+    handlers.onTaskReorder?.(draggedTask, task, position);
+  });
+}
+
+function bindTaskListBucketDropTarget(
+  section: HTMLElement,
+  bucket: DateBucket,
+  tasks: TaskItem[],
+  draggableTaskIds: ReadonlySet<string>,
+  handlers: TaskRowHandlers,
+  now: Date
+): void {
+  const targetDate = taskListDropDateForBucket(bucket, now);
+  if (!targetDate || !handlers.onTaskReschedule) return;
+
+  section.addEventListener("dragover", (event) => {
+    const task = taskListTaskFromDragEvent(event, tasks, draggableTaskIds);
+    if (!task) return;
+    if (getTaskBucket(task, now) === bucket) return;
+    event.preventDefault();
+    if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+    section.addClass("is-drop-target");
+  });
+  section.addEventListener("dragleave", () => {
+    section.removeClass("is-drop-target");
+  });
+  section.addEventListener("drop", (event) => {
+    const task = taskListTaskFromDragEvent(event, tasks, draggableTaskIds);
+    activeDraggedTaskListItemId = undefined;
+    if (!task) return;
+    section.removeClass("is-drop-target");
+    if (getTaskBucket(task, now) === bucket) return;
+    event.preventDefault();
+    handlers.onTaskReschedule?.(task, taskListDropTarget(task, targetDate));
+  });
+}
+
+function taskListTaskFromDragEvent(
+  event: DragEvent,
+  tasks: TaskItem[],
+  draggableTaskIds: ReadonlySet<string>
+): TaskItem | undefined {
+  const draggedId = activeDraggedTaskListItemId ?? event.dataTransfer?.getData(TASK_LIST_DRAG_MIME);
+  if (!draggedId || !draggableTaskIds.has(draggedId)) return undefined;
+  return tasks.find((task) => task.id === draggedId);
+}
+
+function activeTaskListTaskFromDragEvent(event: DragEvent): TaskItem | undefined {
+  const draggedId = activeDraggedTaskListItemId ?? event.dataTransfer?.getData(TASK_LIST_DRAG_MIME);
+  if (!draggedId || !activeDraggableTaskListItemIds.has(draggedId)) return undefined;
+  return activeTaskListTasksById.get(draggedId);
+}
+
+function canDragTaskRowInList(
+  task: TaskItem,
+  options: TaskRenderOptions,
+  handlers: { onTaskReschedule?: TaskRowHandlers["onTaskReschedule"]; onTaskReorder?: TaskRowHandlers["onTaskReorder"] }
+): boolean {
+  if (!handlers.onTaskReschedule && !handlers.onTaskReorder) return false;
+  if (task.source === "vault") return true;
+  if (task.source === "apple-reminders") return options.allowAppleReminderWriteback && Boolean(task.externalId);
+  if (task.source === "dida") {
+    return Boolean(options.allowDidaWriteback && options.allowDidaDragReschedule && task.externalId && task.externalListId);
+  }
+  return false;
+}
+
+function canReorderTaskRow(
+  draggedTask: TaskItem | undefined,
+  targetTask: TaskItem,
+  handlers: Pick<TaskRowHandlers, "onTaskReorder">,
+  options: TaskRenderOptions
+): draggedTask is TaskItem {
+  if (!draggedTask || !handlers.onTaskReorder) return false;
+  if (!canDragTaskRowInList(draggedTask, options, handlers)) return false;
+  if (draggedTask.id === targetTask.id) return false;
+  const draggedDateKey = taskListDateKey(draggedTask);
+  return Boolean(draggedDateKey && draggedDateKey === taskListDateKey(targetTask));
+}
+
+function taskRowDropPosition(row: HTMLElement, event: DragEvent): TaskListDropPosition {
+  const bounds = row.getBoundingClientRect?.();
+  if (!bounds || !Number.isFinite(bounds.top) || !Number.isFinite(bounds.height) || bounds.height <= 0 || event.clientY === undefined) {
+    return "after";
+  }
+  return event.clientY < bounds.top + bounds.height / 2 ? "before" : "after";
+}
+
+function setTaskRowDropClasses(row: HTMLElement, position: TaskListDropPosition): void {
+  row.addClass("is-row-drop-target");
+  row.toggleClass("is-drop-before", position === "before");
+  row.toggleClass("is-drop-after", position === "after");
+}
+
+function clearTaskRowDropClasses(row: HTMLElement): void {
+  row.removeClass("is-row-drop-target");
+  row.removeClass("is-drop-before");
+  row.removeClass("is-drop-after");
+}
+
+function isTaskListRescheduleBucket(bucket: DateBucket): boolean {
+  return TASK_LIST_RESCHEDULE_BUCKETS.includes(bucket as (typeof TASK_LIST_RESCHEDULE_BUCKETS)[number]);
+}
+
+function taskListDropDateForBucket(bucket: DateBucket, now: Date): string | undefined {
+  if (bucket === "overdue") return toLocalDateKey(addDays(now, -1));
+  if (bucket === "today") return toLocalDateKey(now);
+  if (bucket === "tomorrow") return toLocalDateKey(addDays(now, 1));
+  if (bucket === "thisWeek") return toLocalDateKey(addDays(now, 2));
+  return undefined;
+}
+
+function taskListDropTarget(task: TaskItem, dateKey: string): CalendarDropTarget {
+  const startMinutes = startMinutesFromTask(task);
+  return startMinutes === undefined ? dateKey : { dateKey, startMinutes };
+}
+
+function startMinutesFromTask(task: TaskItem): number | undefined {
+  const time = task.scheduledDate?.match(/T(\d{2}):(\d{2})/);
+  if (!time) return undefined;
+  return Number(time[1]) * 60 + Number(time[2]);
+}
+
+function addDays(date: Date, days: number): Date {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
 }
 
 function renderPlainTaskText(text: string): string {

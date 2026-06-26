@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Task Progress Bars Wireframe</title>
+    <style>
+      :root {
+        --bg: #f3f3f1;
+        --panel: #ffffff;
+        --soft: #fafaf8;
+        --line: #1f1f1f;
+        --muted: #666666;
+        --text: #111111;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        padding: 32px;
+        background: var(--bg);
+        color: var(--text);
+        font-family: "Helvetica Neue", Arial, sans-serif;
+      }
+
+      h1,
+      h2,
+      p {
+        margin: 0;
+      }
+
+      .page {
+        max-width: 1280px;
+        margin: 0 auto;
+      }
+
+      .title {
+        font-size: 32px;
+        font-weight: 700;
+        margin-bottom: 24px;
+      }
+
+      .layout {
+        display: grid;
+        grid-template-columns: 360px 1fr;
+        gap: 24px;
+      }
+
+      .panel {
+        background: var(--panel);
+        border: 2px solid var(--line);
+        border-radius: 18px;
+        padding: 22px;
+      }
+
+      .panel h2 {
+        font-size: 22px;
+        margin-bottom: 18px;
+      }
+
+      .setting-card,
+      .card,
+      .detail-box {
+        background: var(--soft);
+        border: 1.5px solid #808080;
+        border-radius: 14px;
+        padding: 16px;
+      }
+
+      .setting-card p,
+      .detail-box p,
+      .meta,
+      .note {
+        color: #444444;
+        line-height: 1.45;
+      }
+
+      .setting-row {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      .setting-name {
+        font-size: 20px;
+        font-weight: 600;
+        margin-bottom: 8px;
+      }
+
+      .toggle {
+        width: 64px;
+        height: 34px;
+        border: 2px solid var(--line);
+        border-radius: 999px;
+        position: relative;
+        flex: 0 0 auto;
+        background: #ffffff;
+        margin-top: 4px;
+      }
+
+      .toggle::after {
+        content: "";
+        position: absolute;
+        right: 5px;
+        top: 4px;
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        background: #222222;
+      }
+
+      .stack {
+        display: grid;
+        gap: 14px;
+      }
+
+      .workspace {
+        display: grid;
+        grid-template-columns: minmax(420px, 1fr) 280px;
+        gap: 18px;
+      }
+
+      .card {
+        border: 2px solid var(--line);
+      }
+
+      .task-line {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      .task-title {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        font-size: 22px;
+      }
+
+      .check {
+        width: 18px;
+        height: 18px;
+        border: 2px solid var(--line);
+        background: #ffffff;
+      }
+
+      .progress-row {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 12px;
+        align-items: center;
+        margin-top: 12px;
+      }
+
+      .progress {
+        height: 14px;
+        border: 1.5px solid var(--line);
+        border-radius: 999px;
+        overflow: hidden;
+        background: #ffffff;
+      }
+
+      .fill {
+        height: 100%;
+        background: #686868;
+      }
+
+      .children {
+        margin-top: 18px;
+        padding-left: 28px;
+        display: grid;
+        gap: 14px;
+      }
+
+      .child {
+        display: grid;
+        gap: 8px;
+      }
+
+      .small {
+        font-size: 18px;
+      }
+
+      .tiny {
+        font-size: 15px;
+        color: #555555;
+      }
+
+      .leaf {
+        padding: 16px;
+        border: 2px solid var(--line);
+        border-radius: 14px;
+        background: #ffffff;
+      }
+
+      .rule-list {
+        display: grid;
+        gap: 10px;
+        margin-top: 16px;
+      }
+
+      code {
+        font-family: Menlo, Monaco, monospace;
+        font-size: 14px;
+      }
+
+      @media (max-width: 980px) {
+        .layout,
+        .workspace {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <h1 class="title">Task Hub - Task Progress Bars Wireframe</h1>
+
+      <section class="layout">
+        <div class="panel">
+          <h2>Settings</h2>
+          <div class="stack">
+            <div class="setting-card">
+              <div class="setting-row">
+                <div>
+                  <div class="setting-name">Show subtask progress bars</div>
+                  <p class="tiny">Show a progress bar on tasks that contain subtasks.</p>
+                  <p class="tiny">Progress uses the full subtask tree.</p>
+                </div>
+                <div class="toggle" aria-hidden="true"></div>
+              </div>
+              <p class="meta" style="margin-top: 12px;">Default: ON</p>
+            </div>
+
+            <div class="setting-card">
+              <p class="small">When OFF, the task list and detail panel hide all progress bars.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h2>Tasks View</h2>
+          <div class="workspace">
+            <div class="stack">
+              <div class="card">
+                <div class="task-line">
+                  <div class="task-title">
+                    <div class="check" aria-hidden="true"></div>
+                    <span>Release Task Hub 0.4.0</span>
+                  </div>
+                  <strong>50%</strong>
+                </div>
+                <p class="tiny" style="margin-top: 10px;">Parent task with children</p>
+                <div class="progress-row">
+                  <div class="progress"><div class="fill" style="width: 50%;"></div></div>
+                  <span class="tiny">recursive</span>
+                </div>
+                <p class="tiny" style="margin-top: 10px;">Progress stays visible even when the subtree is collapsed.</p>
+              </div>
+
+              <div class="children">
+                <div class="child">
+                  <div class="task-line small">
+                    <span>v Refresh docs</span>
+                    <strong>100%</strong>
+                  </div>
+                  <div class="progress"><div class="fill" style="width: 100%;"></div></div>
+                </div>
+
+                <div class="child">
+                  <div class="task-line small">
+                    <span>&gt; QA pass</span>
+                    <strong>50%</strong>
+                  </div>
+                  <div class="progress"><div class="fill" style="width: 50%;"></div></div>
+                  <p class="tiny">- [x] Manual smoke</p>
+                  <p class="tiny">- [ ] Regression suite</p>
+                </div>
+
+                <div class="child">
+                  <div class="task-line small">
+                    <span>- Publish release</span>
+                    <strong>0%</strong>
+                  </div>
+                  <div class="progress"><div class="fill" style="width: 0%;"></div></div>
+                </div>
+              </div>
+
+              <div class="leaf">
+                <div class="task-line">
+                  <div class="task-title">
+                    <div class="check" aria-hidden="true"></div>
+                    <span>Reply to client email</span>
+                  </div>
+                </div>
+                <p class="tiny" style="margin-top: 10px;">Leaf task: no progress bar</p>
+              </div>
+            </div>
+
+            <div class="detail-box">
+              <div class="setting-name">Release Task Hub 0.4.0</div>
+              <p class="small">Subtask progress</p>
+              <div class="progress-row" style="margin-top: 10px;">
+                <div class="progress"><div class="fill" style="width: 50%;"></div></div>
+                <strong>50%</strong>
+              </div>
+
+              <div class="rule-list tiny">
+                <p>1 direct child complete</p>
+                <p>1 direct child partially complete</p>
+                <p>1 direct child not started</p>
+              </div>
+
+              <div class="rule-list" style="margin-top: 24px;">
+                <p class="small">Recursive rule</p>
+                <code>parent = avg(child progress)</code>
+                <code>leaf done = 100</code>
+                <code>leaf open = 0</code>
+              </div>
+
+              <div class="rule-list tiny" style="margin-top: 24px;">
+                <p>Progress does not change just because completed children are hidden by filters.</p>
+                <p>Parent checkbox and subtree progress are separate signals.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

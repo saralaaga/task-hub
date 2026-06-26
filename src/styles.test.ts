@@ -85,6 +85,26 @@ describe("Task Hub styles", () => {
     expect(conditionPanelRule).toContain("z-index: 41");
   });
 
+  it("renders task list rows as compact dividers instead of tall cards", () => {
+    const styles = readFileSync(path.join(__dirname, "styles.css"), "utf8");
+    const flowRule = styles.match(/\.task-hub-task-list-flow\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const rowRule = styles.match(/\.task-hub-task-list-flow\s+\.task-hub-task-row\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const subtaskListRule = styles.match(/\.task-hub-task-list-flow\s+\.task-hub-subtask-list\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const textRule = styles.match(/\.task-hub-task-list-flow\s+\.task-hub-task-text\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const tagRule = styles.match(/\.task-hub-task-list-flow\s+\.task-hub-task-row\s+\.task-hub-task-tag\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+
+    expect(flowRule).toContain("gap: 0");
+    expect(rowRule).toContain("background: transparent");
+    expect(rowRule).toContain("border-bottom: 1px solid");
+    expect(rowRule).toContain("border-left: 3px solid");
+    expect(rowRule).toContain("border-radius: 0");
+    expect(rowRule).toContain("min-height: 32px");
+    expect(subtaskListRule).toContain("margin-left: 19px");
+    expect(textRule).toContain("line-height: 1.2");
+    expect(tagRule).toContain("box-shadow:");
+    expect(tagRule).toContain("font-size: var(--font-ui-medium)");
+  });
+
   it("lets auto-growing calendar task body fields stay compact for short text", () => {
     const styles = readFileSync(path.join(__dirname, "styles.css"), "utf8");
     const fixedTextareaMatch = /\.task-hub-calendar-detail-row\s+\.task-hub-detail-control\s+textarea\s*\{[^}]*min-height:\s*96px[^}]*\}/.exec(styles);
@@ -464,11 +484,15 @@ describe("Task Hub styles", () => {
   it("keeps task content text lightweight in task and calendar cards", () => {
     const styles = readFileSync(path.join(__dirname, "styles.css"), "utf8");
     const taskTextRule = styles.match(/\.task-hub-task-text\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const sectionHeadingRule = Array.from(styles.matchAll(/\.task-hub-task-section h3\s*\{(?<body>[^}]+)\}/g))
+      .map((match) => match.groups?.body ?? "")
+      .find((body) => body.includes("font-size")) ?? "";
     const calendarTitleRule = Array.from(styles.matchAll(/\.task-hub-calendar-item-title\s*\{(?<body>[^}]+)\}/g))
       .map((match) => match.groups?.body ?? "")
       .find((body) => body.includes("font-size")) ?? "";
 
     expect(taskTextRule).toContain("font-weight: 400");
+    expect(sectionHeadingRule).toContain("font-weight: 400");
     expect(calendarTitleRule).toContain("font-weight: 400");
   });
 

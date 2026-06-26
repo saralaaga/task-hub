@@ -40,8 +40,10 @@ export function parseTasksFromMarkdown(input: ParseInput): TaskItem[] {
     const scheduledDate = dueDate ? extractScheduledDate(rawBody, dueDate) : undefined;
     const recurrence = extractRecurrence(rawBody);
     const text = cleanTaskText(rawBody).trim();
+    const id = createTaskId(input.filePath, index, line);
     const task: TaskItem = {
-      id: createTaskId(input.filePath, index, line),
+      id,
+      stableId: id,
       filePath: input.filePath,
       line: index,
       rawLine: line,
