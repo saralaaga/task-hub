@@ -650,7 +650,21 @@ function renderTaskDetails(
       toggle.addEventListener("change", () => {
         toggleDetailExtra(extra, toggle.checked);
       });
-      renderReadonlyDetailValue(extra, t("sourceFile"), taskDetailSourceFileLabel(task), "task-hub-detail-source-file");
+      const appleReminderLists = options.appleReminderLists ?? [];
+      if (canEditAppleReminder && task.externalListId && appleReminderLists.length > 0) {
+        const listSelect = detailSelect(
+          extra,
+          t("appleReminderList"),
+          appleReminderLists.map((list) => ({ value: list.id, label: list.name })),
+          task.externalListId,
+          "task-hub-detail-list-select"
+        );
+        listSelect.addEventListener("change", () => {
+          handlers.onAppleReminderListChange(task, listSelect.value);
+        });
+      } else {
+        renderReadonlyDetailValue(extra, t("sourceFile"), taskDetailSourceFileLabel(task), "task-hub-detail-source-file");
+      }
       if (task.contextPreview && !canEditExternalTask) {
         renderReadonlyDetailValue(extra, t("context"), task.contextPreview, "task-hub-detail-context");
       }
@@ -969,6 +983,24 @@ function detailTextarea(container: HTMLElement, label: string, value: string): H
   const textarea = row.control.createEl("textarea") as HTMLTextAreaElement;
   textarea.value = value;
   return textarea;
+}
+
+function detailSelect(
+  container: HTMLElement,
+  label: string,
+  options: Array<{ value: string; label: string }>,
+  value: string,
+  selectClass?: string
+): HTMLSelectElement {
+  const row = detailRow(container, label);
+  const select = row.control.createEl("select", { cls: selectClass }) as HTMLSelectElement;
+  for (const option of options) {
+    const optionEl = select.createEl("option", { text: option.label }) as HTMLOptionElement;
+    optionEl.value = option.value;
+    optionEl.setAttr("value", option.value);
+  }
+  select.value = value;
+  return select;
 }
 
 type ReminderAlertEditor = {

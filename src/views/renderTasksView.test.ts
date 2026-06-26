@@ -1385,6 +1385,46 @@ describe("renderTasksView", () => {
     }));
   });
 
+  it("lets Apple Reminder tasks switch lists from the hidden detail section", () => {
+    const container = new FakeElement();
+    const viewHandlers = handlers();
+    const task = {
+      ...baseTask,
+      externalListId: "inbox"
+    };
+
+    renderTasksView(
+      container as unknown as HTMLElement,
+      [task],
+      [task],
+      { status: "open", tags: [], sourceQuery: "", textQuery: "" },
+      viewHandlers,
+      new Date("2026-05-08T12:00:00Z"),
+      (key) => key,
+      {
+        allowAppleReminderWriteback: true,
+        appleReminderLists: [
+          { id: "inbox", name: "Inbox" },
+          { id: "work", name: "Work" }
+        ]
+      }
+    );
+
+    const toggle = collect(container).find((element) => element.classes.has("task-hub-detail-extra-toggle"));
+    const extra = collect(container).find((element) => element.classes.has("task-hub-detail-extra"));
+    toggle!.checked = true;
+    toggle!.dispatch("change");
+
+    const listSelect = collect(extra!).find((element) => element.classes.has("task-hub-detail-list-select"));
+    expect(textValues(container)).toContain("appleReminderList");
+    expect(listSelect?.value).toBe("inbox");
+
+    listSelect!.value = "work";
+    listSelect!.change();
+
+    expect(viewHandlers.onAppleReminderListChange).toHaveBeenCalledWith(task, "work");
+  });
+
   it("edits Apple Reminder alert settings from the task details pane only when a time exists", () => {
     const container = new FakeElement();
     const viewHandlers = handlers();
