@@ -1021,37 +1021,48 @@ body .task-hub-view button.task-hub-color-swatch {
 }
 
 .task-hub-task-note-count {
-  align-self: start;
+  align-self: center;
   background: color-mix(in srgb, var(--interactive-accent) 14%, var(--background-secondary));
   border: 1px solid color-mix(in srgb, var(--interactive-accent) 32%, var(--background-modifier-border));
   border-radius: 999px;
   color: var(--text-muted);
+  flex: 0 0 auto;
   font-size: var(--font-ui-smaller);
   line-height: 1;
+  margin-left: 4px;
   padding: 3px 7px;
-  position: absolute;
-  right: 8px;
-  top: 8px;
 }
 
-.task-hub-task-row {
+.task-hub-task-progress {
+  align-items: center;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  min-width: 0;
+}
+
+.task-hub-task-progress-bar {
+  background: color-mix(in srgb, var(--task-hub-source-color, var(--interactive-accent)) 10%, var(--background-secondary));
+  border: 1px solid color-mix(in srgb, var(--task-hub-source-color, var(--interactive-accent)) 24%, var(--background-modifier-border));
+  border-radius: 999px;
+  height: 7px;
+  overflow: clip;
   position: relative;
 }
 
-.task-hub-task-row.has-task-note-count .task-hub-task-body {
-  padding-right: 34px;
+.task-hub-task-progress-fill {
+  background: color-mix(in srgb, var(--task-hub-source-color, var(--interactive-accent)) 68%, white 8%);
+  border-radius: inherit;
+  height: 100%;
+  max-width: 100%;
+  min-width: 0;
 }
 
-.task-hub-task-row.has-subtask-toggle .task-hub-task-body {
-  padding-right: 34px;
-}
-
-.task-hub-task-row.has-subtask-toggle.has-task-note-count .task-hub-task-body {
-  padding-right: 66px;
-}
-
-.task-hub-task-row.has-subtask-toggle .task-hub-task-note-count {
-  right: 38px;
+.task-hub-task-progress-value {
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .task-hub-subtask-toggle {
@@ -1062,12 +1073,11 @@ body .task-hub-view button.task-hub-color-swatch {
   color: var(--text-muted);
   cursor: pointer;
   display: inline-flex;
+  flex: 0 0 auto;
   height: 24px;
   justify-content: center;
+  margin-left: 2px;
   padding: 0;
-  position: absolute;
-  right: 7px;
-  top: 7px;
   width: 24px;
 }
 
@@ -1377,18 +1387,39 @@ button.task-hub-task-note-menu:focus-visible {
 }
 
 .task-hub-task-body {
+  flex: 1 1 auto;
   min-width: 0;
+}
+
+.task-hub-task-content {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  min-width: 0;
+  width: 100%;
 }
 
 .task-hub-task-title-line {
-  align-items: baseline;
+  align-items: center;
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 4px 7px;
   min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
 }
 
-.task-hub-task-text,
+.task-hub-task-text {
+  display: block;
+  flex: 1 1 auto;
+  font-weight: 400;
+  line-height: 1.28;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .task-hub-detail-context {
   display: -webkit-box;
   overflow: hidden;
@@ -1396,12 +1427,17 @@ button.task-hub-task-note-menu:focus-visible {
   -webkit-box-orient: vertical;
 }
 
-.task-hub-task-text {
-  -webkit-line-clamp: 1;
-  flex: 0 1 auto;
-  font-weight: 400;
-  line-height: 1.28;
-  min-width: 8ch;
+.task-hub-task-row.has-progress .task-hub-task-progress {
+  flex: 0 0 33%;
+  max-width: 33%;
+  min-width: 132px;
+}
+
+.task-hub-task-row .task-hub-task-tag {
+  max-width: min(18ch, 100%);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 @keyframes task-hub-complete-pulse {
@@ -1488,6 +1524,32 @@ button.task-hub-task-note-menu:focus-visible {
 .task-hub-detail-note {
   color: var(--text-muted);
   font-size: var(--font-ui-smaller);
+}
+
+.task-hub-detail-progress {
+  background: color-mix(in srgb, var(--task-hub-source-color, var(--interactive-accent)) 6%, var(--background-secondary));
+  border: 1px solid color-mix(in srgb, var(--task-hub-source-color, var(--interactive-accent)) 16%, var(--background-modifier-border));
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+}
+
+.task-hub-detail-progress-label {
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.task-hub-detail-progress .task-hub-task-progress {
+  margin-top: 0;
+}
+
+.task-hub-detail-progress-hint {
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  line-height: 1.35;
 }
 
 .task-hub-detail-context {

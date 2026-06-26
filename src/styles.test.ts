@@ -420,6 +420,30 @@ describe("Task Hub styles", () => {
     expect(reducedMotionRule).toContain(".task-hub-subtask-list.is-closing > .task-hub-task-row");
   });
 
+  it("styles compact task and detail progress bars for subtask progress", () => {
+    const styles = readFileSync(path.join(__dirname, "styles.css"), "utf8");
+    const contentRule = styles.match(/\.task-hub-task-content\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const titleRule = styles.match(/\.task-hub-task-title-line\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const rowRule = styles.match(/\.task-hub-task-progress\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const barRule = styles.match(/\.task-hub-task-progress-bar\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const fillRule = styles.match(/\.task-hub-task-progress-fill\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const detailRule = styles.match(/\.task-hub-detail-progress\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const inlineProgressRule = styles.match(/\.task-hub-task-row\.has-progress \.task-hub-task-progress\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+
+    expect(contentRule).toContain("display: flex");
+    expect(contentRule).toContain("align-items: center");
+    expect(titleRule).toContain("flex-wrap: nowrap");
+    expect(titleRule).toContain("white-space: nowrap");
+    expect(rowRule).toContain("grid-template-columns: minmax(0, 1fr) auto");
+    expect(barRule).toContain("border-radius: 999px");
+    expect(barRule).toContain("height: 7px");
+    expect(fillRule).toContain("max-width: 100%");
+    expect(detailRule).toContain("border-radius: 8px");
+    expect(detailRule).toContain("display: grid");
+    expect(inlineProgressRule).toContain("flex: 0 0 33%");
+    expect(inlineProgressRule).toContain("max-width: 33%");
+  });
+
   it("animates calendar mode switches horizontally", () => {
     const styles = readFileSync(path.join(__dirname, "styles.css"), "utf8");
     const leftRule = styles.match(/\.task-hub-calendar-view-stage\.is-slide-left\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";

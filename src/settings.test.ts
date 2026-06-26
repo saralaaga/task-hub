@@ -27,6 +27,7 @@ describe("normalizeTaskHubSettings", () => {
 
     expect(settings.calendarTaskCreationEnabled).toBe(true);
     expect(settings.showLunarCalendar).toBe(false);
+    expect(settings.showSubtaskProgressBars).toBe(true);
     expect(settings.localApple.calendarTaskSendEnabled).toBe(false);
     expect(settings.localApple.calendarDefaultTimedTaskDurationMinutes).toBe(60);
     expect(settings.localApple.reminderDurationOverrides).toEqual({});
@@ -158,6 +159,11 @@ describe("normalizeTaskHubSettings", () => {
         text: "call"
       }
     });
+  });
+
+  it("keeps explicit subtask progress bar settings while defaulting older settings to enabled", () => {
+    expect(normalizeTaskHubSettings({ ignoredPaths: [] }).showSubtaskProgressBars).toBe(true);
+    expect(normalizeTaskHubSettings({ showSubtaskProgressBars: false }).showSubtaskProgressBars).toBe(false);
   });
 
   it("migrates the previous completed date bucket to other completed", () => {

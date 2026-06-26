@@ -287,6 +287,8 @@ export type TranslationKey =
   | "sendToTarget"
   | "showCompletedByDefault"
   | "showCompletedByDefaultDesc"
+  | "showSubtaskProgressBars"
+  | "showSubtaskProgressBarsDesc"
   | "showCompletedInView"
   | "showLunarCalendar"
   | "showLunarCalendarDesc"
@@ -305,6 +307,8 @@ export type TranslationKey =
   | "readOnly"
   | "supportedTaskSyntax"
   | "supportedTaskSyntaxDesc"
+  | "subtaskProgress"
+  | "subtaskProgressTreeHint"
   | "sync"
   | "synced"
   | "tags"
@@ -1044,6 +1048,8 @@ const TRANSLATIONS: Record<"en" | "zh", Record<TranslationKey, string>> &
     sourceVaultTask: "Vault task",
     showCompletedByDefault: "Show completed tasks by default",
     showCompletedByDefaultDesc: "Completed tasks remain indexed but hidden unless this is enabled.",
+    showSubtaskProgressBars: "Show subtask progress bars",
+    showSubtaskProgressBarsDesc: "Show a progress bar on tasks that contain subtasks. Progress is calculated from the full subtask tree.",
     showCompletedInView: "Show completed",
     showLunarCalendar: "Show lunar dates",
     showLunarCalendarDesc: "Display Chinese lunar dates in the month calendar when the interface language is Chinese.",
@@ -1052,6 +1058,8 @@ const TRANSLATIONS: Record<"en" | "zh", Record<TranslationKey, string>> &
     source: "Source",
     sourceFile: "Source file",
     startTime: "Start time",
+    subtaskProgress: "Subtask progress",
+    subtaskProgressTreeHint: "Based on the full subtask tree.",
     supportedTaskSyntax: "Supported task syntax",
     supportedTaskSyntaxDesc: "Version 1 supports - [ ], - [x], Obsidian tags, 📅 YYYY-MM-DD, and due:: YYYY-MM-DD.",
     sync: "Sync",
@@ -1398,6 +1406,8 @@ const TRANSLATIONS: Record<"en" | "zh", Record<TranslationKey, string>> &
     sourceVaultTask: "vault 任务",
     showCompletedByDefault: "默认显示已完成任务",
     showCompletedByDefaultDesc: "已完成任务仍会被索引；关闭时默认隐藏。",
+    showSubtaskProgressBars: "显示子任务进度条",
+    showSubtaskProgressBarsDesc: "为包含子任务的任务显示进度条。进度会根据完整子任务树自动计算。",
     showCompletedInView: "显示已完成",
     showLunarCalendar: "开启农历展示",
     showLunarCalendarDesc: "在月视图中显示农历年份、月份和每一天的农历日期。",
@@ -1406,6 +1416,8 @@ const TRANSLATIONS: Record<"en" | "zh", Record<TranslationKey, string>> &
     source: "来源",
     sourceFile: "来源文件",
     startTime: "时间",
+    subtaskProgress: "子任务进度",
+    subtaskProgressTreeHint: "基于完整子任务树计算。",
     supportedTaskSyntax: "支持的任务语法",
     supportedTaskSyntaxDesc: "版本 1 支持 - [ ]、- [x]、Obsidian 标签、📅 YYYY-MM-DD 和 due:: YYYY-MM-DD。",
     sync: "同步",
@@ -1556,6 +1568,8 @@ const TRANSLATIONS: Record<"en" | "zh", Record<TranslationKey, string>> &
     sendTo: "送信先",
     showCompletedByDefault: "完了タスクを既定で表示",
     showCompletedByDefaultDesc: "完了タスクは索引に残りますが、この設定がオフの場合は既定で非表示です。",
+    showSubtaskProgressBars: "サブタスク進捗バーを表示",
+    showSubtaskProgressBarsDesc: "サブタスクを持つタスクに進捗バーを表示します。進捗はサブタスクツリー全体から計算されます。",
     showCompletedInView: "完了を表示",
     showLunarCalendar: "旧暦を表示",
     showLunarCalendarDesc: "中国語インターフェイスの月カレンダーに旧暦の日付を表示します。",
@@ -1563,6 +1577,8 @@ const TRANSLATIONS: Record<"en" | "zh", Record<TranslationKey, string>> &
     sourceFile: "ソースファイル",
     sourceSearch: "フォルダーまたはファイル",
     startTime: "開始時刻",
+    subtaskProgress: "サブタスク進捗",
+    subtaskProgressTreeHint: "サブタスクツリー全体に基づいて計算されます。",
     endTime: "終了時刻",
     date: "日付",
     sync: "同期",
@@ -1672,6 +1688,8 @@ const TRANSLATIONS: Record<"en" | "zh", Record<TranslationKey, string>> &
     sendTo: "Envoyer vers",
     showCompletedByDefault: "Afficher les tâches terminées par défaut",
     showCompletedByDefaultDesc: "Les tâches terminées restent indexées, mais sont masquées par défaut sauf si cette option est activée.",
+    showSubtaskProgressBars: "Afficher les barres de progression des sous-tâches",
+    showSubtaskProgressBarsDesc: "Affiche une barre de progression sur les tâches qui contiennent des sous-tâches. La progression est calculée à partir de l'arborescence complète des sous-tâches.",
     showCompletedInView: "Afficher les terminées",
     showLunarCalendar: "Afficher les dates lunaires",
     showLunarCalendarDesc: "Afficher les dates lunaires chinoises dans le calendrier mensuel lorsque l'interface est en chinois.",
@@ -1679,6 +1697,8 @@ const TRANSLATIONS: Record<"en" | "zh", Record<TranslationKey, string>> &
     sourceFile: "Fichier source",
     sourceSearch: "Dossier ou fichier",
     startTime: "Heure de début",
+    subtaskProgress: "Progression des sous-tâches",
+    subtaskProgressTreeHint: "Calculée à partir de l'arborescence complète des sous-tâches.",
     endTime: "Heure de fin",
     date: "Date",
     sync: "Synchroniser",
@@ -1788,6 +1808,8 @@ const TRANSLATIONS: Record<"en" | "zh", Record<TranslationKey, string>> &
     sendTo: "보내기",
     showCompletedByDefault: "완료된 작업을 기본으로 표시",
     showCompletedByDefaultDesc: "완료된 작업은 계속 인덱싱되지만 이 옵션을 켜지 않으면 기본적으로 숨겨집니다.",
+    showSubtaskProgressBars: "하위 작업 진행률 막대 표시",
+    showSubtaskProgressBarsDesc: "하위 작업이 있는 작업에 진행률 막대를 표시합니다. 진행률은 전체 하위 작업 트리를 기준으로 계산됩니다.",
     showCompletedInView: "완료 표시",
     showLunarCalendar: "음력 날짜 표시",
     showLunarCalendarDesc: "인터페이스 언어가 중국어일 때 월간 캘린더에 중국 음력 날짜를 표시합니다.",
@@ -1795,6 +1817,8 @@ const TRANSLATIONS: Record<"en" | "zh", Record<TranslationKey, string>> &
     sourceFile: "소스 파일",
     sourceSearch: "폴더 또는 파일",
     startTime: "시작 시간",
+    subtaskProgress: "하위 작업 진행률",
+    subtaskProgressTreeHint: "전체 하위 작업 트리를 기준으로 계산됩니다.",
     endTime: "종료 시간",
     date: "날짜",
     sync: "동기화",

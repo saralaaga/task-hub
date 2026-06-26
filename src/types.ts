@@ -215,6 +215,7 @@ export type TaskHubSettings = {
   defaultView: DefaultView;
   weekStart: WeekStart;
   showCompletedByDefault: boolean;
+  showSubtaskProgressBars: boolean;
   showLunarCalendar: boolean;
   indexOnStartup: boolean;
   calendarTaskCreationEnabled: boolean;

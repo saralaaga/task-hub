@@ -193,6 +193,7 @@ export class TaskHubView extends ItemView {
           allowDidaDelete: this.plugin.settings.dida.tasksDeleteEnabled,
           allowAppleCalendarReminderConversion:
             this.plugin.settings.localApple.calendarReminderConversionEnabled && this.plugin.canConvertAppleCalendarAndReminders(),
+          showSubtaskProgressBars: this.plugin.settings.showSubtaskProgressBars,
           appleReminderLists: this.plugin.getAppleReminderLists(),
           didaProjects: this.plugin.getDidaProjects(),
           taskSendDefaultTarget: this.plugin.defaultTaskSendTarget(),

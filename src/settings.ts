@@ -7,7 +7,7 @@ import { validTimedDurationMinutes } from "./timeGranularity";
 import type { AppleCalendarInfo, CalendarCreationKind, CalendarCreationTarget, CalendarEventCreationTarget, CalendarSource, CalendarSourceStatus, CalendarTaskCreationTarget, ExternalTaskSourceTab, LocalAppleSyncStatus, TaskHubSettings } from "./types";
 import { setCssProps } from "./views/domStyles";
 
-export const TASK_HUB_SETTINGS_SCHEMA_VERSION = 2;
+export const TASK_HUB_SETTINGS_SCHEMA_VERSION = 3;
 
 export const DEFAULT_SETTINGS: TaskHubSettings = {
   settingsSchemaVersion: TASK_HUB_SETTINGS_SCHEMA_VERSION,
@@ -15,6 +15,7 @@ export const DEFAULT_SETTINGS: TaskHubSettings = {
   defaultView: "tasks",
   weekStart: "monday",
   showCompletedByDefault: false,
+  showSubtaskProgressBars: true,
   showLunarCalendar: false,
   indexOnStartup: true,
   calendarTaskCreationEnabled: true,
@@ -406,6 +407,16 @@ export class TaskHubSettingTab extends PluginSettingTab {
       .addToggle((toggle) => {
         toggle.setValue(this.plugin.settings.showCompletedByDefault).onChange(async (value) => {
           this.plugin.settings.showCompletedByDefault = value;
+          await this.plugin.saveSettings();
+        });
+      });
+
+    new Setting(basicSettingsGrid)
+      .setName(t("showSubtaskProgressBars"))
+      .setDesc(t("showSubtaskProgressBarsDesc"))
+      .addToggle((toggle) => {
+        toggle.setValue(this.plugin.settings.showSubtaskProgressBars).onChange(async (value) => {
+          this.plugin.settings.showSubtaskProgressBars = value;
           await this.plugin.saveSettings();
         });
       });

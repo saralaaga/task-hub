@@ -308,6 +308,16 @@ function taskRowTitle(row: FakeElement): string | undefined {
   return collect(row).find((element) => element.classes.has("task-hub-task-text"))?.text;
 }
 
+function taskRowByTitle(container: FakeElement, title: string): FakeElement | undefined {
+  return collect(container)
+    .filter((element) => element.classes.has("task-hub-task-row"))
+    .find((row) => taskRowTitle(row) === title);
+}
+
+function firstProgressValue(element: FakeElement): string | undefined {
+  return collect(element).find((child) => child.classes.has("task-hub-task-progress-value"))?.text;
+}
+
 describe("renderTasksView", () => {
   beforeEach(() => {
     mockMenus.length = 0;
@@ -419,6 +429,195 @@ describe("renderTasksView", () => {
     expect(rows.map(taskRowTitle)).toEqual(["Parent", "Child"]);
     expect(rows[1].attrs.get("data-task-depth")).toBe("1");
     expect(subtaskList?.classes.has("is-opening")).toBe(true);
+  });
+
+  it("renders recursive progress bars for parent tasks and task details", () => {
+    const container = new FakeElement();
+    const parent: TaskItem = {
+      ...baseTask,
+      id: "parent",
+      source: "vault",
+      externalId: undefined,
+      externalSourceName: undefined,
+      filePath: "Project.md",
+      rawLine: "- [ ] Parent",
+      text: "Parent"
+    };
+    const nestedParent: TaskItem = {
+      ...parent,
+      id: "nested-parent",
+      line: 1,
+      rawLine: "  - [ ] Nested parent",
+      text: "Nested parent",
+      indent: 1,
+      parentId: "parent"
+    };
+    const nestedDone: TaskItem = {
+      ...parent,
+      id: "nested-done",
+      line: 2,
+      rawLine: "    - [x] Nested done",
+      text: "Nested done",
+      completed: true,
+      dueDate: undefined,
+      indent: 2,
+      parentId: "nested-parent"
+    };
+    const nestedOpen: TaskItem = {
+      ...nestedDone,
+      id: "nested-open",
+      line: 3,
+      rawLine: "    - [ ] Nested open",
+      text: "Nested open",
+      completed: false
+    };
+    const leafOpen: TaskItem = {
+      ...parent,
+      id: "leaf-open",
+      line: 4,
+      rawLine: "  - [ ] Leaf open",
+      text: "Leaf open",
+      dueDate: undefined,
+      indent: 1,
+      parentId: "parent"
+    };
+
+    renderTasksView(
+      container as unknown as HTMLElement,
+      [parent, nestedParent, nestedDone, nestedOpen, leafOpen],
+      [parent, nestedParent, nestedDone, nestedOpen, leafOpen],
+      { status: "open", tags: [], sourceQuery: "", textQuery: "" },
+      handlers(),
+      new Date("2026-05-08T12:00:00Z"),
+      (key) => key,
+      { allowAppleReminderWriteback: true, expandedTaskIds: new Set(["parent", "nested-parent"]) }
+    );
+
+    expect(firstProgressValue(taskRowByTitle(container, "Parent")!)).toBe("25%");
+    expect(firstProgressValue(taskRowByTitle(container, "Nested parent")!)).toBe("50%");
+    expect(collect(container).find((element) => element.classes.has("task-hub-detail-progress-label"))?.text).toBe("subtaskProgress");
+    expect(textValues(container)).toContain("subtaskProgressTreeHint");
+  });
+
+  it("places parent progress bars on the same row content lane instead of under the title block", () => {
+    const container = new FakeElement();
+    const parent: TaskItem = {
+      ...baseTask,
+      id: "parent",
+      source: "vault",
+      externalId: undefined,
+      externalSourceName: undefined,
+      filePath: "Project.md",
+      rawLine: "- [ ] Parent",
+      text: "Parent"
+    };
+    const child: TaskItem = {
+      ...parent,
+      id: "child",
+      line: 1,
+      rawLine: "  - [ ] Child",
+      text: "Child",
+      dueDate: undefined,
+      indent: 1,
+      parentId: "parent"
+    };
+
+    renderTasksView(
+      container as unknown as HTMLElement,
+      [parent, child],
+      [parent, child],
+      { status: "open", tags: [], sourceQuery: "", textQuery: "" },
+      handlers(),
+      new Date("2026-05-08T12:00:00Z"),
+      (key) => key,
+      { allowAppleReminderWriteback: true }
+    );
+
+    const row = taskRowByTitle(container, "Parent")!;
+    const content = collect(row).find((element) => element.classes.has("task-hub-task-content"));
+    const body = collect(row).find((element) => element.classes.has("task-hub-task-body"));
+    const progress = collect(row).find((element) => element.classes.has("task-hub-task-progress"));
+
+    expect(row.classes.has("has-progress")).toBe(true);
+    expect(content?.children.includes(body as FakeElement)).toBe(true);
+    expect(content?.children.includes(progress as FakeElement)).toBe(true);
+  });
+
+  it("hides subtask progress bars when the setting is disabled", () => {
+    const container = new FakeElement();
+    const parent: TaskItem = {
+      ...baseTask,
+      id: "parent",
+      source: "vault",
+      externalId: undefined,
+      externalSourceName: undefined,
+      filePath: "Project.md",
+      rawLine: "- [ ] Parent",
+      text: "Parent"
+    };
+    const child: TaskItem = {
+      ...parent,
+      id: "child",
+      line: 1,
+      rawLine: "  - [x] Child",
+      text: "Child",
+      completed: true,
+      dueDate: undefined,
+      indent: 1,
+      parentId: "parent"
+    };
+
+    renderTasksView(
+      container as unknown as HTMLElement,
+      [parent, child],
+      [parent, child],
+      { status: "open", tags: [], sourceQuery: "", textQuery: "" },
+      handlers(),
+      new Date("2026-05-08T12:00:00Z"),
+      (key) => key,
+      { allowAppleReminderWriteback: true, showSubtaskProgressBars: false }
+    );
+
+    expect(collect(container).filter((element) => element.classes.has("task-hub-task-progress"))).toHaveLength(0);
+    expect(collect(container).find((element) => element.classes.has("task-hub-detail-progress"))).toBeUndefined();
+  });
+
+  it("keeps parent progress based on the full task tree when hidden children are filtered out", () => {
+    const container = new FakeElement();
+    const parent: TaskItem = {
+      ...baseTask,
+      id: "parent",
+      source: "vault",
+      externalId: undefined,
+      externalSourceName: undefined,
+      filePath: "Project.md",
+      rawLine: "- [ ] Parent",
+      text: "Parent",
+      dueDate: undefined
+    };
+    const hiddenCompletedChild: TaskItem = {
+      ...parent,
+      id: "child",
+      line: 1,
+      rawLine: "  - [x] Child",
+      text: "Child",
+      completed: true,
+      indent: 1,
+      parentId: "parent"
+    };
+
+    renderTasksView(
+      container as unknown as HTMLElement,
+      [parent],
+      [parent, hiddenCompletedChild],
+      { status: "open", tags: [], sourceQuery: "", textQuery: "" },
+      handlers(),
+      new Date("2026-05-08T12:00:00Z"),
+      (key) => key,
+      { allowAppleReminderWriteback: true }
+    );
+
+    expect(firstProgressValue(taskRowByTitle(container, "Parent")!)).toBe("100%");
   });
 
   it("animates subtask collapse before toggling the tree closed", () => {

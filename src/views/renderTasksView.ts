@@ -3,6 +3,7 @@ import { type DateBucket } from "../calendar/dateBuckets";
 import { getTaskBucket, type TaskFilterState } from "../filtering/filters";
 import type { Translator } from "../i18n";
 import { normalizeReminderAlertMinutes, populateReminderAlertSelect, type ReminderAlertMinutes } from "../reminderAlerts";
+import { buildSubtaskProgressIndex, type TaskProgressInfo } from "../subtaskProgress";
 import type { TaskNote } from "../taskNotes";
 import { parseTaskSendTarget, preferredTaskSendTarget, taskSendTargetOptions } from "../taskSendTargets";
 import type { AppleReminderList, CalendarItemEditDraft, DidaProject, TaskItem, TaskSendTarget } from "../types";
@@ -45,6 +46,7 @@ export type TaskRenderOptions = {
   allowDidaWriteback?: boolean;
   allowDidaDelete?: boolean;
   allowAppleCalendarReminderConversion?: boolean;
+  showSubtaskProgressBars?: boolean;
   selectedTaskId?: string;
   selectedTaskIds?: ReadonlySet<string>;
   sourceColors?: Partial<Record<TaskItem["source"], string>>;
@@ -94,6 +96,7 @@ export function renderTasksView(
   }
 
   const sortedTasks = sortTasksForTaskList(tasks);
+  const progressByTaskId = options.showSubtaskProgressBars === false ? new Map<string, TaskProgressInfo>() : buildSubtaskProgressIndex(allTasks);
   let selectedTask = sortedTasks.find((task) => task.id === options.selectedTaskId) ?? sortedTasks.find((task) => !task.completed) ?? sortedTasks[0];
   const selectedTaskIds = normalizedSelectedTaskIds(options, selectedTask);
   const workbench = container.createDiv({ cls: "task-hub-task-workbench" });
@@ -129,7 +132,7 @@ export function renderTasksView(
       row.toggleClass("is-multi-selected", selectedTaskIds.has(taskId));
     }
     if (detailsHost) {
-      renderTaskDetails(detailsHost, selectedTask, handlers, options, t);
+      renderTaskDetails(detailsHost, selectedTask, progressByTaskId.get(selectedTask.id), handlers, options, t);
     }
     handlers.onSelect(task, { additive, selectedTaskIds: [...selectedTaskIds] });
   };
@@ -144,7 +147,7 @@ export function renderTasksView(
       row.toggleClass("is-multi-selected", selectedTaskIds.has(taskId));
     }
     if (detailsHost) {
-      renderTaskDetails(detailsHost, selectedTask, handlers, options, t);
+      renderTaskDetails(detailsHost, selectedTask, progressByTaskId.get(selectedTask.id), handlers, options, t);
     }
     handlers.onSelect(task, { additive: selectedTaskIds.size > 1, selectedTaskIds: [...selectedTaskIds] });
     return sortedTasks.filter((candidate) => selectedTaskIds.has(candidate.id));
@@ -163,6 +166,7 @@ export function renderTasksView(
         cards,
         task,
         childTasksByParentId,
+        progressByTaskId,
         handlers,
         options,
         t,
@@ -177,13 +181,14 @@ export function renderTasksView(
   }
   restoreTaskListScroll(list, options);
   detailsHost = workbench.createDiv({ cls: "task-hub-task-details-host" });
-  renderTaskDetails(detailsHost, selectedTask, handlers, options, t);
+  renderTaskDetails(detailsHost, selectedTask, selectedTask ? progressByTaskId.get(selectedTask.id) : undefined, handlers, options, t);
 }
 
 function renderTaskTree(
   container: HTMLElement,
   task: TaskItem,
   childTasksByParentId: Map<string, TaskItem[]>,
+  progressByTaskId: Map<string, TaskProgressInfo>,
   handlers: TaskRowHandlers,
   options: TaskRenderOptions,
   t: Translator,
@@ -199,6 +204,7 @@ function renderTaskTree(
   const { row, subtaskToggle } = renderTaskRow(
     container,
     task,
+    progressByTaskId.get(task.id),
     handlers,
     options,
     t,
@@ -238,6 +244,7 @@ function renderTaskTree(
       childContainer,
       child,
       childTasksByParentId,
+      progressByTaskId,
       handlers,
       options,
       t,
@@ -340,6 +347,7 @@ function restoreTaskListScroll(list: HTMLElement, options: TaskRenderOptions): v
 function renderTaskRow(
   container: HTMLElement,
   task: TaskItem,
+  progressInfo: TaskProgressInfo | undefined,
   handlers: TaskRowHandlers,
   options: TaskRenderOptions,
   t: Translator,
@@ -375,7 +383,8 @@ function renderTaskRow(
     handlers.onComplete(task);
   });
 
-  const body = row.createDiv({ cls: "task-hub-task-body" });
+  const content = row.createDiv({ cls: "task-hub-task-content" });
+  const body = content.createDiv({ cls: "task-hub-task-body" });
   const titleLine = body.createDiv({ cls: "task-hub-task-title-line" });
   titleLine.createDiv({ cls: "task-hub-task-text", text: renderPlainTaskText(task.text) });
   for (const tag of task.tags) {
@@ -385,12 +394,16 @@ function renderTaskRow(
       handlers.onTagSelect(tag);
     });
   }
+  if (progressInfo && options.showSubtaskProgressBars !== false) {
+    row.addClass("has-progress");
+    renderTaskProgressRow(content, progressInfo);
+  }
   if (taskNoteCount > 0) {
-    body.createSpan({ cls: "task-hub-task-note-count", text: String(taskNoteCount) });
+    content.createSpan({ cls: "task-hub-task-note-count", text: String(taskNoteCount) });
   }
   let subtaskToggle: HTMLButtonElement | undefined;
   if (childCount > 0) {
-    subtaskToggle = row.createEl("button", {
+    subtaskToggle = content.createEl("button", {
       cls: `task-hub-subtask-toggle ${expanded ? "is-expanded" : ""}`,
       attr: {
         "aria-label": expanded ? "Collapse subtasks" : "Expand subtasks",
@@ -516,6 +529,7 @@ function renderPlainTaskText(text: string): string {
 function renderTaskDetails(
   container: HTMLElement,
   task: TaskItem | undefined,
+  progressInfo: TaskProgressInfo | undefined,
   handlers: TaskRowHandlers,
   options: TaskRenderOptions,
   t: Translator
@@ -672,6 +686,10 @@ function renderTaskDetails(
     }
   }
 
+  if (progressInfo && options.showSubtaskProgressBars !== false) {
+    renderTaskProgressDetails(details, progressInfo, t);
+  }
+
   const sendTargetOptions = task.source === "vault"
     ? taskSendOptionsForTaskDetails(options, t)
     : [];
@@ -689,6 +707,21 @@ function renderTaskDetails(
     details.createDiv({ cls: "task-hub-detail-note", text: t("externalTaskReadOnly") });
   }
   renderTaskNotes(container, task, handlers, options, t);
+}
+
+function renderTaskProgressRow(container: HTMLElement, progressInfo: TaskProgressInfo): void {
+  const progress = container.createDiv({ cls: "task-hub-task-progress" });
+  const bar = progress.createDiv({ cls: "task-hub-task-progress-bar" });
+  const fill = bar.createDiv({ cls: "task-hub-task-progress-fill" });
+  setCssStyles(fill, { width: `${progressInfo.roundedPercent}%` });
+  progress.createSpan({ cls: "task-hub-task-progress-value", text: `${progressInfo.roundedPercent}%` });
+}
+
+function renderTaskProgressDetails(container: HTMLElement, progressInfo: TaskProgressInfo, t: Translator): void {
+  const section = container.createDiv({ cls: "task-hub-detail-progress" });
+  section.createDiv({ cls: "task-hub-detail-progress-label", text: t("subtaskProgress") });
+  renderTaskProgressRow(section, progressInfo);
+  section.createDiv({ cls: "task-hub-detail-progress-hint", text: t("subtaskProgressTreeHint") });
 }
 
 function toggleDetailExtra(extra: HTMLElement, expanded: boolean): void {

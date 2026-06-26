@@ -2081,7 +2081,11 @@ export default class TaskHubPlugin extends Plugin {
     for (const leaf of this.app.workspace.getLeavesOfType(TASK_HUB_VIEW_TYPE)) {
       const view = leaf.view;
       if (view instanceof TaskHubView) {
-        void view.onOpen();
+        view.render({
+          preserveTaskListScroll: true,
+          preserveContentScroll: true,
+          preserveCalendarAgendaScroll: true
+        });
       }
     }
   }
