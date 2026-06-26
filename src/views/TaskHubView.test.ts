@@ -1,4 +1,4 @@
-import { collectCalendarUnscheduledTasks, collectUnscheduledTasks, restoreContentScrollAfterRender } from "./TaskHubView";
+import { collectCalendarUnscheduledTasks, collectUnscheduledTasks, restoreContentScrollAfterRender, scrollExpandedTaskIntoView } from "./TaskHubView";
 import type { TaskFilterState } from "../filtering/filters";
 import type { TaskItem } from "../types";
 
@@ -73,6 +73,50 @@ describe("restoreContentScrollAfterRender", () => {
   });
 });
 
+describe("scrollExpandedTaskIntoView", () => {
+  it("smoothly scrolls the task list down when expanded subtasks would overflow below the viewport", () => {
+    const row = elementRect({ top: 180, bottom: 228 }, { "data-task-id": "parent" });
+    const subtree = elementRect({ top: 232, bottom: 420 }, { "data-parent-task-id": "parent" });
+    const list = listElement({ top: 0, bottom: 300 }, 40, [row, subtree]);
+
+    scrollExpandedTaskIntoView(list as unknown as HTMLElement, "parent");
+
+    expect(list.scrollTo).toHaveBeenCalledWith({ top: 178, behavior: "smooth" });
+  });
+
+  it("scrolls upward when the expanded parent row sits above the visible area", () => {
+    const row = elementRect({ top: 4, bottom: 52 }, { "data-task-id": "parent" });
+    const subtree = elementRect({ top: 56, bottom: 160 }, { "data-parent-task-id": "parent" });
+    const list = listElement({ top: 0, bottom: 300 }, 120, [row, subtree]);
+
+    scrollExpandedTaskIntoView(list as unknown as HTMLElement, "parent");
+
+    expect(list.scrollTo).toHaveBeenCalledWith({ top: 106, behavior: "smooth" });
+  });
+
+  it("does nothing when the expanded task and its subtasks are already fully visible", () => {
+    const row = elementRect({ top: 80, bottom: 128 }, { "data-task-id": "parent" });
+    const subtree = elementRect({ top: 132, bottom: 220 }, { "data-parent-task-id": "parent" });
+    const list = listElement({ top: 0, bottom: 300 }, 64, [row, subtree]);
+
+    scrollExpandedTaskIntoView(list as unknown as HTMLElement, "parent");
+
+    expect(list.scrollTo).not.toHaveBeenCalled();
+    expect(list.scrollTop).toBe(64);
+  });
+
+  it("falls back to the outer scroll container when the row lives inside a non-scrolling list wrapper", () => {
+    const row = elementRect({ top: 180, bottom: 228 }, { "data-task-id": "parent" });
+    const subtree = elementRect({ top: 232, bottom: 420 }, { "data-parent-task-id": "parent" });
+    const list = wrapperElement([row, subtree]);
+    const outer = listElement({ top: 0, bottom: 300 }, 40, [list]);
+
+    scrollExpandedTaskIntoView(outer as unknown as HTMLElement, "parent");
+
+    expect(outer.scrollTo).toHaveBeenCalledWith({ top: 178, behavior: "smooth" });
+  });
+});
+
 function baseFilters(): TaskFilterState {
   return {
     status: "open",
@@ -95,4 +139,59 @@ function task(overrides: Partial<TaskItem>): TaskItem {
     dueDate: overrides.dueDate,
     source: overrides.source ?? "vault"
   };
+}
+
+function listElement(
+  rect: { top: number; bottom: number },
+  scrollTop: number,
+  children: Array<ReturnType<typeof elementRect> | ReturnType<typeof wrapperElement>>
+) {
+  const list = {
+    children,
+    scrollTop,
+    scrollTo: jest.fn(),
+    scrollHeight: 800,
+    clientHeight: rect.bottom - rect.top,
+    getBoundingClientRect: () => ({ top: rect.top, bottom: rect.bottom })
+  };
+  for (const child of children) {
+    child.parentElement = list;
+  }
+  return list;
+}
+
+function elementRect(
+  rect: { top: number; bottom: number },
+  attrs: Record<string, string>
+) {
+  return {
+    attrs: new Map(Object.entries(attrs)),
+    children: [] as unknown[],
+    classes: new Set<string>(),
+    parentElement: undefined as unknown,
+    scrollIntoView: jest.fn(),
+    getAttribute(name: string) {
+      return this.attrs.get(name) ?? null;
+    },
+    getBoundingClientRect: () => ({ top: rect.top, bottom: rect.bottom })
+  };
+}
+
+function wrapperElement(
+  children: Array<ReturnType<typeof elementRect>>
+) {
+  const wrapper = {
+    attrs: new Map<string, string>(),
+    classes: new Set<string>(),
+    children,
+    parentElement: undefined as unknown,
+    getAttribute(name: string) {
+      return this.attrs.get(name) ?? null;
+    },
+    getBoundingClientRect: () => ({ top: 0, bottom: 0 })
+  };
+  for (const child of children) {
+    child.parentElement = wrapper;
+  }
+  return wrapper;
 }

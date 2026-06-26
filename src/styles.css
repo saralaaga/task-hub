@@ -1079,7 +1079,7 @@ body .task-hub-view button.task-hub-color-swatch {
 
 .task-hub-subtask-toggle svg {
   height: 16px;
-  transition: transform 120ms ease;
+  transition: transform 180ms cubic-bezier(0.2, 0.85, 0.25, 1);
   width: 16px;
 }
 
@@ -1094,8 +1094,105 @@ body .task-hub-view button.task-hub-color-swatch {
   margin-left: clamp(22px, 4vw, 42px);
 }
 
+.task-hub-subtask-list.is-opening {
+  animation: task-hub-subtask-list-enter 260ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  overflow: clip;
+  transform-origin: top left;
+  transition: max-height 260ms cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: max-height, opacity, transform;
+}
+
+.task-hub-subtask-list.is-opening > .task-hub-task-row {
+  animation: task-hub-subtask-row-enter 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.task-hub-subtask-list.is-closing {
+  animation: task-hub-subtask-list-exit 240ms cubic-bezier(0.4, 0, 0.2, 1) both;
+  overflow: clip;
+  pointer-events: none;
+  transform-origin: top left;
+  transition: max-height 240ms cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: max-height, opacity, transform;
+}
+
+.task-hub-subtask-list.is-closing > .task-hub-task-row {
+  animation: task-hub-subtask-row-exit 180ms cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+.task-hub-subtask-list.is-opening > .task-hub-task-row:nth-child(1) {
+  animation-delay: 24ms;
+}
+
+.task-hub-subtask-list.is-opening > .task-hub-task-row:nth-child(2) {
+  animation-delay: 48ms;
+}
+
+.task-hub-subtask-list.is-opening > .task-hub-task-row:nth-child(3) {
+  animation-delay: 72ms;
+}
+
+.task-hub-subtask-list.is-opening > .task-hub-task-row:nth-child(4) {
+  animation-delay: 96ms;
+}
+
+.task-hub-subtask-list.is-opening > .task-hub-task-row:nth-child(5) {
+  animation-delay: 120ms;
+}
+
+.task-hub-subtask-list.is-opening > .task-hub-task-row:nth-child(6) {
+  animation-delay: 144ms;
+}
+
 .task-hub-subtask-list .task-hub-task-row {
   background: color-mix(in srgb, var(--background-secondary) 34%, var(--background-primary));
+}
+
+@keyframes task-hub-subtask-list-enter {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scaleY(0.92);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scaleY(1);
+  }
+}
+
+@keyframes task-hub-subtask-row-enter {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes task-hub-subtask-list-exit {
+  from {
+    opacity: 1;
+    transform: translateY(0) scaleY(1);
+  }
+
+  to {
+    opacity: 0;
+    transform: translateY(16px) scaleY(0.94);
+  }
+}
+
+@keyframes task-hub-subtask-row-exit {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+
+  to {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
 }
 
 .task-hub-task-notes {
@@ -2654,6 +2751,10 @@ input.task-hub-tag-editor-input:focus {
   .task-hub-create-modal,
   .task-hub-calendar-detail-popover,
   .task-hub-detail-extra.is-expanding,
+  .task-hub-subtask-list.is-opening,
+  .task-hub-subtask-list.is-closing,
+  .task-hub-subtask-list.is-opening > .task-hub-task-row,
+  .task-hub-subtask-list.is-closing > .task-hub-task-row,
   .task-hub-calendar-view-stage.is-slide-left,
   .task-hub-calendar-view-stage.is-slide-right,
   .task-hub-calendar-with-sidebar.is-unscheduled-opening .task-hub-calendar-pane,

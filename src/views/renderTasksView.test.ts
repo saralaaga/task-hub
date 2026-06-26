@@ -415,8 +415,59 @@ describe("renderTasksView", () => {
     );
 
     const rows = collect(container).filter((element) => element.classes.has("task-hub-task-row"));
+    const subtaskList = collect(container).find((element) => element.classes.has("task-hub-subtask-list"));
     expect(rows.map(taskRowTitle)).toEqual(["Parent", "Child"]);
     expect(rows[1].attrs.get("data-task-depth")).toBe("1");
+    expect(subtaskList?.classes.has("is-opening")).toBe(true);
+  });
+
+  it("animates subtask collapse before toggling the tree closed", () => {
+    jest.useFakeTimers();
+    try {
+      const container = new FakeElement();
+      const parent: TaskItem = {
+        ...baseTask,
+        id: "parent",
+        source: "vault",
+        filePath: "Project.md",
+        rawLine: "- [ ] Parent",
+        text: "Parent"
+      };
+      const child: TaskItem = {
+        ...parent,
+        id: "child",
+        line: 1,
+        rawLine: "  - [ ] Child",
+        text: "Child",
+        dueDate: undefined,
+        indent: 1,
+        parentId: "parent"
+      };
+      const onToggleTaskExpanded = jest.fn();
+
+      renderTasksView(
+        container as unknown as HTMLElement,
+        [parent, child],
+        [parent, child],
+        { status: "open", tags: [], sourceQuery: "", textQuery: "" },
+        handlers(),
+        new Date("2026-05-08T12:00:00Z"),
+        (key) => key,
+        { allowAppleReminderWriteback: true, expandedTaskIds: new Set(["parent"]), onToggleTaskExpanded }
+      );
+
+      const toggle = collect(container).find((element) => element.classes.has("task-hub-subtask-toggle"));
+      const subtaskList = collect(container).find((element) => element.classes.has("task-hub-subtask-list"));
+      toggle?.click();
+
+      expect(onToggleTaskExpanded).not.toHaveBeenCalled();
+      expect(subtaskList?.classes.has("is-closing")).toBe(true);
+
+      jest.advanceTimersByTime(260);
+      expect(onToggleTaskExpanded).toHaveBeenCalledWith(parent);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it("keeps linked-note subtasks out of the no-date top-level bucket after reparenting", () => {

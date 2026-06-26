@@ -196,7 +196,7 @@ function renderTaskTree(
 ): void {
   const children = childTasksByParentId.get(task.id) ?? [];
   const isExpanded = options.expandedTaskIds?.has(task.id) ?? false;
-  const row = renderTaskRow(
+  const { row, subtaskToggle } = renderTaskRow(
     container,
     task,
     handlers,
@@ -211,8 +211,28 @@ function renderTaskTree(
     depth
   );
   rowsByTaskId.set(task.id, row);
+  if (subtaskToggle) {
+    subtaskToggle.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (!isExpanded) {
+        options.onToggleTaskExpanded?.(task);
+        return;
+      }
+
+      const childContainer = findImmediateSubtaskList(row);
+      if (!childContainer) {
+        options.onToggleTaskExpanded?.(task);
+        return;
+      }
+
+      subtaskToggle.disabled = true;
+      animateSubtaskListExit(childContainer, () => options.onToggleTaskExpanded?.(task));
+    });
+  }
   if (children.length === 0 || !isExpanded) return;
   const childContainer = container.createDiv({ cls: "task-hub-subtask-list" });
+  childContainer.setAttr("data-parent-task-id", task.id);
   for (const child of children) {
     renderTaskTree(
       childContainer,
@@ -229,6 +249,80 @@ function renderTaskTree(
       depth + 1
     );
   }
+  animateSubtaskListEnter(childContainer);
+}
+
+function animateSubtaskListEnter(list: HTMLElement): void {
+  const reducedMotion = list.win.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  if (reducedMotion) return;
+
+  list.addClass("is-opening");
+  setCssStyles(list, { maxHeight: "0px" });
+  void list.offsetHeight;
+  setCssStyles(list, { maxHeight: `${measureSubtaskListHeight(list)}px` });
+
+  let finished = false;
+  const finish = (event?: TransitionEvent) => {
+    if (finished) return;
+    if (event?.propertyName && event.propertyName !== "max-height") return;
+    finished = true;
+    list.removeClass("is-opening");
+    setCssStyles(list, { maxHeight: "" });
+    list.removeEventListener?.("transitionend", finish);
+  };
+
+  list.addEventListener("transitionend", finish);
+  setTimeout(() => finish(), 260);
+}
+
+function animateSubtaskListExit(list: HTMLElement, onFinish: () => void): void {
+  const reducedMotion = list.win.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  if (reducedMotion) {
+    onFinish();
+    return;
+  }
+
+  list.removeClass("is-opening");
+  list.addClass("is-closing");
+  setCssStyles(list, { maxHeight: `${measureSubtaskListHeight(list)}px` });
+  void list.offsetHeight;
+  setCssStyles(list, { maxHeight: "0px" });
+
+  let finished = false;
+  const finish = (event?: TransitionEvent) => {
+    if (finished) return;
+    if (event?.propertyName && event.propertyName !== "max-height") return;
+    finished = true;
+    list.removeEventListener?.("transitionend", finish);
+    onFinish();
+  };
+
+  list.addEventListener("transitionend", finish);
+  setTimeout(() => finish(), 260);
+}
+
+function measureSubtaskListHeight(list: HTMLElement): number {
+  if (typeof list.scrollHeight === "number" && Number.isFinite(list.scrollHeight) && list.scrollHeight > 0) {
+    return list.scrollHeight;
+  }
+
+  const childCount = list.childElementCount || list.children.length;
+  return Math.max(childCount * 56 + Math.max(0, childCount - 1) * 6, 56);
+}
+
+function findImmediateSubtaskList(row: HTMLElement): HTMLElement | undefined {
+  const parent = row.parentElement;
+  if (!parent) return undefined;
+  const siblings = Array.from(parent.children);
+  const rowIndex = siblings.indexOf(row);
+  if (rowIndex === -1) return undefined;
+  const nextSibling = siblings[rowIndex + 1] as HTMLElement | undefined;
+  if (!nextSibling) return undefined;
+  const hasSubtaskClass =
+    "classList" in nextSibling
+      ? nextSibling.classList.contains("task-hub-subtask-list")
+      : (nextSibling as HTMLElement & { classes?: Set<string> }).classes?.has("task-hub-subtask-list");
+  return hasSubtaskClass ? nextSibling : undefined;
 }
 
 function normalizedSelectedTaskIds(options: TaskRenderOptions, selectedTask: TaskItem | undefined): Set<string> {
@@ -256,7 +350,7 @@ function renderTaskRow(
   childCount = 0,
   expanded = false,
   depth = 0
-): HTMLElement {
+): { row: HTMLElement; subtaskToggle?: HTMLButtonElement } {
   const taskNoteCount = options.taskNotesEnabled && options.getTaskNoteCount ? options.getTaskNoteCount(task) : 0;
   const classes = [
     "task-hub-task-row",
@@ -269,6 +363,7 @@ function renderTaskRow(
   ].filter(Boolean).join(" ");
   const row = container.createDiv({ cls: classes });
   row.setAttr("data-task-depth", String(depth));
+  row.setAttr("data-task-id", task.id);
   const color = taskDisplayColor(task, options);
   if (color) setCssProps(row, { "--task-hub-source-color": color });
   const checkbox = row.createEl("input", { type: "checkbox" });
@@ -293,20 +388,16 @@ function renderTaskRow(
   if (taskNoteCount > 0) {
     body.createSpan({ cls: "task-hub-task-note-count", text: String(taskNoteCount) });
   }
+  let subtaskToggle: HTMLButtonElement | undefined;
   if (childCount > 0) {
-    const toggle = row.createEl("button", {
+    subtaskToggle = row.createEl("button", {
       cls: `task-hub-subtask-toggle ${expanded ? "is-expanded" : ""}`,
       attr: {
         "aria-label": expanded ? "Collapse subtasks" : "Expand subtasks",
         "aria-expanded": String(expanded)
       }
-    });
-    setIcon(toggle, "chevron-right");
-    toggle.addEventListener("click", (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      options.onToggleTaskExpanded?.(task);
-    });
+    }) as HTMLButtonElement;
+    setIcon(subtaskToggle, "chevron-right");
   }
 
   row.addEventListener("click", (event) => onSelect(task, event));
@@ -321,7 +412,7 @@ function renderTaskRow(
     addTaskBulkMenuItems(menu, selectedTasks, handlers, options, t);
     menu.showAtMouseEvent(event);
   });
-  return row;
+  return { row, subtaskToggle };
 }
 
 function buildChildTasksByParentId(tasks: TaskItem[]): Map<string, TaskItem[]> {

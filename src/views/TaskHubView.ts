@@ -41,6 +41,8 @@ export class TaskHubView extends ItemView {
   private unscheduledPanelClosing = false;
   private unscheduledPanelCloseTimer: number | undefined;
   private expandedTaskIds = new Set<string>();
+  private pendingExpandedTaskScrollId: string | undefined;
+  private pendingExpandedTaskScrollTimers: number[] = [];
 
   constructor(
     leaf: WorkspaceLeaf,
@@ -208,13 +210,19 @@ export class TaskHubView extends ItemView {
             this.plugin.settings.taskNotes.showCountsInTaskList ? this.plugin.getTaskNoteCount(task) : 0,
           getTaskNotes: (task) => this.plugin.getTaskNotes(task),
           onToggleTaskExpanded: (task) => {
+            const isExpanding = !this.expandedTaskIds.has(task.id);
             this.expandedTaskIds = toggleSetValue(this.expandedTaskIds, task.id);
+            this.pendingExpandedTaskScrollId = isExpanding ? task.id : undefined;
             this.render({ preserveTaskListScroll: true, preserveContentScroll: true });
           },
           renderNoteMarkdown: (noteContainer, body, sourcePath) => this.renderNoteMarkdown(noteContainer, body, sourcePath)
         }
       );
       this.restoreContentScroll(options);
+      if (this.pendingExpandedTaskScrollId) {
+        this.scheduleExpandedTaskScroll(this.pendingExpandedTaskScrollId);
+        this.pendingExpandedTaskScrollId = undefined;
+      }
       return;
     }
 
@@ -590,6 +598,20 @@ export class TaskHubView extends ItemView {
     });
   }
 
+  private scheduleExpandedTaskScroll(taskId: string): void {
+    while (this.pendingExpandedTaskScrollTimers.length > 0) {
+      const timer = this.pendingExpandedTaskScrollTimers.pop();
+      if (timer !== undefined) this.containerEl.win.clearTimeout(timer);
+    }
+
+    const contentContainer = this.containerEl.children[1] as HTMLElement | undefined;
+    const syncScroll = () => scrollExpandedTaskIntoView(contentContainer, taskId);
+    syncScroll();
+    for (const delay of [90, 190, 280]) {
+      this.pendingExpandedTaskScrollTimers.push(this.containerEl.win.setTimeout(syncScroll, delay));
+    }
+  }
+
   private async withPreservedCalendarViewport<T>(action: () => Promise<T>): Promise<T> {
     this.captureContentScroll();
     this.captureCalendarAgendaScroll();
@@ -625,6 +647,42 @@ export function restoreContentScrollAfterRender(
 ): void {
   if (!options.preserveScroll || !container) return;
   container.scrollTop = options.scrollTop;
+}
+
+export function scrollExpandedTaskIntoView(
+  container: HTMLElement | undefined,
+  taskId: string,
+  padding = 18
+): void {
+  if (!container) return;
+  const row = findDescendantByAttr(container, "data-task-id", taskId);
+  if (!row) return;
+  const subtaskList = findNextSiblingSubtaskList(row);
+  const bottomAnchor = findBottomMostTaskElement(subtaskList) ?? subtaskList ?? row;
+  maybeScrollIntoView(row);
+  maybeScrollIntoView(bottomAnchor);
+
+  const viewport = findScrollViewport(row, container) ?? container;
+  const listRect = viewport.getBoundingClientRect();
+  const rowRect = row.getBoundingClientRect();
+  const subtreeBottom = bottomAnchor.getBoundingClientRect().bottom;
+  const visibleTop = listRect.top + padding;
+  const visibleBottom = listRect.bottom - padding;
+
+  let delta = 0;
+  if (rowRect.top < visibleTop) {
+    delta = rowRect.top - visibleTop;
+  } else if (subtreeBottom > visibleBottom) {
+    delta = subtreeBottom - visibleBottom;
+  }
+  if (delta === 0) return;
+
+  const nextTop = Math.max(0, viewport.scrollTop + delta);
+  if (typeof viewport.scrollTo === "function") {
+    viewport.scrollTo({ top: nextTop, behavior: "smooth" });
+    return;
+  }
+  viewport.scrollTop = nextTop;
 }
 
 function shouldPreserveScroll(options: TaskHubRenderOptions): boolean {
@@ -671,6 +729,78 @@ function compareUnscheduledTasks(left: TaskItem, right: TaskItem): number {
 
 function findTaskListPane(container: HTMLElement): HTMLElement | undefined {
   return container.querySelector<HTMLElement>(".task-hub-task-list-pane") ?? undefined;
+}
+
+function findDescendantByAttr(root: HTMLElement, name: string, value: string): HTMLElement | undefined {
+  if (readElementAttr(root, name) === value) return root;
+  for (const child of Array.from(root.children)) {
+    const match = findDescendantByAttr(child as HTMLElement, name, value);
+    if (match) return match;
+  }
+  return undefined;
+}
+
+function maybeScrollIntoView(element: HTMLElement | undefined): void {
+  if (!element || typeof element.scrollIntoView !== "function") return;
+  element.scrollIntoView({ block: "nearest", behavior: "smooth" });
+}
+
+function findBottomMostTaskElement(list: HTMLElement | undefined): HTMLElement | undefined {
+  if (!list) return undefined;
+  const taskRows = findDescendantsByClass(list, "task-hub-task-row");
+  return taskRows.at(-1) ?? list;
+}
+
+function findDescendantsByClass(root: HTMLElement, className: string): HTMLElement[] {
+  const matches: HTMLElement[] = [];
+  const hasClass =
+    "classList" in root
+      ? root.classList.contains(className)
+      : (root as HTMLElement & { classes?: Set<string> }).classes?.has(className);
+  if (hasClass) matches.push(root);
+  for (const child of Array.from(root.children)) {
+    matches.push(...findDescendantsByClass(child as HTMLElement, className));
+  }
+  return matches;
+}
+
+function readElementAttr(element: HTMLElement, name: string): string | undefined {
+  if (typeof element.getAttribute === "function") {
+    return element.getAttribute(name) ?? undefined;
+  }
+  const attrs = (element as HTMLElement & { attrs?: Map<string, string> }).attrs;
+  return attrs?.get(name);
+}
+
+function findScrollViewport(target: HTMLElement, fallback: HTMLElement): HTMLElement | undefined {
+  let current: HTMLElement | undefined = target;
+  while (current) {
+    if (isScrollableViewport(current)) return current;
+    current = current.parentElement ?? undefined;
+  }
+  return isScrollableViewport(fallback) ? fallback : undefined;
+}
+
+function isScrollableViewport(element: HTMLElement): boolean {
+  const maybeScrollable = typeof element.scrollTop === "number";
+  if (!maybeScrollable) return false;
+  const scrollHeight = "scrollHeight" in element ? Number(element.scrollHeight) : NaN;
+  const clientHeight = "clientHeight" in element ? Number(element.clientHeight) : NaN;
+  if (Number.isFinite(scrollHeight) && Number.isFinite(clientHeight)) {
+    return scrollHeight > clientHeight;
+  }
+  return true;
+}
+
+function findNextSiblingSubtaskList(row: HTMLElement): HTMLElement | undefined {
+  const parent = row.parentElement;
+  if (!parent) return undefined;
+  const siblings = Array.from(parent.children);
+  const rowIndex = siblings.indexOf(row);
+  if (rowIndex === -1) return undefined;
+  const sibling = siblings[rowIndex + 1] as HTMLElement | undefined;
+  if (!sibling) return undefined;
+  return readElementAttr(sibling, "data-parent-task-id") ? sibling : undefined;
 }
 
 function taskSourceFilterOptions(tasks: TaskItem[], filters: TaskFilterState, now: Date, t: ReturnType<typeof createTranslator>) {

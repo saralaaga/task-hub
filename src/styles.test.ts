@@ -387,6 +387,39 @@ describe("Task Hub styles", () => {
     expect(reducedMotionRule).toContain(".task-hub-unscheduled-task.is-completed");
   });
 
+  it("animates subtask expansion with a staggered reveal and reduced-motion fallback", () => {
+    const styles = readFileSync(path.join(__dirname, "styles.css"), "utf8");
+    const openingRule = styles.match(/\.task-hub-subtask-list\.is-opening\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const closingRule = styles.match(/\.task-hub-subtask-list\.is-closing\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const rowRule = styles.match(/\.task-hub-subtask-list\.is-opening\s*>\s*\.task-hub-task-row\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const closingRowRule = styles.match(/\.task-hub-subtask-list\.is-closing\s*>\s*\.task-hub-task-row\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const firstDelayRule = styles.match(/\.task-hub-subtask-list\.is-opening\s*>\s*\.task-hub-task-row:nth-child\(1\)\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const listKeyframes = styles.match(/@keyframes task-hub-subtask-list-enter\s*\{(?<body>[\s\S]+?)\n\}/)?.groups?.body ?? "";
+    const rowKeyframes = styles.match(/@keyframes task-hub-subtask-row-enter\s*\{(?<body>[\s\S]+?)\n\}/)?.groups?.body ?? "";
+    const listExitKeyframes = styles.match(/@keyframes task-hub-subtask-list-exit\s*\{(?<body>[\s\S]+?)\n\}/)?.groups?.body ?? "";
+    const rowExitKeyframes = styles.match(/@keyframes task-hub-subtask-row-exit\s*\{(?<body>[\s\S]+?)\n\}/)?.groups?.body ?? "";
+    const reducedMotionRule = styles.match(/@media \(prefers-reduced-motion: reduce\)\s*\{(?<body>[\s\S]+?)\n\}/)?.groups?.body ?? "";
+
+    expect(openingRule).toContain("animation: task-hub-subtask-list-enter 260ms cubic-bezier(0.16, 1, 0.3, 1) both");
+    expect(openingRule).toContain("transition: max-height 260ms cubic-bezier(0.16, 1, 0.3, 1)");
+    expect(openingRule).toContain("overflow: clip");
+    expect(openingRule).toContain("transform-origin: top left");
+    expect(closingRule).toContain("animation: task-hub-subtask-list-exit 240ms cubic-bezier(0.4, 0, 0.2, 1) both");
+    expect(closingRule).toContain("pointer-events: none");
+    expect(closingRule).toContain("transition: max-height 240ms cubic-bezier(0.4, 0, 0.2, 1)");
+    expect(rowRule).toContain("animation: task-hub-subtask-row-enter 220ms cubic-bezier(0.16, 1, 0.3, 1) both");
+    expect(closingRowRule).toContain("animation: task-hub-subtask-row-exit 180ms cubic-bezier(0.4, 0, 0.2, 1) both");
+    expect(firstDelayRule).toContain("animation-delay: 24ms");
+    expect(listKeyframes).toContain("transform: translateY(18px) scaleY(0.92)");
+    expect(rowKeyframes).toContain("transform: translateY(12px) scale(0.98)");
+    expect(listExitKeyframes).toContain("transform: translateY(16px) scaleY(0.94)");
+    expect(rowExitKeyframes).toContain("transform: translateY(10px) scale(0.98)");
+    expect(reducedMotionRule).toContain(".task-hub-subtask-list.is-opening");
+    expect(reducedMotionRule).toContain(".task-hub-subtask-list.is-closing");
+    expect(reducedMotionRule).toContain(".task-hub-subtask-list.is-opening > .task-hub-task-row");
+    expect(reducedMotionRule).toContain(".task-hub-subtask-list.is-closing > .task-hub-task-row");
+  });
+
   it("animates calendar mode switches horizontally", () => {
     const styles = readFileSync(path.join(__dirname, "styles.css"), "utf8");
     const leftRule = styles.match(/\.task-hub-calendar-view-stage\.is-slide-left\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
