@@ -92,8 +92,8 @@ const MANAGED_KEYS = new Set([
 const NOTE_TAG = /(^|\s)(#[\p{L}\p{N}_/-]+)/gu;
 
 export function buildTaskNoteKey(task: TaskItem): string {
-  if (task.source === "apple-reminders" && task.externalId) {
-    return `task:apple-reminders:${task.externalId}`;
+  if (task.source !== "vault" && task.externalId) {
+    return `task:${task.source}:${task.externalId}`;
   }
   return `task:${task.source}:${task.filePath}:${task.line}:${hashText(task.rawLine || task.id)}`;
 }

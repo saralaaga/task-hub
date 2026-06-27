@@ -31,6 +31,15 @@ const appleTask: TaskItem = {
   source: "apple-reminders"
 };
 
+const didaTask: TaskItem = {
+  ...vaultTask,
+  id: "dida:task-1",
+  filePath: "Dida/Inbox",
+  rawLine: "",
+  externalId: "task-1",
+  source: "dida"
+};
+
 const event: CalendarEvent = {
   id: "event-1",
   sourceId: "apple-calendar",
@@ -42,9 +51,10 @@ const event: CalendarEvent = {
 };
 
 describe("task note relationships", () => {
-  it("builds task note keys for vault and Apple Reminder tasks", () => {
+  it("builds task note keys for vault and external tasks", () => {
     expect(buildTaskNoteKey(vaultTask)).toMatch(/^task:vault:Inbox\.md:0:[a-z0-9]+$/);
     expect(buildTaskNoteKey(appleTask)).toBe("task:apple-reminders:reminder-1");
+    expect(buildTaskNoteKey(didaTask)).toBe("task:dida:task-1");
   });
 
   it("builds event note keys with source and start date", () => {

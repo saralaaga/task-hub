@@ -1532,6 +1532,75 @@ describe("Apple Reminders migration", () => {
     }));
   });
 
+  it("transfers linked note YAML before removing a sent vault task to Dida", async () => {
+    const taskFile = { path: "Project.md", extension: "md", stat: { ctime: 1, mtime: 2, size: 3 } };
+    const noteFile = { path: "Task Hub Notes/design.md", extension: "md", stat: { ctime: 4, mtime: 5, size: 6 } };
+    const plugin = new TaskHubPlugin({} as never, {} as never);
+    const createTask = jest.fn(async () => ({ id: "dida-created-1" }));
+    jest.spyOn(plugin as never, "createDidaClient").mockReturnValue({ createTask } as never);
+    const currentTask = task({ filePath: "Project.md", rawLine: "- [ ] Design review 📅 2026-05-20", text: "Design review" });
+    const oldKey = buildTaskNoteKey(currentTask);
+    const noteContent = createTaskNoteContent({
+      noteId: "thn_1",
+      relatedKey: oldKey,
+      title: "Design review",
+      createdAt: "2026-05-29T10:30:12"
+    });
+    const writes: Array<{ path: string; content: string }> = [];
+    const process = jest.fn(async (file, update) => {
+      const content = file.path === noteFile.path ? noteContent : "- [ ] Design review 📅 2026-05-20\nNext";
+      const next = update(content);
+      writes.push({ path: file.path, content: next });
+      return next;
+    });
+    plugin.app = {
+      vault: {
+        adapter: {},
+        getFileByPath: jest.fn((path: string) => (path === noteFile.path ? noteFile : taskFile)),
+        read: jest.fn(async () => "- [ ] Design review 📅 2026-05-20\nNext"),
+        process,
+        cachedRead: jest.fn(async () => "Next")
+      },
+      workspace: {
+        getLeavesOfType: jest.fn(() => [])
+      }
+    } as never;
+    plugin.settings = {
+      ...DEFAULT_SETTINGS,
+      taskNotes: {
+        ...DEFAULT_SETTINGS.taskNotes,
+        enabled: true
+      },
+      dida: {
+        ...DEFAULT_SETTINGS.dida,
+        enabled: true,
+        tasksEnabled: true,
+        tasksCreateEnabled: true,
+        apiToken: "token",
+        defaultProjectId: "default-project"
+      }
+    };
+    plugin.taskIndex = {
+      reindexFile: jest.fn(async () => undefined)
+    } as never;
+    plugin.taskNoteIndex = {
+      getNotesForKey: jest.fn(() => [{ path: noteFile.path, related: [oldKey], history: [], title: "design" }]),
+      reindexFile: jest.fn(async () => undefined)
+    } as never;
+    plugin.syncDida = jest.fn(async () => undefined) as never;
+
+    await plugin.sendTaskToDida(currentTask, {
+      type: "dida",
+      projectId: "selected-project"
+    });
+
+    expect(writes.map((write) => write.path)).toEqual([noteFile.path, taskFile.path]);
+    const parsed = parseTaskNoteFrontmatter(writes[0].content);
+    expect(parsed?.related).toEqual(["task:dida:dida-created-1"]);
+    expect(parsed?.history).toContain(oldKey);
+    expect(Object.values(plugin.settings.didaTaskLinks)).toEqual(["dida-created-1"]);
+  });
+
   it("completes Dida tasks when Obsidian requestUrl has an empty JSON body", async () => {
     const { requestUrl } = jest.requireMock("obsidian");
     requestUrl.mockResolvedValueOnce({
@@ -2107,6 +2176,89 @@ describe("Apple Reminders migration", () => {
       title: "Send invoice",
       tags: ["#errand", "#client-acme"]
     }));
+  });
+
+  it("transfers linked note YAML when Apple Reminder detail edits recreate the reminder in another list", async () => {
+    const noteFile = { path: "Task Hub Notes/pay.md", extension: "md", stat: { ctime: 4, mtime: 5, size: 6 } };
+    const plugin = new TaskHubPlugin({} as never, {} as never);
+    const currentTask = appleReminderTask({ externalId: "reminder-1", externalListId: "inbox" });
+    const oldKey = buildTaskNoteKey(currentTask);
+    const noteContent = createTaskNoteContent({
+      noteId: "thn_1",
+      relatedKey: oldKey,
+      title: "Pay invoice",
+      createdAt: "2026-05-29T10:30:12"
+    });
+    const writes: Array<{ path: string; content: string }> = [];
+    const process = jest.fn(async (file, update) => {
+      const next = update(noteContent);
+      writes.push({ path: file.path, content: next });
+      return next;
+    });
+    setAppleReminderDetails.mockRejectedValueOnce(
+      new Error("The operation couldn’t be completed. (com.apple.reminderkit error -3002.)")
+    );
+    createAppleReminder.mockResolvedValueOnce("reminder-2");
+    deleteAppleReminder.mockResolvedValueOnce(undefined);
+    plugin.app = {
+      vault: {
+        getFileByPath: jest.fn((path: string) => (path === noteFile.path ? noteFile : null)),
+        process
+      },
+      workspace: { getLeavesOfType: jest.fn(() => []) }
+    } as never;
+    plugin.settings = {
+      ...DEFAULT_SETTINGS,
+      taskNotes: {
+        ...DEFAULT_SETTINGS.taskNotes,
+        enabled: true
+      },
+      appleReminderLinks: {
+        "vault-task-1": "reminder-1"
+      },
+      localApple: {
+        ...DEFAULT_SETTINGS.localApple,
+        enabled: true,
+        remindersEnabled: true,
+        remindersWritebackEnabled: true,
+        remindersCreateEnabled: true
+      }
+    };
+    plugin.taskNoteIndex = {
+      getNotesForKey: jest.fn((key: string) => (key === oldKey ? [{ path: noteFile.path, related: [oldKey], history: [], title: "pay" }] : [])),
+      reindexFile: jest.fn(async () => undefined)
+    } as never;
+    plugin.syncLocalApple = jest.fn(async () => {
+      plugin.localAppleTasks = [appleReminderTask({ externalId: "reminder-2", externalListId: "work", id: "apple-reminders:reminder-2" })];
+    }) as never;
+
+    await plugin.updateCalendarTask(currentTask, {
+      kind: "task",
+      title: "Send invoice",
+      date: "2026-05-21",
+      startTime: "09:30",
+      reminderListId: "work",
+      notes: "Bring the signed copy",
+      tags: ["#finance"]
+    });
+
+    expect(createAppleReminder).toHaveBeenCalledWith({
+      title: "Send invoice",
+      notes: "Bring the signed copy",
+      dueDate: "2026-05-21",
+      startMinutes: 570,
+      alertMinutesBefore: null,
+      listId: "work",
+      tags: ["#finance"],
+      recurrence: null
+    });
+    expect(deleteAppleReminder).toHaveBeenCalledWith("reminder-1");
+    expect(plugin.settings.appleReminderLinks).toEqual({ "vault-task-1": "reminder-2" });
+    expect(writes.map((write) => write.path)).toEqual([noteFile.path]);
+    const parsed = parseTaskNoteFrontmatter(writes[0].content);
+    expect(parsed?.related).toEqual(["task:apple-reminders:reminder-2"]);
+    expect(parsed?.history).toContain(oldKey);
+    expect(notices).toContain("Task updated.");
   });
 
   it("requests Reminders access and retries when updating before permission is granted", async () => {

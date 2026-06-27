@@ -886,6 +886,33 @@ export default class TaskHubPlugin extends Plugin {
         this.refreshOpenViews();
         return { status: "updated", content: "", line: 0 };
       } catch (error) {
+        if (
+          draft.reminderListId &&
+          draft.reminderListId !== task.externalListId &&
+          this.canCreateAppleReminders() &&
+          this.isAppleReminderSourceMoveError(error)
+        ) {
+          try {
+            const replacementReminderId = await this.runAppleReminderWrite(() =>
+              this.recreateAppleReminderFromDraft(task, draft, title, reminderTags, recurrence)
+            );
+            this.rememberAppleReminderListMoveUndo(task, replacementReminderId, task.externalListId);
+            await this.syncLocalApple({ silent: true });
+            this.updateAppleReminderLinks(task.externalId, replacementReminderId);
+            const noteTransfer = await this.transferTaskNotesToAppleReminder(task, replacementReminderId);
+            if (!noteTransfer.ok) new Notice(noteTransfer.message);
+            this.refreshOpenViews();
+            new Notice(t("taskUpdated"));
+            return { status: "updated", content: "", line: 0 };
+          } catch (fallbackError) {
+            const result: CompletionResult = {
+              status: "conflict",
+              message: this.localAppleErrorMessage(fallbackError, "reminders")
+            };
+            new Notice(result.message);
+            return result;
+          }
+        }
         const result: CompletionResult = { status: "conflict", message: this.localAppleErrorMessage(error, "reminders") };
         new Notice(result.message);
         return result;
@@ -1141,11 +1168,27 @@ export default class TaskHubPlugin extends Plugin {
           repeatFlag: currentTask.recurrence
         })
       );
+      const noteTransfer = await this.transferTaskNotesToUpdatedTask(currentTask, {
+        ...currentTask,
+        id: `dida:${created.id}`,
+        stableId: `dida:${created.id}`,
+        source: "dida",
+        externalId: created.id,
+        externalListId: created.projectId ?? target.projectId ?? this.settings.dida.defaultProjectId,
+        externalSourceName: undefined,
+        filePath: currentTask.filePath,
+        rawLine: currentTask.rawLine
+      });
       this.settings.didaTaskLinks = {
         ...this.settings.didaTaskLinks,
         [currentTask.id]: created.id
       };
       await this.saveSettings();
+
+      if (!noteTransfer.ok) {
+        new Notice(noteTransfer.message);
+        return;
+      }
 
       const deletion = { result: { status: "conflict", message: t("taskUpdateFailed") } as CompletionResult };
       await this.app.vault.process(file, (latestContent) => {
@@ -1307,6 +1350,7 @@ export default class TaskHubPlugin extends Plugin {
         this.updateAppleReminderLinks(reminderId, replacementReminderId);
         const noteTransfer = await this.transferTaskNotesToAppleReminder(task, replacementReminderId);
         if (!noteTransfer.ok) new Notice(noteTransfer.message);
+        this.refreshOpenViews();
         new Notice(t("appleReminderListUpdated"));
         return;
       }
@@ -1682,6 +1726,31 @@ export default class TaskHubPlugin extends Plugin {
       alertMinutesBefore: startMinutesFromTask(task) !== undefined ? task.alertMinutesBefore ?? null : null,
       tags: this.settings.localApple.remindersCreateTagsEnabled ? normalizeAppleReminderTags(task.tags) : [],
       recurrence: task.recurrence ?? null
+    }));
+    try {
+      await this.writeAppleReminderWithAccessRetry(() => deleteAppleReminder(task.externalId as string));
+    } catch (error) {
+      throw new Error(`Created the reminder in the target list, but could not remove the original one: ${error instanceof Error ? error.message : String(error)}`);
+    }
+    return replacementReminderId;
+  }
+
+  private async recreateAppleReminderFromDraft(
+    task: TaskItem,
+    draft: Extract<CalendarItemEditDraft, { kind: "task" }>,
+    title: string,
+    tags: string[],
+    recurrence: string | null | undefined
+  ): Promise<string> {
+    const replacementReminderId = await this.writeAppleReminderWithAccessRetry(() => createAppleReminder({
+      title,
+      notes: draft.notes,
+      dueDate: draft.date || undefined,
+      listId: draft.reminderListId || undefined,
+      startMinutes: draft.startTime ? parseTimeInputValue(draft.startTime) : undefined,
+      alertMinutesBefore: draft.startTime ? draft.alertMinutesBefore ?? null : null,
+      tags,
+      recurrence: recurrence ?? null
     }));
     try {
       await this.writeAppleReminderWithAccessRetry(() => deleteAppleReminder(task.externalId as string));
