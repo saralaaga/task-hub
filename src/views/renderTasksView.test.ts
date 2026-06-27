@@ -1434,8 +1434,9 @@ describe("renderTasksView", () => {
       {
         allowAppleReminderWriteback: true,
         appleReminderLists: [
-          { id: "inbox", name: "Inbox" },
-          { id: "work", name: "Work" }
+          { id: "inbox", name: "Inbox", sourceId: "icloud", sourceName: "iCloud" },
+          { id: "work", name: "Work", sourceId: "icloud", sourceName: "iCloud" },
+          { id: "local", name: "On My Mac", sourceId: "local", sourceName: "On My Mac" }
         ]
       }
     );
@@ -1446,8 +1447,12 @@ describe("renderTasksView", () => {
     toggle!.dispatch("change");
 
     const listSelect = collect(extra!).find((element) => element.classes.has("task-hub-detail-list-select"));
+    const optionLabels = collect(listSelect!).filter((element) => element.type === "option").map((element) => element.text);
     expect(textValues(container)).toContain("appleReminderList");
     expect(listSelect?.value).toBe("inbox");
+    expect(optionLabels).toContain("Inbox");
+    expect(optionLabels).toContain("Work");
+    expect(optionLabels).toContain("On My Mac");
 
     listSelect!.value = "work";
     listSelect!.change();

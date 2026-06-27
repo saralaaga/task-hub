@@ -40,6 +40,8 @@ struct ReminderRecord: Encodable {
 struct ReminderListRecord: Encodable {
     let id: String
     let name: String
+    let sourceId: String?
+    let sourceName: String?
 }
 
 struct CalendarListRecord: Encodable {
@@ -550,7 +552,12 @@ func readReminderLists(store: EKEventStore) {
     requireAccess(.reminder)
 
     let output = store.calendars(for: .reminder).map { calendar in
-        ReminderListRecord(id: calendar.calendarIdentifier, name: calendar.title)
+        ReminderListRecord(
+            id: calendar.calendarIdentifier,
+            name: calendar.title,
+            sourceId: calendar.source.sourceIdentifier,
+            sourceName: calendar.source.title
+        )
     }
 
     writeJson(

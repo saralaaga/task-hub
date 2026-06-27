@@ -133,6 +133,8 @@ export type CalendarSource = {
 export type AppleReminderList = {
   id: string;
   name: string;
+  sourceId?: string;
+  sourceName?: string;
 };
 
 export type DidaProject = {

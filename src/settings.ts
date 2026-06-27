@@ -127,7 +127,7 @@ export function normalizeTaskHubSettings(loaded: Partial<TaskHubSettings> | null
         ...DEFAULT_SETTINGS.localApple,
         ...(loadedLocalApple ?? {}),
         enabled: localAppleEnabled,
-        remindersLists: loadedLocalApple?.remindersLists ?? DEFAULT_SETTINGS.localApple.remindersLists
+        remindersLists: normalizeAppleReminderLists(loadedLocalApple?.remindersLists)
       },
       dida: {
         ...DEFAULT_SETTINGS.dida,
@@ -154,7 +154,7 @@ export function normalizeTaskHubSettings(loaded: Partial<TaskHubSettings> | null
       reminderDurationOverrides:
         loadedLocalApple?.reminderDurationOverrides ?? DEFAULT_SETTINGS.localApple.reminderDurationOverrides,
       remindersCreateTagsEnabled,
-      remindersLists: loadedLocalApple?.remindersLists ?? DEFAULT_SETTINGS.localApple.remindersLists,
+      remindersLists: normalizeAppleReminderLists(loadedLocalApple?.remindersLists),
       calendarColor: loadedLocalApple?.calendarColor ?? DEFAULT_SETTINGS.localApple.calendarColor,
       calendarColorOverrides: loadedLocalApple?.calendarColorOverrides ?? DEFAULT_SETTINGS.localApple.calendarColorOverrides,
       calendars: loadedLocalApple?.calendars ?? DEFAULT_SETTINGS.localApple.calendars,
@@ -317,6 +317,19 @@ function normalizeTaskNotesSettings(loaded: Partial<TaskHubSettings["taskNotes"]
     showFrontmatterInNoteModal: loaded?.showFrontmatterInNoteModal ?? DEFAULT_SETTINGS.taskNotes.showFrontmatterInNoteModal,
     linkedNoteSubtasksEnabled: loaded?.linkedNoteSubtasksEnabled ?? DEFAULT_SETTINGS.taskNotes.linkedNoteSubtasksEnabled
   };
+}
+
+function normalizeAppleReminderLists(loaded: unknown): TaskHubSettings["localApple"]["remindersLists"] {
+  if (!Array.isArray(loaded)) return DEFAULT_SETTINGS.localApple.remindersLists;
+  return loaded
+    .filter((list): list is { id?: unknown; name?: unknown; sourceId?: unknown; sourceName?: unknown } => Boolean(list) && typeof list === "object")
+    .map((list) => ({
+      id: typeof list.id === "string" ? list.id : "",
+      name: typeof list.name === "string" ? list.name : "",
+      sourceId: typeof list.sourceId === "string" ? list.sourceId : undefined,
+      sourceName: typeof list.sourceName === "string" ? list.sourceName : undefined
+    }))
+    .filter((list) => list.id.length > 0 && list.name.length > 0);
 }
 
 function normalizeTaskHubLastSessionState(

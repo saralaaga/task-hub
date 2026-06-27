@@ -1643,6 +1643,43 @@ describe("Apple Reminders migration", () => {
     expect(notices).toContain("Undid the last task change.");
   });
 
+  it("recreates Apple Reminders in the target list when direct list moves are unsupported", async () => {
+    const plugin = new TaskHubPlugin({} as never, {} as never);
+    plugin.app = { workspace: { getLeavesOfType: jest.fn(() => []) } } as never;
+    plugin.settings = {
+      ...DEFAULT_SETTINGS,
+      localApple: {
+        ...DEFAULT_SETTINGS.localApple,
+        enabled: true,
+        remindersEnabled: true,
+        remindersWritebackEnabled: true,
+        remindersCreateEnabled: true,
+        remindersLists: [
+          { id: "inbox", name: "Inbox", sourceId: "icloud", sourceName: "iCloud" },
+          { id: "work", name: "Work", sourceId: "icloud", sourceName: "iCloud" }
+        ]
+      },
+      appleReminderLinks: {
+        "vault-task-1": "reminder-1"
+      }
+    };
+    createAppleReminder.mockResolvedValueOnce("reminder-2");
+    setAppleReminderList.mockRejectedValueOnce(new Error("The operation couldn’t be completed. (com.apple.reminderkit error -3002.)"));
+    deleteAppleReminder.mockResolvedValueOnce(undefined);
+    plugin.syncLocalApple = jest.fn(async () => undefined) as never;
+
+    await plugin.moveAppleReminderToList(appleReminderTask({ externalId: "reminder-1", externalListId: "inbox" }), "work");
+
+    expect(setAppleReminderList).toHaveBeenCalledWith("reminder-1", "work");
+    expect(createAppleReminder).toHaveBeenCalledWith(expect.objectContaining({
+      title: "Pay invoice",
+      listId: "work"
+    }));
+    expect(deleteAppleReminder).toHaveBeenCalledWith("reminder-1");
+    expect(plugin.settings.appleReminderLinks).toEqual({ "vault-task-1": "reminder-2" });
+    expect(notices).toContain("Apple Reminders list updated.");
+  });
+
   it("requests Reminders access and retries when creating an Apple Reminder before permission is granted", async () => {
     const notDetermined = Object.assign(new Error("Apple access has not been requested yet."), { code: "not_determined" });
     createAppleReminder.mockRejectedValueOnce(notDetermined).mockResolvedValueOnce("reminder-created-after-access");

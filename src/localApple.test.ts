@@ -704,10 +704,12 @@ describe("local Apple mapping", () => {
 
   it("reads Apple Reminder lists through the helper", async () => {
     execFile.mockImplementationOnce((_file: string, _args: string[], _options: unknown, callback: ExecFileCallback) => {
-      callback(null, "{\"ok\":true,\"lists\":[{\"id\":\"list-1\",\"name\":\"Personal\"}]}", "");
+      callback(null, "{\"ok\":true,\"lists\":[{\"id\":\"list-1\",\"name\":\"Personal\",\"sourceId\":\"source-1\",\"sourceName\":\"iCloud\"}]}", "");
     });
 
-    await expect(withPlatform("darwin", () => readAppleReminderLists())).resolves.toEqual([{ id: "list-1", name: "Personal" }]);
+    await expect(withPlatform("darwin", () => readAppleReminderLists())).resolves.toEqual([
+      { id: "list-1", name: "Personal", sourceId: "source-1", sourceName: "iCloud" }
+    ]);
     expect(execFile.mock.calls.at(-1)?.[1]).toEqual(["reminder-lists"]);
   });
 

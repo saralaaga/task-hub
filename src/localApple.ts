@@ -182,7 +182,12 @@ export async function readAppleRemindersData(): Promise<TaskItem[]> {
 export async function readAppleReminderLists(): Promise<AppleReminderList[]> {
   const output = await runAppleHelper(["reminder-lists"]);
   const parsed = parseHelperJson<AppleHelperReminderListsResponse>(output);
-  return parsed.lists ?? [];
+  return (parsed.lists ?? []).map((list) => ({
+    id: list.id,
+    name: list.name,
+    sourceId: list.sourceId,
+    sourceName: list.sourceName
+  }));
 }
 
 export async function readAppleCalendarLists(): Promise<AppleCalendarInfo[]> {

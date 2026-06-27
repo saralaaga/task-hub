@@ -258,6 +258,11 @@ export default class TaskHubPlugin extends Plugin {
     return this.settings.localApple.remindersLists;
   }
 
+  private isAppleReminderSourceMoveError(error: unknown): boolean {
+    const message = error instanceof Error ? error.message : String(error);
+    return message.includes("com.apple.reminderkit error -3002") || message.includes("Moving between lists is unsupported in this account");
+  }
+
   getAppleReminderListColors(): Record<string, string> {
     return Object.fromEntries(
       this.settings.localApple.remindersLists.map((list) => [
@@ -1292,7 +1297,19 @@ export default class TaskHubPlugin extends Plugin {
 
     try {
       const reminderId = task.externalId;
-      await this.writeAppleReminderWithAccessRetry(() => setAppleReminderList(reminderId, listId));
+      try {
+        await this.writeAppleReminderWithAccessRetry(() => setAppleReminderList(reminderId, listId));
+      } catch (error) {
+        if (!this.isAppleReminderSourceMoveError(error)) throw error;
+        const replacementReminderId = await this.recreateAppleReminderInList(task, listId);
+        this.rememberAppleReminderListMoveUndo(task, replacementReminderId, task.externalListId);
+        await this.syncLocalApple({ silent: true });
+        this.updateAppleReminderLinks(reminderId, replacementReminderId);
+        const noteTransfer = await this.transferTaskNotesToAppleReminder(task, replacementReminderId);
+        if (!noteTransfer.ok) new Notice(noteTransfer.message);
+        new Notice(t("appleReminderListUpdated"));
+        return;
+      }
       await this.syncLocalApple({ silent: true });
       this.rememberTaskDraftUndo(task, this.resolveUndoTask(task, { status: "updated", content: "", line: 0 }));
       new Notice(t("appleReminderListUpdated"));
@@ -1628,6 +1645,50 @@ export default class TaskHubPlugin extends Plugin {
         return result.status === "updated" || result.status === "already_in_state";
       }
     };
+  }
+
+  private rememberAppleReminderListMoveUndo(originalTask: TaskItem, replacementReminderId: string, originalListId: string | undefined): void {
+    if (this.isUndoingTaskChange || !originalListId) return;
+    this.lastTaskUndoAction = {
+      undo: async () => {
+        const currentTask = this.getTasks().find((candidate) => candidate.source === "apple-reminders" && candidate.externalId === replacementReminderId);
+        if (!currentTask) return false;
+        await this.moveAppleReminderToList(currentTask, originalListId);
+        return true;
+      }
+    };
+  }
+
+  private updateAppleReminderLinks(previousReminderId: string, nextReminderId: string): void {
+    let changed = false;
+    const nextLinks = Object.fromEntries(Object.entries(this.settings.appleReminderLinks).map(([taskId, reminderId]) => {
+      if (reminderId !== previousReminderId) return [taskId, reminderId];
+      changed = true;
+      return [taskId, nextReminderId];
+    }));
+    if (changed) {
+      this.settings.appleReminderLinks = nextLinks;
+      void this.saveSettings();
+    }
+  }
+
+  private async recreateAppleReminderInList(task: TaskItem, listId: string): Promise<string> {
+    const replacementReminderId = await this.writeAppleReminderWithAccessRetry(() => createAppleReminder({
+      title: task.text,
+      notes: task.contextPreview,
+      dueDate: task.dueDate,
+      listId,
+      startMinutes: startMinutesFromTask(task),
+      alertMinutesBefore: startMinutesFromTask(task) !== undefined ? task.alertMinutesBefore ?? null : null,
+      tags: this.settings.localApple.remindersCreateTagsEnabled ? normalizeAppleReminderTags(task.tags) : [],
+      recurrence: task.recurrence ?? null
+    }));
+    try {
+      await this.writeAppleReminderWithAccessRetry(() => deleteAppleReminder(task.externalId as string));
+    } catch (error) {
+      throw new Error(`Created the reminder in the target list, but could not remove the original one: ${error instanceof Error ? error.message : String(error)}`);
+    }
+    return replacementReminderId;
   }
 
   private resolveUndoTask(task: TaskItem, result: CompletionResult): TaskItem | undefined {
