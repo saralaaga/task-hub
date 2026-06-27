@@ -3,6 +3,7 @@ import {
   createTaskHubSessionSnapshot,
   collectCalendarUnscheduledTasks,
   collectUnscheduledTasks,
+  reconcileVisibleTaskSelection,
   restoreContentScrollAfterRender,
   restoreTaskHubSessionState,
   scrollExpandedTaskIntoView,
@@ -337,6 +338,47 @@ describe("Task Hub session state", () => {
   });
 });
 
+describe("reconcileVisibleTaskSelection", () => {
+  it("keeps task details focused on the same stable task after a save changes the volatile task id", () => {
+    const previousTask = task({
+      id: "Inbox.md:0:oldhash",
+      stableId: "vault:th_current",
+      text: "Before edit"
+    });
+    const updatedTask = task({
+      id: "Inbox.md:0:newhash",
+      stableId: "vault:th_current",
+      text: "After edit"
+    });
+
+    const selection = reconcileVisibleTaskSelection(
+      [updatedTask],
+      previousTask.id,
+      previousTask.stableId,
+      new Set([previousTask.id])
+    );
+
+    expect(selection.selectedTaskId).toBe(updatedTask.id);
+    expect(selection.selectedTaskStableId).toBe(updatedTask.stableId);
+    expect([...selection.selectedTaskIds]).toEqual([updatedTask.id]);
+  });
+
+  it("falls back to another still-visible selected task when the previous primary selection disappears", () => {
+    const visibleTask = task({ id: "visible", stableId: "vault:th_visible", text: "Visible task" });
+
+    const selection = reconcileVisibleTaskSelection(
+      [visibleTask],
+      "missing",
+      "vault:th_missing",
+      new Set(["missing", visibleTask.id])
+    );
+
+    expect(selection.selectedTaskId).toBe(visibleTask.id);
+    expect(selection.selectedTaskStableId).toBe(visibleTask.stableId);
+    expect([...selection.selectedTaskIds]).toEqual([visibleTask.id]);
+  });
+});
+
 describe("scrollExpandedTaskIntoView", () => {
   it("smoothly scrolls the task list down when expanded subtasks would overflow below the viewport", () => {
     const row = elementRect({ top: 180, bottom: 228 }, { "data-task-id": "parent" });
@@ -436,6 +478,7 @@ function fallbackFilters(): TaskViewFilterSettings {
 function task(overrides: Partial<TaskItem>): TaskItem {
   return {
     id: overrides.id ?? "task",
+    stableId: overrides.stableId,
     filePath: overrides.filePath ?? "Inbox.md",
     line: overrides.line ?? 0,
     rawLine: overrides.rawLine ?? "- [ ] Task",

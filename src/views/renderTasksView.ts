@@ -76,9 +76,11 @@ export type TaskRenderOptions = {
 const BUCKETS = ["overdue", "today", "tomorrow", "thisWeek", "future", "noDate", "otherCompleted"] as const;
 const TASK_LIST_DRAG_MIME = "application/x-task-hub-task-list-id";
 const TASK_LIST_RESCHEDULE_BUCKETS = ["overdue", "today", "tomorrow", "thisWeek"] as const;
+const TASK_PROGRESS_ANIMATION_MS = 240;
 let activeDraggedTaskListItemId: string | undefined;
 let activeTaskListTasksById = new Map<string, TaskItem>();
 let activeDraggableTaskListItemIds = new Set<string>();
+const previousTaskProgressByContainer = new WeakMap<HTMLElement, Map<string, number>>();
 
 export function renderTasksView(
   container: HTMLElement,
@@ -91,6 +93,7 @@ export function renderTasksView(
   options: TaskRenderOptions = { allowAppleReminderWriteback: false }
 ): void {
   container.empty();
+  const previousProgressByTaskId = previousTaskProgressByContainer.get(container) ?? new Map<string, number>();
 
   const hasActiveFilter =
     filters.status !== "open" ||
@@ -100,6 +103,7 @@ export function renderTasksView(
     Boolean(filters.textQuery);
 
   if (tasks.length === 0 && !hasActiveFilter) {
+    previousTaskProgressByContainer.set(container, new Map());
     container.createDiv({
       cls: "task-hub-empty",
       text: t("noOpenTasks")
@@ -108,7 +112,8 @@ export function renderTasksView(
   }
 
   const sortedTasks = applyTaskListManualOrder(tasks, options.taskListManualOrder ?? {});
-  const progressByTaskId = options.showSubtaskProgressBars === false ? new Map<string, TaskProgressInfo>() : buildSubtaskProgressIndex(allTasks);
+  const allProgressByTaskId = buildSubtaskProgressIndex(allTasks);
+  const progressByTaskId = options.showSubtaskProgressBars === false ? new Map<string, TaskProgressInfo>() : allProgressByTaskId;
   let selectedTask = sortedTasks.find((task) => task.id === options.selectedTaskId) ?? sortedTasks.find((task) => !task.completed) ?? sortedTasks[0];
   const selectedTaskIds = normalizedSelectedTaskIds(options, selectedTask);
   const workbench = container.createDiv({ cls: "task-hub-task-workbench" });
@@ -119,6 +124,7 @@ export function renderTasksView(
   const showListDragTargets = draggableTaskIds.size > 0 && Boolean(handlers.onTaskReschedule);
 
   if (sortedTasks.length === 0) {
+    previousTaskProgressByContainer.set(container, new Map());
     list.createDiv({ cls: "task-hub-empty", text: t("noMatchingTasks") });
     restoreTaskListScroll(list, options);
     return;
@@ -192,6 +198,7 @@ export function renderTasksView(
         task,
         childTasksByParentId,
         progressByTaskId,
+        previousProgressByTaskId,
         handlers,
         options,
         t,
@@ -207,6 +214,10 @@ export function renderTasksView(
   restoreTaskListScroll(list, options);
   detailsHost = workbench.createDiv({ cls: "task-hub-task-details-host" });
   renderTaskDetails(detailsHost, selectedTask, selectedTask ? progressByTaskId.get(selectedTask.id) : undefined, handlers, options, t);
+  previousTaskProgressByContainer.set(
+    container,
+    new Map([...allProgressByTaskId.entries()].map(([taskId, info]) => [taskId, info.roundedPercent]))
+  );
 }
 
 function renderTaskTree(
@@ -214,6 +225,7 @@ function renderTaskTree(
   task: TaskItem,
   childTasksByParentId: Map<string, TaskItem[]>,
   progressByTaskId: Map<string, TaskProgressInfo>,
+  previousProgressByTaskId: Map<string, number>,
   handlers: TaskRowHandlers,
   options: TaskRenderOptions,
   t: Translator,
@@ -231,6 +243,7 @@ function renderTaskTree(
     container,
     task,
     progressByTaskId.get(task.id),
+    previousProgressByTaskId.get(task.id),
     handlers,
     options,
     t,
@@ -271,6 +284,7 @@ function renderTaskTree(
       child,
       childTasksByParentId,
       progressByTaskId,
+      previousProgressByTaskId,
       handlers,
       options,
       t,
@@ -376,6 +390,7 @@ function renderTaskRow(
   container: HTMLElement,
   task: TaskItem,
   progressInfo: TaskProgressInfo | undefined,
+  previousProgressPercent: number | undefined,
   handlers: TaskRowHandlers,
   options: TaskRenderOptions,
   t: Translator,
@@ -426,7 +441,7 @@ function renderTaskRow(
   }
   if (progressInfo && options.showSubtaskProgressBars !== false) {
     row.addClass("has-progress");
-    renderTaskProgressRow(content, progressInfo);
+    renderTaskProgressRow(content, progressInfo, previousProgressPercent);
   }
   if (taskNoteCount > 0) {
     content.createSpan({ cls: "task-hub-task-note-count", text: String(taskNoteCount) });
@@ -909,12 +924,52 @@ function renderTaskDetails(
   renderTaskNotes(container, task, handlers, options, t);
 }
 
-function renderTaskProgressRow(container: HTMLElement, progressInfo: TaskProgressInfo): void {
+function renderTaskProgressRow(
+  container: HTMLElement,
+  progressInfo: TaskProgressInfo,
+  previousProgressPercent?: number
+): void {
   const progress = container.createDiv({ cls: "task-hub-task-progress" });
   const bar = progress.createDiv({ cls: "task-hub-task-progress-bar" });
   const fill = bar.createDiv({ cls: "task-hub-task-progress-fill" });
-  setCssStyles(fill, { width: `${progressInfo.roundedPercent}%` });
   progress.createSpan({ cls: "task-hub-task-progress-value", text: `${progressInfo.roundedPercent}%` });
+  const nextPercent = clampTaskProgressPercent(progressInfo.roundedPercent);
+  const shouldAnimate =
+    typeof previousProgressPercent === "number"
+    && previousProgressPercent !== nextPercent
+    && !progress.win.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+
+  if (!shouldAnimate) {
+    setCssStyles(fill, { width: `${nextPercent}%` });
+    return;
+  }
+
+  const previousPercent = clampTaskProgressPercent(previousProgressPercent);
+  progress.addClass("is-progress-animating");
+  progress.addClass(nextPercent > previousPercent ? "is-progress-increasing" : "is-progress-decreasing");
+  setCssStyles(fill, { width: `${previousPercent}%` });
+  scheduleTaskProgressAnimation(progress, () => {
+    setCssStyles(fill, { width: `${nextPercent}%` });
+  });
+  setTimeout(() => {
+    progress.removeClass("is-progress-animating");
+    progress.removeClass("is-progress-increasing");
+    progress.removeClass("is-progress-decreasing");
+  }, TASK_PROGRESS_ANIMATION_MS + 80);
+}
+
+function scheduleTaskProgressAnimation(element: HTMLElement, callback: () => void): void {
+  const requestAnimationFrameFn = element.win.requestAnimationFrame?.bind(element.win);
+  if (requestAnimationFrameFn) {
+    requestAnimationFrameFn(() => callback());
+    return;
+  }
+  setTimeout(callback, 0);
+}
+
+function clampTaskProgressPercent(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(0, Math.min(100, value));
 }
 
 function toggleDetailExtra(extra: HTMLElement, expanded: boolean): void {

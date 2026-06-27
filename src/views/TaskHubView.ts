@@ -31,6 +31,7 @@ export class TaskHubView extends ItemView {
   private knownCalendarSourceIds = new Set<string>(["vault"]);
   private isRefreshing = false;
   private selectedTaskId: string | undefined;
+  private selectedTaskStableId: string | undefined;
   private taskListScrollTop = 0;
   private contentScrollTop = 0;
   private calendarAgendaScrollPosition: AgendaScrollPosition | undefined;
@@ -179,10 +180,15 @@ export class TaskHubView extends ItemView {
     if (this.view === "tasks") {
       const now = new Date();
       const visibleTasks = this.taskViewVisibleTasks(allTasks, now);
-      if (visibleTasks.length > 0 && !visibleTasks.some((task) => task.id === this.selectedTaskId)) {
-        this.selectedTaskId = undefined;
-      }
-      this.pruneSelectedTaskIds(visibleTasks);
+      const selection = reconcileVisibleTaskSelection(
+        visibleTasks,
+        this.selectedTaskId,
+        this.selectedTaskStableId,
+        this.selectedTaskIds
+      );
+      this.selectedTaskId = selection.selectedTaskId;
+      this.selectedTaskStableId = selection.selectedTaskStableId;
+      this.selectedTaskIds = selection.selectedTaskIds;
       renderTasksView(
         main,
         visibleTasks,
@@ -574,15 +580,20 @@ export class TaskHubView extends ItemView {
   }
 
   private pruneSelectedTaskIds(visibleTasks: TaskItem[]): void {
-    const visibleIds = new Set(visibleTasks.map((task) => task.id));
-    this.selectedTaskIds = new Set([...this.selectedTaskIds].filter((taskId) => visibleIds.has(taskId)));
-    if (this.selectedTaskId && !visibleIds.has(this.selectedTaskId)) {
-      this.selectedTaskId = undefined;
-    }
+    const selection = reconcileVisibleTaskSelection(
+      visibleTasks,
+      this.selectedTaskId,
+      this.selectedTaskStableId,
+      this.selectedTaskIds
+    );
+    this.selectedTaskId = selection.selectedTaskId;
+    this.selectedTaskStableId = selection.selectedTaskStableId;
+    this.selectedTaskIds = selection.selectedTaskIds;
   }
 
   private updateTaskSelection(task: TaskItem, taskIds?: string[]): void {
     this.selectedTaskId = task.id;
+    this.selectedTaskStableId = task.stableId ?? task.id;
     this.selectedTaskIds = new Set(taskIds && taskIds.length > 0 ? taskIds : [task.id]);
   }
 
@@ -711,6 +722,45 @@ export class TaskHubView extends ItemView {
     this.render();
   }
 
+}
+
+export function reconcileVisibleTaskSelection(
+  visibleTasks: TaskItem[],
+  selectedTaskId: string | undefined,
+  selectedTaskStableId: string | undefined,
+  selectedTaskIds: ReadonlySet<string>
+): {
+  selectedTaskId: string | undefined;
+  selectedTaskStableId: string | undefined;
+  selectedTaskIds: Set<string>;
+} {
+  const visibleIds = new Set(visibleTasks.map((task) => task.id));
+  const visibleByStableId = new Map(visibleTasks.map((task) => [task.stableId ?? task.id, task]));
+  const nextSelectedTaskIds = new Set([...selectedTaskIds].filter((taskId) => visibleIds.has(taskId)));
+  let nextSelectedTask = selectedTaskId ? visibleTasks.find((task) => task.id === selectedTaskId) : undefined;
+
+  if (!nextSelectedTask && selectedTaskStableId) {
+    nextSelectedTask = visibleByStableId.get(selectedTaskStableId);
+  }
+
+  if (!nextSelectedTask && nextSelectedTaskIds.size > 0) {
+    nextSelectedTask = visibleTasks.find((task) => nextSelectedTaskIds.has(task.id));
+  }
+
+  if (!nextSelectedTask) {
+    return {
+      selectedTaskId: undefined,
+      selectedTaskStableId: undefined,
+      selectedTaskIds: nextSelectedTaskIds
+    };
+  }
+
+  nextSelectedTaskIds.add(nextSelectedTask.id);
+  return {
+    selectedTaskId: nextSelectedTask.id,
+    selectedTaskStableId: nextSelectedTask.stableId ?? nextSelectedTask.id,
+    selectedTaskIds: nextSelectedTaskIds
+  };
 }
 
 export function restoreContentScrollAfterRender(

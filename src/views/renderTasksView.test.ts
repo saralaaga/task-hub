@@ -346,6 +346,14 @@ function firstProgressValue(element: FakeElement): string | undefined {
   return collect(element).find((child) => child.classes.has("task-hub-task-progress-value"))?.text;
 }
 
+function firstProgressFill(element: FakeElement): FakeElement | undefined {
+  return collect(element).find((child) => child.classes.has("task-hub-task-progress-fill"));
+}
+
+function inlineStyleWidth(element: FakeElement | undefined): string | undefined {
+  return (element?.style as { width?: string } | undefined)?.width;
+}
+
 describe("renderTasksView", () => {
   beforeEach(() => {
     mockMenus.length = 0;
@@ -689,6 +697,137 @@ describe("renderTasksView", () => {
     );
 
     expect(firstProgressValue(taskRowByTitle(container, "Parent")!)).toBe("100%");
+  });
+
+  it("animates parent progress increases from the previous percentage on rerender", () => {
+    jest.useFakeTimers();
+    try {
+      const container = new FakeElement();
+      const parent: TaskItem = {
+        ...baseTask,
+        id: "parent",
+        stableId: "vault:parent",
+        source: "vault",
+        externalId: undefined,
+        externalSourceName: undefined,
+        filePath: "Project.md",
+        rawLine: "- [ ] Parent",
+        text: "Parent",
+        dueDate: undefined
+      };
+      const child: TaskItem = {
+        ...parent,
+        id: "child",
+        stableId: "vault:child",
+        line: 1,
+        rawLine: "  - [ ] Child",
+        text: "Child",
+        indent: 1,
+        parentId: "parent"
+      };
+
+      renderTasksView(
+        container as unknown as HTMLElement,
+        [parent, child],
+        [parent, child],
+        { status: "open", tags: [], sourceQuery: "", textQuery: "" },
+        handlers(),
+        new Date("2026-05-08T12:00:00Z"),
+        (key) => key,
+        { allowAppleReminderWriteback: true }
+      );
+
+      const completedChild = { ...child, completed: true, rawLine: "  - [x] Child" };
+      renderTasksView(
+        container as unknown as HTMLElement,
+        [parent, completedChild],
+        [parent, completedChild],
+        { status: "open", tags: [], sourceQuery: "", textQuery: "" },
+        handlers(),
+        new Date("2026-05-08T12:00:00Z"),
+        (key) => key,
+        { allowAppleReminderWriteback: true }
+      );
+
+      const row = taskRowByTitle(container, "Parent")!;
+      const progress = collect(row).find((element) => element.classes.has("task-hub-task-progress"));
+      const fill = firstProgressFill(row);
+
+      expect(progress?.classes.has("is-progress-animating")).toBe(true);
+      expect(progress?.classes.has("is-progress-increasing")).toBe(true);
+      expect(inlineStyleWidth(fill)).toBe("0%");
+
+      jest.runOnlyPendingTimers();
+      expect(inlineStyleWidth(fill)).toBe("100%");
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it("animates parent progress decreases from the previous percentage on rerender", () => {
+    jest.useFakeTimers();
+    try {
+      const container = new FakeElement();
+      const parent: TaskItem = {
+        ...baseTask,
+        id: "parent",
+        stableId: "vault:parent",
+        source: "vault",
+        externalId: undefined,
+        externalSourceName: undefined,
+        filePath: "Project.md",
+        rawLine: "- [ ] Parent",
+        text: "Parent",
+        dueDate: undefined
+      };
+      const child: TaskItem = {
+        ...parent,
+        id: "child",
+        stableId: "vault:child",
+        line: 1,
+        rawLine: "  - [x] Child",
+        text: "Child",
+        completed: true,
+        indent: 1,
+        parentId: "parent"
+      };
+
+      renderTasksView(
+        container as unknown as HTMLElement,
+        [parent, child],
+        [parent, child],
+        { status: "open", tags: [], sourceQuery: "", textQuery: "" },
+        handlers(),
+        new Date("2026-05-08T12:00:00Z"),
+        (key) => key,
+        { allowAppleReminderWriteback: true }
+      );
+
+      const reopenedChild = { ...child, completed: false, rawLine: "  - [ ] Child" };
+      renderTasksView(
+        container as unknown as HTMLElement,
+        [parent, reopenedChild],
+        [parent, reopenedChild],
+        { status: "open", tags: [], sourceQuery: "", textQuery: "" },
+        handlers(),
+        new Date("2026-05-08T12:00:00Z"),
+        (key) => key,
+        { allowAppleReminderWriteback: true }
+      );
+
+      const row = taskRowByTitle(container, "Parent")!;
+      const progress = collect(row).find((element) => element.classes.has("task-hub-task-progress"));
+      const fill = firstProgressFill(row);
+
+      expect(progress?.classes.has("is-progress-animating")).toBe(true);
+      expect(progress?.classes.has("is-progress-decreasing")).toBe(true);
+      expect(inlineStyleWidth(fill)).toBe("100%");
+
+      jest.runOnlyPendingTimers();
+      expect(inlineStyleWidth(fill)).toBe("0%");
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it("animates subtask collapse before toggling the tree closed", () => {

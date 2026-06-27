@@ -105,6 +105,26 @@ describe("Task Hub styles", () => {
     expect(tagRule).toContain("font-size: var(--font-ui-medium)");
   });
 
+  it("animates task progress bars when recursive completion percentages change", () => {
+    const styles = readFileSync(path.join(__dirname, "styles.css"), "utf8");
+    const fillRule = styles.match(/\.task-hub-task-progress-fill\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const valueRule = styles.match(/\.task-hub-task-progress-value\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const animatingFillRule = styles.match(/\.task-hub-task-progress\.is-progress-animating\s+\.task-hub-task-progress-fill\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const increasingRule = styles.match(/\.task-hub-task-progress\.is-progress-increasing\s+\.task-hub-task-progress-fill\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const decreasingRule = styles.match(/\.task-hub-task-progress\.is-progress-decreasing\s+\.task-hub-task-progress-fill\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const reducedMotionRule = styles.match(/@media \(prefers-reduced-motion: reduce\)\s*\{(?<body>[\s\S]+?)\n\}/)?.groups?.body ?? "";
+
+    expect(fillRule).toContain("transition:");
+    expect(fillRule).toContain("width 240ms cubic-bezier(0.22, 1, 0.36, 1)");
+    expect(fillRule).toContain("will-change: width");
+    expect(valueRule).toContain("transform 240ms cubic-bezier(0.22, 1, 0.36, 1)");
+    expect(animatingFillRule).toContain("filter: saturate(1.08)");
+    expect(increasingRule).toContain("box-shadow:");
+    expect(decreasingRule).toContain("box-shadow:");
+    expect(reducedMotionRule).toContain(".task-hub-task-progress-fill");
+    expect(reducedMotionRule).toContain(".task-hub-task-progress-value");
+  });
+
   it("lets auto-growing calendar task body fields stay compact for short text", () => {
     const styles = readFileSync(path.join(__dirname, "styles.css"), "utf8");
     const fixedTextareaMatch = /\.task-hub-calendar-detail-row\s+\.task-hub-detail-control\s+textarea\s*\{[^}]*min-height:\s*96px[^}]*\}/.exec(styles);

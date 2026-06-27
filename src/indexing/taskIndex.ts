@@ -148,9 +148,20 @@ export class TaskIndex {
   }
 
   private replaceFileTasks(path: string, tasks: TaskItem[]): void {
-    this.removeFileTasks(path);
-    for (const task of tasks) {
-      this.tasksById.set(task.id, task);
+    const previousTaskIds = this.taskIdsByPath.get(path) ?? [];
+    const previousEntries = Array.from(this.tasksById.entries());
+    const previousTaskIdSet = new Set(previousTaskIds);
+    const insertAt = previousEntries.findIndex(([taskId]) => previousTaskIdSet.has(taskId));
+    const nextEntries = previousEntries.filter(([taskId]) => !previousTaskIdSet.has(taskId));
+    const replacementEntries: Array<[string, TaskItem]> = tasks.map((task) => [task.id, task]);
+    if (insertAt === -1) {
+      nextEntries.push(...replacementEntries);
+    } else {
+      nextEntries.splice(insertAt, 0, ...replacementEntries);
+    }
+    this.tasksById.clear();
+    for (const [taskId, task] of nextEntries) {
+      this.tasksById.set(taskId, task);
     }
     this.taskIdsByPath.set(path, tasks.map((task) => task.id));
   }

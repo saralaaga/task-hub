@@ -35,6 +35,28 @@ describe("TaskIndex", () => {
     expect(index.getTasks()[0].tags).toEqual(["#next"]);
   });
 
+  it("keeps a changed file's tasks in their previous global order slot after reindex", async () => {
+    const contentsByPath: Record<string, string[]> = {
+      "A.md": ["- [ ] Alpha 📅 2026-05-08", "- [ ] Alpha #tag 📅 2026-05-08"],
+      "B.md": ["- [ ] Beta 📅 2026-05-08"]
+    };
+    const index = new TaskIndex({
+      ignoredPaths: [],
+      readFile: (file) => contentsByPath[file.path].shift() ?? ""
+    });
+
+    await index.scanFiles([
+      markdownFile({ path: "A.md", mtime: 1, size: 24 }),
+      markdownFile({ path: "B.md", mtime: 1, size: 23 })
+    ]);
+    expect(index.getTasks().map((task) => task.text)).toEqual(["Alpha", "Beta"]);
+
+    await index.reindexFile(markdownFile({ path: "A.md", mtime: 2, size: 29 }));
+
+    expect(index.getTasks().map((task) => task.text)).toEqual(["Alpha", "Beta"]);
+    expect(index.getTasks()[0].tags).toEqual(["#tag"]);
+  });
+
   it("removes tasks for deleted files", async () => {
     const index = new TaskIndex({
       ignoredPaths: [],

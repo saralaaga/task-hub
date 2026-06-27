@@ -1090,13 +1090,38 @@ body .task-hub-view button.task-hub-color-swatch {
   height: 100%;
   max-width: 100%;
   min-width: 0;
+  transition:
+    width 240ms cubic-bezier(0.22, 1, 0.36, 1),
+    filter 180ms ease,
+    box-shadow 180ms ease;
+  will-change: width;
 }
 
 .task-hub-task-progress-value {
   color: var(--text-muted);
   font-size: var(--font-ui-smaller);
   font-variant-numeric: tabular-nums;
+  transition:
+    color 180ms ease,
+    transform 240ms cubic-bezier(0.22, 1, 0.36, 1);
   white-space: nowrap;
+}
+
+.task-hub-task-progress.is-progress-animating .task-hub-task-progress-fill {
+  filter: saturate(1.08);
+}
+
+.task-hub-task-progress.is-progress-increasing .task-hub-task-progress-fill {
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--task-hub-source-color, var(--interactive-accent)) 18%, transparent);
+}
+
+.task-hub-task-progress.is-progress-decreasing .task-hub-task-progress-fill {
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--text-muted) 18%, transparent);
+}
+
+.task-hub-task-progress.is-progress-animating .task-hub-task-progress-value {
+  color: color-mix(in srgb, var(--text-normal) 82%, var(--task-hub-source-color, var(--interactive-accent)));
+  transform: translateY(-1px);
 }
 
 .task-hub-subtask-toggle {
@@ -2994,6 +3019,8 @@ input.task-hub-tag-editor-input:focus {
   .task-hub-subtask-list.is-closing,
   .task-hub-subtask-list.is-opening > .task-hub-task-row,
   .task-hub-subtask-list.is-closing > .task-hub-task-row,
+  .task-hub-task-progress-fill,
+  .task-hub-task-progress-value,
   .task-hub-calendar-view-stage.is-slide-left,
   .task-hub-calendar-view-stage.is-slide-right,
   .task-hub-calendar-with-sidebar.is-unscheduled-opening .task-hub-calendar-pane,
