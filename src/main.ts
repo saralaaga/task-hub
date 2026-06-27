@@ -2629,6 +2629,11 @@ class TaskNoteModal extends Modal {
   }
 }
 
+function isImeComposingEnterEvent(event: KeyboardEvent): boolean {
+  const keyCode = Number((event as KeyboardEvent & { keyCode?: number }).keyCode ?? 0);
+  return Boolean(event.isComposing || keyCode === 229);
+}
+
 function createDetachedWorkspaceLeaf(app: TaskHubPlugin["app"]): WorkspaceLeaf {
   type DetachedWorkspaceLeafConstructor = new (app: TaskHubPlugin["app"]) => WorkspaceLeaf;
   return new (WorkspaceLeaf as unknown as DetachedWorkspaceLeafConstructor)(app);
@@ -2720,6 +2725,7 @@ class CreateTaskModal extends Modal {
         });
         bindTaskHubTagInputSuggest(this.plugin.app, text.inputEl, () => collectObsidianTags(this.plugin.app, this.plugin.getTasks()));
         text.inputEl.addEventListener("keydown", (event) => {
+          if (isImeComposingEnterEvent(event)) return;
           if (event.key === "Enter") {
             event.preventDefault();
             void submit();

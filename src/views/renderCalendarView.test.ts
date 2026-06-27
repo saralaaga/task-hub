@@ -67,6 +67,8 @@ class FakeDocument {
       metaKey: event.metaKey ?? false,
       ctrlKey: event.ctrlKey ?? false,
       key: event.key,
+      isComposing: event.isComposing ?? false,
+      keyCode: event.keyCode,
       pointerId: event.pointerId,
       target: event.target,
       preventDefault: event.preventDefault ?? jest.fn(),
@@ -307,6 +309,8 @@ class FakeElement {
       metaKey: event.metaKey ?? false,
       ctrlKey: event.ctrlKey ?? false,
       key: event.key,
+      isComposing: event.isComposing ?? false,
+      keyCode: event.keyCode,
       pointerId: event.pointerId,
       target: event.target,
       preventDefault: event.preventDefault ?? jest.fn(),
@@ -344,6 +348,8 @@ type FakeEvent = {
   metaKey: boolean;
   ctrlKey: boolean;
   key?: string;
+  isComposing?: boolean;
+  keyCode?: number;
   preventDefault(): void;
   stopPropagation(): void;
   pointerId?: number;
@@ -2328,6 +2334,59 @@ describe("renderCalendarView", () => {
     expect(onTaskUpdate).toHaveBeenCalledWith(reminderTask, expect.objectContaining({
       title: "Updated body"
     }));
+  });
+
+  it("does not save calendar task title edits when Enter is confirming IME composition", () => {
+    const container = new FakeElement();
+    const onTaskUpdate = jest.fn();
+    const reminderTask = {
+      ...task,
+      source: "apple-reminders" as const,
+      externalId: "reminder-1"
+    };
+
+    renderCalendarView(
+      container as unknown as HTMLElement,
+      {
+        mode: "month",
+        focusDate: new Date("2026-05-08T12:00:00Z"),
+        weekStart: "monday",
+        visibleSourceIds: new Set(["apple-reminders"]),
+        includeCompletedTasks: false,
+        allowAppleReminderWriteback: true,
+        allowTaskCreation: false,
+        sources: [remindersSource],
+        t: (key) => key
+      },
+      [reminderTask],
+      [],
+      {
+        onLayerToggle: jest.fn(),
+        onModeChange: jest.fn(),
+        onMove: jest.fn(),
+        onDateCreateTask: jest.fn(),
+        onTaskComplete: jest.fn(),
+        onTaskJump: jest.fn(),
+        onTaskSelect: jest.fn(),
+        onTaskUpdate,
+        onTaskReschedule: jest.fn(),
+        onToday: jest.fn()
+      }
+    );
+
+    collect(container).find((element) => element.classes.has("task-hub-calendar-item"))?.click();
+    const popover = collect(fakeDocument.body).find((element) => element.classes.has("task-hub-calendar-detail-popover"));
+    const title = collect(popover as FakeElement).find((element) =>
+      element.type === "textarea" &&
+      element.classes.has("task-hub-calendar-detail-title-input") &&
+      element.classes.has("task-hub-auto-grow-textarea")
+    );
+
+    title!.value = "task";
+    title!.dispatch("input");
+    title!.dispatch("keydown", { key: "Enter", isComposing: true, keyCode: 229 });
+
+    expect(onTaskUpdate).not.toHaveBeenCalled();
   });
 
   it("renders the calendar task body as an auto-growing multiline field", () => {

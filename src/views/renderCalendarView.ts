@@ -1597,8 +1597,14 @@ function isHTMLElement(value: HTMLElement | undefined): value is HTMLElement {
   return value !== undefined;
 }
 
+function isImeComposingEnterEvent(event: KeyboardEvent): boolean {
+  const keyCode = Number((event as KeyboardEvent & { keyCode?: number }).keyCode ?? 0);
+  return Boolean(event.isComposing || keyCode === 229);
+}
+
 function bindDetailCommitKeys(field: HTMLElement, commit: () => void): void {
   field.addEventListener("keydown", (event) => {
+    if (isImeComposingEnterEvent(event)) return;
     if (event.key !== "Enter") return;
     event.preventDefault();
     event.stopPropagation();

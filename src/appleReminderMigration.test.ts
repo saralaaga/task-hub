@@ -27,6 +27,14 @@ type FakeElement = {
   children: FakeElement[];
 };
 
+type FakeDomEvent = {
+  key?: string;
+  isComposing?: boolean;
+  keyCode?: number;
+  preventDefault?: jest.Mock;
+  stopPropagation?: jest.Mock;
+};
+
 type FakeButton = {
   onClickHandler?: () => void;
   setButtonText: jest.Mock;
@@ -40,7 +48,7 @@ const modals: Array<{ contentEl: FakeElement; titleEl: FakeElement; modalEl: Fak
 function fakeEl(): FakeElement {
   const element: FakeElement = {
     addClass: jest.fn(),
-    addEventListener: jest.fn((name: string, handler: () => void) => {
+    addEventListener: jest.fn((name: string, handler: (event?: FakeDomEvent) => void) => {
       listeners.push({ element, name, handler });
     }),
     appendChild: jest.fn(),
@@ -76,15 +84,20 @@ function fakeEl(): FakeElement {
   return element;
 }
 
-const listeners: Array<{ element: FakeElement; name: string; handler: () => void }> = [];
+const listeners: Array<{ element: FakeElement; name: string; handler: (event?: FakeDomEvent) => void }> = [];
 
 function collectElements(element: FakeElement): FakeElement[] {
   return [element, ...element.children.flatMap(collectElements)];
 }
 
-function dispatchFake(element: FakeElement, name: string): void {
+function dispatchFake(element: FakeElement, name: string, event: FakeDomEvent = {}): void {
+  const nextEvent = {
+    preventDefault: jest.fn(),
+    stopPropagation: jest.fn(),
+    ...event
+  };
   for (const listener of listeners.filter((candidate) => candidate.element === element && candidate.name === name)) {
-    listener.handler();
+    listener.handler(nextEvent);
   }
 }
 
@@ -1369,6 +1382,43 @@ describe("Apple Reminders migration", () => {
     expect(fields.find((element) => element.type === "textarea")).toBeDefined();
     expect(fields.filter((element) => element.type === "checkbox")).toHaveLength(defaultCheckboxCount + 1);
     expect(fields.filter((element) => element.type === "select")).toHaveLength(defaultSelectCount + 2);
+  });
+
+  it("does not submit create task modal when Enter is used to confirm IME composition", async () => {
+    const plugin = new TaskHubPlugin({} as never, {} as never);
+    plugin.app = {
+      workspace: {
+        getLeavesOfType: jest.fn(() => [])
+      }
+    } as never;
+    plugin.settings = {
+      ...DEFAULT_SETTINGS,
+      calendarCreationDefaultKind: "task",
+      calendarTaskCreationDefaultTarget: { type: "apple-reminders" },
+      localApple: {
+        ...DEFAULT_SETTINGS.localApple,
+        enabled: true,
+        remindersEnabled: true,
+        remindersCreateEnabled: true
+      }
+    };
+    plugin.syncLocalApple = jest.fn(async () => undefined) as never;
+    (globalThis as unknown as { window: { setTimeout: typeof setTimeout } }).window = { setTimeout };
+
+    plugin.openCreateTaskModal("2026-05-20");
+
+    const modal = modals.at(-1);
+    const fields = modal ? collectElements(modal.contentEl) : [];
+    const bodyInput = fields.find((element) => element.type === "text");
+
+    expect(bodyInput).toBeDefined();
+
+    bodyInput!.value = "task";
+    dispatchFake(bodyInput!, "input");
+    dispatchFake(bodyInput!, "keydown", { key: "Enter", isComposing: true, keyCode: 229 });
+    await flushAsync();
+
+    expect(createAppleReminder).not.toHaveBeenCalled();
   });
 
   it("shows recurrence start and end dates for recurring event creation details", () => {
