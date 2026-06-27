@@ -1,4 +1,5 @@
 import {
+  TaskHubView,
   createTaskHubSessionSnapshot,
   collectCalendarUnscheduledTasks,
   collectUnscheduledTasks,
@@ -61,6 +62,171 @@ describe("collectCalendarUnscheduledTasks", () => {
     const result = collectCalendarUnscheduledTasks(tasks, baseFilters(), NOW, () => true, new Set(["done"]));
 
     expect(result.map((item) => item.id)).toEqual(["open", "done"]);
+  });
+});
+
+describe("TaskHubView completion viewport preservation", () => {
+  it("captures task and content scroll before completing a task from the list view", async () => {
+    const plugin = {
+      settings: {
+        defaultView: "tasks",
+        language: "en",
+        taskViewFilters: fallbackFilters(),
+        lastSessionState: undefined,
+        taskListManualOrder: {},
+        taskNotes: {
+          enabled: false,
+          linkedNoteSubtasksEnabled: false,
+          thinoIntegrationEnabled: false,
+          showCountsInTaskList: false
+        },
+        localApple: {
+          remindersWritebackEnabled: false,
+          remindersEnabled: false,
+          remindersColor: "#f59e0b",
+          enabled: false,
+          calendarReminderConversionEnabled: false
+        },
+        dida: {
+          tasksWritebackEnabled: false,
+          tasksDragRescheduleEnabled: false,
+          tasksDeleteEnabled: false,
+          tasksColor: "#3b82f6"
+        },
+        showSubtaskProgressBars: true
+      },
+      completeTask: jest.fn(async () => ({ status: "updated", content: "", line: 0 })),
+      getTasks: jest.fn(() => []),
+      getCalendarSources: jest.fn(() => []),
+      taskIndex: { getStats: jest.fn(() => ({ totalTasks: 0, indexedFiles: 0, skippedFiles: 0 })) },
+      settingsLocal: {},
+      getAppleReminderListColors: jest.fn(() => ({})),
+      getDidaProjectColors: jest.fn(() => ({})),
+      getAppleReminderLists: jest.fn(() => []),
+      getDidaProjects: jest.fn(() => []),
+      defaultTaskSendTarget: jest.fn(() => undefined),
+      canCreateAppleReminders: jest.fn(() => false),
+      canCreateDidaTasks: jest.fn(() => false),
+      canConvertAppleCalendarAndReminders: jest.fn(() => false),
+      getTaskNoteCount: jest.fn(() => 0),
+      getTaskNotes: jest.fn(() => []),
+      jumpToTask: jest.fn(),
+      sendTaskToAppleReminders: jest.fn(),
+      sendTaskToDida: jest.fn(),
+      convertAppleReminderToCalendarEvent: jest.fn(),
+      moveAppleReminderToList: jest.fn(),
+      moveDidaTaskToProject: jest.fn(),
+      rescheduleTask: jest.fn(),
+      reorderTaskListDate: jest.fn(),
+      updateCalendarTask: jest.fn(),
+      deleteCalendarTask: jest.fn(),
+      sendTaskToTarget: jest.fn(),
+      createTaskNoteForTask: jest.fn(),
+      openTaskNote: jest.fn(),
+      deleteTaskNote: jest.fn(),
+      openTaskNoteSource: jest.fn()
+    } as never;
+    const view = new TaskHubView({} as never, plugin);
+    const captureTaskListScroll = jest.spyOn(view as never, "captureTaskListScroll");
+    const captureContentScroll = jest.spyOn(view as never, "captureContentScroll");
+    const listPane = { scrollTop: 320 };
+    const setTimeoutSpy = jest.fn(() => 1 as unknown as ReturnType<typeof setTimeout>);
+    const contentContainer = {
+      scrollTop: 180,
+      querySelector: jest.fn(() => listPane)
+    };
+    Object.assign(view, {
+      containerEl: {
+        win: { setTimeout: setTimeoutSpy, clearTimeout: jest.fn() },
+        children: [{}, contentContainer]
+      }
+    });
+
+    await completeTaskFromView(view, task({ id: "task-1", completed: false }));
+
+    expect(captureTaskListScroll).toHaveBeenCalled();
+    expect(captureContentScroll).toHaveBeenCalled();
+    expect(setTimeoutSpy).toHaveBeenCalledWith(expect.any(Function), 360);
+  });
+
+  it("selects the acted-on task before completing it from the list view", async () => {
+    const plugin = {
+      settings: {
+        defaultView: "tasks",
+        language: "en",
+        taskViewFilters: fallbackFilters(),
+        lastSessionState: undefined,
+        taskListManualOrder: {},
+        taskNotes: {
+          enabled: false,
+          linkedNoteSubtasksEnabled: false,
+          thinoIntegrationEnabled: false,
+          showCountsInTaskList: false
+        },
+        localApple: {
+          remindersWritebackEnabled: false,
+          remindersEnabled: false,
+          remindersColor: "#f59e0b",
+          enabled: false,
+          calendarReminderConversionEnabled: false
+        },
+        dida: {
+          tasksWritebackEnabled: false,
+          tasksDragRescheduleEnabled: false,
+          tasksDeleteEnabled: false,
+          tasksColor: "#3b82f6"
+        },
+        showSubtaskProgressBars: true
+      },
+      completeTask: jest.fn(async () => ({ status: "updated", content: "", line: 0 })),
+      getTasks: jest.fn(() => []),
+      getCalendarSources: jest.fn(() => []),
+      taskIndex: { getStats: jest.fn(() => ({ totalTasks: 0, indexedFiles: 0, skippedFiles: 0 })) },
+      getAppleReminderListColors: jest.fn(() => ({})),
+      getDidaProjectColors: jest.fn(() => ({})),
+      getAppleReminderLists: jest.fn(() => []),
+      getDidaProjects: jest.fn(() => []),
+      defaultTaskSendTarget: jest.fn(() => undefined),
+      canCreateAppleReminders: jest.fn(() => false),
+      canCreateDidaTasks: jest.fn(() => false),
+      canConvertAppleCalendarAndReminders: jest.fn(() => false),
+      getTaskNoteCount: jest.fn(() => 0),
+      getTaskNotes: jest.fn(() => []),
+      jumpToTask: jest.fn(),
+      sendTaskToAppleReminders: jest.fn(),
+      sendTaskToDida: jest.fn(),
+      convertAppleReminderToCalendarEvent: jest.fn(),
+      moveAppleReminderToList: jest.fn(),
+      moveDidaTaskToProject: jest.fn(),
+      rescheduleTask: jest.fn(),
+      reorderTaskListDate: jest.fn(),
+      updateCalendarTask: jest.fn(),
+      deleteCalendarTask: jest.fn(),
+      sendTaskToTarget: jest.fn(),
+      createTaskNoteForTask: jest.fn(),
+      openTaskNote: jest.fn(),
+      deleteTaskNote: jest.fn(),
+      openTaskNoteSource: jest.fn()
+    } as never;
+    const view = new TaskHubView({} as never, plugin);
+    const updateTaskSelection = jest.spyOn(view as never, "updateTaskSelection");
+    const setTimeoutSpy = jest.fn(() => 1 as unknown as ReturnType<typeof setTimeout>);
+    const contentContainer = {
+      scrollTop: 180,
+      querySelector: jest.fn(() => ({ scrollTop: 320 }))
+    };
+    Object.assign(view, {
+      containerEl: {
+        win: { setTimeout: setTimeoutSpy, clearTimeout: jest.fn() },
+        children: [{}, contentContainer]
+      }
+    });
+    const targetTask = task({ id: "task-2", completed: false });
+
+    await completeTaskFromView(view, targetTask);
+
+    expect(updateTaskSelection).toHaveBeenCalledWith(targetTask);
+    expect(setTimeoutSpy).toHaveBeenCalledWith(expect.any(Function), 360);
   });
 });
 
@@ -353,4 +519,8 @@ function editableTarget(tagName: string, isContentEditable = false): EventTarget
     tagName: tagName.toUpperCase(),
     isContentEditable
   } as unknown as EventTarget;
+}
+
+function completeTaskFromView(view: TaskHubView, task: TaskItem): Promise<void> {
+  return (view as unknown as { completeTaskFromView(task: TaskItem): Promise<void> }).completeTaskFromView(task);
 }

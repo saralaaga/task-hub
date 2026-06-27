@@ -451,7 +451,12 @@ describe("renderTasksView", () => {
       viewHandlers,
       new Date("2026-05-08T12:00:00Z"),
       (key) => key,
-      { allowAppleReminderWriteback: true, expandedTaskIds: new Set(["parent"]), onToggleTaskExpanded }
+      {
+        allowAppleReminderWriteback: true,
+        expandedTaskIds: new Set(["parent"]),
+        expandingTaskIds: new Set(["parent"]),
+        onToggleTaskExpanded
+      }
     );
 
     const rows = collect(container).filter((element) => element.classes.has("task-hub-task-row"));
@@ -459,6 +464,42 @@ describe("renderTasksView", () => {
     expect(rows.map(taskRowTitle)).toEqual(["Parent", "Child"]);
     expect(rows[1].attrs.get("data-task-depth")).toBe("1");
     expect(subtaskList?.classes.has("is-opening")).toBe(true);
+  });
+
+  it("does not replay the subtask enter animation on ordinary rerenders", () => {
+    const container = new FakeElement();
+    const parent: TaskItem = {
+      ...baseTask,
+      id: "parent",
+      source: "vault",
+      filePath: "Project.md",
+      rawLine: "- [ ] Parent",
+      text: "Parent"
+    };
+    const child: TaskItem = {
+      ...parent,
+      id: "child",
+      line: 1,
+      rawLine: "  - [ ] Child",
+      text: "Child",
+      dueDate: undefined,
+      indent: 1,
+      parentId: "parent"
+    };
+
+    renderTasksView(
+      container as unknown as HTMLElement,
+      [parent, child],
+      [parent, child],
+      { status: "open", tags: [], sourceQuery: "", textQuery: "" },
+      handlers(),
+      new Date("2026-05-08T12:00:00Z"),
+      (key) => key,
+      { allowAppleReminderWriteback: true, expandedTaskIds: new Set(["parent"]) }
+    );
+
+    const subtaskList = collect(container).find((element) => element.classes.has("task-hub-subtask-list"));
+    expect(subtaskList?.classes.has("is-opening")).toBe(false);
   });
 
   it("renders recursive progress bars for parent tasks and task details", () => {

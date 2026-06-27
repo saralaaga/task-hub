@@ -68,6 +68,7 @@ export type TaskRenderOptions = {
   getTaskNotes?: (task: TaskItem) => TaskNote[];
   renderNoteMarkdown?: TaskNoteMarkdownRenderer;
   expandedTaskIds?: ReadonlySet<string>;
+  expandingTaskIds?: ReadonlySet<string>;
   onToggleTaskExpanded?: (task: TaskItem) => void;
   taskListManualOrder?: TaskListManualOrder;
 };
@@ -225,6 +226,7 @@ function renderTaskTree(
 ): void {
   const children = childTasksByParentId.get(task.id) ?? [];
   const isExpanded = options.expandedTaskIds?.has(task.id) ?? false;
+  const isExpanding = options.expandingTaskIds?.has(task.id) ?? false;
   const { row, subtaskToggle } = renderTaskRow(
     container,
     task,
@@ -280,7 +282,9 @@ function renderTaskTree(
       depth + 1
     );
   }
-  animateSubtaskListEnter(childContainer);
+  if (isExpanding) {
+    animateSubtaskListEnter(childContainer);
+  }
 }
 
 function animateSubtaskListEnter(list: HTMLElement): void {

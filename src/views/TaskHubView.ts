@@ -41,6 +41,7 @@ export class TaskHubView extends ItemView {
   private unscheduledPanelClosing = false;
   private unscheduledPanelCloseTimer: number | undefined;
   private expandedTaskIds = new Set<string>();
+  private expandingTaskIds = new Set<string>();
   private pendingExpandedTaskScrollId: string | undefined;
   private pendingExpandedTaskScrollTimers: number[] = [];
   private readonly undoShortcutHandler = (event: KeyboardEvent) => {
@@ -241,6 +242,7 @@ export class TaskHubView extends ItemView {
           selectedTaskId: this.selectedTaskId,
           selectedTaskIds: this.selectedTaskIds,
           expandedTaskIds: this.expandedTaskIds,
+          expandingTaskIds: this.expandingTaskIds,
           sourceColors,
           taskColors,
           bindTagInputSuggest,
@@ -255,6 +257,7 @@ export class TaskHubView extends ItemView {
           onToggleTaskExpanded: (task) => {
             const isExpanding = !this.expandedTaskIds.has(task.id);
             this.expandedTaskIds = toggleSetValue(this.expandedTaskIds, task.id);
+            this.expandingTaskIds = isExpanding ? new Set([task.id]) : new Set();
             this.pendingExpandedTaskScrollId = isExpanding ? task.id : undefined;
             this.render({ preserveTaskListScroll: true, preserveContentScroll: true });
           },
@@ -265,6 +268,9 @@ export class TaskHubView extends ItemView {
       if (this.pendingExpandedTaskScrollId) {
         this.scheduleExpandedTaskScroll(this.pendingExpandedTaskScrollId);
         this.pendingExpandedTaskScrollId = undefined;
+      }
+      if (this.expandingTaskIds.size > 0) {
+        this.expandingTaskIds = new Set();
       }
       return;
     }
@@ -605,6 +611,7 @@ export class TaskHubView extends ItemView {
   }
 
   private async completeTaskFromView(task: TaskItem): Promise<void> {
+    this.updateTaskSelection(task);
     this.captureTaskListScroll();
     this.captureContentScroll();
     this.completingTaskIds.add(task.id);
