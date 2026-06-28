@@ -406,6 +406,11 @@ export class TaskHubView extends ItemView {
             this.syncSessionStateToSettings();
             this.render();
           },
+          onFocusDateChange: (date) => {
+            this.calendarFocusDate = date;
+            this.syncSessionStateToSettings();
+            this.render();
+          },
           onTimeScaleChange: (scale) => {
             this.plugin.settings.calendarTimeScale = scale;
             void this.plugin.saveSettings().then(() => this.render());

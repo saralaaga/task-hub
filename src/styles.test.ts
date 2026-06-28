@@ -443,6 +443,41 @@ describe("Task Hub styles", () => {
     expect(reducedMotionRule).toContain(".task-hub-unscheduled-task.is-completed");
   });
 
+  it("styles the day view with a persistent details sidebar and mini month navigator", () => {
+    const styles = readFileSync(path.join(__dirname, "styles.css"), "utf8");
+    const layoutRule = styles.match(/\.task-hub-calendar-day-layout\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const sidebarRule = styles.match(/\.task-hub-calendar-day-sidebar\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const sectionRule = styles.match(/\.task-hub-calendar-day-sidebar-section\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const detailRule = styles.match(/\.task-hub-calendar-day-detail\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const weekdayRule = styles.match(/\.task-hub-calendar-mini-month-weekdays > span\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const miniGridRule = styles.match(/\.task-hub-calendar-mini-month-weekdays,\s*\.task-hub-calendar-mini-month-grid\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const dayButtonRule = styles.match(/\.task-hub-calendar-mini-month-day\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const todayRule = styles.match(/\.task-hub-calendar-mini-month-day\.has-task\.is-today\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const selectedRule = styles.match(/\.task-hub-calendar-mini-month-day\.has-task\.is-selected\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const completionRule = styles.match(/\.task-hub-calendar-mini-month-day\.is-completion-4\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const lunarInlineRule = styles.match(/\.task-hub-calendar-lunar-inline\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+
+    expect(layoutRule).toContain("grid-template-columns: minmax(0, 1fr) minmax(300px, 360px)");
+    expect(sidebarRule).toContain("position: sticky");
+    expect(sidebarRule).toContain("overflow-y: auto");
+    expect(sectionRule).toContain("border-radius: 12px");
+    expect(detailRule).toContain("border-radius: 12px");
+    expect(detailRule).toContain("padding: 12px");
+    expect(weekdayRule).toContain("white-space: nowrap");
+    expect(miniGridRule).toContain("grid-template-columns: repeat(7, minmax(0, 1fr))");
+    expect(dayButtonRule).toContain("border-radius: 999px");
+    expect(dayButtonRule).toContain("border: none");
+    expect(dayButtonRule).toContain("width: 36px");
+    expect(dayButtonRule).toContain("font-variant-numeric: tabular-nums");
+    expect(todayRule).toContain("box-shadow:");
+    expect(todayRule).not.toContain("0 0 0 1px");
+    expect(selectedRule).toContain("box-shadow:");
+    expect(selectedRule).not.toContain("0 0 0 1px");
+    expect(completionRule).toContain("background: color-mix");
+    expect(lunarInlineRule).toContain("margin-left: 6px");
+    expect(lunarInlineRule).toContain("font-size: var(--font-ui-smaller)");
+  });
+
   it("animates subtask expansion with a staggered reveal and reduced-motion fallback", () => {
     const styles = readFileSync(path.join(__dirname, "styles.css"), "utf8");
     const openingRule = styles.match(/\.task-hub-subtask-list\.is-opening\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";

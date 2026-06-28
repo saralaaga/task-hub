@@ -1,4 +1,4 @@
-import { Menu, setIcon } from "obsidian";
+import { Menu, setIcon, setTooltip } from "obsidian";
 import { buildCalendarItems, calendarEventLayerId, getCalendarRange, type CalendarItem, type CalendarViewMode } from "../calendar/calendarModel";
 import type { CalendarDropTarget } from "../calendar/calendarDropTarget";
 import { toLocalDateKey } from "../calendar/dateBuckets";
@@ -81,6 +81,7 @@ export type CalendarViewHandlers = {
   onModeChange: (mode: CalendarViewMode) => void;
   onMove: (direction: -1 | 1) => void;
   onToday: () => void;
+  onFocusDateChange?: (date: Date) => void;
   onLayerToggle: (sourceId: string) => void;
   onDateCreateTask: (target: CalendarDropTarget) => void;
   onTaskComplete: (task: TaskItem) => void;
@@ -142,6 +143,21 @@ let activeSelectedCalendarItemKey: string | undefined;
 let activeSelectedTaskIds = new Set<string>();
 let activeSelectedCalendarItemKeys = new Set<string>();
 let activeCalendarItemElements = new Map<string, Set<HTMLElement>>();
+let activeDaySidebarHost: HTMLElement | undefined;
+type MiniMonthDayStats = {
+  taskCount: number;
+  completedTaskCount: number;
+  eventCount: number;
+};
+let activeDaySidebarContext:
+  | {
+      day: string;
+      dayItems: CalendarItem[];
+      miniMonthStats: Map<string, MiniMonthDayStats>;
+      state: CalendarViewState;
+      handlers: CalendarViewHandlers;
+    }
+  | undefined;
 let suppressNextTimedCreationClick = false;
 const WEEK_START_DAY_INDEX: Record<WeekStart, number> = {
   sunday: 0,
@@ -190,6 +206,8 @@ export function renderCalendarView(
 ): void {
   const detailsSelectionKeyToRestore = activeDetailsSelectionKey;
   if (activeDetailsElement) clearActiveCalendarDetails(true);
+  activeDaySidebarHost = undefined;
+  activeDaySidebarContext = undefined;
   const agendaScrollToRestore = state.calendarAgendaScrollPosition ?? readAgendaScrollPosition(container);
   activeCalendarItemElements = new Map();
   activeSelectedTaskIds = new Set(state.selectedTaskIds ?? []);
@@ -242,6 +260,19 @@ export function renderCalendarView(
     taskColors: state.taskColors,
     taskDurationOverrides: state.taskDurationOverrides
   });
+  const miniMonthStats =
+    state.mode === "day"
+      ? buildMiniMonthStats(buildCalendarItems({
+          tasks,
+          events,
+          visibleSourceIds: state.visibleSourceIds,
+          includeCompletedTasks: true,
+          sourceColors: Object.fromEntries(state.sources.map((source) => [source.id, source.color])),
+          eventColors: Object.fromEntries(events.filter((event) => event.sourceId === "apple-calendar" && event.calendarId).map((event) => [event.calendarId as string, appleCalendarEventColor(event, state)])),
+          taskColors: state.taskColors,
+          taskDurationOverrides: state.taskDurationOverrides
+        }))
+      : new Map<string, MiniMonthDayStats>();
   const visibleItems = items.filter((item) => item.date >= range.start && item.date <= range.end);
 
   const transitionClass = state.modeTransition ? `is-slide-${state.modeTransition}` : "";
@@ -254,18 +285,35 @@ export function renderCalendarView(
     : state.unscheduledPanelOpening
       ? "is-unscheduled-opening"
       : "is-unscheduled-open";
-  const calendarHost = showUnscheduledPanel ? viewStage.createDiv({ cls: `task-hub-calendar-with-sidebar ${sidebarStateClass}` }) : viewStage;
-  const calendarPane = showUnscheduledPanel ? calendarHost.createDiv({ cls: "task-hub-calendar-pane" }) : viewStage;
+  const showDaySidebar = state.mode === "day";
+  const calendarHost =
+    showDaySidebar
+      ? viewStage.createDiv({ cls: "task-hub-calendar-day-layout" })
+      : showUnscheduledPanel
+        ? viewStage.createDiv({ cls: `task-hub-calendar-with-sidebar ${sidebarStateClass}` })
+        : viewStage;
+  const calendarPane =
+    showDaySidebar || showUnscheduledPanel
+      ? calendarHost.createDiv({ cls: "task-hub-calendar-pane" })
+      : viewStage;
 
   if (visibleItems.length === 0) {
     calendarPane.createDiv({ cls: "task-hub-empty", text: state.t("calendarEmpty") });
   }
 
   if (state.mode === "day" || state.mode === "week") {
+    if (state.mode === "day") primeDaySidebarSelection(visibleItems.filter((item) => item.date === range.days[0]));
     renderAgendaGrid(calendarPane, state, range.days, visibleItems, handlers, today);
     restoreAgendaScrollPosition(calendarPane, agendaScrollToRestore);
+    if (state.mode === "day") {
+      const daySidebar = calendarHost.createEl("aside", { cls: "task-hub-calendar-day-sidebar" });
+      const dayItems = visibleItems.filter((item) => item.date === range.days[0]);
+      activeDaySidebarHost = daySidebar;
+      activeDaySidebarContext = { day: range.days[0], dayItems, miniMonthStats, state, handlers };
+      renderCalendarDaySidebar(daySidebar, range.days[0], dayItems, miniMonthStats, state, handlers);
+    }
     if (showUnscheduledPanel) renderUnscheduledPanel(calendarHost, state, handlers);
-    restoreCalendarDetailsPopover(detailsSelectionKeyToRestore, handlers, state);
+    if (state.mode === "week") restoreCalendarDetailsPopover(detailsSelectionKeyToRestore, handlers, state);
     return;
   }
 
@@ -499,6 +547,10 @@ function renderAgendaDayHeader(
   bindCalendarDropTarget(header, day, dayItems, handlers, state);
   header.createSpan({ cls: "task-hub-calendar-weekday", text: shortWeekday(dayDate, state.t) });
   header.createSpan({ cls: "task-hub-calendar-day-number", text: String(dayDate.getDate()) });
+  if (state.mode === "day" && state.showLunarCalendar) {
+    const lunarTitle = formatLunarMonthTitle(dayDate);
+    if (lunarTitle) header.createSpan({ cls: "task-hub-calendar-lunar-inline", text: lunarTitle });
+  }
   if (dayItems.length > 0) {
     header.createSpan({ cls: "task-hub-calendar-count", text: itemSummary(taskCount, eventCount, state.t) });
   }
@@ -686,13 +738,13 @@ function renderTimedCalendarItem(
         renderTimedTaskOverlapPopover(row, layout.overlapItems, handlers, state);
         return;
       }
-      renderCalendarDetailsPopover(row, item, handlers, state);
+      openCalendarDetailsSurface(row, item, handlers, state);
     });
   } else {
     row.addEventListener("click", (event) => {
       event.stopPropagation();
       selectCalendarItem(row, item, event, handlers);
-      renderCalendarDetailsPopover(row, item, handlers, state);
+      openCalendarDetailsSurface(row, item, handlers, state);
     });
   }
 }
@@ -956,13 +1008,13 @@ function renderCalendarItem(container: HTMLElement, item: CalendarItem, handlers
     row.addEventListener("click", (event) => {
       event.stopPropagation();
       selectCalendarItem(row, item, event, handlers);
-      renderCalendarDetailsPopover(row, item, handlers, state);
+      openCalendarDetailsSurface(row, item, handlers, state);
     });
   } else {
     row.addEventListener("click", (event) => {
       event.stopPropagation();
       selectCalendarItem(row, item, event, handlers);
-      renderCalendarDetailsPopover(row, item, handlers, state);
+      openCalendarDetailsSurface(row, item, handlers, state);
     });
   }
 }
@@ -971,20 +1023,7 @@ function renderUnscheduledPanel(container: HTMLElement, state: CalendarViewState
   const panel = container.createEl("aside", { cls: "task-hub-unscheduled-panel" });
   panel.toggleClass("is-opening", Boolean(state.unscheduledPanelOpening && !state.unscheduledPanelClosing));
   panel.toggleClass("is-closing", Boolean(state.unscheduledPanelClosing));
-  const tasks = state.unscheduledTasks ?? [];
-  const header = panel.createDiv({ cls: "task-hub-unscheduled-header" });
-  header.createDiv({ cls: "task-hub-unscheduled-title", text: state.t("unscheduled") });
-  header.createDiv({ cls: "task-hub-unscheduled-count", text: String(tasks.length) });
-
-  if (tasks.length === 0) {
-    panel.createDiv({ cls: "task-hub-unscheduled-empty", text: state.t("noUnscheduledTasks") });
-    return;
-  }
-
-  const list = panel.createDiv({ cls: "task-hub-unscheduled-list" });
-  for (const task of tasks) {
-    renderUnscheduledTaskRow(list, task, state, handlers);
-  }
+  renderUnscheduledPanelBody(panel, state, handlers);
 }
 
 function renderUnscheduledTaskRow(container: HTMLElement, task: TaskItem, state: CalendarViewState, handlers: CalendarViewHandlers): void {
@@ -1013,6 +1052,194 @@ function renderUnscheduledTaskRow(container: HTMLElement, task: TaskItem, state:
   row.addEventListener("click", (event) => {
     event.stopPropagation();
     selectCalendarItem(row, item, event, handlers);
+    if (state.mode === "day") {
+      activeDetailsSelectionKey = calendarItemSelectionKey(item);
+      refreshActiveDaySidebar();
+    }
+  });
+}
+
+function primeDaySidebarSelection(dayItems: CalendarItem[]): void {
+  if (dayItems.length === 0) {
+    activeDetailsSelectionKey = undefined;
+    activeSelectedCalendarItemKey = undefined;
+    return;
+  }
+
+  const validKeys = new Set(dayItems.map((item) => calendarItemSelectionKey(item)));
+  const preferredKey =
+    (activeSelectedCalendarItemKey && validKeys.has(activeSelectedCalendarItemKey) ? activeSelectedCalendarItemKey : undefined) ??
+    (activeDetailsSelectionKey && validKeys.has(activeDetailsSelectionKey) ? activeDetailsSelectionKey : undefined) ??
+    [...activeSelectedCalendarItemKeys].find((key) => validKeys.has(key)) ??
+    calendarItemSelectionKey(dayItems[0]);
+  const selectedItem = dayItems.find((item) => calendarItemSelectionKey(item) === preferredKey) ?? dayItems[0];
+  const selectedKey = calendarItemSelectionKey(selectedItem);
+  activeSelectedCalendarItemKey = selectedKey;
+  activeDetailsSelectionKey = selectedKey;
+  if (activeSelectedCalendarItemKeys.size === 0) {
+    activeSelectedCalendarItemKeys = new Set([selectedKey]);
+  }
+  if (activeSelectedTaskIds.size === 0 && selectedItem.task) {
+    activeSelectedTaskIds = new Set([selectedItem.task.id]);
+  }
+}
+
+function refreshActiveDaySidebar(): void {
+  if (!activeDaySidebarHost || !activeDaySidebarContext) return;
+  renderCalendarDaySidebar(
+    activeDaySidebarHost,
+    activeDaySidebarContext.day,
+    activeDaySidebarContext.dayItems,
+    activeDaySidebarContext.miniMonthStats,
+    activeDaySidebarContext.state,
+    activeDaySidebarContext.handlers
+  );
+}
+
+function renderCalendarDaySidebar(
+  container: HTMLElement,
+  day: string,
+  dayItems: CalendarItem[],
+  miniMonthStats: Map<string, MiniMonthDayStats>,
+  state: CalendarViewState,
+  handlers: CalendarViewHandlers
+): void {
+  container.empty();
+  const dayDate = new Date(`${day}T12:00:00`);
+  renderCalendarMiniMonth(container, dayDate, miniMonthStats, state, handlers);
+
+  if (dayItems.length === 0) {
+    container.createDiv({ cls: "task-hub-calendar-day-sidebar-empty", text: state.t("calendarEmpty") });
+  } else {
+    const selectedItem =
+      dayItems.find((item) => calendarItemSelectionKey(item) === activeDetailsSelectionKey)
+      ?? dayItems.find((item) => calendarItemSelectionKey(item) === activeSelectedCalendarItemKey)
+      ?? dayItems[0];
+    activeDetailsSelectionKey = calendarItemSelectionKey(selectedItem);
+    const detailSurface = container.createDiv({ cls: "task-hub-calendar-day-detail task-hub-calendar-detail-surface" });
+    if (selectedItem.color) setCssProps(detailSurface, { "--task-hub-item-color": selectedItem.color });
+    renderCalendarDetailHeader(detailSurface, selectedItem, handlers, state, { dismissible: false });
+    if (selectedItem.task) {
+      renderTaskDetailsPopover(detailSurface, selectedItem, selectedItem.task, handlers, state, () => undefined);
+    } else if (selectedItem.event) {
+      renderEventDetailsPopover(detailSurface, selectedItem, selectedItem.event, handlers, state, () => undefined);
+    }
+  }
+
+  if (state.unscheduledPanelOpen || state.unscheduledPanelClosing) {
+    const unscheduledSection = container.createDiv({ cls: "task-hub-calendar-day-sidebar-section" });
+    renderUnscheduledPanelBody(unscheduledSection, state, handlers);
+  }
+}
+
+function renderCalendarMiniMonth(
+  container: HTMLElement,
+  focusDate: Date,
+  miniMonthStats: Map<string, MiniMonthDayStats>,
+  state: CalendarViewState,
+  handlers: CalendarViewHandlers
+): void {
+  const monthSection = container.createDiv({ cls: "task-hub-calendar-day-sidebar-section task-hub-calendar-mini-month" });
+  const weekdayRow = monthSection.createDiv({ cls: "task-hub-calendar-mini-month-weekdays" });
+  const weekdayLabels = miniMonthWeekdays(state.weekStart, state.t);
+  for (const weekday of weekdayLabels) {
+    weekdayRow.createSpan({ text: weekday });
+  }
+
+  const grid = monthSection.createDiv({ cls: "task-hub-calendar-mini-month-grid" });
+  for (const cell of miniMonthCells(focusDate, state.weekStart)) {
+    const button = grid.createEl("button", { cls: "task-hub-calendar-mini-month-day", text: String(cell.date.getDate()) });
+    const dateKey = toLocalDateKey(cell.date);
+    const stats = miniMonthStats.get(dateKey);
+    const completionClass = miniMonthCompletionClass(stats?.completedTaskCount ?? 0);
+    const tooltip = miniMonthTooltip(cell.date, stats, state.t);
+    if ((stats?.taskCount ?? 0) > 0) button.addClass("has-task");
+    if (!cell.isCurrentMonth) button.addClass("is-outside-month");
+    if (cell.isToday) button.addClass("is-today");
+    if (cell.isFocusedDay) button.addClass("is-selected");
+    if (completionClass) button.addClass(completionClass);
+    button.setAttr("aria-label", tooltip.replace(/\n/g, ", "));
+    setTooltip(button, tooltip, { placement: "top" });
+    button.addEventListener("click", () => handlers.onFocusDateChange?.(cell.date));
+  }
+}
+
+function renderUnscheduledPanelBody(container: HTMLElement, state: CalendarViewState, handlers: CalendarViewHandlers): void {
+  const tasks = state.unscheduledTasks ?? [];
+  const header = container.createDiv({ cls: "task-hub-unscheduled-header" });
+  header.createDiv({ cls: "task-hub-unscheduled-title", text: state.t("unscheduled") });
+  header.createDiv({ cls: "task-hub-unscheduled-count", text: String(tasks.length) });
+
+  if (tasks.length === 0) {
+    container.createDiv({ cls: "task-hub-unscheduled-empty", text: state.t("noUnscheduledTasks") });
+    return;
+  }
+
+  const list = container.createDiv({ cls: "task-hub-unscheduled-list" });
+  for (const task of tasks) {
+    renderUnscheduledTaskRow(list, task, state, handlers);
+  }
+}
+
+function miniMonthWeekdays(weekStart: WeekStart, t: Translator): string[] {
+  const startIndex = WEEK_START_DAY_INDEX[weekStart];
+  return Array.from({ length: 7 }, (_, offset) => {
+    const date = new Date(2026, 4, 3 + ((startIndex + offset) % 7));
+    return shortWeekday(date, t);
+  });
+}
+
+function buildMiniMonthStats(items: CalendarItem[]): Map<string, MiniMonthDayStats> {
+  const stats = new Map<string, MiniMonthDayStats>();
+  for (const item of items) {
+    const dayStats = stats.get(item.date) ?? { taskCount: 0, completedTaskCount: 0, eventCount: 0 };
+    if (item.kind === "task") {
+      dayStats.taskCount += 1;
+      if (item.task?.completed) dayStats.completedTaskCount += 1;
+    } else {
+      dayStats.eventCount += 1;
+    }
+    stats.set(item.date, dayStats);
+  }
+  return stats;
+}
+
+function miniMonthCompletionClass(completedTaskCount: number): string | undefined {
+  if (completedTaskCount <= 0) return undefined;
+  return `is-completion-${Math.min(4, completedTaskCount)}`;
+}
+
+function miniMonthTooltip(date: Date, stats: MiniMonthDayStats | undefined, t: Translator): string {
+  const taskCount = stats?.taskCount ?? 0;
+  const completedTaskCount = stats?.completedTaskCount ?? 0;
+  const eventCount = stats?.eventCount ?? 0;
+  const taskLabel = t(taskCount === 1 ? "task" : "tasks");
+  const eventLabel = t(eventCount === 1 ? "event" : "events");
+  return [
+    date.toLocaleDateString(t.locale ?? "en-US", { month: "short", day: "numeric", weekday: "short" }),
+    `${taskCount} ${taskLabel}`,
+    `${completedTaskCount} ${t("completed")}`,
+    `${eventCount} ${eventLabel}`
+  ].join("\n");
+}
+
+function miniMonthCells(focusDate: Date, weekStart: WeekStart): Array<{ date: Date; isCurrentMonth: boolean; isFocusedDay: boolean; isToday: boolean }> {
+  const monthStart = new Date(focusDate.getFullYear(), focusDate.getMonth(), 1);
+  const leading = monthLeadingPlaceholderCount(toLocalDateKey(monthStart), weekStart);
+  const firstCell = new Date(monthStart);
+  firstCell.setDate(monthStart.getDate() - leading);
+  const todayKey = toLocalDateKey(new Date());
+  const focusedKey = toLocalDateKey(focusDate);
+  return Array.from({ length: 42 }, (_, index) => {
+    const date = new Date(firstCell);
+    date.setDate(firstCell.getDate() + index);
+    const key = toLocalDateKey(date);
+    return {
+      date,
+      isCurrentMonth: date.getMonth() === focusDate.getMonth(),
+      isFocusedDay: key === focusedKey,
+      isToday: key === todayKey
+    };
   });
 }
 
@@ -1044,6 +1271,15 @@ function updateHiddenItemCount(container: HTMLElement, badge: HTMLElement): void
   }
   badge.textContent = "";
   container.removeClass("has-hidden-items");
+}
+
+function openCalendarDetailsSurface(anchor: HTMLElement, item: CalendarItem, handlers: CalendarViewHandlers, state: CalendarViewState): void {
+  activeDetailsSelectionKey = calendarItemSelectionKey(item);
+  if (state.mode === "day") {
+    refreshActiveDaySidebar();
+    return;
+  }
+  renderCalendarDetailsPopover(anchor, item, handlers, state);
 }
 
 function registerCalendarItemElement(element: HTMLElement, item: CalendarItem): void {
@@ -1142,19 +1378,7 @@ function renderCalendarDetailsPopover(anchor: HTMLElement, item: CalendarItem, h
   ownerDocument.addEventListener("click", closePopover);
   ownerDocument.addEventListener("keydown", closeOnEscape);
 
-  const header = popover.createDiv({ cls: "task-hub-calendar-detail-header" });
-  const title = header.createDiv({ cls: "task-hub-calendar-detail-title" });
-  title.addClass(item.task ? "is-task" : "is-event");
-  if (item.task) {
-    title.addClass("has-complete-checkbox");
-    const checkboxCell = title.createSpan({ cls: "task-hub-calendar-detail-title-check-cell" });
-    renderCalendarTaskCompleteCheckbox(checkboxCell, item.task, canToggleCalendarTask(item.task, state), handlers, state);
-  }
-  title.createSpan({ cls: "task-hub-calendar-detail-title-text", text: state.t(item.task ? "taskDetails" : "calendarDetails") });
-  renderDetailSourceLogo(title, item);
-  const close = header.createEl("button", { cls: "task-hub-icon-button", text: "×" });
-  close.setAttr("aria-label", state.t("cancel"));
-  close.addEventListener("click", closePopover);
+  const header = renderCalendarDetailHeader(popover, item, handlers, state, { dismissible: true, onClose: closePopover });
   bindDetailsPopoverDrag(popover, header, ownerDocument);
 
   if (item.task) {
@@ -1164,6 +1388,32 @@ function renderCalendarDetailsPopover(anchor: HTMLElement, item: CalendarItem, h
   if (item.event) {
     renderEventDetailsPopover(popover, item, item.event, handlers, state, closePopover);
   }
+}
+
+function renderCalendarDetailHeader(
+  container: HTMLElement,
+  item: CalendarItem,
+  handlers: CalendarViewHandlers,
+  state: CalendarViewState,
+  options: { dismissible: boolean; onClose?: () => void }
+): HTMLElement {
+  const header = container.createDiv({ cls: "task-hub-calendar-detail-header" });
+  if (!options.dismissible) header.addClass("is-static");
+  const title = header.createDiv({ cls: "task-hub-calendar-detail-title" });
+  title.addClass(item.task ? "is-task" : "is-event");
+  if (item.task) {
+    title.addClass("has-complete-checkbox");
+    const checkboxCell = title.createSpan({ cls: "task-hub-calendar-detail-title-check-cell" });
+    renderCalendarTaskCompleteCheckbox(checkboxCell, item.task, canToggleCalendarTask(item.task, state), handlers, state);
+  }
+  title.createSpan({ cls: "task-hub-calendar-detail-title-text", text: state.t(item.task ? "taskDetails" : "calendarDetails") });
+  renderDetailSourceLogo(title, item);
+  if (options.dismissible) {
+    const close = header.createEl("button", { cls: "task-hub-icon-button", text: "×" });
+    close.setAttr("aria-label", state.t("cancel"));
+    close.addEventListener("click", () => options.onClose?.());
+  }
+  return header;
 }
 
 function clearActiveCalendarDetails(preserveSelection = false): void {
@@ -1225,7 +1475,7 @@ function renderTimedTaskOverlapPopover(anchor: HTMLElement, items: CalendarItem[
       event.stopPropagation();
       closePopover();
       selectCalendarItem(anchor, item, event, handlers);
-      renderCalendarDetailsPopover(anchor, item, handlers, state);
+      openCalendarDetailsSurface(anchor, item, handlers, state);
     });
   }
 }

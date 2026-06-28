@@ -2432,6 +2432,15 @@ input.task-hub-tag-editor-input:focus {
   position: relative;
 }
 
+.task-hub-calendar-day-layout {
+  align-items: start;
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
+  min-width: 0;
+  position: relative;
+}
+
 .task-hub-calendar-with-sidebar.is-unscheduled-closing {
   grid-template-columns: minmax(0, 1fr);
 }
@@ -2440,6 +2449,146 @@ input.task-hub-tag-editor-input:focus {
   display: grid;
   gap: 8px;
   min-width: 0;
+}
+
+.task-hub-calendar-day-sidebar {
+  align-content: start;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--background-secondary) 82%, transparent), color-mix(in srgb, var(--background-primary) 92%, transparent));
+  border: 1px solid color-mix(in srgb, var(--background-modifier-border) 88%, transparent);
+  border-radius: 14px;
+  display: grid;
+  gap: 12px;
+  max-height: calc(100vh - 176px);
+  min-width: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 14px;
+  position: sticky;
+  top: 8px;
+}
+
+.task-hub-calendar-day-sidebar-section {
+  background: color-mix(in srgb, var(--background-primary) 76%, transparent);
+  border: 1px solid color-mix(in srgb, var(--background-modifier-border) 80%, transparent);
+  border-radius: 12px;
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px;
+}
+
+.task-hub-calendar-day-detail {
+  background: color-mix(in srgb, var(--background-primary) 84%, transparent);
+  border: 1px solid color-mix(in srgb, var(--background-modifier-border) 84%, transparent);
+  border-radius: 12px;
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+  padding: 12px;
+}
+
+.task-hub-calendar-day-sidebar-empty {
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+  line-height: 1.4;
+  padding: 2px 2px 6px;
+}
+
+.task-hub-calendar-mini-month {
+  gap: 10px;
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+
+.task-hub-calendar-mini-month-weekdays,
+.task-hub-calendar-mini-month-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+.task-hub-calendar-mini-month-weekdays > span {
+  color: var(--text-faint);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.1;
+  white-space: nowrap;
+  text-align: center;
+}
+
+.task-hub-calendar-mini-month-day {
+  align-items: center;
+  background: transparent;
+  border: none;
+  border-radius: 999px;
+  box-shadow: none;
+  color: var(--text-normal);
+  display: inline-flex;
+  font-size: var(--font-ui-small);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  height: 36px;
+  justify-content: center;
+  justify-self: center;
+  padding: 0;
+  position: relative;
+  transition: transform 140ms ease, background-color 140ms ease, color 140ms ease, box-shadow 140ms ease;
+  width: 36px;
+}
+
+.task-hub-calendar-mini-month-day.is-outside-month {
+  color: var(--text-faint);
+}
+
+.task-hub-calendar-mini-month-day:hover {
+  transform: translateY(-1px);
+}
+
+.task-hub-calendar-mini-month-day.has-task:hover {
+  box-shadow: 0 8px 18px color-mix(in srgb, var(--background-modifier-box-shadow) 28%, transparent);
+}
+
+.task-hub-calendar-mini-month-day.has-task.is-today {
+  box-shadow:
+    0 10px 24px color-mix(in srgb, var(--interactive-accent) 12%, transparent),
+    0 0 18px color-mix(in srgb, var(--interactive-accent) 18%, transparent);
+}
+
+.task-hub-calendar-mini-month-day.is-selected {
+  background: color-mix(in srgb, var(--interactive-accent) 24%, var(--background-primary));
+  color: var(--text-normal);
+  font-weight: 700;
+}
+
+.task-hub-calendar-mini-month-day.has-task.is-selected {
+  box-shadow:
+    0 14px 28px color-mix(in srgb, var(--interactive-accent) 16%, transparent),
+    0 2px 10px color-mix(in srgb, var(--interactive-accent) 14%, transparent);
+}
+
+.task-hub-calendar-mini-month-day.is-completion-1 {
+  background: color-mix(in srgb, var(--interactive-accent) 16%, var(--background-primary));
+}
+
+.task-hub-calendar-mini-month-day.is-completion-2 {
+  background: color-mix(in srgb, var(--interactive-accent) 28%, var(--background-primary));
+}
+
+.task-hub-calendar-mini-month-day.is-completion-3 {
+  background: color-mix(in srgb, var(--interactive-accent) 42%, var(--background-primary));
+}
+
+.task-hub-calendar-mini-month-day.is-completion-4 {
+  background: color-mix(in srgb, var(--interactive-accent) 58%, var(--background-primary));
+  color: color-mix(in srgb, var(--text-normal) 90%, white);
+}
+
+.task-hub-calendar-lunar-inline {
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  line-height: 1.2;
+  margin-left: 6px;
 }
 
 .task-hub-calendar-with-sidebar.is-unscheduled-opening .task-hub-calendar-pane {
@@ -3419,6 +3568,11 @@ input.task-hub-tag-editor-input:focus {
   gap: 8px;
   grid-template-columns: minmax(0, 1fr) 32px;
   user-select: none;
+}
+
+.task-hub-calendar-detail-header.is-static {
+  cursor: default;
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .task-hub-calendar-detail-header.has-calendar-select {

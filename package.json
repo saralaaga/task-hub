@@ -1,6 +1,6 @@
 {
   "name": "obsidian-task-hub",
-  "version": "0.3.51",
+  "version": "0.3.52",
   "private": true,
   "type": "module",
   "scripts": {
