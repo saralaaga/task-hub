@@ -1080,33 +1080,18 @@ function renderTaskSendTargetPicker(
   let currentValue = selectedValue;
   const current = options.find((option) => option.value === currentValue) ?? options[0];
   currentValue = current.value;
-  const details = container.createEl("details", { cls: "task-hub-send-target-menu" }) as HTMLDetailsElement;
-  details.addEventListener("toggle", () => {
-    container.closest(".task-hub-task-details")?.toggleClass("is-send-menu-open", details.open);
-  });
-  const summary = details.createEl("summary", { cls: "task-hub-send-target-trigger" });
-  summary.setAttr("aria-label", t("sendToTarget"));
-  const label = summary.createSpan({ cls: "task-hub-send-target-label", text: current.label });
-  const icon = summary.createSpan({ cls: "task-hub-send-target-icon" });
-  setIcon(icon, "chevron-down");
-  const menu = details.createDiv({ cls: "task-hub-send-target-options" });
+  const select = container.createEl("select", { cls: "task-hub-send-target-select" }) as HTMLSelectElement;
+  select.setAttr("aria-label", t("sendToTarget"));
   for (const option of options) {
-    const item = menu.createEl("button", {
-      cls: option.value === currentValue ? "task-hub-send-target-option is-selected" : "task-hub-send-target-option",
+    select.createEl("option", {
+      value: option.value,
       text: option.label
     });
-    item.addEventListener("click", (event) => {
-      event.preventDefault();
-      currentValue = option.value;
-      label.setText(option.label);
-      for (const sibling of Array.from(menu.children)) {
-        sibling.removeClass("is-selected");
-      }
-      item.addClass("is-selected");
-      details.open = false;
-      container.closest(".task-hub-task-details")?.removeClass("is-send-menu-open");
-    });
   }
+  select.value = currentValue;
+  select.addEventListener("change", () => {
+    currentValue = select.value;
+  });
   return { getValue: () => currentValue };
 }
 

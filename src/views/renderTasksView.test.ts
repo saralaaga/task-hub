@@ -2717,9 +2717,7 @@ describe("renderTasksView", () => {
 
     const actions = collect(container).find((element) => element.classes.has("task-hub-detail-actions"));
     const sendButton = findElementByText(container, "sendTo");
-    const sendPicker = collect(container).find((element) => element.classes.has("task-hub-send-target-menu"));
-    const sendLabel = collect(container).find((element) => element.classes.has("task-hub-send-target-label"));
-    const sendIcon = collect(container).find((element) => element.classes.has("task-hub-send-target-icon"));
+    const sendPicker = collect(container).find((element) => element.classes.has("task-hub-send-target-select"));
     expect(testHandlers.onSendToTarget).toHaveBeenCalledWith(task, { type: "dida", projectId: "dida-project" });
     expect(actions?.classes.has("has-send-action")).toBe(true);
     expect(actions?.classes.has("is-long-language")).toBe(true);
@@ -2727,8 +2725,7 @@ describe("renderTasksView", () => {
     expect(sendButton?.parent?.classes.has("task-hub-send-label-cell")).toBe(true);
     expect(sendPicker).toBeDefined();
     expect(sendPicker?.parent?.classes.has("task-hub-send-picker-cell")).toBe(true);
-    expect(sendLabel?.text).toBe("dida: Work");
-    expect(sendIcon).toBeDefined();
+    expect(sendPicker?.value).toBe("dida:dida-project");
   });
 
   it("sends to the selected target from the task details picker", () => {
@@ -2753,8 +2750,9 @@ describe("renderTasksView", () => {
       }
     );
 
-    const didaOption = collect(container).find((element) => element.classes.has("task-hub-send-target-option") && element.text === "dida: Work");
-    didaOption?.click();
+    const picker = collect(container).find((element) => element.classes.has("task-hub-send-target-select"));
+    picker!.value = "dida:dida-project";
+    picker?.change();
     findElementByText(container, "sendTo")?.click();
 
     expect(testHandlers.onSendToTarget).toHaveBeenCalledWith(task, { type: "dida", projectId: "dida-project" });

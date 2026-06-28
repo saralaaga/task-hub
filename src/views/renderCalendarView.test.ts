@@ -6081,14 +6081,11 @@ describe("renderCalendarView", () => {
 
     collect(container).find((element) => element.classes.has("task-hub-calendar-item"))?.click();
     const popover = collect(fakeDocument.body).find((element) => element.classes.has("task-hub-calendar-detail-popover"));
-    const sendPicker = collect(popover as FakeElement).find((element) => element.classes.has("task-hub-send-target-menu"));
-    const sendLabel = collect(popover as FakeElement).find((element) => element.classes.has("task-hub-send-target-label"));
-    const sendIcon = collect(popover as FakeElement).find((element) => element.classes.has("task-hub-send-target-icon"));
+    const sendPicker = collect(popover as FakeElement).find((element) => element.classes.has("task-hub-send-target-select"));
 
     expect(findText(popover as FakeElement, "sendTo")).toBeDefined();
     expect(sendPicker).toBeDefined();
-    expect(sendLabel?.text).toBe("dida: Work");
-    expect(sendIcon).toBeDefined();
+    expect(sendPicker?.value).toBe("dida:dida-project");
 
     findText(popover as FakeElement, "sendTo")?.click();
 

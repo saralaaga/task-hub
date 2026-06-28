@@ -378,6 +378,8 @@ describe("Task Hub styles", () => {
     const detailHeaderLogoRule = styles.match(/\.task-hub-detail-header-logo-cell\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const detailHeaderSpacerRule = styles.match(/\.task-hub-detail-header-spacer\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const reminderDetailOverride = styles.match(/\.task-hub-reminder-alert-row\.task-hub-detail-row\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const detailEditorRule = styles.match(/\.task-hub-detail-editor\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const detailExtraRule = styles.match(/\.task-hub-detail-extra\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const detailExtraExpandingRule = styles.match(/\.task-hub-detail-extra\.is-expanding\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const detailExtraHiddenRule = styles.match(/\.task-hub-detail-extra\.is-hidden,\s*\.task-hub-detail-extra\.is-opening,\s*\.task-hub-detail-extra\.is-closing\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const reducedMotionRule = styles.match(/@media \(prefers-reduced-motion: reduce\)\s*\{(?<body>[\s\S]+?)\n\}/)?.groups?.body ?? "";
@@ -388,6 +390,9 @@ describe("Task Hub styles", () => {
     expect(detailHeaderLogoRule).toContain("min-height: 32px");
     expect(detailHeaderSpacerRule).toContain("min-width: 0");
     expect(reminderDetailOverride).not.toContain("grid-template-columns");
+    expect(detailEditorRule).toContain("gap: 8px");
+    expect(detailExtraRule).toContain("display: grid");
+    expect(detailExtraRule).toContain("gap: 8px");
     expect(detailExtraExpandingRule).toContain("max-height 220ms cubic-bezier(0.2, 0.85, 0.25, 1)");
     expect(detailExtraExpandingRule).toContain("overflow: clip");
     expect(detailExtraHiddenRule).toContain("opacity: 0");
@@ -554,7 +559,7 @@ describe("Task Hub styles", () => {
     const shellRule = detailsRules.find((body) => body.includes("--task-hub-detail-label-width")) ?? "";
     const actionRule = styles.match(/\.task-hub-detail-actions\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const sendButtonRule = styles.match(/\.task-hub-send-control button\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
-    const sendTargetRule = styles.match(/\.task-hub-send-target-trigger\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const sendTargetRule = styles.match(/\.task-hub-send-target-select\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
 
     expect(sizingRule).toContain("overflow-x: hidden");
     expect(sizingRule).toContain("overflow-y: auto");
@@ -564,7 +569,7 @@ describe("Task Hub styles", () => {
     expect(actionRule).toContain("grid-template-columns: minmax(0, 1fr)");
     expect(sendButtonRule).toContain("border-radius: 8px");
     expect(sendButtonRule).toContain("height: 38px");
-    expect(sendTargetRule).toContain("border-radius: 8px");
+    expect(sendTargetRule).toContain("appearance: auto");
     expect(sendTargetRule).toContain("height: 38px");
     expect(sendTargetRule).toContain("min-height: 38px");
     expect(styles).not.toContain(".task-hub-detail-save");
