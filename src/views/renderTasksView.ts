@@ -15,6 +15,7 @@ import { renderTaskNoteBody, taskNotePreviewBody, taskNotePreviewTitle, type Tas
 import { createRecurrenceSelect, recurrenceValueFromSelect } from "./recurrenceControls";
 import { resolveTaskBulkActions, type TaskBulkActionId } from "./taskSelection";
 import { renderSourceLogo, sourceLogoKindForTask } from "./sourceLogos";
+import type { TaskHubTagInputElement } from "./tagInputSuggest";
 import { setCssProps, setCssStyles } from "./domStyles";
 
 export type TaskRowHandlers = {
@@ -62,7 +63,7 @@ export type TaskRenderOptions = {
   appleReminderLists?: AppleReminderList[];
   didaProjects?: DidaProject[];
   taskSendDefaultTarget?: TaskSendTarget;
-  bindTagInputSuggest?: (input: HTMLInputElement) => void;
+  bindTagInputSuggest?: (input: TaskHubTagInputElement) => void;
   taskListScrollTop?: number;
   exitingTaskIds?: ReadonlySet<string>;
   taskNotesEnabled?: boolean;
@@ -785,7 +786,7 @@ function renderTaskDetails(
     renderReadonlyDetailValue(facts, t("context"), task.contextPreview, "task-hub-detail-context");
   }
 
-  let titleInput: HTMLInputElement | undefined;
+  let titleInput: HTMLTextAreaElement | undefined;
   let dateInput: HTMLInputElement | undefined;
   let timeInput: HTMLInputElement | undefined;
   let alertEditor: ReminderAlertEditor | undefined;
@@ -829,11 +830,10 @@ function renderTaskDetails(
   if (canEditTask) {
     editor = details.createDiv({ cls: "task-hub-detail-editor" });
     if (canEditTask) {
-      titleInput = detailInput(
+      titleInput = detailAutoGrowTextarea(
         editor,
         t("taskCreationBody"),
         task.text,
-        "text",
         "task-hub-detail-title-input"
       );
     }
@@ -1291,6 +1291,31 @@ function detailTextarea(container: HTMLElement, label: string, value: string): H
   return textarea;
 }
 
+function detailAutoGrowTextarea(
+  container: HTMLElement,
+  label: string,
+  value: string,
+  textareaClass?: string
+): HTMLTextAreaElement {
+  const row = detailRow(container, label);
+  const textarea = row.control.createEl("textarea", {
+    cls: ["task-hub-auto-grow-textarea", textareaClass ?? ""].filter(Boolean).join(" ")
+  }) as HTMLTextAreaElement;
+  textarea.value = value;
+  textarea.setAttr("rows", "1");
+  resizeAutoGrowTextarea(textarea);
+  textarea.addEventListener("input", () => resizeAutoGrowTextarea(textarea));
+  return textarea;
+}
+
+function resizeAutoGrowTextarea(textarea: HTMLTextAreaElement): void {
+  setCssStyles(textarea, { height: "auto" });
+  const nextHeight = textarea.scrollHeight;
+  if (Number.isFinite(nextHeight) && nextHeight > 0) {
+    setCssStyles(textarea, { height: `${nextHeight}px` });
+  }
+}
+
 function detailSelect(
   container: HTMLElement,
   label: string,
@@ -1368,7 +1393,7 @@ function tagChipEditor(
   label: string,
   placeholder: string,
   initialTags: string[],
-  bindTagInputSuggest?: (input: HTMLInputElement) => void,
+  bindTagInputSuggest?: (input: TaskHubTagInputElement) => void,
   onChange?: () => void
 ): TagChipEditor {
   const row = detailRow(container, label);

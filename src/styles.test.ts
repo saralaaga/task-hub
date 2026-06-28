@@ -382,6 +382,7 @@ describe("Task Hub styles", () => {
     const detailExtraRule = styles.match(/\.task-hub-detail-extra\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const detailExtraExpandingRule = styles.match(/\.task-hub-detail-extra\.is-expanding\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const detailExtraHiddenRule = styles.match(/\.task-hub-detail-extra\.is-hidden,\s*\.task-hub-detail-extra\.is-opening,\s*\.task-hub-detail-extra\.is-closing\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const autoGrowRule = styles.match(/\.task-hub-detail-control textarea\.task-hub-auto-grow-textarea\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const reducedMotionRule = styles.match(/@media \(prefers-reduced-motion: reduce\)\s*\{(?<body>[\s\S]+?)\n\}/)?.groups?.body ?? "";
 
     expect(detailRowRule).toContain("grid-template-columns: 36px var(--task-hub-detail-label-width, 128px) minmax(0, 1fr)");
@@ -397,6 +398,9 @@ describe("Task Hub styles", () => {
     expect(detailExtraExpandingRule).toContain("overflow: clip");
     expect(detailExtraHiddenRule).toContain("opacity: 0");
     expect(detailExtraHiddenRule).toContain("transform: translateY(-8px)");
+    expect(autoGrowRule).toContain("min-height: 34px");
+    expect(autoGrowRule).toContain("overflow-y: auto");
+    expect(autoGrowRule).toContain("resize: none");
     expect(reducedMotionRule).toContain(".task-hub-detail-extra.is-expanding");
   });
 

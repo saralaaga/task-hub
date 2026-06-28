@@ -2068,6 +2068,32 @@ describe("renderTasksView", () => {
     }));
   });
 
+  it("renders the task detail body as an auto-growing multiline field", () => {
+    const container = new FakeElement();
+    const task = {
+      ...baseTask,
+      text: "也许将 taskhub 扩展为一个不错的完整任务管理插件，用任务驱动笔记系统会更顺手一些"
+    };
+
+    renderTasksView(
+      container as unknown as HTMLElement,
+      [task],
+      [task],
+      { status: "open", tags: [], sourceQuery: "", textQuery: "" },
+      handlers(),
+      new Date("2026-05-08T12:00:00Z"),
+      (key) => key,
+      { allowAppleReminderWriteback: true }
+    );
+
+    const title = collect(container).find((element) => element.classes.has("task-hub-detail-title-input"));
+
+    expect(title?.type).toBe("textarea");
+    expect(title?.classes.has("task-hub-auto-grow-textarea")).toBe(true);
+    expect(title?.value).toBe(task.text);
+    expect(title?.attrs.get("rows")).toBe("1");
+  });
+
   it("renders escaped Markdown punctuation in task titles as plain text", () => {
     const container = new FakeElement();
     const task = { ...baseTask, text: "5 号楼缺少空调 \\* 3" };

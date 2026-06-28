@@ -1935,6 +1935,13 @@ button.task-hub-task-note-pin.is-active:focus-visible {
   resize: vertical;
 }
 
+.task-hub-detail-control textarea.task-hub-auto-grow-textarea {
+  max-height: 160px;
+  min-height: 34px;
+  overflow-y: auto;
+  resize: none;
+}
+
 .task-hub-detail-control input[type="checkbox"] {
   height: 18px;
   margin: 0;
