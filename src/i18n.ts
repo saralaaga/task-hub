@@ -361,8 +361,10 @@ export type TranslationKey =
   | "taskNotesThinoFolderDesc"
   | "taskNoteEditInThino"
   | "taskNoteDeleted"
+  | "taskNotePin"
   | "taskNoteSave"
   | "taskNoteSaved"
+  | "taskNoteUnpin"
   | "taskReopened"
   | "taskUpdateFailed"
   | "tasks"
@@ -507,6 +509,8 @@ const JA_SETTINGS_TRANSLATIONS: Partial<Record<TranslationKey, string>> = {
   taskNotesThinoDesc: "新規ノートに Thino multi-file frontmatter を使います。Thino single-file、Canvas、日記ストレージは生成しません。",
   taskNotesThinoFolder: "Thino ノートフォルダー",
   taskNotesThinoFolderDesc: "Thino multi-file ストレージで使うフォルダー。",
+  taskNotePin: "ノートをピン留め",
+  taskNoteUnpin: "ノートのピン留めを解除",
   taskSendDefaultTarget: "デフォルトの送信先",
   taskSendDefaultTargetDesc: "タスク詳細の「送信先」ボタン横で既定選択される送信先。"
 };
@@ -636,6 +640,8 @@ const FR_SETTINGS_TRANSLATIONS: Partial<Record<TranslationKey, string>> = {
   taskNotesThinoDesc: "Utilise le frontmatter Thino multi-fichier pour les nouvelles notes. Les stockages Thino single-file, Canvas et journal ne sont pas générés.",
   taskNotesThinoFolder: "Dossier des notes Thino",
   taskNotesThinoFolderDesc: "Dossier utilisé par le stockage multi-fichier Thino.",
+  taskNotePin: "Épingler la note",
+  taskNoteUnpin: "Désépingler la note",
   taskSendDefaultTarget: "Destination d'envoi par défaut",
   taskSendDefaultTargetDesc: "Destination sélectionnée par défaut à côté du bouton Envoyer vers dans les détails de tâche."
 };
@@ -765,6 +771,8 @@ const KO_SETTINGS_TRANSLATIONS: Partial<Record<TranslationKey, string>> = {
   taskNotesThinoDesc: "새 노트에 Thino multi-file frontmatter를 사용합니다. Thino single-file, Canvas, diary 저장소는 생성하지 않습니다.",
   taskNotesThinoFolder: "Thino 노트 폴더",
   taskNotesThinoFolderDesc: "Thino multi-file 저장소에서 사용하는 폴더입니다.",
+  taskNotePin: "노트 고정",
+  taskNoteUnpin: "노트 고정 해제",
   taskSendDefaultTarget: "기본 보내기 대상",
   taskSendDefaultTargetDesc: "작업 세부 정보의 보내기 버튼 옆에서 기본으로 선택되는 대상입니다."
 };
@@ -1118,8 +1126,10 @@ const TRANSLATIONS: Record<"en" | "zh", Record<TranslationKey, string>> &
     taskNotesThinoFolderDesc: "Folder used by Thino multi-file storage.",
     taskNoteEditInThino: "Edit in Thino",
     taskNoteDeleted: "Task note deleted.",
+    taskNotePin: "Pin note",
     taskNoteSave: "Save note",
     taskNoteSaved: "Task note saved.",
+    taskNoteUnpin: "Unpin note",
     taskReopened: "Task reopened.",
     taskUpdateFailed: "Task Hub could not update the task.",
     tasks: "Tasks",
@@ -1480,8 +1490,10 @@ const TRANSLATIONS: Record<"en" | "zh", Record<TranslationKey, string>> &
     taskNotesThinoFolderDesc: "Thino multi-file 存储使用的文件夹。",
     taskNoteEditInThino: "在 Thino 中编辑",
     taskNoteDeleted: "任务笔记已删除。",
+    taskNotePin: "置顶笔记",
     taskNoteSave: "保存笔记",
     taskNoteSaved: "任务笔记已保存。",
+    taskNoteUnpin: "取消置顶笔记",
     taskReopened: "任务已重新打开。",
     taskUpdateFailed: "Task Hub 无法更新该任务。",
     tasks: "任务",

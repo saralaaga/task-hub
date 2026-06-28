@@ -6,6 +6,7 @@ import type { Translator } from "../i18n";
 import { normalizeReminderAlertMinutes, populateReminderAlertSelect, type ReminderAlertMinutes } from "../reminderAlerts";
 import { buildSubtaskProgressIndex, type TaskProgressInfo } from "../subtaskProgress";
 import type { TaskNote } from "../taskNotes";
+import { taskNoteOrderItemKey } from "../taskNoteOrdering";
 import { parseTaskSendTarget, preferredTaskSendTarget, taskSendTargetOptions } from "../taskSendTargets";
 import { applyTaskListManualOrder, taskListDateKey, type TaskListDropPosition } from "../taskListOrdering";
 import type { AppleReminderList, CalendarItemEditDraft, DidaProject, TaskItem, TaskListManualOrder, TaskSendTarget } from "../types";
@@ -36,6 +37,8 @@ export type TaskRowHandlers = {
   onOpenTaskNote?: (path: string) => void;
   onDeleteTaskNote?: (path: string) => void;
   onOpenTaskNoteInThino?: (path: string) => void;
+  onTaskNoteReorder?: (task: TaskItem, draggedNote: TaskNote, anchorNote: TaskNote, position: TaskListDropPosition) => void;
+  onToggleTaskNotePinned?: (task: TaskItem, note: TaskNote) => void;
 };
 
 export type TaskSelectionIntent = {
@@ -66,6 +69,7 @@ export type TaskRenderOptions = {
   allowThinoNoteEdit?: boolean;
   getTaskNoteCount?: (task: TaskItem) => number;
   getTaskNotes?: (task: TaskItem) => TaskNote[];
+  isTaskNotePinned?: (task: TaskItem, note: TaskNote) => boolean;
   renderNoteMarkdown?: TaskNoteMarkdownRenderer;
   expandedTaskIds?: ReadonlySet<string>;
   expandingTaskIds?: ReadonlySet<string>;
@@ -75,6 +79,7 @@ export type TaskRenderOptions = {
 
 const BUCKETS = ["overdue", "today", "tomorrow", "thisWeek", "future", "noDate", "otherCompleted"] as const;
 const TASK_LIST_DRAG_MIME = "application/x-task-hub-task-list-id";
+const TASK_NOTE_DRAG_MIME = "application/x-task-hub-task-note-id";
 const TASK_LIST_RESCHEDULE_BUCKETS = ["overdue", "today", "tomorrow", "thisWeek"] as const;
 const TASK_PROGRESS_ANIMATION_MS = 240;
 let activeDraggedTaskListItemId: string | undefined;
@@ -1136,9 +1141,62 @@ function renderTaskNotes(
   const color = taskDisplayColor(task, options);
   if (color) setCssProps(notesContainer, { "--task-hub-source-color": color });
   notesContainer.createEl("h4", { text: t("notes") });
+  const canReorderNotes = notes.length > 1 && Boolean(handlers.onTaskNoteReorder);
+  const notesByKey = new Map(notes.map((note) => [taskNoteOrderItemKey(note), note]));
+  let activeDraggedNoteKey: string | undefined;
   for (const note of notes) {
     const text = taskNotePreviewBody(note.body);
-    const card = notesContainer.createDiv({ cls: "task-hub-task-note-card" });
+    const noteKey = taskNoteOrderItemKey(note);
+    const isPinned = options.isTaskNotePinned?.(task, note) ?? false;
+    const card = notesContainer.createDiv({
+      cls: `task-hub-task-note-card ${canReorderNotes ? "is-draggable" : ""} ${isPinned ? "is-pinned" : ""}`
+    });
+    if (canReorderNotes) {
+      card.draggable = true;
+      card.setAttr("draggable", "true");
+      card.addEventListener("dragstart", (event) => {
+        activeDraggedNoteKey = noteKey;
+        card.addClass("is-dragging");
+        if (!event.dataTransfer) return;
+        event.dataTransfer.effectAllowed = "move";
+        event.dataTransfer.setData(TASK_NOTE_DRAG_MIME, noteKey);
+      });
+      card.addEventListener("dragend", () => {
+        activeDraggedNoteKey = undefined;
+        card.removeClass("is-dragging");
+        clearTaskNoteCardDropClasses(card);
+      });
+      card.addEventListener("dragover", (event) => {
+        const draggedNote = taskNoteFromDragEvent(event, notesByKey, activeDraggedNoteKey);
+        if (!draggedNote || draggedNote === note) return;
+        const position = taskNoteCardDropPosition(card, event);
+        event.preventDefault();
+        if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+        setTaskNoteCardDropClasses(card, position);
+      });
+      card.addEventListener("dragleave", () => {
+        clearTaskNoteCardDropClasses(card);
+      });
+      card.addEventListener("drop", (event) => {
+        const draggedNote = taskNoteFromDragEvent(event, notesByKey, activeDraggedNoteKey);
+        activeDraggedNoteKey = undefined;
+        card.removeClass("is-dragging");
+        clearTaskNoteCardDropClasses(card);
+        if (!draggedNote || draggedNote === note) return;
+        const position = taskNoteCardDropPosition(card, event);
+        event.preventDefault();
+        handlers.onTaskNoteReorder?.(task, draggedNote, note, position);
+      });
+    }
+    const pinButton = card.createEl("button", { cls: `task-hub-task-note-pin ${isPinned ? "is-active" : ""}` });
+    pinButton.setAttr("aria-label", isPinned ? t("taskNoteUnpin") : t("taskNotePin"));
+    pinButton.setAttr("title", isPinned ? t("taskNoteUnpin") : t("taskNotePin"));
+    setIcon(pinButton, "pin");
+    pinButton.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      handlers.onToggleTaskNotePinned?.(task, note);
+    });
     const menuButton = card.createEl("button", { cls: "task-hub-task-note-menu" });
     menuButton.setAttr("aria-label", t("more"));
     setIcon(menuButton, "more-horizontal");
@@ -1172,6 +1230,35 @@ function renderTaskNotes(
     renderTaskNoteBody(card.createDiv({ cls: "task-hub-task-note-body" }), text, note.path, options.renderNoteMarkdown);
     if (note.createdAt) card.createDiv({ cls: "task-hub-task-note-date", text: note.createdAt.slice(0, 10) });
   }
+}
+
+function taskNoteFromDragEvent(
+  event: DragEvent,
+  notesByKey: ReadonlyMap<string, TaskNote>,
+  activeDraggedNoteKey: string | undefined
+): TaskNote | undefined {
+  const draggedKey = activeDraggedNoteKey ?? event.dataTransfer?.getData(TASK_NOTE_DRAG_MIME);
+  return draggedKey ? notesByKey.get(draggedKey) : undefined;
+}
+
+function taskNoteCardDropPosition(card: HTMLElement, event: DragEvent): TaskListDropPosition {
+  const bounds = card.getBoundingClientRect?.();
+  if (!bounds || !Number.isFinite(bounds.top) || !Number.isFinite(bounds.height) || bounds.height <= 0 || event.clientY === undefined) {
+    return "after";
+  }
+  return event.clientY < bounds.top + bounds.height / 2 ? "before" : "after";
+}
+
+function setTaskNoteCardDropClasses(card: HTMLElement, position: TaskListDropPosition): void {
+  card.addClass("is-note-drop-target");
+  card.toggleClass("is-drop-before", position === "before");
+  card.toggleClass("is-drop-after", position === "after");
+}
+
+function clearTaskNoteCardDropClasses(card: HTMLElement): void {
+  card.removeClass("is-note-drop-target");
+  card.removeClass("is-drop-before");
+  card.removeClass("is-drop-after");
 }
 
 type DetailRow = {

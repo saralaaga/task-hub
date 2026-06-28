@@ -1291,11 +1291,50 @@ body .task-hub-view button.task-hub-color-swatch {
   word-break: break-word;
 }
 
+.task-hub-task-note-card.is-pinned {
+  border-color: color-mix(in srgb, var(--task-hub-source-color) 32%, var(--background-modifier-border));
+}
+
+.task-hub-task-note-card.is-draggable {
+  cursor: grab;
+  transition:
+    border-color 140ms ease,
+    box-shadow 140ms ease,
+    transform 140ms ease;
+}
+
+.task-hub-task-note-card.is-draggable:active,
+.task-hub-task-note-card.is-dragging {
+  cursor: grabbing;
+}
+
+.task-hub-task-note-card.is-dragging {
+  opacity: 0.72;
+  transform: scale(0.99);
+}
+
+.task-hub-task-note-card.is-note-drop-target {
+  border-color: color-mix(in srgb, var(--task-hub-source-color) 62%, var(--background-modifier-border));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--task-hub-source-color) 28%, transparent);
+}
+
+.task-hub-task-note-card.is-note-drop-target.is-drop-before {
+  box-shadow:
+    inset 0 2px 0 0 var(--task-hub-source-color),
+    0 0 0 1px color-mix(in srgb, var(--task-hub-source-color) 28%, transparent);
+}
+
+.task-hub-task-note-card.is-note-drop-target.is-drop-after {
+  box-shadow:
+    inset 0 -2px 0 0 var(--task-hub-source-color),
+    0 0 0 1px color-mix(in srgb, var(--task-hub-source-color) 28%, transparent);
+}
+
 .task-hub-task-note-body {
   line-height: 1.45;
   margin-top: 10px;
   overflow-wrap: anywhere;
-  padding: 0 34px 0 2px;
+  padding: 0 70px 0 2px;
   white-space: normal;
 }
 
@@ -1304,7 +1343,7 @@ body .task-hub-view button.task-hub-color-swatch {
   font-size: var(--font-ui-small);
   font-weight: 600;
   line-height: 1.25;
-  padding-right: 34px;
+  padding-right: 70px;
 }
 
 .task-hub-task-note-date {
@@ -1336,10 +1375,43 @@ button.task-hub-task-note-menu {
   width: 26px;
 }
 
+button.task-hub-task-note-pin {
+  align-items: center;
+  appearance: none;
+  background: transparent;
+  border: 0;
+  border-radius: 999px;
+  box-shadow: none;
+  color: var(--text-faint);
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  height: 26px;
+  justify-content: center;
+  line-height: 1;
+  min-height: 0;
+  padding: 0;
+  position: absolute;
+  right: 42px;
+  top: 8px;
+  width: 26px;
+}
+
+button.task-hub-task-note-pin.is-active {
+  color: var(--task-hub-source-color);
+}
+
 button.task-hub-task-note-menu:hover,
-button.task-hub-task-note-menu:focus-visible {
+button.task-hub-task-note-menu:focus-visible,
+button.task-hub-task-note-pin:hover,
+button.task-hub-task-note-pin:focus-visible {
   background: transparent;
   color: var(--text-normal);
+}
+
+button.task-hub-task-note-pin.is-active:hover,
+button.task-hub-task-note-pin.is-active:focus-visible {
+  color: var(--task-hub-source-color);
 }
 
 .task-hub-task-note-text {

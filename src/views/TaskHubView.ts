@@ -228,7 +228,15 @@ export class TaskHubView extends ItemView {
           onCreateTaskNote: (task) => void this.plugin.createTaskNoteForTask(task),
           onOpenTaskNote: (path) => void this.plugin.openTaskNote(path),
           onDeleteTaskNote: (path) => void this.plugin.deleteTaskNote(path),
-          onOpenTaskNoteInThino: (path) => void this.plugin.openTaskNoteSource(path)
+          onOpenTaskNoteInThino: (path) => void this.plugin.openTaskNoteSource(path),
+          onTaskNoteReorder: (task, draggedNote, anchorNote, position) => {
+            this.captureContentScroll();
+            void this.plugin.reorderTaskNotes(task, draggedNote, anchorNote, position);
+          },
+          onToggleTaskNotePinned: (task, note) => {
+            this.captureContentScroll();
+            void this.plugin.toggleTaskNotePinned(task, note);
+          }
         },
         now,
         t,
@@ -259,7 +267,8 @@ export class TaskHubView extends ItemView {
           allowThinoNoteEdit: this.plugin.settings.taskNotes.thinoIntegrationEnabled,
           getTaskNoteCount: (task) =>
             this.plugin.settings.taskNotes.showCountsInTaskList ? this.plugin.getTaskNoteCount(task) : 0,
-          getTaskNotes: (task) => this.plugin.getTaskNotes(task),
+          getTaskNotes: (task) => this.plugin.getOrderedTaskNotes(task),
+          isTaskNotePinned: (task, note) => this.plugin.isTaskNotePinned(task, note),
           onToggleTaskExpanded: (task) => {
             const isExpanding = !this.expandedTaskIds.has(task.id);
             this.expandedTaskIds = toggleSetValue(this.expandedTaskIds, task.id);

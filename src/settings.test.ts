@@ -77,6 +77,8 @@ describe("normalizeTaskHubSettings", () => {
       textQuery: ""
     });
     expect(settings.taskListManualOrder).toEqual({});
+    expect(settings.taskNoteManualOrder).toEqual({});
+    expect(settings.taskNotePinned).toEqual({});
     expect(settings.vaultTaskStableState).toEqual({});
     expect(settings.ignoredPaths).toEqual(["Archive/"]);
   });
@@ -270,6 +272,16 @@ describe("normalizeTaskHubSettings", () => {
         "2026-05-08": ["vault:th_a", "vault:th_a", "bad stable id"],
         invalid: ["vault:th_b"]
       },
+      taskNoteManualOrder: {
+        "task:vault:th_parent": ["note-1", "note-1", "", 42 as never],
+        "": ["note-2"],
+        "task:vault:th_other": []
+      } as never,
+      taskNotePinned: {
+        "task:vault:th_parent": ["note-2", "note-2", "", 7 as never],
+        "": ["note-3"],
+        "task:vault:th_empty": []
+      } as never,
       vaultTaskStableState: {
         "Project.md": [
           {
@@ -294,6 +306,12 @@ describe("normalizeTaskHubSettings", () => {
 
     expect(settings.taskListManualOrder).toEqual({
       "2026-05-08": ["vault:th_a"]
+    });
+    expect(settings.taskNoteManualOrder).toEqual({
+      "task:vault:th_parent": ["note-1"]
+    });
+    expect(settings.taskNotePinned).toEqual({
+      "task:vault:th_parent": ["note-2"]
     });
     expect(settings.vaultTaskStableState).toEqual({
       "Project.md": [

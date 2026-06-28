@@ -222,6 +222,8 @@ export type IndexedFileState = {
 };
 
 export type TaskListManualOrder = Record<string, string[]>;
+export type TaskNoteManualOrder = Record<string, string[]>;
+export type TaskNotePinned = Record<string, string[]>;
 
 export type PersistedVaultTaskStableRecord = {
   stableId: string;
@@ -258,6 +260,8 @@ export type TaskHubSettings = {
   taskNotes: TaskNoteSettings;
   taskViewFilters: TaskViewFilterSettings;
   taskListManualOrder: TaskListManualOrder;
+  taskNoteManualOrder: TaskNoteManualOrder;
+  taskNotePinned: TaskNotePinned;
   vaultTaskStableState: Record<string, PersistedVaultTaskStableRecord[]>;
   ignoredPaths: string[];
   tagViewOrder: string[];

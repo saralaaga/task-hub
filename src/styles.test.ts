@@ -300,18 +300,25 @@ describe("Task Hub styles", () => {
   it("keeps task note cards padded and Markdown paragraphs compact", () => {
     const styles = readFileSync(path.join(__dirname, "styles.css"), "utf8");
     const noteCardRule = styles.match(/\.task-hub-task-note-card\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const pinnedCardRule = styles.match(/\.task-hub-task-note-card\.is-pinned\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const noteBodyRule = styles.match(/\.task-hub-task-note-body\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const noteTitleRule = styles.match(/\.task-hub-task-note-title\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const pinRule = styles.match(/button\.task-hub-task-note-pin\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const pinActiveRule = styles.match(/button\.task-hub-task-note-pin\.is-active\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const plainTextRule = styles.match(/\.task-hub-task-note-text\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const blockRule = styles.match(/\.task-hub-task-note-card\s+\.task-hub-task-note-body p,\s*\.task-hub-task-note-card\s+\.task-hub-task-note-body ul,\s*\.task-hub-task-note-card\s+\.task-hub-task-note-body ol\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const listItemRule = styles.match(/\.task-hub-task-note-card\s+\.task-hub-task-note-body li\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
 
     expect(noteCardRule).toContain("padding: 14px 16px 12px");
+    expect(pinnedCardRule).toContain("border-color: color-mix");
     expect(noteTitleRule).toContain("color: var(--text-muted)");
     expect(noteTitleRule).toContain("font-size: var(--font-ui-small)");
-    expect(noteBodyRule).toContain("padding: 0 34px 0 2px");
+    expect(noteBodyRule).toContain("padding: 0 70px 0 2px");
     expect(noteBodyRule).toContain("margin-top: 10px");
     expect(noteBodyRule).toContain("white-space: normal");
+    expect(pinRule).toContain("right: 42px");
+    expect(pinRule).toContain("border-radius: 999px");
+    expect(pinActiveRule).toContain("color: var(--task-hub-source-color)");
     expect(plainTextRule).toContain("white-space: pre-wrap");
     expect(blockRule).toContain("margin-block: 0 2px");
     expect(listItemRule).toContain("margin-block: 0 2px");

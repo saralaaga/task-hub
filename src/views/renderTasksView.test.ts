@@ -342,6 +342,16 @@ function taskRowByTitle(container: FakeElement, title: string): FakeElement | un
     .find((row) => taskRowTitle(row) === title);
 }
 
+function taskNoteCardByTitle(container: FakeElement, title: string): FakeElement | undefined {
+  return collect(container)
+    .filter((element) => element.classes.has("task-hub-task-note-card"))
+    .find((card) => collect(card).find((element) => element.classes.has("task-hub-task-note-title"))?.text === title);
+}
+
+function taskNotePinButtonByTitle(container: FakeElement, title: string): FakeElement | undefined {
+  return collect(taskNoteCardByTitle(container, title) ?? container).find((element) => element.classes.has("task-hub-task-note-pin"));
+}
+
 function firstProgressValue(element: FakeElement): string | undefined {
   return collect(element).find((child) => child.classes.has("task-hub-task-progress-value"))?.text;
 }
@@ -376,7 +386,9 @@ describe("renderTasksView", () => {
     onCreateTaskNote: jest.fn(),
     onOpenTaskNote: jest.fn(),
     onDeleteTaskNote: jest.fn(),
-    onOpenTaskNoteInThino: jest.fn()
+    onOpenTaskNoteInThino: jest.fn(),
+    onTaskNoteReorder: jest.fn(),
+    onToggleTaskNotePinned: jest.fn()
   });
 
   it("disables Apple Reminders checkboxes when writeback is disabled", () => {
@@ -1327,6 +1339,157 @@ describe("renderTasksView", () => {
     expect(viewHandlers.onDeleteTaskNote).toHaveBeenCalledWith("Task Hub Notes/one.md");
     expect(viewHandlers.onOpenTaskNote).toHaveBeenCalledWith("Task Hub Notes/one.md");
     expect(viewHandlers.onOpenTaskNoteInThino).toHaveBeenCalledWith("Task Hub Notes/one.md");
+  });
+
+  it("makes multiple task note cards draggable and reports note reordering on drop", () => {
+    const container = new FakeElement();
+    const viewHandlers = handlers();
+
+    renderTasksView(
+      container as unknown as HTMLElement,
+      [baseTask],
+      [baseTask],
+      { status: "open", tags: [], sourceQuery: "", textQuery: "" },
+      viewHandlers,
+      new Date("2026-05-08T12:00:00Z"),
+      (key) => key,
+      {
+        allowAppleReminderWriteback: true,
+        taskNotesEnabled: true,
+        getTaskNoteCount: () => 2,
+        getTaskNotes: () => [
+          {
+            path: "Task Hub Notes/one.md",
+            noteId: "note-1",
+            related: [],
+            history: [],
+            title: "One",
+            body: "Body one",
+            bodyStartLine: 10,
+            tags: [],
+            createdAt: "2026-05-29T10:30:12"
+          },
+          {
+            path: "Task Hub Notes/two.md",
+            noteId: "note-2",
+            related: [],
+            history: [],
+            title: "Two",
+            body: "Body two",
+            bodyStartLine: 10,
+            tags: [],
+            createdAt: "2026-05-28T09:00:00"
+          }
+        ]
+      }
+    );
+
+    const dragCard = taskNoteCardByTitle(container, "one");
+    const dropCard = taskNoteCardByTitle(container, "two");
+    const dataTransfer = fakeDataTransfer();
+
+    expect(dragCard?.draggable).toBe(true);
+    expect(dropCard?.draggable).toBe(true);
+    dropCard!.clientY = 0;
+    dragCard?.dispatch("dragstart", { dataTransfer });
+    dropCard?.dispatch("drop", { dataTransfer, clientY: 28 });
+
+    expect(viewHandlers.onTaskNoteReorder).toHaveBeenCalledWith(
+      baseTask,
+      expect.objectContaining({ noteId: "note-1", path: "Task Hub Notes/one.md" }),
+      expect.objectContaining({ noteId: "note-2", path: "Task Hub Notes/two.md" }),
+      "after"
+    );
+  });
+
+  it("does not make a single task note draggable", () => {
+    const container = new FakeElement();
+
+    renderTasksView(
+      container as unknown as HTMLElement,
+      [baseTask],
+      [baseTask],
+      { status: "open", tags: [], sourceQuery: "", textQuery: "" },
+      handlers(),
+      new Date("2026-05-08T12:00:00Z"),
+      (key) => key,
+      {
+        allowAppleReminderWriteback: true,
+        taskNotesEnabled: true,
+        getTaskNoteCount: () => 1,
+        getTaskNotes: () => [
+          {
+            path: "Task Hub Notes/solo.md",
+            noteId: "note-solo",
+            related: [],
+            history: [],
+            title: "Solo",
+            body: "Only one",
+            bodyStartLine: 10,
+            tags: [],
+            createdAt: "2026-05-29T10:30:12"
+          }
+        ]
+      }
+    );
+
+    expect(taskNoteCardByTitle(container, "solo")?.draggable).toBe(false);
+  });
+
+  it("renders a pin button beside the note menu and toggles pinned state", () => {
+    const container = new FakeElement();
+    const viewHandlers = handlers();
+
+    renderTasksView(
+      container as unknown as HTMLElement,
+      [baseTask],
+      [baseTask],
+      { status: "open", tags: [], sourceQuery: "", textQuery: "" },
+      viewHandlers,
+      new Date("2026-05-08T12:00:00Z"),
+      (key) => key,
+      {
+        allowAppleReminderWriteback: true,
+        taskNotesEnabled: true,
+        isTaskNotePinned: (_task, note) => note.path === "Task Hub Notes/two.md",
+        getTaskNoteCount: () => 2,
+        getTaskNotes: () => [
+          {
+            path: "Task Hub Notes/one.md",
+            noteId: "note-1",
+            related: [],
+            history: [],
+            title: "One",
+            body: "Body one",
+            bodyStartLine: 10,
+            tags: [],
+            createdAt: "2026-05-29T10:30:12"
+          },
+          {
+            path: "Task Hub Notes/two.md",
+            noteId: "note-2",
+            related: [],
+            history: [],
+            title: "Two",
+            body: "Body two",
+            bodyStartLine: 10,
+            tags: [],
+            createdAt: "2026-05-28T09:00:00"
+          }
+        ]
+      }
+    );
+
+    const firstPin = taskNotePinButtonByTitle(container, "one");
+    const secondCard = taskNoteCardByTitle(container, "two");
+
+    expect(firstPin?.attrs.get("aria-label")).toBe("taskNotePin");
+    expect(secondCard?.classes.has("is-pinned")).toBe(true);
+    taskNotePinButtonByTitle(container, "one")?.click();
+    expect(viewHandlers.onToggleTaskNotePinned).toHaveBeenCalledWith(
+      baseTask,
+      expect.objectContaining({ noteId: "note-1", path: "Task Hub Notes/one.md" })
+    );
   });
 
   it("renders note tags inline instead of duplicating them below the note body", () => {

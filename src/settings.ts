@@ -47,6 +47,8 @@ export const DEFAULT_SETTINGS: TaskHubSettings = {
     textQuery: ""
   },
   taskListManualOrder: {},
+  taskNoteManualOrder: {},
+  taskNotePinned: {},
   vaultTaskStableState: {},
   ignoredPaths: ["Templates/", "Archive/"],
   tagViewOrder: [],
@@ -142,6 +144,8 @@ export function normalizeTaskHubSettings(loaded: Partial<TaskHubSettings> | null
     taskNotes: normalizeTaskNotesSettings(loaded?.taskNotes),
     taskViewFilters: normalizeTaskViewFilters(loaded?.taskViewFilters, loaded?.showCompletedByDefault),
     taskListManualOrder: normalizeTaskListManualOrder(loaded?.taskListManualOrder),
+    taskNoteManualOrder: normalizeTaskNoteManualOrder(loaded?.taskNoteManualOrder),
+    taskNotePinned: normalizeTaskNotePinned(loaded?.taskNotePinned),
     vaultTaskStableState: normalizeVaultTaskStableState(loaded?.vaultTaskStableState),
     externalTaskSourceOrder: normalizeExternalTaskSourceOrder(loaded?.externalTaskSourceOrder),
     localApple: {
@@ -193,6 +197,32 @@ function normalizeTaskListManualOrder(value: unknown): TaskHubSettings["taskList
       new Set(stableIds.filter((stableId): stableId is string => isTaskStableId(stableId)))
     );
     if (normalized.length > 0) result[dateKey] = normalized;
+  }
+  return result;
+}
+
+function normalizeTaskNoteManualOrder(value: unknown): TaskHubSettings["taskNoteManualOrder"] {
+  if (!value || typeof value !== "object") return {};
+  const result: TaskHubSettings["taskNoteManualOrder"] = {};
+  for (const [scopeKey, noteKeys] of Object.entries(value as Record<string, unknown>)) {
+    if (typeof scopeKey !== "string" || !scopeKey.trim() || !Array.isArray(noteKeys)) continue;
+    const normalized = Array.from(
+      new Set(noteKeys.filter((noteKey): noteKey is string => typeof noteKey === "string" && noteKey.trim().length > 0))
+    );
+    if (normalized.length > 0) result[scopeKey] = normalized;
+  }
+  return result;
+}
+
+function normalizeTaskNotePinned(value: unknown): TaskHubSettings["taskNotePinned"] {
+  if (!value || typeof value !== "object") return {};
+  const result: TaskHubSettings["taskNotePinned"] = {};
+  for (const [scopeKey, noteKeys] of Object.entries(value as Record<string, unknown>)) {
+    if (typeof scopeKey !== "string" || !scopeKey.trim() || !Array.isArray(noteKeys)) continue;
+    const normalized = Array.from(
+      new Set(noteKeys.filter((noteKey): noteKey is string => typeof noteKey === "string" && noteKey.trim().length > 0))
+    );
+    if (normalized.length > 0) result[scopeKey] = normalized;
   }
   return result;
 }

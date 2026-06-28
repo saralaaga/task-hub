@@ -34,8 +34,19 @@ import {
   normalizeTaskNoteFolder,
   replaceTaskNoteBody,
   taskNoteFileName,
-  transferTaskNoteRelationship
+  transferTaskNoteRelationship,
+  type TaskNote
 } from "./taskNotes";
+import {
+  cleanupTaskNotePinnedEntry,
+  cleanupTaskNoteManualOrderEntry,
+  prioritizeTaskNoteInManualOrder,
+  reorderTaskNotes as buildReorderedTaskNoteKeys,
+  sortTaskNotes,
+  taskNoteOrderItemKey,
+  taskNoteOrderScopeKey,
+  togglePinnedTaskNote
+} from "./taskNoteOrdering";
 import {
   appleCalendarSource,
   appleCalendarsFromEvents,
@@ -357,6 +368,8 @@ export default class TaskHubPlugin extends Plugin {
 
   async saveSettings(): Promise<void> {
     this.cleanupTaskListManualOrderState();
+    this.cleanupTaskNoteManualOrderState();
+    this.cleanupTaskNotePinnedState();
     await this.saveData(this.settings);
     this.refreshOpenViews();
   }
@@ -366,6 +379,38 @@ export default class TaskHubPlugin extends Plugin {
     const cleaned = cleanupTaskListManualOrder(this.settings.taskListManualOrder, this.getTasks());
     if (JSON.stringify(cleaned) === JSON.stringify(this.settings.taskListManualOrder)) return false;
     this.settings.taskListManualOrder = cleaned;
+    return true;
+  }
+
+  private cleanupTaskNoteManualOrderState(): boolean {
+    if (!this.taskIndex || typeof this.taskIndex.getTasks !== "function") return false;
+    if (!this.taskNoteIndex || typeof this.taskNoteIndex.getNotesForKey !== "function") return false;
+    const nextManualOrder: TaskHubSettings["taskNoteManualOrder"] = {};
+    for (const task of this.getTasks()) {
+      const notes = this.getTaskNotes(task);
+      if (notes.length === 0) continue;
+      const scopeKey = taskNoteOrderScopeKey(task);
+      const cleaned = cleanupTaskNoteManualOrderEntry(notes, this.settings.taskNoteManualOrder[scopeKey] ?? []);
+      if (cleaned.length > 0) nextManualOrder[scopeKey] = cleaned;
+    }
+    if (JSON.stringify(nextManualOrder) === JSON.stringify(this.settings.taskNoteManualOrder)) return false;
+    this.settings.taskNoteManualOrder = nextManualOrder;
+    return true;
+  }
+
+  private cleanupTaskNotePinnedState(): boolean {
+    if (!this.taskIndex || typeof this.taskIndex.getTasks !== "function") return false;
+    if (!this.taskNoteIndex || typeof this.taskNoteIndex.getNotesForKey !== "function") return false;
+    const nextPinned: TaskHubSettings["taskNotePinned"] = {};
+    for (const task of this.getTasks()) {
+      const notes = this.getTaskNotes(task);
+      if (notes.length === 0) continue;
+      const scopeKey = taskNoteOrderScopeKey(task);
+      const cleaned = cleanupTaskNotePinnedEntry(notes, this.settings.taskNotePinned[scopeKey] ?? []);
+      if (cleaned.length > 0) nextPinned[scopeKey] = cleaned;
+    }
+    if (JSON.stringify(nextPinned) === JSON.stringify(this.settings.taskNotePinned)) return false;
+    this.settings.taskNotePinned = nextPinned;
     return true;
   }
 
@@ -1650,8 +1695,77 @@ export default class TaskHubPlugin extends Plugin {
     return this.settings.taskNotes.enabled ? this.taskNoteIndex.getNotesForKey(buildTaskNoteKey(task)) : [];
   }
 
+  getOrderedTaskNotes(task: TaskItem): TaskNote[] {
+    const notes = this.getTaskNotes(task);
+    if (notes.length <= 1) return notes;
+    const scopeKey = taskNoteOrderScopeKey(task);
+    return sortTaskNotes(notes, this.settings.taskNoteManualOrder[scopeKey] ?? [], this.settings.taskNotePinned[scopeKey] ?? []);
+  }
+
   getTaskNoteCount(task: TaskItem): number {
     return this.getTaskNotes(task).length;
+  }
+
+  isTaskNotePinned(task: TaskItem, note: TaskNote): boolean {
+    return (this.settings.taskNotePinned[taskNoteOrderScopeKey(task)] ?? []).includes(taskNoteOrderItemKey(note));
+  }
+
+  async reorderTaskNotes(task: TaskItem, draggedNote: TaskNote, anchorNote: TaskNote, position: TaskListDropPosition): Promise<void> {
+    const notes = this.getTaskNotes(task);
+    if (notes.length <= 1) return;
+    const scopeKey = taskNoteOrderScopeKey(task);
+    const nextOrder = cleanupTaskNoteManualOrderEntry(
+      notes,
+      buildReorderedTaskNoteKeys(notes, this.settings.taskNoteManualOrder, task, draggedNote, anchorNote, position)
+    );
+    const nextManualOrder = { ...this.settings.taskNoteManualOrder };
+    if (nextOrder.length > 0) {
+      nextManualOrder[scopeKey] = nextOrder;
+    } else {
+      delete nextManualOrder[scopeKey];
+    }
+    if (JSON.stringify(nextManualOrder) === JSON.stringify(this.settings.taskNoteManualOrder)) return;
+    this.settings.taskNoteManualOrder = nextManualOrder;
+    await this.saveSettings();
+  }
+
+  async toggleTaskNotePinned(task: TaskItem, note: TaskNote): Promise<void> {
+    const notes = this.getTaskNotes(task);
+    if (notes.length === 0) return;
+    const scopeKey = taskNoteOrderScopeKey(task);
+    const wasPinned = this.isTaskNotePinned(task, note);
+    const nextPinnedEntry = cleanupTaskNotePinnedEntry(notes, togglePinnedTaskNote(this.settings.taskNotePinned, task, note));
+    const nextPinned = { ...this.settings.taskNotePinned };
+    if (nextPinnedEntry.length > 0) {
+      nextPinned[scopeKey] = nextPinnedEntry;
+    } else {
+      delete nextPinned[scopeKey];
+    }
+
+    let nextManual = this.settings.taskNoteManualOrder;
+    if (!wasPinned) {
+      const prioritized = cleanupTaskNoteManualOrderEntry(
+        notes,
+        prioritizeTaskNoteInManualOrder(notes, this.settings.taskNoteManualOrder, task, note)
+      );
+      nextManual = { ...this.settings.taskNoteManualOrder };
+      if (prioritized.length > 0) {
+        nextManual[scopeKey] = prioritized;
+      } else {
+        delete nextManual[scopeKey];
+      }
+    }
+
+    if (
+      JSON.stringify(nextPinned) === JSON.stringify(this.settings.taskNotePinned) &&
+      JSON.stringify(nextManual) === JSON.stringify(this.settings.taskNoteManualOrder)
+    ) {
+      return;
+    }
+
+    this.settings.taskNotePinned = nextPinned;
+    this.settings.taskNoteManualOrder = nextManual;
+    await this.saveSettings();
   }
 
   getEventNotes(event: CalendarEvent) {
