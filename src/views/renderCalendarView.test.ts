@@ -2241,6 +2241,7 @@ describe("renderCalendarView", () => {
     const container = new FakeElement();
     const onOpenTaskNote = jest.fn();
     const onDeleteTaskNote = jest.fn();
+    const onOpenTaskNoteSource = jest.fn();
     const onOpenTaskNoteInThino = jest.fn();
 
     renderCalendarView(
@@ -2285,6 +2286,7 @@ describe("renderCalendarView", () => {
         onTaskDelete: jest.fn(),
         onOpenTaskNote,
         onDeleteTaskNote,
+        onOpenTaskNoteSource,
         onOpenTaskNoteInThino,
         onToday: jest.fn()
       }
@@ -2303,12 +2305,19 @@ describe("renderCalendarView", () => {
 
     const menuButton = collect(popover as FakeElement).find((element) => element.classes.has("task-hub-task-note-menu"));
     menuButton?.click();
-    expect(mockMenus.at(-1)?.items.map((menuItem) => menuItem.title)).toEqual(["delete", "edit", "taskNoteEditInThino"]);
+    expect(mockMenus.at(-1)?.items.map((menuItem) => menuItem.title)).toEqual([
+      "delete",
+      "edit",
+      "taskNoteEditSource",
+      "taskNoteEditInThino"
+    ]);
     mockMenus.at(-1)?.items[0].click?.();
     mockMenus.at(-1)?.items[1].click?.();
     mockMenus.at(-1)?.items[2].click?.();
+    mockMenus.at(-1)?.items[3].click?.();
     expect(onDeleteTaskNote).toHaveBeenCalledWith("Task Hub Notes/one.md");
     expect(onOpenTaskNote).toHaveBeenCalledWith("Task Hub Notes/one.md");
+    expect(onOpenTaskNoteSource).toHaveBeenCalledWith("Task Hub Notes/one.md");
     expect(onOpenTaskNoteInThino).toHaveBeenCalledWith("Task Hub Notes/one.md");
   });
 

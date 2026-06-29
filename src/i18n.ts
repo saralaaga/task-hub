@@ -363,6 +363,7 @@ export type TranslationKey =
   | "taskNotesThinoDesc"
   | "taskNotesThinoFolder"
   | "taskNotesThinoFolderDesc"
+  | "taskNoteEditSource"
   | "taskNoteEditInThino"
   | "taskNoteDeleted"
   | "taskNotePin"
@@ -517,6 +518,7 @@ const JA_SETTINGS_TRANSLATIONS: Partial<Record<TranslationKey, string>> = {
   taskNotesThinoDesc: "新規ノートに Thino multi-file frontmatter を使います。Thino single-file、Canvas、日記ストレージは生成しません。",
   taskNotesThinoFolder: "Thino ノートフォルダー",
   taskNotesThinoFolderDesc: "Thino multi-file ストレージで使うフォルダー。",
+  taskNoteEditSource: "ソースファイルで編集",
   taskNotePin: "ノートをピン留め",
   taskNoteUnpin: "ノートのピン留めを解除",
   taskSendDefaultTarget: "デフォルトの送信先",
@@ -1144,6 +1146,7 @@ const TRANSLATIONS: Record<"en" | "zh", Record<TranslationKey, string>> &
     taskNotesThinoDesc: "Use Thino multi-file frontmatter for newly created notes. Thino single-file, Canvas, and diary storage are not generated.",
     taskNotesThinoFolder: "Thino notes folder",
     taskNotesThinoFolderDesc: "Folder used by Thino multi-file storage.",
+    taskNoteEditSource: "Edit source file",
     taskNoteEditInThino: "Edit in Thino",
     taskNoteDeleted: "Task note deleted.",
     taskNotePin: "Pin note",
@@ -1512,6 +1515,7 @@ const TRANSLATIONS: Record<"en" | "zh", Record<TranslationKey, string>> &
     taskNotesThinoDesc: "为新笔记写入 Thino multi-file frontmatter；不生成 Thino single-file、Canvas 或日记存储内容。",
     taskNotesThinoFolder: "Thino 笔记文件夹",
     taskNotesThinoFolderDesc: "Thino multi-file 存储使用的文件夹。",
+    taskNoteEditSource: "在源文件编辑",
     taskNoteEditInThino: "在 Thino 中编辑",
     taskNoteDeleted: "任务笔记已删除。",
     taskNotePin: "置顶笔记",
@@ -1595,6 +1599,8 @@ const TRANSLATIONS: Record<"en" | "zh", Record<TranslationKey, string>> &
     notSynced: "未同期",
     open: "未完了",
     openSource: "ソースを開く",
+    taskNoteEditSource: "ソースファイルで編集",
+    taskNoteEditInThino: "Thino で編集",
     openTaskHub: "Task Hub を開く",
     or: "または",
     otherCompleted: "その他の完了",
@@ -1718,6 +1724,8 @@ const TRANSLATIONS: Record<"en" | "zh", Record<TranslationKey, string>> &
     notSynced: "non synchronisé",
     open: "Ouverte",
     openSource: "Ouvrir la source",
+    taskNoteEditSource: "Modifier le fichier source",
+    taskNoteEditInThino: "Modifier dans Thino",
     openTaskHub: "Ouvrir Task Hub",
     or: "ou",
     otherCompleted: "Autres terminées",
@@ -1841,6 +1849,8 @@ const TRANSLATIONS: Record<"en" | "zh", Record<TranslationKey, string>> &
     notSynced: "동기화 안 됨",
     open: "미완료",
     openSource: "소스 열기",
+    taskNoteEditSource: "원본 파일에서 편집",
+    taskNoteEditInThino: "Thino에서 편집",
     openTaskHub: "Task Hub 열기",
     or: "또는",
     otherCompleted: "기타 완료",

@@ -234,6 +234,7 @@ export class TaskHubView extends ItemView {
           onCreateTaskNote: (task) => void this.plugin.createTaskNoteForTask(task),
           onOpenTaskNote: (path) => void this.plugin.openTaskNote(path),
           onDeleteTaskNote: (path) => void this.plugin.deleteTaskNote(path),
+          onOpenTaskNoteSource: (path) => void this.plugin.openTaskNoteSource(path),
           onOpenTaskNoteInThino: (path) => void this.plugin.openTaskNoteSource(path),
           onTaskNoteReorder: (task, draggedNote, anchorNote, position) => {
             this.captureContentScroll();
@@ -452,6 +453,7 @@ export class TaskHubView extends ItemView {
           onCreateEventNote: (event) => void this.plugin.createTaskNoteForEvent(event),
           onOpenTaskNote: (path) => void this.plugin.openTaskNote(path),
           onDeleteTaskNote: (path) => void this.plugin.deleteTaskNote(path),
+          onOpenTaskNoteSource: (path) => void this.plugin.openTaskNoteSource(path),
           onOpenTaskNoteInThino: (path) => void this.plugin.openTaskNoteSource(path),
           onTaskNoteReorder: (task, draggedNote, anchorNote, position) => {
             this.captureContentScroll();

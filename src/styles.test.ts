@@ -320,7 +320,7 @@ describe("Task Hub styles", () => {
     expect(pinnedCardRule).toContain("border-color: color-mix");
     expect(noteTitleRule).toContain("color: var(--text-muted)");
     expect(noteTitleRule).toContain("font-size: var(--font-ui-small)");
-    expect(noteBodyRule).toContain("padding: 0 70px 0 2px");
+    expect(noteBodyRule).toContain("padding: 0 0 0 2px");
     expect(noteBodyRule).toContain("margin-top: 10px");
     expect(noteBodyRule).toContain("white-space: normal");
     expect(pinRule).toContain("right: 42px");

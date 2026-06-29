@@ -105,6 +105,7 @@ export type CalendarViewHandlers = {
   onCreateEventNote?: (event: CalendarEvent) => void;
   onOpenTaskNote?: (path: string) => void;
   onDeleteTaskNote?: (path: string) => void;
+  onOpenTaskNoteSource?: (path: string) => void;
   onOpenTaskNoteInThino?: (path: string) => void;
   onTaskSendToAppleCalendar?: (task: TaskItem) => void;
   onAppleReminderListChange?: (task: TaskItem, listId: string) => void;
@@ -1283,6 +1284,7 @@ function calendarTaskRowHandlers(handlers: CalendarViewHandlers): TaskRowHandler
     onCreateTaskNote: handlers.onCreateTaskNote,
     onOpenTaskNote: handlers.onOpenTaskNote ?? (() => undefined),
     onDeleteTaskNote: handlers.onDeleteTaskNote ?? (() => undefined),
+    onOpenTaskNoteSource: handlers.onOpenTaskNoteSource,
     onOpenTaskNoteInThino: handlers.onOpenTaskNoteInThino,
     onTaskNoteReorder: handlers.onTaskNoteReorder,
     onToggleTaskNotePinned: handlers.onToggleTaskNotePinned
@@ -2034,9 +2036,7 @@ function renderCalendarNotes(
     const menuButton = card.createEl("button", { cls: "task-hub-task-note-menu" });
     menuButton.setAttr("aria-label", state.t("more"));
     setIcon(menuButton, "more-horizontal");
-    menuButton.addEventListener("click", (event) => {
-      event.preventDefault();
-      event.stopPropagation();
+    const openTaskNoteMenu = (event: MouseEvent) => {
       const menu = new Menu();
       menu.addItem((menuItem) => {
         menuItem
@@ -2050,6 +2050,12 @@ function renderCalendarNotes(
           .setIcon("pencil")
           .onClick(() => handlers.onOpenTaskNote?.(note.path));
       });
+      menu.addItem((menuItem) => {
+        menuItem
+          .setTitle(state.t("taskNoteEditSource"))
+          .setIcon("file-text")
+          .onClick(() => handlers.onOpenTaskNoteSource?.(note.path));
+      });
       if (state.allowThinoNoteEdit) {
         menu.addItem((menuItem) => {
           menuItem
@@ -2059,6 +2065,16 @@ function renderCalendarNotes(
         });
       }
       menu.showAtMouseEvent(event as MouseEvent);
+    };
+    card.addEventListener("contextmenu", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      openTaskNoteMenu(event as MouseEvent);
+    });
+    menuButton.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      openTaskNoteMenu(event as MouseEvent);
     });
     card.createDiv({ cls: "task-hub-task-note-title", text: taskNotePreviewTitle(note.path) });
     renderTaskNoteBody(card.createDiv({ cls: "task-hub-task-note-body" }), taskNotePreviewBody(note.body), note.path, state.renderNoteMarkdown);

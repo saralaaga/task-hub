@@ -1328,7 +1328,7 @@ body .task-hub-view button.task-hub-color-swatch {
   line-height: 1.45;
   margin-top: 10px;
   overflow-wrap: anywhere;
-  padding: 0 70px 0 2px;
+  padding: 0 0 0 2px;
   white-space: normal;
 }
 

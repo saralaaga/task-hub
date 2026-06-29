@@ -386,6 +386,7 @@ describe("renderTasksView", () => {
     onCreateTaskNote: jest.fn(),
     onOpenTaskNote: jest.fn(),
     onDeleteTaskNote: jest.fn(),
+    onOpenTaskNoteSource: jest.fn(),
     onOpenTaskNoteInThino: jest.fn(),
     onTaskNoteReorder: jest.fn(),
     onToggleTaskNotePinned: jest.fn()
@@ -1294,12 +1295,14 @@ describe("renderTasksView", () => {
     ]);
     const menu = collect(container).find((element) => element.classes.has("task-hub-task-note-menu"));
     menu?.click();
-    expect(mockMenus.at(-1)?.items.map((item) => item.title)).toEqual(["delete", "edit"]);
+    expect(mockMenus.at(-1)?.items.map((item) => item.title)).toEqual(["delete", "edit", "taskNoteEditSource"]);
     mockMenus.at(-1)?.items[1].click?.();
+    mockMenus.at(-1)?.items[2].click?.();
     expect(viewHandlers.onOpenTaskNote).toHaveBeenCalledWith("Task Hub Notes/one.md");
+    expect(viewHandlers.onOpenTaskNoteSource).toHaveBeenCalledWith("Task Hub Notes/one.md");
   });
 
-  it("shows delete, edit, and Thino edit note menu actions", () => {
+  it("shows delete, edit, source edit, and Thino edit note menu actions", () => {
     const container = new FakeElement();
     const viewHandlers = handlers();
 
@@ -1332,12 +1335,19 @@ describe("renderTasksView", () => {
     );
 
     collect(container).find((element) => element.classes.has("task-hub-task-note-menu"))?.click();
-    expect(mockMenus.at(-1)?.items.map((item) => item.title)).toEqual(["delete", "edit", "taskNoteEditInThino"]);
+    expect(mockMenus.at(-1)?.items.map((item) => item.title)).toEqual([
+      "delete",
+      "edit",
+      "taskNoteEditSource",
+      "taskNoteEditInThino"
+    ]);
     mockMenus.at(-1)?.items[0].click?.();
     mockMenus.at(-1)?.items[1].click?.();
     mockMenus.at(-1)?.items[2].click?.();
+    mockMenus.at(-1)?.items[3].click?.();
     expect(viewHandlers.onDeleteTaskNote).toHaveBeenCalledWith("Task Hub Notes/one.md");
     expect(viewHandlers.onOpenTaskNote).toHaveBeenCalledWith("Task Hub Notes/one.md");
+    expect(viewHandlers.onOpenTaskNoteSource).toHaveBeenCalledWith("Task Hub Notes/one.md");
     expect(viewHandlers.onOpenTaskNoteInThino).toHaveBeenCalledWith("Task Hub Notes/one.md");
   });
 

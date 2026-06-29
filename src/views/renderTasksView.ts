@@ -38,6 +38,7 @@ export type TaskRowHandlers = {
   onCreateTaskNote?: (task: TaskItem) => void;
   onOpenTaskNote?: (path: string) => void;
   onDeleteTaskNote?: (path: string) => void;
+  onOpenTaskNoteSource?: (path: string) => void;
   onOpenTaskNoteInThino?: (path: string) => void;
   onTaskNoteReorder?: (task: TaskItem, draggedNote: TaskNote, anchorNote: TaskNote, position: TaskListDropPosition) => void;
   onToggleTaskNotePinned?: (task: TaskItem, note: TaskNote) => void;
@@ -1185,9 +1186,7 @@ function renderTaskNotes(
     const menuButton = card.createEl("button", { cls: "task-hub-task-note-menu" });
     menuButton.setAttr("aria-label", t("more"));
     setIcon(menuButton, "more-horizontal");
-    menuButton.addEventListener("click", (event) => {
-      event.preventDefault();
-      event.stopPropagation();
+    const openTaskNoteMenu = (event: MouseEvent) => {
       const menu = new Menu();
       menu.addItem((item) => {
         item
@@ -1201,6 +1200,12 @@ function renderTaskNotes(
           .setIcon("pencil")
           .onClick(() => handlers.onOpenTaskNote?.(note.path));
       });
+      menu.addItem((item) => {
+        item
+          .setTitle(t("taskNoteEditSource"))
+          .setIcon("file-text")
+          .onClick(() => handlers.onOpenTaskNoteSource?.(note.path));
+      });
       if (options.allowThinoNoteEdit) {
         menu.addItem((item) => {
           item
@@ -1210,6 +1215,16 @@ function renderTaskNotes(
         });
       }
       menu.showAtMouseEvent(event as MouseEvent);
+    };
+    card.addEventListener("contextmenu", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      openTaskNoteMenu(event as MouseEvent);
+    });
+    menuButton.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      openTaskNoteMenu(event as MouseEvent);
     });
     card.createDiv({ cls: "task-hub-task-note-title", text: taskNotePreviewTitle(note.path) });
     renderTaskNoteBody(card.createDiv({ cls: "task-hub-task-note-body" }), text, note.path, options.renderNoteMarkdown);
