@@ -1163,6 +1163,7 @@ function renderCalendarMiniMonth(
   handlers: CalendarViewHandlers
 ): void {
   const monthSection = container.createDiv({ cls: "task-hub-calendar-day-sidebar-section task-hub-calendar-mini-month" });
+  monthSection.createDiv({ cls: "task-hub-calendar-mini-month-title", text: miniMonthTitle(focusDate, state.t) });
   const weekdayRow = monthSection.createDiv({ cls: "task-hub-calendar-mini-month-weekdays" });
   const weekdayLabels = miniMonthWeekdays(state.weekStart, state.t);
   for (const weekday of weekdayLabels) {
@@ -1210,6 +1211,10 @@ function miniMonthWeekdays(weekStart: WeekStart, t: Translator): string[] {
     const date = new Date(2026, 4, 3 + ((startIndex + offset) % 7));
     return shortWeekday(date, t);
   });
+}
+
+function miniMonthTitle(date: Date, t: Translator): string {
+  return date.toLocaleDateString(t.locale ?? "en-US", { month: "long" });
 }
 
 function buildMiniMonthStats(
@@ -1313,11 +1318,14 @@ function calendarTaskRenderOptions(state: CalendarViewState): TaskRenderOptions 
 function miniMonthCells(focusDate: Date, weekStart: WeekStart): Array<{ date: Date; isCurrentMonth: boolean; isFocusedDay: boolean; isToday: boolean }> {
   const monthStart = new Date(focusDate.getFullYear(), focusDate.getMonth(), 1);
   const leading = monthLeadingPlaceholderCount(toLocalDateKey(monthStart), weekStart);
+  const monthEnd = new Date(focusDate.getFullYear(), focusDate.getMonth() + 1, 0);
+  const dayCount = monthEnd.getDate();
+  const visibleCellCount = Math.ceil((leading + dayCount) / 7) * 7;
   const firstCell = new Date(monthStart);
   firstCell.setDate(monthStart.getDate() - leading);
   const todayKey = toLocalDateKey(new Date());
   const focusedKey = toLocalDateKey(focusDate);
-  return Array.from({ length: 42 }, (_, index) => {
+  return Array.from({ length: visibleCellCount }, (_, index) => {
     const date = new Date(firstCell);
     date.setDate(firstCell.getDate() + index);
     const key = toLocalDateKey(date);

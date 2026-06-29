@@ -1099,6 +1099,85 @@ describe("renderCalendarView", () => {
     expect(localDateKey(onFocusDateChange.mock.calls[0][0])).toBe("2026-05-12");
   });
 
+  it("renders only the weeks needed for the day-view mini calendar month", () => {
+    const container = new FakeElement();
+
+    renderCalendarView(
+      container as unknown as HTMLElement,
+      {
+        mode: "day",
+        focusDate: new Date("2026-06-29T12:00:00"),
+        weekStart: "monday",
+        visibleSourceIds: new Set(["vault"]),
+        includeCompletedTasks: false,
+        allowAppleReminderWriteback: false,
+        allowAppleCalendarWriteback: false,
+        allowTaskCreation: false,
+        sources: [],
+        t: (key) => key
+      },
+      [task],
+      [],
+      {
+        onLayerToggle: jest.fn(),
+        onModeChange: jest.fn(),
+        onMove: jest.fn(),
+        onDateCreateTask: jest.fn(),
+        onTaskComplete: jest.fn(),
+        onTaskJump: jest.fn(),
+        onTaskSelect: jest.fn(),
+        onTaskReschedule: jest.fn(),
+        onEventReschedule: jest.fn(),
+        onToday: jest.fn()
+      }
+    );
+
+    const miniMonthDays = collect(container).filter((element) => element.classes.has("task-hub-calendar-mini-month-day"));
+    const julySixth = miniMonthDays.find((element) => element.text === "6" && element.classes.has("is-outside-month"));
+
+    expect(miniMonthDays).toHaveLength(35);
+    expect(julySixth).toBeUndefined();
+  });
+
+  it("renders a lightweight localized month title above the day-view mini calendar grid", () => {
+    const container = new FakeElement();
+    const translator = Object.assign((key: string) => key, { locale: "zh-CN" });
+
+    renderCalendarView(
+      container as unknown as HTMLElement,
+      {
+        mode: "day",
+        focusDate: new Date("2026-06-29T12:00:00"),
+        weekStart: "monday",
+        visibleSourceIds: new Set(["vault"]),
+        includeCompletedTasks: false,
+        allowAppleReminderWriteback: false,
+        allowAppleCalendarWriteback: false,
+        allowTaskCreation: false,
+        sources: [],
+        t: translator as unknown as ((key: never) => string) & { locale?: string }
+      },
+      [task],
+      [],
+      {
+        onLayerToggle: jest.fn(),
+        onModeChange: jest.fn(),
+        onMove: jest.fn(),
+        onDateCreateTask: jest.fn(),
+        onTaskComplete: jest.fn(),
+        onTaskJump: jest.fn(),
+        onTaskSelect: jest.fn(),
+        onTaskReschedule: jest.fn(),
+        onEventReschedule: jest.fn(),
+        onToday: jest.fn()
+      }
+    );
+
+    const monthTitle = collect(container).find((element) => element.classes.has("task-hub-calendar-mini-month-title"));
+
+    expect(monthTitle?.text).toBe("六月");
+  });
+
   it("shows hover counts and completion heat for mini calendar dates", () => {
     const container = new FakeElement();
     const completedTask = {
