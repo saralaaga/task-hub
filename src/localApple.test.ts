@@ -147,7 +147,26 @@ describe("local Apple mapping", () => {
         0
       )
     ).toMatchObject({
-      dueDate: "2026-05-20"
+      dueDate: "2026-05-20",
+      scheduledDate: "2026-05-20"
+    });
+  });
+
+  it("maps Apple Reminder completion dates into Task Hub completedDate", () => {
+    expect(
+      reminderToTask(
+        {
+          id: "reminder-1",
+          name: "Buy milk",
+          list: "Personal",
+          completed: true,
+          completionDate: "2026-05-21T08:15:00.000Z"
+        },
+        0
+      )
+    ).toMatchObject({
+      completed: true,
+      completedDate: "2026-05-21"
     });
   });
 

@@ -142,6 +142,10 @@ export type TranslationKey =
   | "externalTaskSources"
   | "externalTaskSourcesDesc"
   | "externalTaskSourcesEmpty"
+  | "externalTaskLookahead"
+  | "externalTaskLookaheadDesc"
+  | "externalTaskLookback"
+  | "externalTaskLookbackDesc"
   | "feedbackButton"
   | "feedbackDesc"
   | "feedbackTitle"
@@ -430,6 +434,10 @@ const JA_SETTINGS_TRANSLATIONS: Partial<Record<TranslationKey, string>> = {
   eventCreationDefaultTargetDesc: "カレンダーから新規イベントを作成するときに既定で選ばれる Apple カレンダー。",
   externalTaskSourcesDesc: "Apple カレンダー、Apple リマインダー、Dida / TickTick を有効化します。タブをドラッグして既定の順序を調整できます。",
   externalTaskSourcesEmpty: "上で外部タスクソースを有効にすると、ここで設定できます。",
+  externalTaskLookahead: "外部タスク先読み日数",
+  externalTaskLookaheadDesc: "外部タスクの今後何日分まで読み込んで保持するかを設定します。既定は 100 日です。",
+  externalTaskLookback: "外部タスク過去読み込み日数",
+  externalTaskLookbackDesc: "外部タスクの過去何日分まで読み込んで保持するかを設定します。既定は 100 日です。",
   failedSync: "同期失敗",
   feedbackButton: "バグ報告 / 提案",
   feedbackDesc: "GitHub issue ページを開き、問題、アイデア、利用上の提案を送信します。",
@@ -561,6 +569,10 @@ const FR_SETTINGS_TRANSLATIONS: Partial<Record<TranslationKey, string>> = {
   eventCreationDefaultTargetDesc: "Apple Calendar sélectionné par défaut lors de la création d'un événement depuis le calendrier.",
   externalTaskSourcesDesc: "Active Apple Calendar, Apple Reminders et Dida / TickTick ; faites glisser les onglets pour ajuster l'ordre par défaut.",
   externalTaskSourcesEmpty: "Activez d'abord une source de tâches externe ci-dessus, puis configurez-la ici.",
+  externalTaskLookahead: "Jours futurs des tâches externes",
+  externalTaskLookaheadDesc: "Nombre de jours futurs de tâches externes à lire et conserver. Valeur par défaut : 100.",
+  externalTaskLookback: "Jours passés des tâches externes",
+  externalTaskLookbackDesc: "Nombre de jours passés de tâches externes à lire et conserver. Valeur par défaut : 100.",
   failedSync: "Échec de synchronisation",
   feedbackButton: "Signaler un bug / proposer",
   feedbackDesc: "Ouvre la page GitHub issue pour envoyer un problème, une idée ou une suggestion d'utilisation.",
@@ -692,6 +704,10 @@ const KO_SETTINGS_TRANSLATIONS: Partial<Record<TranslationKey, string>> = {
   eventCreationDefaultTargetDesc: "캘린더에서 새 이벤트를 만들 때 기본으로 선택되는 Apple 캘린더입니다.",
   externalTaskSourcesDesc: "Apple 캘린더, Apple 미리 알림, Dida / TickTick을 켭니다. 탭을 드래그해 기본 순서를 조정할 수 있습니다.",
   externalTaskSourcesEmpty: "위에서 외부 작업 소스를 먼저 켠 다음 여기에서 설정하세요.",
+  externalTaskLookahead: "외부 작업 앞으로 읽을 일수",
+  externalTaskLookaheadDesc: "외부 작업을 앞으로 며칠까지 읽고 유지할지 설정합니다. 기본값은 100일입니다.",
+  externalTaskLookback: "외부 작업 뒤로 읽을 일수",
+  externalTaskLookbackDesc: "외부 작업을 과거 며칠까지 읽고 유지할지 설정합니다. 기본값은 100일입니다.",
   failedSync: "동기화 실패",
   feedbackButton: "버그 신고 / 제안",
   feedbackDesc: "GitHub issue 페이지를 열어 문제, 아이디어, 사용 제안을 보냅니다.",
@@ -894,6 +910,10 @@ const TRANSLATIONS: Record<"en" | "zh", Record<TranslationKey, string>> &
     externalTaskSources: "External task sources",
     externalTaskSourcesDesc: "Enable Apple Calendar, Apple Reminders, and Dida/TickTick; drag the tabs to choose their default order.",
     externalTaskSourcesEmpty: "Enable an external task source above to configure it.",
+    externalTaskLookahead: "External task lookahead days",
+    externalTaskLookaheadDesc: "How many future days of external tasks to read and keep. Default: 100.",
+    externalTaskLookback: "External task lookback days",
+    externalTaskLookbackDesc: "How many past days of external tasks to read and keep. Default: 100.",
     feedbackButton: "Report bug / suggest",
     feedbackDesc: "Open the GitHub issue page to report bugs, share ideas, or leave feedback.",
     feedbackTitle: "Feedback",
@@ -1264,6 +1284,10 @@ const TRANSLATIONS: Record<"en" | "zh", Record<TranslationKey, string>> &
     externalTaskSources: "外部任务源",
     externalTaskSourcesDesc: "开启 Apple 日历、Apple 提醒事项和滴答清单 / TickTick；拖动标签可调整默认顺序。",
     externalTaskSourcesEmpty: "先在上方开启一个外部任务源，然后在这里配置。",
+    externalTaskLookahead: "外部任务向后读取天数",
+    externalTaskLookaheadDesc: "外部任务未来保留多少天并参与读取。默认 100 天。",
+    externalTaskLookback: "外部任务向前回看天数",
+    externalTaskLookbackDesc: "外部任务过去保留多少天并参与读取。默认 100 天。",
     feedbackButton: "报 bug / 提建议",
     feedbackDesc: "打开 GitHub issue 页面，反馈问题、想法或使用建议。",
     feedbackTitle: "反馈",

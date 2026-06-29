@@ -4,10 +4,10 @@ import type TaskHubPlugin from "./main";
 import { DEFAULT_DIDA_API_BASE, DIDA_INBOX_PROJECT_NAME } from "./dida/didaMapping";
 import { normalizeTaskSendDefaultTarget, parseTaskSendTarget, serializeTaskSendTarget, taskSendTargetOptions } from "./taskSendTargets";
 import { validTimedDurationMinutes } from "./timeGranularity";
-import type { AppleCalendarInfo, CalendarCreationKind, CalendarCreationTarget, CalendarEventCreationTarget, CalendarSource, CalendarSourceStatus, CalendarTaskCreationTarget, ExternalTaskSourceTab, LocalAppleSyncStatus, PersistedVaultTaskStableRecord, TaskHubLastSessionState, TaskHubSettings } from "./types";
+import type { AppleCalendarInfo, CalendarCreationKind, CalendarCreationTarget, CalendarEventCreationTarget, CalendarSource, CalendarSourceStatus, CalendarTaskCreationTarget, ExternalTaskShadowMetadata, ExternalTaskSourceTab, LocalAppleSyncStatus, PersistedVaultTaskStableRecord, TaskHubLastSessionState, TaskHubSettings } from "./types";
 import { setCssProps } from "./views/domStyles";
 
-export const TASK_HUB_SETTINGS_SCHEMA_VERSION = 4;
+export const TASK_HUB_SETTINGS_SCHEMA_VERSION = 5;
 
 export const DEFAULT_SETTINGS: TaskHubSettings = {
   settingsSchemaVersion: TASK_HUB_SETTINGS_SCHEMA_VERSION,
@@ -50,6 +50,9 @@ export const DEFAULT_SETTINGS: TaskHubSettings = {
   taskNoteManualOrder: {},
   taskNotePinned: {},
   vaultTaskStableState: {},
+  externalTaskLookbackDays: 100,
+  externalTaskLookaheadDays: 100,
+  externalTaskMetadata: {},
   ignoredPaths: ["Templates/", "Archive/"],
   tagViewOrder: [],
   calendarSources: [],
@@ -147,6 +150,9 @@ export function normalizeTaskHubSettings(loaded: Partial<TaskHubSettings> | null
     taskNoteManualOrder: normalizeTaskNoteManualOrder(loaded?.taskNoteManualOrder),
     taskNotePinned: normalizeTaskNotePinned(loaded?.taskNotePinned),
     vaultTaskStableState: normalizeVaultTaskStableState(loaded?.vaultTaskStableState),
+    externalTaskLookbackDays: normalizeWindowDays(loaded?.externalTaskLookbackDays, DEFAULT_SETTINGS.externalTaskLookbackDays),
+    externalTaskLookaheadDays: normalizeWindowDays(loaded?.externalTaskLookaheadDays, DEFAULT_SETTINGS.externalTaskLookaheadDays),
+    externalTaskMetadata: normalizeExternalTaskMetadata(loaded?.externalTaskMetadata),
     externalTaskSourceOrder: normalizeExternalTaskSourceOrder(loaded?.externalTaskSourceOrder),
     localApple: {
       ...DEFAULT_SETTINGS.localApple,
@@ -267,6 +273,35 @@ function normalizeVaultTaskStableRecord(value: unknown): PersistedVaultTaskStabl
     tags: Array.from(new Set(candidate.tags.filter((tag): tag is string => typeof tag === "string"))),
     completed: candidate.completed
   };
+}
+
+function normalizeExternalTaskMetadata(value: unknown): TaskHubSettings["externalTaskMetadata"] {
+  if (!value || typeof value !== "object") return {};
+  const result: TaskHubSettings["externalTaskMetadata"] = {};
+  for (const [stableId, metadata] of Object.entries(value as Record<string, unknown>)) {
+    if (!isTaskStableId(stableId)) continue;
+    const normalized = normalizeExternalTaskMetadataRecord(metadata);
+    if (normalized) result[stableId] = normalized;
+  }
+  return result;
+}
+
+function normalizeExternalTaskMetadataRecord(value: unknown): ExternalTaskShadowMetadata | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const candidate = value as Record<string, unknown>;
+  const startDate = typeof candidate.startDate === "string" && /^\d{4}-\d{2}-\d{2}$/u.test(candidate.startDate)
+    ? candidate.startDate
+    : undefined;
+  const lastSeenAt = typeof candidate.lastSeenAt === "string" && !Number.isNaN(Date.parse(candidate.lastSeenAt))
+    ? candidate.lastSeenAt
+    : undefined;
+  if (!startDate && !lastSeenAt) return undefined;
+  return { startDate, lastSeenAt };
+}
+
+function normalizeWindowDays(value: unknown, fallback: number): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) return fallback;
+  return Math.max(0, Math.min(3650, Math.floor(value)));
 }
 
 function isTaskStableId(value: unknown): value is string {
@@ -1014,6 +1049,36 @@ export class TaskHubSettingTab extends PluginSettingTab {
   private displayExternalTaskSources(containerEl: HTMLElement): void {
     const t = createTranslator(this.plugin.settings.language);
     new Setting(containerEl).setName(t("externalTaskSources")).setDesc(t("externalTaskSourcesDesc")).setHeading();
+
+    new Setting(containerEl)
+      .setName(t("externalTaskLookback"))
+      .setDesc(t("externalTaskLookbackDesc"))
+      .addText((text) => {
+        text.setValue(String(this.plugin.settings.externalTaskLookbackDays)).onChange(async (value) => {
+          const days = Number.parseInt(value, 10);
+          if (Number.isFinite(days) && days >= 0) {
+            this.plugin.settings.externalTaskLookbackDays = days;
+            await this.plugin.saveSettings();
+            await this.plugin.syncExternalTasks({ silent: true });
+            this.display({ preserveScroll: true });
+          }
+        });
+      });
+
+    new Setting(containerEl)
+      .setName(t("externalTaskLookahead"))
+      .setDesc(t("externalTaskLookaheadDesc"))
+      .addText((text) => {
+        text.setValue(String(this.plugin.settings.externalTaskLookaheadDays)).onChange(async (value) => {
+          const days = Number.parseInt(value, 10);
+          if (Number.isFinite(days) && days >= 0) {
+            this.plugin.settings.externalTaskLookaheadDays = days;
+            await this.plugin.saveSettings();
+            await this.plugin.syncExternalTasks({ silent: true });
+            this.display({ preserveScroll: true });
+          }
+        });
+      });
 
     this.displayLocalApple(containerEl, { tabs: false });
     this.displayDida(containerEl);

@@ -239,6 +239,11 @@ export type PersistedVaultTaskStableRecord = {
   completed: boolean;
 };
 
+export type ExternalTaskShadowMetadata = {
+  startDate?: string;
+  lastSeenAt?: string;
+};
+
 export type TaskHubSettings = {
   settingsSchemaVersion: number;
   language: Language;
@@ -264,6 +269,9 @@ export type TaskHubSettings = {
   taskNoteManualOrder: TaskNoteManualOrder;
   taskNotePinned: TaskNotePinned;
   vaultTaskStableState: Record<string, PersistedVaultTaskStableRecord[]>;
+  externalTaskLookbackDays: number;
+  externalTaskLookaheadDays: number;
+  externalTaskMetadata: Record<string, ExternalTaskShadowMetadata>;
   ignoredPaths: string[];
   tagViewOrder: string[];
   calendarSources: CalendarSource[];

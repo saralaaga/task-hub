@@ -331,6 +331,21 @@ describe("TaskHubSettingTab risky Apple Reminders setting", () => {
     expect(plugin.syncLocalApple).toHaveBeenCalledWith({ silent: true });
   });
 
+  it("resyncs external task sources after changing the external task lookahead window", async () => {
+    const plugin = pluginForSettings();
+    const tab = new TaskHubSettingTab({} as never, plugin as never);
+
+    tab.display();
+    const lookahead = settings.find((setting) => setting.name === "External task lookahead days")?.text;
+    expect(lookahead).toBeDefined();
+
+    await lookahead?.onChangeHandler?.("180");
+
+    expect(plugin.settings.externalTaskLookaheadDays).toBe(180);
+    expect(plugin.saveSettings).toHaveBeenCalled();
+    expect(plugin.syncExternalTasks).toHaveBeenCalledWith({ silent: true });
+  });
+
   it("preserves the settings scroll position after choosing an Apple Calendar color swatch", async () => {
     const plugin = pluginForSettings();
     plugin.settings.localApple.calendarEnabled = true;
@@ -408,6 +423,7 @@ function pluginForSettings() {
     getAppleReminderLists: () => [],
     saveSettings: jest.fn(async () => undefined),
     syncLocalApple: jest.fn(async () => undefined),
+    syncExternalTasks: jest.fn(async () => undefined),
     refreshLocalAppleStatus: jest.fn(async () => undefined),
     requestLocalApplePermissions: jest.fn(async () => undefined),
     confirmRiskySourceDeletionSetting: jest.fn(async () => false),

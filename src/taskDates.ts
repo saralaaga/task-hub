@@ -6,6 +6,7 @@ const EXPLICIT_START_TOKEN = /(?:^|\s)🛫\s*\d{4}-\d{2}-\d{2}(?=\s|$)/u;
 const EXPLICIT_SCHEDULED_TOKEN = /(?:^|\s)⏳\s*\d{4}-\d{2}-\d{2}(?=\s|$)/u;
 
 type TaskDateFields = Pick<TaskItem, "dueDate" | "scheduledDate" | "startDate" | "rawLine">;
+type TaskWindowFields = Pick<TaskItem, "completed" | "completedDate" | "dueDate" | "scheduledDate" | "startDate" | "rawLine">;
 
 export function taskDateKey(value: string | undefined): string | undefined {
   return value?.match(DATE_PREFIX)?.[1];
@@ -40,4 +41,27 @@ export function taskScheduledStartMinutes(task: Pick<TaskItem, "scheduledDate">)
   const match = task.scheduledDate?.match(TIME_TOKEN);
   if (!match) return undefined;
   return Number(match[1]) * 60 + Number(match[2]);
+}
+
+export function taskCompletedDateKey(task: Pick<TaskItem, "completedDate">): string | undefined {
+  return taskDateKey(task.completedDate);
+}
+
+export function taskWindowDateKey(task: TaskWindowFields): string | undefined {
+  if (task.completed) {
+    return taskCompletedDateKey(task) ?? taskPlannedDateKey(task);
+  }
+  return taskPlannedDateKey(task);
+}
+
+export function isDateKeyWithinWindow(dateKey: string, now: Date, lookbackDays: number, lookaheadDays: number): boolean {
+  const start = new Date(now);
+  start.setHours(0, 0, 0, 0);
+  start.setDate(start.getDate() - lookbackDays);
+  const end = new Date(now);
+  end.setHours(0, 0, 0, 0);
+  end.setDate(end.getDate() + lookaheadDays);
+  const candidate = new Date(`${dateKey}T00:00:00`);
+  if (Number.isNaN(candidate.getTime())) return true;
+  return candidate >= start && candidate <= end;
 }

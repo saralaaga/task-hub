@@ -80,7 +80,39 @@ describe("normalizeTaskHubSettings", () => {
     expect(settings.taskNoteManualOrder).toEqual({});
     expect(settings.taskNotePinned).toEqual({});
     expect(settings.vaultTaskStableState).toEqual({});
+    expect(settings.externalTaskLookbackDays).toBe(100);
+    expect(settings.externalTaskLookaheadDays).toBe(100);
+    expect(settings.externalTaskMetadata).toEqual({});
     expect(settings.ignoredPaths).toEqual(["Archive/"]);
+  });
+
+  it("normalizes external task window and metadata records", () => {
+    const settings = normalizeTaskHubSettings({
+      externalTaskLookbackDays: 365.9,
+      externalTaskLookaheadDays: -10,
+      externalTaskMetadata: {
+        "apple-reminders:good": {
+          startDate: "2026-06-01",
+          lastSeenAt: "2026-06-29T10:00:00.000Z"
+        },
+        "apple-reminders:bad-date": {
+          startDate: "06-01-2026",
+          lastSeenAt: "not-a-date"
+        },
+        invalid: {
+          startDate: "2026-06-01"
+        }
+      }
+    });
+
+    expect(settings.externalTaskLookbackDays).toBe(365);
+    expect(settings.externalTaskLookaheadDays).toBe(0);
+    expect(settings.externalTaskMetadata).toEqual({
+      "apple-reminders:good": {
+        startDate: "2026-06-01",
+        lastSeenAt: "2026-06-29T10:00:00.000Z"
+      }
+    });
   });
 
   it("normalizes external task source tab order", () => {

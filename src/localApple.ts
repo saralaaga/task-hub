@@ -466,6 +466,7 @@ type AppleReminderRecord = {
   list?: string;
   completed?: boolean;
   dueDate?: string;
+  completionDate?: string;
   notes?: string;
   url?: string;
   tags?: string[];
@@ -490,7 +491,7 @@ type AppleCalendarRecord = {
 
 export function reminderToTask(record: AppleReminderRecord, index: number): TaskItem {
   const dueDate = toDateKey(record.dueDate);
-  const scheduledDate = toLocalDateTime(record.dueDate);
+  const scheduledDate = toScheduledDate(record.dueDate);
   const parsedTitle = extractAppleReminderTitleTags(record.name ?? "Untitled reminder");
   return {
     id: `apple-reminders:${record.id ?? index}`,
@@ -506,6 +507,7 @@ export function reminderToTask(record: AppleReminderRecord, index: number): Task
     tags: mergeAppleReminderTags(parsedTitle.tags, Array.isArray(record.tags) ? record.tags : []),
     dueDate,
     scheduledDate,
+    completedDate: toDateKey(record.completionDate),
     contextPreview: record.notes,
     source: APPLE_REMINDERS_SOURCE_ID,
     externalUrl: record.url,
@@ -576,6 +578,10 @@ function toLocalDateTime(value: string | undefined): string | undefined {
   const hour = String(date.getHours()).padStart(2, "0");
   const minute = String(date.getMinutes()).padStart(2, "0");
   return `${year}-${month}-${day}T${hour}:${minute}`;
+}
+
+function toScheduledDate(value: string | undefined): string | undefined {
+  return toLocalDateTime(value) ?? toDateKey(value);
 }
 
 function normalizeHexColor(value: string | undefined): string | undefined {

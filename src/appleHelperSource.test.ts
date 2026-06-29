@@ -82,6 +82,13 @@ describe("Apple helper source", () => {
     expect(source).toContain("reminder.addAlarm(EKAlarm(absoluteDate:");
   });
 
+  it("includes Apple Reminder completion dates in helper output", () => {
+    const source = readFileSync(path.join(__dirname, "..", "apple-helper", "TaskHubAppleHelper.swift"), "utf8");
+
+    expect(source).toContain("let completionDate: String?");
+    expect(source).toContain("completionDate: reminder.completionDate.map(isoString)");
+  });
+
   it("can update Apple Calendar event detail fields", () => {
     const source = readFileSync(path.join(__dirname, "..", "apple-helper", "TaskHubAppleHelper.swift"), "utf8");
 

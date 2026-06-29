@@ -27,6 +27,7 @@ describe("dida task mapping", () => {
       completed: false,
       tags: ["#work"],
       dueDate: "2026-06-02",
+      startDate: undefined,
       scheduledDate: "2026-06-02T09:30",
       source: "dida",
       externalId: "task-1",
@@ -55,7 +56,29 @@ describe("dida task mapping", () => {
 
     expect(task).toMatchObject({
       dueDate: "2026-06-09",
-      scheduledDate: undefined
+      scheduledDate: "2026-06-09"
+    });
+  });
+
+  it("keeps Dida start dates separate from scheduled dates", () => {
+    const task = didaTaskToTaskItem(
+      {
+        id: "task-plan-split",
+        projectId: "project-1",
+        title: "Plan split",
+        status: 0,
+        isAllDay: true,
+        startDate: "2026-06-01T00:00:00+0800",
+        dueDate: "2026-06-08T00:00:00+0800"
+      },
+      { id: "project-1", name: "Inbox" },
+      0
+    );
+
+    expect(task).toMatchObject({
+      startDate: "2026-06-01",
+      scheduledDate: "2026-06-08",
+      dueDate: "2026-06-08"
     });
   });
 
@@ -83,6 +106,7 @@ describe("dida task mapping", () => {
         projectId: "project-2",
         notes: "Bring the spreadsheet",
         date: "2026-06-02",
+        startDate: "2026-05-30",
         startMinutes: 570,
         tags: ["#work", "client"],
         reminderOffsetMinutes: 30,
@@ -94,6 +118,7 @@ describe("dida task mapping", () => {
       content: "Bring the spreadsheet",
       desc: "Bring the spreadsheet",
       isAllDay: false,
+      startDate: "2026-05-30T00:00:00+0800",
       dueDate: "2026-06-02T09:30:00+0800",
       timeZone: "Asia/Shanghai",
       tags: ["work", "client"],

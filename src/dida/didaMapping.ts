@@ -9,9 +9,9 @@ export const DEFAULT_DIDA_API_BASE = "https://api.dida365.com";
 export const TICKTICK_API_BASE = "https://api.ticktick.com";
 
 export function didaTaskToTaskItem(task: DidaTaskRecord, project: DidaProject, index: number): TaskItem {
-  const dateValue = task.dueDate ?? task.startDate;
-  const dueDate = toLocalDateKey(dateValue);
-  const scheduledDate = task.isAllDay ? undefined : toLocalDateTime(dateValue);
+  const dueDate = toLocalDateKey(task.dueDate);
+  const startDate = toLocalDateKey(task.startDate);
+  const scheduledDate = toScheduledDate(task.dueDate, task.isAllDay);
   const tags = task.tags ? didaTagsForTaskHub(task.tags) : extractHashtags(task.title);
   return {
     id: `${DIDA_SOURCE_ID}:${task.id}`,
@@ -23,6 +23,7 @@ export function didaTaskToTaskItem(task: DidaTaskRecord, project: DidaProject, i
     completed: task.status === 2 || Boolean(task.completedTime),
     tags,
     dueDate,
+    startDate,
     contextPreview: task.content ?? task.desc,
     source: DIDA_SOURCE_ID,
     externalId: task.id,
@@ -31,7 +32,7 @@ export function didaTaskToTaskItem(task: DidaTaskRecord, project: DidaProject, i
     scheduledDate,
     priority: task.priority === undefined ? undefined : String(task.priority),
     recurrence: task.repeatFlag,
-    completedDate: task.completedTime,
+    completedDate: toLocalDateKey(task.completedTime),
     externalListId: task.projectId || project.id
   };
 }
@@ -41,6 +42,7 @@ export function taskItemToDidaPayload(input: {
   projectId?: string;
   notes?: string;
   date?: string | null;
+  startDate?: string | null;
   startMinutes?: number;
   tags?: string[];
   reminderOffsetMinutes?: number;
@@ -66,6 +68,11 @@ export function taskItemToDidaPayload(input: {
     if (input.reminderOffsetMinutes !== undefined) {
       payload.reminders = [reminderTrigger(input.reminderOffsetMinutes)];
     }
+  }
+
+  if (input.startDate) {
+    payload.startDate = `${input.startDate}T00:00:00+0800`;
+    payload.timeZone = payload.timeZone ?? "Asia/Shanghai";
   }
 
   return payload;
@@ -115,6 +122,11 @@ function toLocalDateTime(value: string | undefined): string | undefined {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return floating?.[1];
   return `${formatLocalDateKey(date)}T${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+}
+
+function toScheduledDate(value: string | undefined, isAllDay: boolean | undefined): string | undefined {
+  if (!value) return undefined;
+  return isAllDay ? toLocalDateKey(value) : toLocalDateTime(value) ?? toLocalDateKey(value);
 }
 
 function hasExplicitZone(value: string): boolean {
