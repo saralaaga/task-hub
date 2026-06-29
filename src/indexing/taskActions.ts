@@ -1,5 +1,6 @@
 import type { TaskItem } from "../types";
 import { nextRecurrenceDate, normalizeRecurrenceRule } from "../recurrence";
+import { taskDateKey, taskPlannedDateKey, taskScheduledStartMinutes, taskStartDateForRepair, taskUsesLegacyDueDatePlan } from "../taskDates";
 
 export type CompletionMessages = {
   lineChangedConflict: string;
@@ -30,11 +31,14 @@ export type CompletionResult =
 const OPEN_TASK_MARKER = /^(\s*)- \[ \]/;
 const COMPLETED_TASK_MARKER = /^(\s*)- \[[xX]\]/;
 const TASK_PREFIX = /^(\s*- \[[ xX]\]\s+)(.*)$/;
+const EMOJI_START = /(?:^|\s)🛫\s*\d{4}-\d{2}-\d{2}(?=\s|$)/u;
+const EMOJI_SCHEDULED = /(?:^|\s)⏳\s*\d{4}-\d{2}-\d{2}(?=\s|$)/u;
 const EMOJI_DUE = /(?:^|\s)📅\s*\d{4}-\d{2}-\d{2}(?=\s|$)/u;
 const INLINE_DUE = /(?:^|\s)due::\s*\d{4}-\d{2}-\d{2}(?=\s|$)/u;
 const BARE_DUE = /(?:^|\s)\d{4}-\d{2}-\d{2}(?=\s|$)/u;
 const SCHEDULED_TIME = /(?:^|\s)⏰\s*\d{1,2}:\d{2}(?=\s|$)/u;
 const RECURRENCE = /(?:^|\s)(?:repeat::|🔁)\s*((?:RRULE:)?[A-Z0-9=;,_-]+)(?=\s|$)/iu;
+const COMPLETED_DATE = /(?:^|\s)✅\s*(\d{4}-\d{2}-\d{2})(?=\s|$)/u;
 const TAG = /(^|\s)(#[\p{L}\p{N}_/-]+)/gu;
 const SEARCH_WINDOW = 5;
 const DEFAULT_COMPLETION_MESSAGES: CompletionMessages = {
@@ -45,21 +49,22 @@ const DEFAULT_COMPLETION_MESSAGES: CompletionMessages = {
 };
 const DEFAULT_RESCHEDULE_MESSAGES: RescheduleMessages = {
   ...DEFAULT_COMPLETION_MESSAGES,
-  dateTokenMissing: "The indexed task line does not contain a supported due date."
+  dateTokenMissing: "The indexed task line does not contain a supported scheduling date."
 };
 
 export function completeTaskInContent(
   content: string,
   task: TaskItem,
   messages: CompletionMessages = DEFAULT_COMPLETION_MESSAGES,
-  action: CompletionAction = "complete"
+  action: CompletionAction = "complete",
+  completedDate = localDateStamp()
 ): CompletionResult {
   if (isSameTaskInTargetState(lineAt(content, task.line), task.rawLine, action)) {
     return { status: "already_in_state" };
   }
 
   const lines = content.split(/\r?\n/);
-  const direct = tryToggleAtLine(lines, task.line, task, messages, action);
+  const direct = tryToggleAtLine(lines, task.line, task, messages, action, completedDate);
   if (direct.status !== "conflict") {
     return withContent(direct, lines);
   }
@@ -72,7 +77,7 @@ export function completeTaskInContent(
     };
   }
 
-  return withContent(tryToggleAtLine(lines, nearby, task, messages, action), lines);
+  return withContent(tryToggleAtLine(lines, nearby, task, messages, action, completedDate), lines);
 }
 
 export function rescheduleTaskInContent(
@@ -82,12 +87,12 @@ export function rescheduleTaskInContent(
   messages: RescheduleMessages = DEFAULT_RESCHEDULE_MESSAGES,
   startMinutes?: number
 ): CompletionResult {
-  if (task.dueDate === targetDate && startMinutes === undefined && !taskHasScheduledTime(task)) {
+  if (taskPlannedDateKey(task) === targetDate && normalizedStartMinutes(startMinutes) === taskScheduledStartMinutes(task)) {
     return { status: "already_in_state" };
   }
 
   const lines = content.split(/\r?\n/);
-  const direct = tryRescheduleAtLine(lines, task.line, task.rawLine, targetDate, messages, startMinutes, task.dueDate === undefined);
+  const direct = tryRescheduleAtLine(lines, task.line, task, targetDate, messages, startMinutes);
   if (direct.status !== "conflict") {
     return withContent(direct, lines);
   }
@@ -100,7 +105,7 @@ export function rescheduleTaskInContent(
     };
   }
 
-  return withContent(tryRescheduleAtLine(lines, nearby, task.rawLine, targetDate, messages, startMinutes, task.dueDate === undefined), lines);
+  return withContent(tryRescheduleAtLine(lines, nearby, task, targetDate, messages, startMinutes), lines);
 }
 
 export function deleteTaskInContent(
@@ -153,7 +158,8 @@ function tryToggleAtLine(
   line: number,
   task: TaskItem,
   messages: CompletionMessages,
-  action: CompletionAction
+  action: CompletionAction,
+  completedDate: string
 ): CompletionResult {
   const currentLine = lines[line];
   if (currentLine === undefined) {
@@ -170,7 +176,8 @@ function tryToggleAtLine(
       return { status: "conflict", message: messages.lineNoLongerOpen };
     }
 
-    lines[line] = currentLine.replace(marker, action === "complete" ? "$1- [x]" : "$1- [ ]");
+    const toggledLine = currentLine.replace(marker, action === "complete" ? "$1- [x]" : "$1- [ ]");
+    lines[line] = action === "complete" ? withCompletedDate(toggledLine, completedDate) : withoutCompletedDate(toggledLine);
     if (action === "complete") {
       const nextLine = nextRecurringTaskLine(currentLine, task);
       if (nextLine) lines.splice(line + 1, 0, nextLine);
@@ -184,25 +191,21 @@ function tryToggleAtLine(
 function tryRescheduleAtLine(
   lines: string[],
   line: number,
-  rawLine: string,
+  task: TaskItem,
   targetDate: string,
   messages: RescheduleMessages,
-  startMinutes: number | undefined,
-  allowAppendDueDate: boolean
+  startMinutes: number | undefined
 ): CompletionResult {
   const currentLine = lines[line];
   if (currentLine === undefined) {
     return { status: "conflict", message: messages.lineOutsideFile };
   }
 
-  if (currentLine !== rawLine) {
+  if (currentLine !== task.rawLine) {
     return { status: "conflict", message: messages.lineMismatchConflict };
   }
 
-  const nextLine = updateScheduledTime(
-    replaceDueDate(currentLine, targetDate) ?? appendDueDateIfUnscheduled(currentLine, taskLineHasDate(rawLine), targetDate, allowAppendDueDate),
-    startMinutes
-  );
+  const nextLine = buildRescheduledTaskLine(currentLine, task, targetDate, startMinutes);
   if (!nextLine) {
     return { status: "conflict", message: messages.dateTokenMissing };
   }
@@ -281,92 +284,76 @@ function withContent(result: CompletionResult, lines: string[]): CompletionResul
   };
 }
 
-function replaceDueDate(line: string, targetDate: string): string | undefined {
-  if (EMOJI_DUE.test(line)) {
-    return line.replace(EMOJI_DUE, (match) => match.replace(/\d{4}-\d{2}-\d{2}/, targetDate));
-  }
-  if (INLINE_DUE.test(line)) {
-    return line.replace(INLINE_DUE, (match) => match.replace(/\d{4}-\d{2}-\d{2}/, targetDate));
-  }
-  if (BARE_DUE.test(line)) {
-    return line.replace(BARE_DUE, (match) => match.replace(/\d{4}-\d{2}-\d{2}/, targetDate));
-  }
-  return undefined;
-}
-
-function appendDueDateIfUnscheduled(line: string, taskHasDate: boolean, targetDate: string, allowAppend = true): string | undefined {
-  if (taskHasDate || !allowAppend) return undefined;
-  return `${line.trimEnd()} 📅 ${targetDate}`;
-}
-
-function updateScheduledTime(line: string | undefined, startMinutes: number | undefined): string | undefined {
-  if (!line) return line;
-  if (startMinutes === undefined) return line.replace(SCHEDULED_TIME, "");
-  const timeToken = ` ⏰ ${formatTime(startMinutes)}`;
-  if (SCHEDULED_TIME.test(line)) {
-    return line.replace(SCHEDULED_TIME, timeToken);
-  }
-  if (EMOJI_DUE.test(line)) {
-    return line.replace(EMOJI_DUE, (match) => `${match}${timeToken}`);
-  }
-  if (INLINE_DUE.test(line)) {
-    return line.replace(INLINE_DUE, (match) => `${match}${timeToken}`);
-  }
-  if (BARE_DUE.test(line)) {
-    return line.replace(BARE_DUE, (match) => `${match}${timeToken}`);
-  }
-  return line;
-}
-
 function nextRecurringTaskLine(line: string, task: TaskItem): string | undefined {
   const recurrence = normalizeRecurrenceRule(task.recurrence ?? extractRecurrence(line));
-  const nextDate = nextRecurrenceDate(task.dueDate, recurrence);
+  const nextDate = nextRecurrenceDate(taskPlannedDateKey(task), recurrence);
   if (!nextDate) return undefined;
-  const opened = line.replace(COMPLETED_TASK_MARKER, "$1- [ ]").replace(OPEN_TASK_MARKER, "$1- [ ]");
-  return replaceDueDate(opened, nextDate);
+  const opened = withoutCompletedDate(line.replace(COMPLETED_TASK_MARKER, "$1- [ ]").replace(OPEN_TASK_MARKER, "$1- [ ]"));
+  const match = opened.match(TASK_PREFIX);
+  if (!match) return undefined;
+  const metadata = parseTaskBody(match[2]);
+  const nextBody = buildTaskBody({
+    ...metadata,
+    startDate: metadata.startDate || metadata.scheduledDate || !metadata.dueDate ? nextDate : undefined,
+    scheduledDate: metadata.hasExplicitScheduledDate ? withScheduledTime(nextDate, scheduledTime(metadata.scheduledDate)) : undefined,
+    dueDate: metadata.dueDate ? nextDate : undefined
+  });
+  return `${match[1]}${nextBody}`;
 }
 
 function extractRecurrence(line: string): string | undefined {
   return normalizeRecurrenceRule(line.match(RECURRENCE)?.[1]);
 }
 
-function taskLineHasDate(line: string): boolean {
-  return EMOJI_DUE.test(line) || INLINE_DUE.test(line) || BARE_DUE.test(line);
-}
-
-function taskHasScheduledTime(task: TaskItem): boolean {
-  return Boolean(task.scheduledDate) || SCHEDULED_TIME.test(task.rawLine);
-}
-
 function buildUpdatedTaskBody(currentBody: string, update: TaskLineUpdate): string {
-  const title = update.title.replace(/\s+/g, " ").trim();
-  const parts = [title || cleanTaskBody(currentBody)];
-  if (update.date) {
-    parts.push(INLINE_DUE.test(currentBody) ? `due:: ${update.date}` : `📅 ${update.date}`);
-  }
-  if (update.startTime) {
-    parts.push(`⏰ ${update.startTime}`);
-  }
+  const metadata = parseTaskBody(currentBody);
+  const title = update.title.replace(/\s+/g, " ").trim() || metadata.title || cleanTaskBody(currentBody);
+  const legacyPlan = !metadata.startDate && !metadata.hasExplicitScheduledDate && Boolean(metadata.dueDate);
   const recurrence = update.recurrence === undefined
-    ? extractRecurrence(currentBody)
+    ? metadata.recurrence
     : normalizeRecurrenceRule(update.recurrence);
-  if (recurrence) {
-    parts.push(`repeat:: ${recurrence}`);
-  }
-  parts.push(...normalizeTags(update.tags));
-  return parts.filter(Boolean).join(" ");
+  return buildTaskBody({
+    ...metadata,
+    title,
+    startDate: update.date ? (metadata.startDate ?? metadata.scheduledDate ?? metadata.dueDate ?? update.date) : undefined,
+    scheduledDate: update.date ? withScheduledTime(update.date, update.startTime || undefined) : undefined,
+    dueDate: update.date && !legacyPlan ? metadata.dueDate : undefined,
+    dueFormat: update.date && !legacyPlan ? metadata.dueFormat : undefined,
+    recurrence,
+    tags: normalizeTags(update.tags),
+    completedDate: metadata.completedDate
+  });
 }
 
 function cleanTaskBody(body: string): string {
   return body
+    .replace(EMOJI_START, " ")
+    .replace(EMOJI_SCHEDULED, " ")
     .replace(EMOJI_DUE, " ")
     .replace(INLINE_DUE, " ")
+    .replace(COMPLETED_DATE, " ")
     .replace(BARE_DUE, " ")
     .replace(SCHEDULED_TIME, " ")
     .replace(RECURRENCE, " ")
     .replace(TAG, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function withCompletedDate(line: string, completedDate: string): string {
+  const normalized = withoutCompletedDate(line);
+  return `${normalized.trimEnd()} ✅ ${completedDate}`;
+}
+
+function withoutCompletedDate(line: string): string {
+  return line.replace(COMPLETED_DATE, "").replace(/\s+$/, "");
+}
+
+function localDateStamp(now = new Date()): string {
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function normalizeTags(tags: string[]): string[] {
@@ -380,6 +367,108 @@ function normalizeTags(tags: string[]): string[] {
 function formatTime(minutes: number): string {
   const clamped = Math.max(0, Math.min(23 * 60 + 45, Math.round(minutes / 15) * 15));
   return `${String(Math.floor(clamped / 60)).padStart(2, "0")}:${String(clamped % 60).padStart(2, "0")}`;
+}
+
+type DueFormat = "emoji" | "inline" | "bare" | undefined;
+
+type ParsedTaskBody = {
+  title: string;
+  dueDate?: string;
+  dueFormat?: DueFormat;
+  startDate?: string;
+  scheduledDate?: string;
+  hasExplicitScheduledDate: boolean;
+  recurrence?: string;
+  completedDate?: string;
+  tags: string[];
+};
+
+function buildRescheduledTaskLine(line: string, task: TaskItem, targetDate: string, startMinutes: number | undefined): string | undefined {
+  const match = line.match(TASK_PREFIX);
+  if (!match) return undefined;
+  const metadata = parseTaskBody(match[2]);
+  return `${match[1]}${buildTaskBody({
+    ...metadata,
+    startDate: metadata.startDate ?? taskStartDateForRepair(task, targetDate),
+    scheduledDate: withScheduledTime(targetDate, startMinutes),
+    dueDate: taskUsesLegacyDueDatePlan(task) ? undefined : metadata.dueDate,
+    dueFormat: taskUsesLegacyDueDatePlan(task) ? undefined : metadata.dueFormat
+  })}`;
+}
+
+function parseTaskBody(body: string): ParsedTaskBody {
+  const startDate = extractDateToken(body, EMOJI_START);
+  const explicitScheduledDate = extractDateToken(body, EMOJI_SCHEDULED);
+  const dueDate = extractDueDate(body);
+  const scheduleAnchor = explicitScheduledDate ?? dueDate ?? startDate;
+  return {
+    title: cleanTaskBody(body),
+    dueDate,
+    dueFormat: extractDueFormat(body),
+    startDate,
+    scheduledDate: withScheduledTime(scheduleAnchor, scheduledTime(body)),
+    hasExplicitScheduledDate: Boolean(explicitScheduledDate),
+    recurrence: extractRecurrence(body),
+    completedDate: body.match(COMPLETED_DATE)?.[1],
+    tags: extractTags(body)
+  };
+}
+
+function buildTaskBody(body: ParsedTaskBody): string {
+  const parts = [body.title.replace(/\s+/g, " ").trim()];
+  if (body.startDate) parts.push(`🛫 ${body.startDate}`);
+  if (taskDateKey(body.scheduledDate)) parts.push(`⏳ ${taskDateKey(body.scheduledDate)}`);
+  if (body.dueDate) parts.push(formatDueDateToken(body.dueDate, body.dueFormat));
+  const time = scheduledTime(body.scheduledDate);
+  if (time) parts.push(`⏰ ${time}`);
+  if (body.recurrence) parts.push(`repeat:: ${body.recurrence}`);
+  parts.push(...body.tags);
+  const line = parts.filter(Boolean).join(" ");
+  return body.completedDate ? `${line} ✅ ${body.completedDate}` : line;
+}
+
+function extractDateToken(body: string, pattern: RegExp): string | undefined {
+  return body.match(pattern)?.[0].match(/\d{4}-\d{2}-\d{2}/)?.[0];
+}
+
+function extractDueDate(body: string): string | undefined {
+  const withoutStructuredDates = body.replace(EMOJI_START, " ").replace(EMOJI_SCHEDULED, " ").replace(COMPLETED_DATE, " ");
+  return withoutStructuredDates.match(EMOJI_DUE)?.[0].match(/\d{4}-\d{2}-\d{2}/)?.[0]
+    ?? withoutStructuredDates.match(INLINE_DUE)?.[0].match(/\d{4}-\d{2}-\d{2}/)?.[0]
+    ?? withoutStructuredDates.match(BARE_DUE)?.[0].match(/\d{4}-\d{2}-\d{2}/)?.[0];
+}
+
+function extractDueFormat(body: string): DueFormat {
+  if (EMOJI_DUE.test(body)) return "emoji";
+  if (INLINE_DUE.test(body)) return "inline";
+  if (BARE_DUE.test(body.replace(EMOJI_START, " ").replace(EMOJI_SCHEDULED, " ").replace(COMPLETED_DATE, " "))) return "bare";
+  return undefined;
+}
+
+function extractTags(body: string): string[] {
+  return Array.from(body.matchAll(TAG), (match) => match[2]);
+}
+
+function formatDueDateToken(dueDate: string, dueFormat: DueFormat): string {
+  if (dueFormat === "inline") return `due:: ${dueDate}`;
+  if (dueFormat === "bare") return dueDate;
+  return `📅 ${dueDate}`;
+}
+
+function scheduledTime(value: string | undefined): string | undefined {
+  return value?.match(/T(\d{2}:\d{2})/)?.[1];
+}
+
+function withScheduledTime(date: string | undefined, time: string | number | undefined): string | undefined {
+  if (!date) return undefined;
+  if (typeof time === "number") return `${date}T${formatTime(time)}`;
+  return time ? `${date}T${time}` : date;
+}
+
+function normalizedStartMinutes(startMinutes: number | undefined): number | undefined {
+  if (startMinutes === undefined) return undefined;
+  const [hours, minutes] = formatTime(startMinutes).split(":").map(Number);
+  return hours * 60 + minutes;
 }
 
 function lineAt(content: string, line: number): string | undefined {

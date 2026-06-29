@@ -1,5 +1,6 @@
 import { getTaskDateBucket, type DateBucket } from "../calendar/dateBuckets";
 import type { TaskItem, TaskStatusFilter } from "../types";
+import { taskPlannedDateKey } from "../taskDates";
 
 export type TaskFilterState = {
   status: TaskStatusFilter;
@@ -57,7 +58,7 @@ export function groupTasksByDateBucket(tasks: TaskItem[], now: Date): Record<Dat
 }
 
 export function getTaskBucket(task: TaskItem, now: Date): DateBucket {
-  const bucket = getTaskDateBucket(task.dueDate, now);
+  const bucket = getTaskDateBucket(taskPlannedDateKey(task), now);
   return task.completed && bucket === "overdue" ? "otherCompleted" : bucket;
 }
 

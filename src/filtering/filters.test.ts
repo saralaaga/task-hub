@@ -53,6 +53,20 @@ describe("filterTasks", () => {
     expect(results.map((item) => item.id)).toEqual(["week"]);
   });
 
+  it("uses scheduled date and start date for date buckets before falling back to legacy due dates", () => {
+    const results = filterTasks(
+      [
+        task({ id: "scheduled", scheduledDate: "2026-05-10" }),
+        task({ id: "started", startDate: "2026-05-10", dueDate: undefined }),
+        task({ id: "legacy", dueDate: "2026-05-10" })
+      ],
+      { ...BASE_FILTERS, dateBucket: "thisWeek" },
+      NOW
+    );
+
+    expect(results.map((item) => item.id)).toEqual(["scheduled", "started", "legacy"]);
+  });
+
   it("filters by all selected tags", () => {
     const results = filterTasks(TASKS, { ...BASE_FILTERS, tags: ["#work", "#client/acme"] }, NOW);
 
@@ -186,6 +200,8 @@ function task(overrides: Partial<TaskItem>): TaskItem {
     completed: overrides.completed ?? false,
     tags: overrides.tags ?? [],
     dueDate: overrides.dueDate,
+    scheduledDate: overrides.scheduledDate,
+    startDate: overrides.startDate,
     heading: overrides.heading,
     contextPreview: overrides.contextPreview,
     source: overrides.source ?? "vault"

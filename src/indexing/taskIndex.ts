@@ -223,6 +223,7 @@ export class TaskIndex {
       indent: task.indent,
       dueDate: task.dueDate,
       scheduledDate: task.scheduledDate,
+      startDate: task.startDate,
       tags: [...task.tags],
       completed: task.completed
     }));
@@ -298,6 +299,7 @@ function stableIdCandidateScore(task: TaskItem, candidate: StableIdCandidate): n
   if (candidate.indent === task.indent) score += 40;
   if (candidate.dueDate === task.dueDate) score += 70;
   if (candidate.scheduledDate === task.scheduledDate) score += 40;
+  if (candidate.startDate === task.startDate) score += 40;
   if (candidate.tagKey === tagKey) score += 50;
   if (candidate.completed === task.completed) score += 10;
   if (candidate.line === task.line) score += 45;
@@ -316,6 +318,7 @@ function stableIdCandidateFromTask(task: TaskItem): StableIdCandidate {
     indent: task.indent,
     dueDate: task.dueDate,
     scheduledDate: task.scheduledDate,
+    startDate: task.startDate,
     tags: task.tags,
     completed: task.completed
   });
@@ -330,7 +333,7 @@ function stableIdCandidateFromRecord(record: PersistedVaultTaskStableRecord): St
   };
 }
 
-function exactTaskSignature(task: Pick<PersistedVaultTaskStableRecord, "text" | "heading" | "indent" | "dueDate" | "scheduledDate" | "tags"> | StableIdCandidate): string {
+function exactTaskSignature(task: Pick<PersistedVaultTaskStableRecord, "text" | "heading" | "indent" | "dueDate" | "scheduledDate" | "startDate" | "tags"> | StableIdCandidate): string {
   const tags = "tagKey" in task ? task.tagKey : [...task.tags].sort().join("\u0001");
   return [
     normalizeTaskText(task.text),
@@ -338,16 +341,17 @@ function exactTaskSignature(task: Pick<PersistedVaultTaskStableRecord, "text" | 
     String(task.indent ?? -1),
     task.dueDate ?? "",
     task.scheduledDate ?? "",
+    task.startDate ?? "",
     tags
   ].join("\u0002");
 }
 
-function softTaskSignature(task: Pick<PersistedVaultTaskStableRecord, "text" | "heading" | "indent" | "dueDate"> | StableIdCandidate): string {
+function softTaskSignature(task: Pick<PersistedVaultTaskStableRecord, "text" | "heading" | "indent" | "dueDate" | "startDate"> | StableIdCandidate): string {
   return [
     normalizeTaskText(task.text),
     normalizeTaskText(task.heading),
     String(task.indent ?? -1),
-    task.dueDate ?? ""
+    task.startDate ?? task.dueDate ?? ""
   ].join("\u0002");
 }
 
@@ -375,6 +379,7 @@ function samePersistedTaskState(
       record.indent === candidate.indent &&
       record.dueDate === candidate.dueDate &&
       record.scheduledDate === candidate.scheduledDate &&
+      record.startDate === candidate.startDate &&
       record.completed === candidate.completed &&
       record.tags.length === candidate.tags.length &&
       record.tags.every((tag, tagIndex) => tag === candidate.tags[tagIndex])

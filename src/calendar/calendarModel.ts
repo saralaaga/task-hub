@@ -1,5 +1,6 @@
 import { toLocalDateKey } from "./dateBuckets";
 import type { CalendarEvent, TaskItem, WeekStart } from "../types";
+import { taskPlannedDateKey, taskScheduledStartMinutes } from "../taskDates";
 
 export type CalendarViewMode = "day" | "week" | "month";
 
@@ -54,14 +55,15 @@ export function buildCalendarItems(input: BuildCalendarItemsInput): CalendarItem
 
   for (const task of input.tasks) {
     const sourceId = task.source;
+    const plannedDate = taskPlannedDateKey(task);
     if (!input.visibleSourceIds.has(sourceId)) continue;
-    if (!task.dueDate) continue;
+    if (!plannedDate) continue;
     if (task.completed && !input.includeCompletedTasks) continue;
-    const taskStartMinutes = task.scheduledDate ? parseCalendarDateTime(task.scheduledDate)?.minutes : undefined;
+    const taskStartMinutes = taskScheduledStartMinutes(task);
     items.push({
       id: `task:${task.id}`,
       title: task.text,
-      date: task.dueDate,
+      date: plannedDate,
       startMinutes: taskStartMinutes,
       endMinutes: undefined,
       allDay: taskStartMinutes === undefined,

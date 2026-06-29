@@ -7,6 +7,7 @@ import type { TranslationKey, Translator } from "../i18n";
 import { normalizeReminderAlertMinutes, populateReminderAlertSelect, type ReminderAlertMinutes } from "../reminderAlerts";
 import type { TaskNote } from "../taskNotes";
 import { parseTaskSendTarget, preferredTaskSendTarget, taskSendTargetOptions } from "../taskSendTargets";
+import { taskPlannedDateKey } from "../taskDates";
 import type { AppleCalendarInfo, AppleReminderList, CalendarEvent, CalendarItemEditDraft, CalendarSource, CalendarSourceStatus, CalendarTimeScale, DidaProject, TaskItem, TaskSendTarget, WeekStart } from "../types";
 import { canDeleteAppleCalendarEventCapability, canDeleteAppleReminderCapability } from "../integrationCapabilities";
 import {
@@ -20,11 +21,13 @@ import {
 import { renderTaskNoteBody, taskNotePreviewBody, taskNotePreviewTitle, type TaskNoteMarkdownRenderer } from "./renderTaskNoteBody";
 import { recurrencePresetFromRule } from "../recurrence";
 import { MIN_TIME_GRANULARITY_MINUTES, snapDayStartMinutes, snapToTimeGranularity, validTimedDurationMinutes } from "../timeGranularity";
+import type { TaskListDropPosition } from "../taskListOrdering";
 import { createRecurrenceSelect, recurrenceValueFromSelect } from "./recurrenceControls";
 import { resolveTaskBulkActions, type TaskBulkActionId } from "./taskSelection";
 import { renderSourceLogo, sourceLogoKindForCalendarItem } from "./sourceLogos";
 import { setCssProps, setCssStyles } from "./domStyles";
 import type { TaskHubTagInputElement } from "./tagInputSuggest";
+import { renderTaskDetails, type TaskRenderOptions, type TaskRowHandlers } from "./renderTasksView";
 
 export type CalendarViewState = {
   mode: CalendarViewMode;
@@ -104,6 +107,9 @@ export type CalendarViewHandlers = {
   onDeleteTaskNote?: (path: string) => void;
   onOpenTaskNoteInThino?: (path: string) => void;
   onTaskSendToAppleCalendar?: (task: TaskItem) => void;
+  onAppleReminderListChange?: (task: TaskItem, listId: string) => void;
+  onTaskNoteReorder?: (task: TaskItem, draggedNote: TaskNote, anchorNote: TaskNote, position: TaskListDropPosition) => void;
+  onToggleTaskNotePinned?: (task: TaskItem, note: TaskNote) => void;
   onTimeScaleChange?: (scale: CalendarTimeScale) => void;
 };
 
@@ -271,7 +277,7 @@ export function renderCalendarView(
           eventColors: Object.fromEntries(events.filter((event) => event.sourceId === "apple-calendar" && event.calendarId).map((event) => [event.calendarId as string, appleCalendarEventColor(event, state)])),
           taskColors: state.taskColors,
           taskDurationOverrides: state.taskDurationOverrides
-        }))
+        }), tasks, state.visibleSourceIds)
       : new Map<string, MiniMonthDayStats>();
   const visibleItems = items.filter((item) => item.date >= range.start && item.date <= range.end);
 
@@ -312,7 +318,7 @@ export function renderCalendarView(
       activeDaySidebarContext = { day: range.days[0], dayItems, miniMonthStats, state, handlers };
       renderCalendarDaySidebar(daySidebar, range.days[0], dayItems, miniMonthStats, state, handlers);
     }
-    if (showUnscheduledPanel) renderUnscheduledPanel(calendarHost, state, handlers);
+    if (state.mode === "week" && showUnscheduledPanel) renderUnscheduledPanel(calendarHost, state, handlers);
     if (state.mode === "week") restoreCalendarDetailsPopover(detailsSelectionKeyToRestore, handlers, state);
     return;
   }
@@ -1116,19 +1122,36 @@ function renderCalendarDaySidebar(
       ?? dayItems.find((item) => calendarItemSelectionKey(item) === activeSelectedCalendarItemKey)
       ?? dayItems[0];
     activeDetailsSelectionKey = calendarItemSelectionKey(selectedItem);
-    const detailSurface = container.createDiv({ cls: "task-hub-calendar-day-detail task-hub-calendar-detail-surface" });
-    if (selectedItem.color) setCssProps(detailSurface, { "--task-hub-item-color": selectedItem.color });
-    renderCalendarDetailHeader(detailSurface, selectedItem, handlers, state, { dismissible: false });
     if (selectedItem.task) {
-      renderTaskDetailsPopover(detailSurface, selectedItem, selectedItem.task, handlers, state, () => undefined);
+      const detailSurface = container.createDiv({ cls: "task-hub-calendar-day-detail task-hub-calendar-day-task-detail" });
+      renderTaskDetails(
+        detailSurface,
+        selectedItem.task,
+        undefined,
+        calendarTaskRowHandlers(handlers),
+        calendarTaskRenderOptions(state),
+        state.t
+      );
     } else if (selectedItem.event) {
+      const detailSurface = container.createDiv({
+        cls: "task-hub-calendar-day-detail task-hub-calendar-detail-surface task-hub-calendar-day-event-detail"
+      });
+      if (selectedItem.color) setCssProps(detailSurface, { "--task-hub-item-color": selectedItem.color });
+      renderCalendarDetailHeader(detailSurface, selectedItem, handlers, state, { dismissible: false });
       renderEventDetailsPopover(detailSurface, selectedItem, selectedItem.event, handlers, state, () => undefined);
     }
   }
 
   if (state.unscheduledPanelOpen || state.unscheduledPanelClosing) {
-    const unscheduledSection = container.createDiv({ cls: "task-hub-calendar-day-sidebar-section" });
-    renderUnscheduledPanelBody(unscheduledSection, state, handlers);
+    const unscheduledSurface = container.createDiv({
+      cls: "task-hub-calendar-day-sidebar-section task-hub-calendar-day-unscheduled"
+    });
+    unscheduledSurface.toggleClass(
+      "is-opening",
+      Boolean(state.unscheduledPanelOpening && !state.unscheduledPanelClosing)
+    );
+    unscheduledSurface.toggleClass("is-closing", Boolean(state.unscheduledPanelClosing));
+    renderUnscheduledPanelBody(unscheduledSurface, state, handlers);
   }
 }
 
@@ -1189,18 +1212,31 @@ function miniMonthWeekdays(weekStart: WeekStart, t: Translator): string[] {
   });
 }
 
-function buildMiniMonthStats(items: CalendarItem[]): Map<string, MiniMonthDayStats> {
+function buildMiniMonthStats(
+  items: CalendarItem[],
+  tasks: TaskItem[],
+  visibleSourceIds: ReadonlySet<string>
+): Map<string, MiniMonthDayStats> {
   const stats = new Map<string, MiniMonthDayStats>();
   for (const item of items) {
     const dayStats = stats.get(item.date) ?? { taskCount: 0, completedTaskCount: 0, eventCount: 0 };
     if (item.kind === "task") {
       dayStats.taskCount += 1;
-      if (item.task?.completed) dayStats.completedTaskCount += 1;
     } else {
       dayStats.eventCount += 1;
     }
     stats.set(item.date, dayStats);
   }
+
+  for (const task of tasks) {
+    if (!visibleSourceIds.has(task.source)) continue;
+    if (!task.completed || !task.completedDate) continue;
+    const completedDateKey = task.completedDate.slice(0, 10);
+    const dayStats = stats.get(completedDateKey) ?? { taskCount: 0, completedTaskCount: 0, eventCount: 0 };
+    dayStats.completedTaskCount += 1;
+    stats.set(completedDateKey, dayStats);
+  }
+
   return stats;
 }
 
@@ -1221,6 +1257,57 @@ function miniMonthTooltip(date: Date, stats: MiniMonthDayStats | undefined, t: T
     `${completedTaskCount} ${t("completed")}`,
     `${eventCount} ${eventLabel}`
   ].join("\n");
+}
+
+function calendarTaskRowHandlers(handlers: CalendarViewHandlers): TaskRowHandlers {
+  return {
+    onComplete: handlers.onTaskComplete,
+    onJump: handlers.onTaskJump,
+    onTaskReschedule: (task, target) => handlers.onTaskReschedule(task, target),
+    onSendToAppleReminders: (task) => handlers.onTaskSendToAppleReminders?.(task),
+    onSendToDida: handlers.onTaskSendToDida,
+    onSendToTarget: handlers.onTaskSendToTarget,
+    onSendToAppleCalendar: handlers.onTaskSendToAppleCalendar,
+    onSelect: (task) => handlers.onTaskSelect(task),
+    onTagSelect: () => undefined,
+    onSourceSelect: () => undefined,
+    onAppleReminderListChange: (task, listId) => handlers.onAppleReminderListChange?.(task, listId),
+    onDidaProjectChange: () => undefined,
+    onTaskUpdate: handlers.onTaskUpdate,
+    onTaskDelete: handlers.onTaskDelete,
+    onCreateTaskNote: handlers.onCreateTaskNote,
+    onOpenTaskNote: handlers.onOpenTaskNote ?? (() => undefined),
+    onDeleteTaskNote: handlers.onDeleteTaskNote ?? (() => undefined),
+    onOpenTaskNoteInThino: handlers.onOpenTaskNoteInThino,
+    onTaskNoteReorder: handlers.onTaskNoteReorder,
+    onToggleTaskNotePinned: handlers.onToggleTaskNotePinned
+  };
+}
+
+function calendarTaskRenderOptions(state: CalendarViewState): TaskRenderOptions {
+  return {
+    allowAppleReminderWriteback: state.allowAppleReminderWriteback,
+    allowAppleReminderCreate: state.allowAppleReminderCreate,
+    allowDidaWriteback: state.allowDidaWriteback,
+    allowDidaDragReschedule: state.allowDidaDragReschedule,
+    allowDidaDelete: state.allowDidaDelete,
+    allowDidaCreate: state.allowDidaCreate,
+    allowAppleCalendarReminderConversion: state.allowAppleCalendarReminderConversion,
+    sourceColors: {
+      vault: state.sources.find((source) => source.id === "vault")?.color,
+      "apple-reminders": state.sources.find((source) => source.id === "apple-reminders")?.color,
+      dida: state.sources.find((source) => source.id === "dida")?.color
+    },
+    taskColors: state.taskColors,
+    appleReminderLists: state.appleReminderLists,
+    didaProjects: state.didaProjects,
+    taskSendDefaultTarget: state.taskSendDefaultTarget,
+    bindTagInputSuggest: state.bindTagInputSuggest,
+    taskNotesEnabled: state.taskNotesEnabled,
+    allowThinoNoteEdit: state.allowThinoNoteEdit,
+    getTaskNotes: state.getTaskNotes,
+    renderNoteMarkdown: state.renderNoteMarkdown
+  };
 }
 
 function miniMonthCells(focusDate: Date, weekStart: WeekStart): Array<{ date: Date; isCurrentMonth: boolean; isFocusedDay: boolean; isToday: boolean }> {
@@ -1547,7 +1634,7 @@ function renderTaskDetailsPopover(
   const form = popover.createDiv({ cls: "task-hub-calendar-detail-form" });
   const title = detailAutoGrowTextarea(form, state.t("taskCreationBody"), task.text, "task-hub-calendar-detail-title-input");
   state.bindTagInputSuggest?.(title);
-  const date = detailInput(form, state.t("date"), task.dueDate ?? "", "date");
+  const date = detailInput(form, state.t("date"), taskPlannedDateKey(task) ?? "", "date");
   const time = detailInput(form, state.t("startTime"), timeFromTask(task), "time");
   const alertEditor = task.source === "apple-reminders" ? reminderAlertEditor(form, time, task.alertMinutesBefore, state.t) : undefined;
   let tags: HTMLInputElement | undefined;

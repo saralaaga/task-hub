@@ -2,8 +2,8 @@ import { buildCalendarItems, getCalendarRange } from "./calendarModel";
 import type { CalendarEvent, TaskItem } from "../types";
 
 const TASKS: TaskItem[] = [
-  task({ id: "task-1", text: "Due today", dueDate: "2026-05-06" }),
-  task({ id: "task-2", text: "Done today", completed: true, dueDate: "2026-05-06" }),
+  task({ id: "task-1", text: "Due today", startDate: "2026-05-06" }),
+  task({ id: "task-2", text: "Done today", completed: true, startDate: "2026-05-06" }),
   task({ id: "task-3", text: "No date" })
 ];
 
@@ -46,6 +46,20 @@ describe("buildCalendarItems", () => {
         allDay: true
       })
     ]);
+  });
+
+  it("uses scheduled date first and falls back to start date for vault tasks", () => {
+    const items = buildCalendarItems({
+      tasks: [
+        task({ id: "scheduled", text: "Scheduled", startDate: "2026-05-06", scheduledDate: "2026-05-08" }),
+        task({ id: "started", text: "Started", startDate: "2026-05-07" })
+      ],
+      events: [],
+      visibleSourceIds: new Set(["vault"]),
+      includeCompletedTasks: false
+    });
+
+    expect(items.map((item) => `${item.id}:${item.date}`)).toEqual(["task:started:2026-05-07", "task:scheduled:2026-05-08"]);
   });
 
   it("honors completed-task and source layer visibility", () => {
@@ -363,6 +377,7 @@ function task(overrides: Partial<TaskItem>): TaskItem {
     tags: [],
     dueDate: overrides.dueDate,
     scheduledDate: overrides.scheduledDate,
+    startDate: overrides.startDate,
     createdDate: overrides.createdDate,
     externalId: overrides.externalId,
     externalListId: overrides.externalListId,

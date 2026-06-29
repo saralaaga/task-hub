@@ -7,6 +7,7 @@ import type TaskHubPlugin from "../main";
 import type { TaskHubLastSessionState, TaskHubSettings, TaskItem } from "../types";
 import { parseTasksFromMarkdown } from "../parsing/taskParser";
 import { type CalendarViewMode } from "../calendar/calendarModel";
+import { taskPlannedDateKey } from "../taskDates";
 import { renderCalendarView, type AgendaScrollPosition, type CalendarModeTransitionDirection } from "./renderCalendarView";
 import { renderShell, type DashboardView } from "./renderShell";
 import { syncVisibleSources } from "./sourceVisibility";
@@ -64,6 +65,11 @@ export class TaskHubView extends ItemView {
     this.calendarFocusDate = restoredState.calendarFocusDate;
     this.visibleSourceIds = restoredState.visibleSourceIds;
     this.unscheduledPanelOpen = restoredState.unscheduledPanelOpen;
+    const currentSourceIds =
+      typeof this.plugin.getCalendarSources === "function"
+        ? this.plugin.getCalendarSources().map((source) => source.id)
+        : [];
+    this.knownCalendarSourceIds = new Set(["vault", ...currentSourceIds]);
   }
 
   getViewType(): string {
@@ -136,7 +142,7 @@ export class TaskHubView extends ItemView {
       {
         onViewChange: (view) => {
           this.view = view;
-          this.syncSessionStateToSettings();
+          this.persistSessionState();
           this.render();
         },
         onRescan: () => void this.refreshData(),
@@ -148,7 +154,7 @@ export class TaskHubView extends ItemView {
           } else {
             this.toggleUnscheduledPanel();
           }
-          this.syncSessionStateToSettings();
+          this.persistSessionState();
           this.render();
         },
         onStatusChange: (status) => {
@@ -393,22 +399,22 @@ export class TaskHubView extends ItemView {
           onModeChange: (mode) => {
             this.calendarModeTransition = calendarModeTransitionDirection(this.calendarMode, mode);
             this.calendarMode = mode;
-            this.syncSessionStateToSettings();
+            this.persistSessionState();
             this.render();
           },
           onMove: (direction) => {
             this.calendarFocusDate = moveDate(this.calendarFocusDate, this.calendarMode, direction);
-            this.syncSessionStateToSettings();
+            this.persistSessionState();
             this.render();
           },
           onToday: () => {
             this.calendarFocusDate = new Date();
-            this.syncSessionStateToSettings();
+            this.persistSessionState();
             this.render();
           },
           onFocusDateChange: (date) => {
             this.calendarFocusDate = date;
-            this.syncSessionStateToSettings();
+            this.persistSessionState();
             this.render();
           },
           onTimeScaleChange: (scale) => {
@@ -417,7 +423,7 @@ export class TaskHubView extends ItemView {
           },
           onLayerToggle: (sourceId) => {
             this.visibleSourceIds = toggleSetValue(this.visibleSourceIds, sourceId);
-            this.syncSessionStateToSettings();
+            this.persistSessionState();
             this.render();
           },
           onDateCreateTask: (dateKey) => this.plugin.openCreateTaskModal(dateKey),
@@ -437,6 +443,7 @@ export class TaskHubView extends ItemView {
           onTaskSendToAppleReminders: (task) => void this.withPreservedCalendarViewport(() => this.plugin.sendTaskToAppleReminders(task)),
           onTaskSendToDida: (task) => void this.withPreservedCalendarViewport(() => this.plugin.sendTaskToDida(task)),
           onTaskSendToAppleCalendar: (task) => void this.withPreservedCalendarViewport(() => this.plugin.convertAppleReminderToCalendarEvent(task)),
+          onAppleReminderListChange: (task, listId) => void this.withPreservedCalendarViewport(() => this.plugin.moveAppleReminderToList(task, listId)),
           onEventReschedule: (event, dateKey) => void this.withPreservedCalendarViewport(() => this.plugin.rescheduleCalendarEvent(event, dateKey)),
           onEventUpdate: (event, draft) => void this.withPreservedCalendarViewport(() => this.plugin.updateCalendarEvent(event, draft)),
           onEventDelete: (event) => void this.withPreservedCalendarViewport(() => this.plugin.deleteCalendarEvent(event)),
@@ -445,7 +452,15 @@ export class TaskHubView extends ItemView {
           onCreateEventNote: (event) => void this.plugin.createTaskNoteForEvent(event),
           onOpenTaskNote: (path) => void this.plugin.openTaskNote(path),
           onDeleteTaskNote: (path) => void this.plugin.deleteTaskNote(path),
-          onOpenTaskNoteInThino: (path) => void this.plugin.openTaskNoteSource(path)
+          onOpenTaskNoteInThino: (path) => void this.plugin.openTaskNoteSource(path),
+          onTaskNoteReorder: (task, draggedNote, anchorNote, position) => {
+            this.captureContentScroll();
+            void this.plugin.reorderTaskNotes(task, draggedNote, anchorNote, position);
+          },
+          onToggleTaskNotePinned: (task, note) => {
+            this.captureContentScroll();
+            void this.plugin.toggleTaskNotePinned(task, note);
+          }
         }
       );
       this.unscheduledPanelOpening = false;
@@ -710,6 +725,13 @@ export class TaskHubView extends ItemView {
     this.render(options);
   }
 
+  private persistSessionState(): void {
+    this.syncSessionStateToSettings();
+    const saveData = (this.plugin as unknown as { saveData?: (data: TaskHubSettings) => Promise<unknown> }).saveData;
+    if (typeof saveData !== "function") return;
+    void saveData.call(this.plugin, this.plugin.settings);
+  }
+
   private syncSessionStateToSettings(): void {
     this.plugin.settings.taskViewFilters = cloneTaskFilters(this.filters);
     this.plugin.settings.lastSessionState = createTaskHubSessionSnapshot({
@@ -832,7 +854,7 @@ export function collectUnscheduledTasks(
   canScheduleTask: (task: TaskItem) => boolean
 ): TaskItem[] {
   return filterTasks(tasks, filters, now)
-    .filter((task) => !task.dueDate && canScheduleTask(task))
+    .filter((task) => !taskPlannedDateKey(task) && canScheduleTask(task))
     .sort(compareUnscheduledTasks);
 }
 
@@ -848,7 +870,7 @@ export function collectCalendarUnscheduledTasks(
 
   const visibleIds = new Set(visible.map((task) => task.id));
   const exiting = tasks.filter((task) => {
-    if (!completingTaskIds.has(task.id) || visibleIds.has(task.id) || !task.completed || task.dueDate || !canScheduleTask(task)) return false;
+    if (!completingTaskIds.has(task.id) || visibleIds.has(task.id) || !task.completed || taskPlannedDateKey(task) || !canScheduleTask(task)) return false;
     return filterTasks([task], { ...filters, status: "all" }, now).length > 0;
   });
   return [...visible, ...exiting].sort(compareUnscheduledTasks);

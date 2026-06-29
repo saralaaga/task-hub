@@ -263,6 +263,7 @@ function normalizeVaultTaskStableRecord(value: unknown): PersistedVaultTaskStabl
     indent: typeof candidate.indent === "number" ? Math.max(0, Math.floor(candidate.indent)) : undefined,
     dueDate: typeof candidate.dueDate === "string" ? candidate.dueDate : undefined,
     scheduledDate: typeof candidate.scheduledDate === "string" ? candidate.scheduledDate : undefined,
+    startDate: typeof candidate.startDate === "string" ? candidate.startDate : undefined,
     tags: Array.from(new Set(candidate.tags.filter((tag): tag is string => typeof tag === "string"))),
     completed: candidate.completed
   };

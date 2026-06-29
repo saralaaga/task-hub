@@ -13,9 +13,9 @@ describe("task creation helpers", () => {
   it("appends task lines to empty and non-empty content", () => {
     const line = createTaskLine("Buy milk", "2026-05-08");
 
-    expect(appendTaskToContent("", line)).toBe("- [ ] Buy milk 📅 2026-05-08\n");
-    expect(appendTaskToContent("# Inbox", line)).toBe("# Inbox\n- [ ] Buy milk 📅 2026-05-08\n");
-    expect(appendTaskToContent("# Inbox\n", line)).toBe("# Inbox\n- [ ] Buy milk 📅 2026-05-08\n");
+    expect(appendTaskToContent("", line)).toBe("- [ ] Buy milk 🛫 2026-05-08 ⏳ 2026-05-08\n");
+    expect(appendTaskToContent("# Inbox", line)).toBe("# Inbox\n- [ ] Buy milk 🛫 2026-05-08 ⏳ 2026-05-08\n");
+    expect(appendTaskToContent("# Inbox\n", line)).toBe("# Inbox\n- [ ] Buy milk 🛫 2026-05-08 ⏳ 2026-05-08\n");
   });
 
   it("creates task lines that the existing parser can place on the calendar", () => {
@@ -25,24 +25,25 @@ describe("task creation helpers", () => {
       {
         text: "Buy milk",
         tags: ["#errand"],
-        dueDate: "2026-05-08",
+        startDate: "2026-05-08",
+        scheduledDate: "2026-05-08",
         source: "vault"
       }
     ]);
   });
 
   it("folds multiline user input into one task line", () => {
-    expect(createTaskLine("Buy\nmilk\tsoon", "2026-05-08")).toBe("- [ ] Buy milk soon 📅 2026-05-08");
+    expect(createTaskLine("Buy\nmilk\tsoon", "2026-05-08")).toBe("- [ ] Buy milk soon 🛫 2026-05-08 ⏳ 2026-05-08");
   });
 
   it("creates timed task lines that the parser can place on the time grid", () => {
     const content = appendTaskToContent("", createTaskLine("Buy milk", "2026-05-08", 570));
 
-    expect(content).toBe("- [ ] Buy milk 📅 2026-05-08 ⏰ 09:30\n");
+    expect(content).toBe("- [ ] Buy milk 🛫 2026-05-08 ⏳ 2026-05-08 ⏰ 09:30\n");
     expect(parseTasksFromMarkdown({ filePath: "Task Hub.md", content })).toMatchObject([
       {
         text: "Buy milk",
-        dueDate: "2026-05-08",
+        startDate: "2026-05-08",
         scheduledDate: "2026-05-08T09:30"
       }
     ]);
@@ -51,7 +52,7 @@ describe("task creation helpers", () => {
   it("keeps timed task creation to five-minute precision", () => {
     const content = appendTaskToContent("", createTaskLine("Buy milk", "2026-05-08", 9 * 60 + 7));
 
-    expect(content).toBe("- [ ] Buy milk 📅 2026-05-08 ⏰ 09:05\n");
+    expect(content).toBe("- [ ] Buy milk 🛫 2026-05-08 ⏳ 2026-05-08 ⏰ 09:05\n");
     expect(parseTasksFromMarkdown({ filePath: "Task Hub.md", content })).toMatchObject([
       {
         scheduledDate: "2026-05-08T09:05"
@@ -62,11 +63,12 @@ describe("task creation helpers", () => {
   it("creates recurring task lines that the parser can read", () => {
     const content = appendTaskToContent("", createTaskLine("Review budget", "2026-06-08", undefined, "RRULE:FREQ=WEEKLY"));
 
-    expect(content).toBe("- [ ] Review budget 📅 2026-06-08 repeat:: RRULE:FREQ=WEEKLY\n");
+    expect(content).toBe("- [ ] Review budget 🛫 2026-06-08 ⏳ 2026-06-08 repeat:: RRULE:FREQ=WEEKLY\n");
     expect(parseTasksFromMarkdown({ filePath: "Task Hub.md", content })).toMatchObject([
       {
         text: "Review budget",
-        dueDate: "2026-06-08",
+        startDate: "2026-06-08",
+        scheduledDate: "2026-06-08",
         recurrence: "RRULE:FREQ=WEEKLY"
       }
     ]);

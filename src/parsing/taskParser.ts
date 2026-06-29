@@ -8,11 +8,14 @@ type ParseInput = {
 
 const TASK_LINE = /^(\s*)- \[([ xX])\]\s+(.*)$/;
 const TAG = /(^|\s)(#[\p{L}\p{N}_/-]+)/gu;
+const EMOJI_START = /(?:^|\s)🛫\s*(\d{4}-\d{2}-\d{2})(?=\s|$)/u;
+const EMOJI_SCHEDULED = /(?:^|\s)⏳\s*(\d{4}-\d{2}-\d{2})(?=\s|$)/u;
 const EMOJI_DUE = /(?:^|\s)📅\s*(\d{4}-\d{2}-\d{2})(?=\s|$)/u;
 const INLINE_DUE = /(?:^|\s)due::\s*(\d{4}-\d{2}-\d{2})(?=\s|$)/u;
 const BARE_DUE = /(?:^|\s)(\d{4}-\d{2}-\d{2})(?=\s|$)/u;
 const EMOJI_TIME = /(?:^|\s)⏰\s*([01]\d|2[0-3]):([0-5]\d)(?=\s|$)/u;
 const RECURRENCE = /(?:^|\s)(?:repeat::|🔁)\s*((?:RRULE:)?[A-Z0-9=;,_-]+)(?=\s|$)/iu;
+const COMPLETED_DATE = /(?:^|\s)✅\s*(\d{4}-\d{2}-\d{2})(?=\s|$)/u;
 const HEADING = /^(#{1,6})\s+(.+)$/;
 
 export function parseTasksFromMarkdown(input: ParseInput): TaskItem[] {
@@ -36,9 +39,11 @@ export function parseTasksFromMarkdown(input: ParseInput): TaskItem[] {
     taskStack.length = indent;
     const parentId = findParentId(taskStack, indent);
     const tags = extractTags(rawBody);
+    const startDate = extractStartDate(rawBody);
     const dueDate = extractDueDate(rawBody);
-    const scheduledDate = dueDate ? extractScheduledDate(rawBody, dueDate) : undefined;
+    const scheduledDate = extractScheduledDate(rawBody, extractScheduledDateKey(rawBody) ?? dueDate ?? startDate);
     const recurrence = extractRecurrence(rawBody);
+    const completedDate = extractCompletedDate(rawBody);
     const text = cleanTaskText(rawBody).trim();
     const id = createTaskId(input.filePath, index, line);
     const task: TaskItem = {
@@ -54,7 +59,9 @@ export function parseTasksFromMarkdown(input: ParseInput): TaskItem[] {
       parentId,
       dueDate,
       scheduledDate,
+      startDate,
       recurrence,
+      completedDate,
       heading: currentHeading,
       contextPreview: buildContextPreview(lines, index),
       source: "vault"
@@ -85,23 +92,43 @@ function extractTags(text: string): string[] {
 }
 
 function extractDueDate(text: string): string | undefined {
-  return text.match(EMOJI_DUE)?.[1] ?? text.match(INLINE_DUE)?.[1] ?? text.match(BARE_DUE)?.[1];
+  const withoutScheduleDates = text
+    .replace(COMPLETED_DATE, " ")
+    .replace(EMOJI_START, " ")
+    .replace(EMOJI_SCHEDULED, " ");
+  return withoutScheduleDates.match(EMOJI_DUE)?.[1] ?? withoutScheduleDates.match(INLINE_DUE)?.[1] ?? withoutScheduleDates.match(BARE_DUE)?.[1];
 }
 
-function extractScheduledDate(text: string, dueDate: string): string | undefined {
+function extractStartDate(text: string): string | undefined {
+  return text.match(EMOJI_START)?.[1];
+}
+
+function extractScheduledDateKey(text: string): string | undefined {
+  return text.match(EMOJI_SCHEDULED)?.[1];
+}
+
+function extractScheduledDate(text: string, anchorDate: string | undefined): string | undefined {
+  if (!anchorDate) return undefined;
   const match = text.match(EMOJI_TIME);
-  if (!match) return undefined;
-  return `${dueDate}T${match[1]}:${match[2]}`;
+  if (!match) return anchorDate;
+  return `${anchorDate}T${match[1]}:${match[2]}`;
 }
 
 function extractRecurrence(text: string): string | undefined {
   return normalizeRecurrenceRule(text.match(RECURRENCE)?.[1]);
 }
 
+function extractCompletedDate(text: string): string | undefined {
+  return text.match(COMPLETED_DATE)?.[1];
+}
+
 function cleanTaskText(text: string): string {
   return text
+    .replace(EMOJI_START, " ")
+    .replace(EMOJI_SCHEDULED, " ")
     .replace(EMOJI_DUE, " ")
     .replace(INLINE_DUE, " ")
+    .replace(COMPLETED_DATE, " ")
     .replace(BARE_DUE, " ")
     .replace(EMOJI_TIME, " ")
     .replace(RECURRENCE, " ")

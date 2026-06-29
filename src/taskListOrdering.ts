@@ -1,4 +1,5 @@
 import type { TaskItem, TaskListManualOrder } from "./types";
+import { taskPlannedDateKey } from "./taskDates";
 
 export type TaskListDropPosition = "before" | "after";
 
@@ -7,7 +8,7 @@ export function taskStableId(task: TaskItem): string {
 }
 
 export function taskListDateKey(task: TaskItem): string | undefined {
-  return task.scheduledDate?.slice(0, 10) ?? task.dueDate ?? task.startDate?.slice(0, 10);
+  return taskPlannedDateKey(task);
 }
 
 export function sortTasksForTaskList(tasks: TaskItem[]): TaskItem[] {

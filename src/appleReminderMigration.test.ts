@@ -895,7 +895,7 @@ describe("Apple Reminders migration", () => {
     });
 
     expect(createAppleCalendarEvent).not.toHaveBeenCalled();
-    await expect(process.mock.results[0].value).resolves.toBe("- [ ] Pay invoice 📅 2026-05-21 ⏰ 09:30\nNext");
+    await expect(process.mock.results[0].value).resolves.toBe("- [ ] Pay invoice 🛫 2026-05-20 ⏳ 2026-05-21 ⏰ 09:30\nNext");
     expect(notices).toContain("Task date updated.");
     expect(notices).not.toContain("Apple Calendar event created and source task removed.");
   });
@@ -924,7 +924,7 @@ describe("Apple Reminders migration", () => {
       scheduledDate: "2026-05-20T09:30"
     }), "2026-05-20");
 
-    await expect(process.mock.results[0].value).resolves.toBe("- [ ] Pay invoice 📅 2026-05-20\nNext");
+    await expect(process.mock.results[0].value).resolves.toBe("- [ ] Pay invoice 🛫 2026-05-20 ⏳ 2026-05-20\nNext");
     expect(notices).toContain("Task date updated.");
     expect(notices).not.toContain("Task is already on this date.");
   });
@@ -1981,7 +1981,7 @@ describe("Apple Reminders migration", () => {
       reminderListId: ""
     });
 
-    await expect(process.mock.results[0].value).resolves.toBe("- [ ] Send invoice 📅 2026-05-21 ⏰ 09:30 #finance\nNext");
+    await expect(process.mock.results[0].value).resolves.toBe("- [ ] Send invoice 🛫 2026-05-20 ⏳ 2026-05-21 ⏰ 09:30 #finance\nNext");
     expect(notices).toContain("Task updated.");
   });
 
@@ -2040,7 +2040,7 @@ describe("Apple Reminders migration", () => {
     expect(parsed?.related).toEqual([
       buildTaskNoteKey({
         ...currentTask,
-        rawLine: "- [ ] Send invoice 📅 2026-05-20 #finance",
+        rawLine: "- [ ] Send invoice 🛫 2026-05-20 ⏳ 2026-05-20 #finance",
         text: "Send invoice",
         tags: ["#finance"]
       })
@@ -2076,7 +2076,7 @@ describe("Apple Reminders migration", () => {
       recurrence: "RRULE:FREQ=MONTHLY"
     });
 
-    await expect(process.mock.results[0].value).resolves.toBe("- [ ] Pay invoice 📅 2026-05-20 repeat:: RRULE:FREQ=MONTHLY\nNext");
+    await expect(process.mock.results[0].value).resolves.toBe("- [ ] Pay invoice 🛫 2026-05-20 ⏳ 2026-05-20 repeat:: RRULE:FREQ=MONTHLY\nNext");
   });
 
   it("updates Apple Reminder detail drafts through the helper", async () => {

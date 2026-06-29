@@ -15,7 +15,7 @@ export function createTaskLine(text: string, dateKey: string, startMinutes?: num
   const timeText = startMinutes === undefined ? "" : ` ⏰ ${formatTaskTime(startMinutes)}`;
   const normalizedRecurrence = normalizeRecurrenceRule(recurrence);
   const recurrenceText = normalizedRecurrence ? ` repeat:: ${normalizedRecurrence}` : "";
-  return `- [ ] ${taskText} 📅 ${dateKey}${timeText}${recurrenceText}`;
+  return `- [ ] ${taskText} 🛫 ${dateKey} ⏳ ${dateKey}${timeText}${recurrenceText}`;
 }
 
 export function appendTaskToContent(content: string, taskLine: string): string {

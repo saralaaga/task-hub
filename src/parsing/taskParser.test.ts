@@ -4,7 +4,7 @@ describe("parseTasksFromMarkdown", () => {
   it("extracts open tasks with tags and emoji due dates", () => {
     const tasks = parseTasksFromMarkdown({
       filePath: "Projects/Acme.md",
-      content: "# Acme\n\n- [ ] Write proposal #client/acme 📅 2026-05-10"
+      content: "# Acme\n\n- [ ] Write proposal #client/acme 🛫 2026-05-08 ⏳ 2026-05-10"
     });
 
     expect(tasks).toHaveLength(1);
@@ -14,7 +14,8 @@ describe("parseTasksFromMarkdown", () => {
       completed: false,
       text: "Write proposal",
       tags: ["#client/acme"],
-      dueDate: "2026-05-10",
+      startDate: "2026-05-08",
+      scheduledDate: "2026-05-10",
       heading: "Acme"
     });
   });
@@ -22,14 +23,15 @@ describe("parseTasksFromMarkdown", () => {
   it("extracts completed tasks with due:: dates", () => {
     const tasks = parseTasksFromMarkdown({
       filePath: "Inbox.md",
-      content: "- [x] Send invoice #finance due:: 2026-05-11"
+      content: "- [x] Send invoice #finance due:: 2026-05-11 ✅ 2026-05-12"
     });
 
     expect(tasks[0]).toMatchObject({
       completed: true,
       text: "Send invoice",
       tags: ["#finance"],
-      dueDate: "2026-05-11"
+      dueDate: "2026-05-11",
+      completedDate: "2026-05-12"
     });
   });
 
@@ -42,6 +44,20 @@ describe("parseTasksFromMarkdown", () => {
     expect(tasks[0]).toMatchObject({
       text: "测试",
       dueDate: "2026-06-05"
+    });
+  });
+
+  it("keeps legacy due-date tasks compatible with the new planner fields", () => {
+    const tasks = parseTasksFromMarkdown({
+      filePath: "Project.md",
+      content: "- [ ] Legacy task 📅 2026-06-05 ⏰ 09:30"
+    });
+
+    expect(tasks[0]).toMatchObject({
+      text: "Legacy task",
+      dueDate: "2026-06-05",
+      scheduledDate: "2026-06-05T09:30",
+      startDate: undefined
     });
   });
 

@@ -1083,7 +1083,7 @@ const TRANSLATIONS: Record<"en" | "zh", Record<TranslationKey, string>> &
     taskCompleted: "Task completed.",
     taskCreated: "Task created.",
     taskDateAlreadySet: "Task is already on that date.",
-    taskDateTokenMissing: "The task line does not contain a supported due date.",
+    taskDateTokenMissing: "The task line does not contain a supported scheduling date.",
     taskDateUpdated: "Task date updated.",
     taskUndoApplied: "Undid the last task change.",
     taskUndoUnavailable: "No recent task change is available to undo.",

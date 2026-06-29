@@ -9,6 +9,7 @@ import type { TaskNote } from "../taskNotes";
 import { taskNoteOrderItemKey } from "../taskNoteOrdering";
 import { parseTaskSendTarget, preferredTaskSendTarget, taskSendTargetOptions } from "../taskSendTargets";
 import { applyTaskListManualOrder, taskListDateKey, type TaskListDropPosition } from "../taskListOrdering";
+import { taskPlannedDateKey, taskScheduledStartMinutes } from "../taskDates";
 import type { AppleReminderList, CalendarItemEditDraft, DidaProject, TaskItem, TaskListManualOrder, TaskSendTarget } from "../types";
 import { addSourceIndicatorMenuItem, deleteLabelForTaskBulkAction, sourceIndicatorLabelForTask } from "./contextMenuLabels";
 import { renderTaskNoteBody, taskNotePreviewBody, taskNotePreviewTitle, type TaskNoteMarkdownRenderer } from "./renderTaskNoteBody";
@@ -722,9 +723,7 @@ function taskListDropTarget(task: TaskItem, dateKey: string): CalendarDropTarget
 }
 
 function startMinutesFromTask(task: TaskItem): number | undefined {
-  const time = task.scheduledDate?.match(/T(\d{2}):(\d{2})/);
-  if (!time) return undefined;
-  return Number(time[1]) * 60 + Number(time[2]);
+  return taskScheduledStartMinutes(task);
 }
 
 function addDays(date: Date, days: number): Date {
@@ -737,7 +736,7 @@ function renderPlainTaskText(text: string): string {
   return text.replace(/\\([\\`*_[\]{}()#+\-.!|>])/g, "$1");
 }
 
-function renderTaskDetails(
+export function renderTaskDetails(
   container: HTMLElement,
   task: TaskItem | undefined,
   progressInfo: TaskProgressInfo | undefined,
@@ -777,7 +776,8 @@ function renderTaskDetails(
     titleRow.control.createDiv({ cls: `task-hub-detail-title ${task.completed ? "is-completed" : ""}`, text: task.text });
   }
   const facts = details.createDiv({ cls: "task-hub-detail-facts" });
-  if (!canEditTask && task.dueDate) renderReadonlyDetailValue(facts, t("date"), task.dueDate);
+  const plannedDate = taskPlannedDateKey(task);
+  if (!canEditTask && plannedDate) renderReadonlyDetailValue(facts, t("date"), plannedDate);
   if (!canEditTask && task.tags.length > 0) renderReadonlyDetailValue(facts, t("tags"), task.tags.join(" "));
   if (!canEditTask) {
     renderReadonlyDetailValue(facts, t("sourceFile"), taskDetailSourceFileLabel(task), "task-hub-detail-source-file");
@@ -838,7 +838,7 @@ function renderTaskDetails(
       );
     }
     if (canEditTask) {
-      dateInput = detailInput(editor, t("date"), task.dueDate ?? "", "date");
+      dateInput = detailInput(editor, t("date"), plannedDate ?? "", "date");
       if (canEditAppleReminder || canEditVaultTask) {
         timeInput = detailInput(editor, t("startTime"), timeFromTask(task) ?? "", "time");
         if (canEditAppleReminder) {

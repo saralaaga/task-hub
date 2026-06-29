@@ -911,16 +911,19 @@ describe("renderCalendarView", () => {
     );
 
     const sidebar = collect(container).find((element) => element.classes.has("task-hub-calendar-day-sidebar"));
-    const selectedDetail = collect(container).find((element) => element.classes.has("task-hub-calendar-detail-title-input"));
+    const selectedDetail = collect(container).find((element) => element.classes.has("task-hub-detail-title-input"));
     const miniMonth = collect(container).find((element) => element.classes.has("task-hub-calendar-mini-month"));
     const weekdayRow = collect(container).find((element) => element.classes.has("task-hub-calendar-mini-month-weekdays"));
     const lunarInline = collect(container).find((element) => element.classes.has("task-hub-calendar-lunar-inline"));
+    const logo = collect(container).find((element) => element.classes.has("task-hub-detail-source-logo"));
 
     expect(sidebar).toBeDefined();
     expect(miniMonth).toBeDefined();
     expect(weekdayRow?.children[0]?.text.length).toBeGreaterThan(1);
     expect(lunarInline?.text).toBeTruthy();
     expect(selectedDetail?.value).toBe("拍孕妇照");
+    expect(selectedDetail?.disabled).toBe(false);
+    expect(logo?.classes.has("is-obsidian")).toBe(true);
     expect(collect(fakeDocument.body).some((element) => element.classes.has("task-hub-calendar-detail-popover"))).toBe(false);
   });
 
@@ -983,6 +986,72 @@ describe("renderCalendarView", () => {
     expect(collect(fakeDocument.body).some((element) => element.classes.has("task-hub-calendar-detail-popover"))).toBe(false);
   });
 
+  it("reuses the task detail editor in the day-view sidebar for vault tasks", () => {
+    const container = new FakeElement();
+    const onTaskUpdate = jest.fn();
+    const timedTask = {
+      ...task,
+      id: "task-day-sidebar-edit",
+      text: "论文",
+      rawLine: "- [ ] 论文 📅 2026-06-28 #p/论文",
+      dueDate: "2026-06-28",
+      tags: ["#p/论文"],
+      scheduledDate: undefined,
+      source: "vault" as const
+    };
+
+    renderCalendarView(
+      container as unknown as HTMLElement,
+      {
+        mode: "day",
+        focusDate: new Date("2026-06-28T12:00:00Z"),
+        weekStart: "monday",
+        visibleSourceIds: new Set(["vault"]),
+        includeCompletedTasks: false,
+        allowAppleReminderWriteback: false,
+        allowAppleCalendarWriteback: false,
+        allowTaskCreation: false,
+        sources: [],
+        t: (key) => key
+      },
+      [timedTask],
+      [],
+      {
+        onLayerToggle: jest.fn(),
+        onModeChange: jest.fn(),
+        onMove: jest.fn(),
+        onDateCreateTask: jest.fn(),
+        onTaskComplete: jest.fn(),
+        onTaskJump: jest.fn(),
+        onTaskSelect: jest.fn(),
+        onTaskUpdate,
+        onTaskReschedule: jest.fn(),
+        onToday: jest.fn()
+      }
+    );
+
+    const detailSurface = activeCalendarDetailSurface(container);
+    const title = collect(detailSurface as FakeElement).find((element) => element.classes.has("task-hub-detail-title-input"));
+    const tagInput = collect(detailSurface as FakeElement).find((element) => element.classes.has("task-hub-tag-editor-input"));
+    const logo = collect(detailSurface as FakeElement).find((element) => element.classes.has("task-hub-detail-source-logo"));
+    const editor = collect(detailSurface as FakeElement).find((element) => element.classes.has("task-hub-detail-editor"));
+
+    expect(title?.disabled).toBe(false);
+    expect(tagInput).toBeDefined();
+    expect(logo?.classes.has("is-obsidian")).toBe(true);
+
+    title!.value = "论文终稿";
+    title!.dispatch("input");
+    tagInput!.value = "#写作";
+    tagInput!.dispatch("keydown", { key: " " });
+    editor?.dispatch("mouseleave");
+
+    expect(onTaskUpdate).toHaveBeenCalledWith(timedTask, expect.objectContaining({
+      title: "论文终稿",
+      tags: ["#p/论文", "#写作"]
+    }));
+  });
+
   it("lets the day-view mini calendar switch the focused date directly", () => {
     const container = new FakeElement();
     const onFocusDateChange = jest.fn();
@@ -1037,7 +1106,8 @@ describe("renderCalendarView", () => {
       id: "task-completed-mini-month",
       text: "Done",
       completed: true,
-      rawLine: "- [x] Done"
+      completedDate: "2026-05-09",
+      rawLine: "- [x] Done ✅ 2026-05-09"
     };
     const sameDayEvent = {
       ...event,
@@ -1082,19 +1152,27 @@ describe("renderCalendarView", () => {
       element.classes.has("is-selected") &&
       element.text === "8"
     );
+    const completedDay = collect(container).find((element) =>
+      element.classes.has("task-hub-calendar-mini-month-day") &&
+      !element.classes.has("is-outside-month") &&
+      element.text === "9"
+    );
     const emptyDay = collect(container).find((element) =>
       element.classes.has("task-hub-calendar-mini-month-day") &&
       element.text === "13"
     );
     const ariaLabel = focusedDay?.attributes.get("aria-label") ?? "";
+    const completedDayAriaLabel = completedDay?.attributes.get("aria-label") ?? "";
 
     expect(focusedDay?.classes.has("has-task")).toBe(true);
     expect(emptyDay?.classes.has("has-task")).toBe(false);
-    expect(focusedDay?.classes.has("is-completion-1")).toBe(true);
+    expect(focusedDay?.classes.has("is-completion-1")).toBe(false);
+    expect(completedDay?.classes.has("is-completion-1")).toBe(true);
     expect(focusedDay?.attributes.has("title")).toBe(false);
     expect(ariaLabel).toContain("2 tasks");
-    expect(ariaLabel).toContain("1 completed");
+    expect(ariaLabel).toContain("0 completed");
     expect(ariaLabel).toContain("1 event");
+    expect(completedDayAriaLabel).toContain("1 completed");
     expect(mockSetTooltip).toHaveBeenCalledWith(
       focusedDay,
       expect.stringContaining("2 tasks"),
@@ -3185,6 +3263,7 @@ describe("renderCalendarView", () => {
     const detailSurface = activeCalendarDetailSurface(container);
     const headerTitle = collect(detailSurface as FakeElement).find((element) => element.classes.has("task-hub-calendar-detail-title"));
     const logo = collect(detailSurface as FakeElement).find((element) => element.classes.has("task-hub-calendar-detail-logo"));
+    expect(detailSurface?.classes.has("task-hub-calendar-day-event-detail")).toBe(true);
     expect(headerTitle?.classes.has("is-event")).toBe(true);
     expect(headerTitle?.classes.has("has-complete-checkbox")).toBe(false);
     expect(collect(headerTitle as FakeElement).find((element) => element.text === "calendarDetails")).toBeDefined();
@@ -3616,6 +3695,52 @@ describe("renderCalendarView", () => {
     expect(onTaskReschedule).toHaveBeenCalledWith(unscheduledTask, "2026-05-12");
   });
 
+  it("mounts the unscheduled side panel inside the right sidebar host in week view", () => {
+    const container = new FakeElement();
+    const unscheduledTask = { ...task, id: "task-unscheduled-week", dueDate: undefined, rawLine: "- [ ] Week", text: "Week" };
+
+    renderCalendarView(
+      container as unknown as HTMLElement,
+      {
+        mode: "week",
+        focusDate: new Date("2026-05-08T12:00:00Z"),
+        weekStart: "monday",
+        visibleSourceIds: new Set(["vault"]),
+        includeCompletedTasks: false,
+        allowAppleReminderWriteback: false,
+        allowTaskCreation: false,
+        calendarDayStartHour: 6,
+        calendarDayEndHour: 22,
+        unscheduledPanelOpen: true,
+        unscheduledTasks: [unscheduledTask],
+        sources: [],
+        t: (key) => key
+      },
+      [unscheduledTask],
+      [],
+      {
+        onLayerToggle: jest.fn(),
+        onModeChange: jest.fn(),
+        onMove: jest.fn(),
+        onDateCreateTask: jest.fn(),
+        onTaskComplete: jest.fn(),
+        onTaskJump: jest.fn(),
+        onTaskSelect: jest.fn(),
+        onTaskSelectionChange: jest.fn(),
+        onTaskReschedule: jest.fn(),
+        onToday: jest.fn()
+      }
+    );
+
+    const panel = collect(container).find((element) => element.classes.has("task-hub-unscheduled-panel"));
+    const host = collect(container).find((element) => element.classes.has("task-hub-calendar-with-sidebar"));
+    const stage = collect(container).find((element) => element.classes.has("task-hub-calendar-view-stage"));
+
+    expect(host?.classes.has("is-unscheduled-open")).toBe(true);
+    expect(panel?.parent).toBe(host);
+    expect(panel?.parent).not.toBe(stage);
+  });
+
   it("keeps the unscheduled side panel mounted while its close animation runs", () => {
     const container = new FakeElement();
     const unscheduledTask = { ...task, id: "task-unscheduled-closing", dueDate: undefined, rawLine: "- [ ] Unscheduled", text: "Unscheduled" };
@@ -3792,12 +3917,15 @@ describe("renderCalendarView", () => {
     );
 
     const row = collect(container).find((element) => element.classes.has("task-hub-unscheduled-task"));
+    const panel = collect(container).find((element) => element.classes.has("task-hub-calendar-day-unscheduled"));
+    const sidebar = collect(container).find((element) => element.classes.has("task-hub-calendar-day-sidebar"));
     const column = collect(container).find((element) => element.classes.has("task-hub-agenda-column"));
     if (column) column.boundingRect = { top: 0, height: 896 };
     const dataTransfer = new FakeDataTransfer();
     row?.dispatch("dragstart", { dataTransfer, clientY: 0 });
     column?.dispatch("drop", { dataTransfer, clientY: 168 });
 
+    expect(panel?.parent).toBe(sidebar);
     expect(onTaskReschedule).toHaveBeenCalledWith(unscheduledTask, {
       dateKey: "2026-05-08",
       startMinutes: 540

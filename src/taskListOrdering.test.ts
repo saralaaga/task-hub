@@ -17,6 +17,8 @@ describe("taskListOrdering", () => {
     tags: [],
     source: "vault",
     dueDate: "2026-05-08",
+    scheduledDate: overrides.scheduledDate,
+    startDate: overrides.startDate,
     ...overrides
   });
 
@@ -30,6 +32,14 @@ describe("taskListOrdering", () => {
         "2026-05-08": ["vault:th_b", "vault:th_a"]
       }).map((item) => item.text)
     ).toEqual(["Second", "First", "Third"]);
+  });
+
+  it("groups by planned date before falling back to legacy due dates", () => {
+    const first = task({ id: "a", stableId: "vault:th_a", startDate: "2026-05-08", dueDate: undefined });
+    const second = task({ id: "b", stableId: "vault:th_b", scheduledDate: "2026-05-08", dueDate: undefined });
+    const third = task({ id: "c", stableId: "vault:th_c", dueDate: "2026-05-09" });
+
+    expect(applyTaskListManualOrder([first, second, third], {}).map((item) => item.id)).toEqual(["a", "b", "c"]);
   });
 
   it("reorders a date group around the drop anchor", () => {

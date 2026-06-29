@@ -234,6 +234,7 @@ export type PersistedVaultTaskStableRecord = {
   indent?: number;
   dueDate?: string;
   scheduledDate?: string;
+  startDate?: string;
   tags: string[];
   completed: boolean;
 };

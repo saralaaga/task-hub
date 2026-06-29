@@ -20,6 +20,7 @@ import { completeTaskInContent, deleteTaskInContent, rescheduleTaskInContent, up
 import { TaskIndex } from "./indexing/taskIndex";
 import { openExternalTaskSource } from "./externalSources";
 import { appendTaskToContent, createTaskLine, normalizeTaskCreationFilePath } from "./taskCreation";
+import { taskPlannedDateKey } from "./taskDates";
 import { bindTaskHubTagInputSuggest, collectObsidianTags } from "./views/tagInputSuggest";
 import { normalizeReminderAlertMinutes, populateReminderAlertSelect, type ReminderAlertMinutes } from "./reminderAlerts";
 import { preferredTaskSendTarget, taskSendTargetOptions } from "./taskSendTargets";
@@ -562,7 +563,7 @@ export default class TaskHubPlugin extends Plugin {
         new Notice(result.message);
         return result;
       }
-      if (timedTarget.startMinutes === undefined && task.dueDate === timedTarget.dateKey && startMinutesFromTask(task) === undefined) {
+      if (timedTarget.startMinutes === undefined && taskPlannedDateKey(task) === timedTarget.dateKey && startMinutesFromTask(task) === undefined) {
         new Notice(t("taskDateAlreadySet"));
         return { status: "already_in_state" };
       }
@@ -606,7 +607,7 @@ export default class TaskHubPlugin extends Plugin {
         return result;
       }
 
-      if (timedTarget.startMinutes === undefined && task.dueDate === timedTarget.dateKey && startMinutesFromTask(task) === undefined) {
+      if (timedTarget.startMinutes === undefined && taskPlannedDateKey(task) === timedTarget.dateKey && startMinutesFromTask(task) === undefined) {
         new Notice(t("taskDateAlreadySet"));
         return { status: "already_in_state" };
       }
@@ -1124,7 +1125,7 @@ export default class TaskHubPlugin extends Plugin {
       const input = {
         title: currentTask.text,
         notes: this.appleReminderNotes(currentTask),
-        dueDate: currentTask.dueDate,
+        dueDate: taskPlannedDateKey(currentTask),
         startMinutes: startMinutesFromTask(currentTask),
         listId: target.listId ?? this.settings.localApple.remindersDefaultListId,
         tags: this.settings.localApple.remindersCreateTagsEnabled ? normalizeAppleReminderTags(currentTask.tags) : [],
@@ -1206,7 +1207,7 @@ export default class TaskHubPlugin extends Plugin {
           title: currentTask.text,
           projectId: target.projectId ?? this.settings.dida.defaultProjectId,
           notes: this.appleReminderNotes(currentTask),
-          date: currentTask.dueDate,
+          date: taskPlannedDateKey(currentTask),
           startMinutes: startMinutesFromTask(currentTask),
           tags: this.settings.dida.tasksCreateTagsEnabled ? currentTask.tags : [],
           reminderOffsetMinutes: this.settings.dida.defaultReminderOffsetMinutes,
@@ -1422,7 +1423,7 @@ export default class TaskHubPlugin extends Plugin {
           title: task.text,
           projectId,
           notes: task.contextPreview,
-          date: task.dueDate ?? null,
+          date: taskPlannedDateKey(task) ?? null,
           startMinutes: startMinutesFromTask(task),
           tags: this.settings.dida.tasksCreateTagsEnabled ? task.tags : [],
           reminderOffsetMinutes: this.settings.dida.defaultReminderOffsetMinutes,
@@ -1834,7 +1835,7 @@ export default class TaskHubPlugin extends Plugin {
     const replacementReminderId = await this.writeAppleReminderWithAccessRetry(() => createAppleReminder({
       title: task.text,
       notes: task.contextPreview,
-      dueDate: task.dueDate,
+      dueDate: taskPlannedDateKey(task),
       listId,
       startMinutes: startMinutesFromTask(task),
       alertMinutesBefore: startMinutesFromTask(task) !== undefined ? task.alertMinutesBefore ?? null : null,
@@ -1921,7 +1922,7 @@ export default class TaskHubPlugin extends Plugin {
     return {
       kind: "task",
       title: task.text,
-      date: task.dueDate ?? "",
+      date: taskPlannedDateKey(task) ?? "",
       startTime: startMinutes === undefined ? "" : timeInputValue(startMinutes),
       tags: [...task.tags],
       reminderListId: task.externalListId,

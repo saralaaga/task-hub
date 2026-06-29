@@ -348,6 +348,78 @@ describe("Task Hub session state", () => {
       unscheduledPanelOpen: true
     });
   });
+
+  it("persists updated layer visibility and calendar session state immediately", () => {
+    const settings = {
+      defaultView: "tasks",
+      taskViewFilters: fallbackFilters(),
+      lastSessionState: undefined
+    };
+    const saveData = jest.fn(async () => undefined);
+    const view = new TaskHubView({} as never, { settings, saveData } as never);
+    Object.assign(view as never, {
+      view: "calendar",
+      filters: {
+        status: "all",
+        tags: ["#ops"],
+        sourceQuery: "",
+        textQuery: "follow up"
+      },
+      calendarMode: "week",
+      calendarFocusDate: new Date("2026-06-17T09:30:00.000Z"),
+      visibleSourceIds: new Set(["vault", "apple-calendar:work"]),
+      unscheduledPanelOpen: true
+    });
+
+    (view as unknown as { persistSessionState: () => void }).persistSessionState();
+
+    expect(settings.lastSessionState).toEqual({
+      view: "calendar",
+      taskViewFilters: {
+        status: "all",
+        tags: ["#ops"],
+        conditions: undefined,
+        sourceQuery: "",
+        textQuery: "follow up"
+      },
+      calendarMode: "week",
+      calendarFocusDate: "2026-06-17T09:30:00.000Z",
+      visibleSourceIds: ["vault", "apple-calendar:work"],
+      unscheduledPanelOpen: true
+    });
+    expect(saveData).toHaveBeenCalledWith(settings);
+  });
+
+  it("seeds known calendar layers from current sources so hidden layers are not auto-restored on reopen", () => {
+    const settings = {
+      defaultView: "tasks",
+      taskViewFilters: fallbackFilters(),
+      lastSessionState: {
+        view: "calendar",
+        taskViewFilters: fallbackFilters(),
+        calendarMode: "week",
+        calendarFocusDate: "2026-06-17T09:30:00.000Z",
+        visibleSourceIds: ["vault"],
+        unscheduledPanelOpen: false
+      }
+    };
+    const plugin = {
+      settings,
+      getCalendarSources: jest.fn(() => [
+        { id: "apple-reminders" },
+        { id: "apple-calendar:work" }
+      ])
+    };
+
+    const view = new TaskHubView({} as never, plugin as never);
+
+    expect([...(view as unknown as { visibleSourceIds: Set<string> }).visibleSourceIds]).toEqual(["vault"]);
+    expect([...(view as unknown as { knownCalendarSourceIds: Set<string> }).knownCalendarSourceIds]).toEqual([
+      "vault",
+      "apple-reminders",
+      "apple-calendar:work"
+    ]);
+  });
 });
 
 describe("reconcileVisibleTaskSelection", () => {
