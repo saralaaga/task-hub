@@ -4,13 +4,20 @@ import * as path from "path";
 describe("Task Hub styles", () => {
   it("keeps dense calendar item lists scrollable without shrinking cards", () => {
     const styles = readFileSync(path.join(__dirname, "styles.css"), "utf8");
+    const dayAgendaRule = styles.match(/\.task-hub-agenda-day\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const monthRule = styles.match(/\.task-hub-calendar-day-items\s*>\s*\.task-hub-calendar-item\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const allDaySlotRule = styles.match(/\.task-hub-agenda-all-day-slot\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const dayAllDayStickyRule = styles.match(/\.task-hub-agenda-day\s+\.task-hub-agenda-all-day-slot\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const dayAllDayLabelStickyRule = styles.match(/\.task-hub-agenda-day\s+\.task-hub-agenda-all-day-label\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const fitAllDaySlotRule = styles.match(/\.task-hub-agenda\.is-scale-fit\s+\.task-hub-agenda-all-day-slot\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const allDayRule = styles.match(/\.task-hub-agenda-all-day-slot\s*>\s*\.task-hub-calendar-item\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
 
+    expect(dayAgendaRule).toContain("overflow: visible");
     expect(monthRule).toContain("flex: 0 0 auto");
     expect(allDaySlotRule).toContain("grid-auto-rows: max-content");
+    expect(dayAllDayStickyRule).toContain("position: sticky");
+    expect(dayAllDayStickyRule).toContain("top: var(--task-hub-agenda-header-sticky-offset)");
+    expect(dayAllDayLabelStickyRule).toContain("top: var(--task-hub-agenda-header-sticky-offset)");
     expect(fitAllDaySlotRule).toContain("max-height: 86px");
     expect(allDayRule).toContain("flex: 0 0 auto");
     expect(allDayRule).toContain("min-height: max-content");

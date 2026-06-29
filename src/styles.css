@@ -3443,6 +3443,7 @@ input.task-hub-tag-editor-input:focus {
   --task-hub-agenda-hours: 16;
   --task-hub-agenda-rows: 16;
   --task-hub-hour-height: 56px;
+  --task-hub-agenda-header-sticky-offset: 41px;
   border: 1px solid var(--background-modifier-border);
   border-radius: 8px;
   display: grid;
@@ -3452,6 +3453,7 @@ input.task-hub-tag-editor-input:focus {
 
 .task-hub-agenda-day {
   --task-hub-agenda-days: 1;
+  overflow: visible;
 }
 
 .task-hub-agenda-corner,
@@ -3498,6 +3500,11 @@ input.task-hub-tag-editor-input:focus {
   z-index: 3;
 }
 
+.task-hub-agenda-day .task-hub-agenda-all-day-label {
+  top: var(--task-hub-agenda-header-sticky-offset);
+  z-index: 4;
+}
+
 .task-hub-agenda-all-day-slot {
   border-bottom: 1px solid var(--background-modifier-border);
   display: grid;
@@ -3510,6 +3517,13 @@ input.task-hub-tag-editor-input:focus {
   padding: 6px;
   position: relative;
   scrollbar-gutter: stable;
+}
+
+.task-hub-agenda-day .task-hub-agenda-all-day-slot {
+  background: color-mix(in srgb, var(--background-secondary) 94%, var(--background-primary));
+  position: sticky;
+  top: var(--task-hub-agenda-header-sticky-offset);
+  z-index: 3;
 }
 
 .task-hub-agenda.is-scale-fit .task-hub-agenda-all-day-slot {
