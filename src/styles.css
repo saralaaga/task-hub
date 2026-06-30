@@ -1808,6 +1808,21 @@ button.task-hub-task-note-pin.is-active:focus-visible {
   margin-block: 0 2px;
 }
 
+.task-hub-task-note-body ul.contains-task-list,
+.task-hub-task-note-body ol.contains-task-list {
+  padding-inline-start: 2.3em;
+}
+
+.task-hub-task-note-body li.task-list-item {
+  padding-inline-start: 0;
+}
+
+.task-hub-task-note-body .task-list-item-checkbox {
+  height: 18px;
+  margin-block: 0;
+  width: 18px;
+}
+
 .task-hub-task-note-body > :last-child {
   margin-bottom: 0;
 }
