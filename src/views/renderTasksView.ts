@@ -1,4 +1,4 @@
-import { Menu, setIcon } from "obsidian";
+import { Menu, Notice, setIcon } from "obsidian";
 import { toLocalDateKey, type DateBucket } from "../calendar/dateBuckets";
 import type { CalendarDropTarget } from "../calendar/calendarDropTarget";
 import { getTaskBucket, type TaskFilterState } from "../filtering/filters";
@@ -10,9 +10,10 @@ import { taskNoteOrderItemKey } from "../taskNoteOrdering";
 import { parseTaskSendTarget, preferredTaskSendTarget, taskSendTargetOptions } from "../taskSendTargets";
 import { applyTaskListManualOrder, taskListDateKey, type TaskListDropPosition } from "../taskListOrdering";
 import { taskPlannedDateKey, taskScheduledStartMinutes } from "../taskDates";
-import type { AppleReminderList, CalendarItemEditDraft, DidaProject, TaskItem, TaskListManualOrder, TaskSendTarget } from "../types";
+import type { AppleReminderList, CalendarItemEditDraft, DidaProject, TaskHubSmartList, TaskItem, TaskListManualOrder, TaskSendTarget } from "../types";
 import { addSourceIndicatorMenuItem, deleteLabelForTaskBulkAction, sourceIndicatorLabelForTask } from "./contextMenuLabels";
 import { renderTaskNoteBody, taskNotePreviewBody, taskNotePreviewTitle, type TaskNoteMarkdownRenderer } from "./renderTaskNoteBody";
+import { renderTaskFilterPanel, type SourceFilterOption, type TaskFilterControlHandlers } from "./renderShell";
 import { createRecurrenceSelect, recurrenceValueFromSelect } from "./recurrenceControls";
 import { resolveTaskBulkActions, type TaskBulkActionId } from "./taskSelection";
 import { renderSourceLogo, sourceLogoKindForTask } from "./sourceLogos";
@@ -78,14 +79,38 @@ export type TaskRenderOptions = {
   expandingTaskIds?: ReadonlySet<string>;
   onToggleTaskExpanded?: (task: TaskItem) => void;
   taskListManualOrder?: TaskListManualOrder;
+  sourceFilters?: SourceFilterOption[];
+  filterHandlers?: TaskFilterControlHandlers;
+  smartLists?: TaskHubSmartList[];
+  activeSmartListId?: string;
+  onSaveSmartList?: (name: string) => void;
+  onApplySmartList?: (smartList: TaskHubSmartList) => void;
+  onAddTasksToSmartList?: (smartList: TaskHubSmartList, tasks: TaskItem[]) => void;
+  onRemoveTasksFromActiveSmartList?: (tasks: TaskItem[]) => void;
+  onDeleteSmartList?: (smartList: TaskHubSmartList) => void;
+  onRenameSmartList?: (smartList: TaskHubSmartList, name: string) => void;
+  onSmartListColorChange?: (smartList: TaskHubSmartList, color: string | undefined) => void;
+  smartListCounts?: ReadonlyMap<string, number>;
 };
 
 const BUCKETS = ["overdue", "today", "tomorrow", "thisWeek", "future", "noDate", "otherCompleted"] as const;
 const TASK_LIST_DRAG_MIME = "application/x-task-hub-task-list-id";
+const TASK_LIST_DRAG_IDS_MIME = "application/x-task-hub-task-list-ids";
 const TASK_NOTE_DRAG_MIME = "application/x-task-hub-task-note-id";
 const TASK_LIST_RESCHEDULE_BUCKETS = ["overdue", "today", "tomorrow", "thisWeek"] as const;
 const TASK_PROGRESS_ANIMATION_MS = 240;
+const SMART_LIST_COLORS: Array<{ key: "smartListColorDefault" | "smartListColorRed" | "smartListColorOrange" | "smartListColorGreen" | "smartListColorCyan" | "smartListColorBlue" | "smartListColorPurple"; value?: string }> = [
+  { key: "smartListColorDefault", value: undefined },
+  { key: "smartListColorRed", value: "#d65d5d" },
+  { key: "smartListColorOrange", value: "#d97757" },
+  { key: "smartListColorGreen", value: "#8aa05f" },
+  { key: "smartListColorCyan", value: "#5f9f92" },
+  { key: "smartListColorBlue", value: "#6f94b8" },
+  { key: "smartListColorPurple", value: "#8f83b5" }
+];
 let activeDraggedTaskListItemId: string | undefined;
+let activeDraggedTaskListItemIds: string[] = [];
+let activeDraggedTaskListRows = new Set<HTMLElement>();
 let activeTaskListTasksById = new Map<string, TaskItem>();
 let activeDraggableTaskListItemIds = new Set<string>();
 const previousTaskProgressByContainer = new WeakMap<HTMLElement, Map<string, number>>();
@@ -108,7 +133,8 @@ export function renderTasksView(
     Boolean(filters.dateBucket) ||
     filters.tags.length > 0 ||
     Boolean(filters.sourceQuery) ||
-    Boolean(filters.textQuery);
+    Boolean(filters.textQuery) ||
+    Boolean(options.activeSmartListId);
 
   if (tasks.length === 0 && !hasActiveFilter) {
     previousTaskProgressByContainer.set(container, new Map());
@@ -124,7 +150,11 @@ export function renderTasksView(
   const progressByTaskId = options.showSubtaskProgressBars === false ? new Map<string, TaskProgressInfo>() : allProgressByTaskId;
   let selectedTask = sortedTasks.find((task) => task.id === options.selectedTaskId) ?? sortedTasks.find((task) => !task.completed) ?? sortedTasks[0];
   const selectedTaskIds = normalizedSelectedTaskIds(options, selectedTask);
-  const workbench = container.createDiv({ cls: "task-hub-task-workbench" });
+  const hasSidebar = Boolean(options.filterHandlers || options.smartLists?.length || options.onSaveSmartList);
+  const workbench = container.createDiv({ cls: `task-hub-task-workbench ${hasSidebar ? "has-filter-sidebar" : ""}` });
+  if (hasSidebar) {
+    renderTaskSidebar(workbench, filters, options, t);
+  }
   const list = workbench.createDiv({ cls: "task-hub-task-list-pane" });
   const draggableTaskIds = new Set(sortedTasks.filter((task) => canDragTaskRowInList(task, options, handlers)).map((task) => task.id));
   activeTaskListTasksById = new Map(sortedTasks.map((task) => [task.id, task]));
@@ -228,6 +258,317 @@ export function renderTasksView(
   );
 }
 
+function renderTaskSidebar(
+  container: HTMLElement,
+  filters: TaskFilterState,
+  options: TaskRenderOptions,
+  t: Translator
+): void {
+  const sidebar = container.createDiv({ cls: "task-hub-task-filter-sidebar" });
+  if (options.filterHandlers) {
+    const controls = sidebar.createDiv({ cls: "task-hub-task-filter-card" });
+    renderTaskFilterPanel(
+      controls,
+      {
+        filters,
+        sourceFilters: options.sourceFilters,
+        t
+      },
+      options.filterHandlers,
+      { bindTagInputSuggest: options.bindTagInputSuggest }
+    );
+  }
+
+  const smartLists = sidebar.createDiv({ cls: "task-hub-smart-list-card" });
+  const header = smartLists.createDiv({ cls: "task-hub-smart-list-header" });
+  header.createSpan({ cls: "task-hub-smart-list-title", text: t("smartLists") });
+  const actions = header.createDiv({ cls: "task-hub-smart-list-header-actions" });
+  if (options.activeSmartListId && options.onRemoveTasksFromActiveSmartList) {
+    const remove = actions.createSpan({ cls: "task-hub-smart-list-remove-drop" });
+    remove.setAttr("role", "button");
+    remove.setAttr("tabindex", "0");
+    remove.setAttr("aria-label", t("removeFromSmartListHint"));
+    remove.setAttr("title", t("removeFromSmartListHint"));
+    setIcon(remove, "trash-2");
+    const showHint = () => new Notice(t("removeFromSmartListHint"));
+    remove.addEventListener("click", showHint);
+    remove.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      showHint();
+    });
+    bindActiveSmartListRemoveDropTarget(remove, options, t);
+  }
+  if (options.onSaveSmartList) {
+    const save = actions.createEl("button", { cls: "task-hub-icon-button task-hub-smart-list-save" });
+    save.setAttr("aria-label", t("saveSmartList"));
+    save.setAttr("title", t("saveSmartList"));
+    setIcon(save, "plus");
+    save.addEventListener("click", () => {
+      renderSmartListCreateForm(smartLists, options.onSaveSmartList, t);
+    });
+  }
+
+  const list = smartLists.createDiv({ cls: "task-hub-smart-list-items" });
+  const items = options.smartLists ?? [];
+  if (items.length === 0) {
+    list.createDiv({ cls: "task-hub-smart-list-empty", text: t("noSmartLists") });
+    return;
+  }
+
+  for (const smartList of items) {
+    const item = list.createDiv({
+      cls: `task-hub-smart-list-item ${options.activeSmartListId === smartList.id ? "is-active" : ""}`
+    });
+    setCssProps(item, { "--task-hub-smart-list-color": smartList.color ?? "var(--interactive-accent)" });
+    renderSmartListItemContent(item, smartList, options);
+    bindSmartListDropTarget(item, smartList, options, t);
+    item.addEventListener("contextmenu", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      renderSmartListContextMenu(item, event, smartList, options, t);
+    });
+  }
+}
+
+function renderSmartListItemContent(item: HTMLElement, smartList: TaskHubSmartList, options: TaskRenderOptions): void {
+  item.empty();
+  item.removeClass("is-editing");
+  const apply = item.createEl("button", { cls: "task-hub-smart-list-apply" });
+  apply.createSpan({ cls: "task-hub-smart-list-item-name", text: smartList.name });
+  const count = options.smartListCounts?.get(smartList.id) ?? smartList.taskStableIds.length + smartList.taskIds.length;
+  if (count > 0) apply.createSpan({ cls: "task-hub-smart-list-item-count", text: String(count) });
+  apply.addEventListener("click", () => options.onApplySmartList?.(smartList));
+}
+
+function bindSmartListDropTarget(
+  item: HTMLElement,
+  smartList: TaskHubSmartList,
+  options: TaskRenderOptions,
+  t: Translator
+): void {
+  if (!options.onAddTasksToSmartList) return;
+  item.addEventListener("dragover", (event) => {
+    const tasks = activeTaskListTasksFromDragEvent(event);
+    if (tasks.length === 0) return;
+    event.preventDefault();
+    if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
+    item.addClass("is-drop-target");
+  });
+  item.addEventListener("dragleave", () => {
+    item.removeClass("is-drop-target");
+  });
+  item.addEventListener("drop", (event) => {
+    const tasks = activeTaskListTasksFromDragEvent(event);
+    clearActiveTaskListDrag();
+    item.removeClass("is-drop-target");
+    if (tasks.length === 0) return;
+    event.preventDefault();
+    options.onAddTasksToSmartList?.(smartList, tasks);
+    showSmartListDragNotice(t, "smartListDragInNotice", smartList.name, tasks.length);
+  });
+}
+
+function bindActiveSmartListRemoveDropTarget(button: HTMLElement, options: TaskRenderOptions, t: Translator): void {
+  button.addEventListener("dragover", (event) => {
+    const tasks = activeTaskListTasksFromDragEvent(event);
+    if (tasks.length === 0) return;
+    event.preventDefault();
+    if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+    button.addClass("is-drop-target");
+  });
+  button.addEventListener("dragleave", () => {
+    button.removeClass("is-drop-target");
+  });
+  button.addEventListener("drop", (event) => {
+    const tasks = activeTaskListTasksFromDragEvent(event);
+    clearActiveTaskListDrag();
+    button.removeClass("is-drop-target");
+    if (tasks.length === 0) return;
+    event.preventDefault();
+    options.onRemoveTasksFromActiveSmartList?.(tasks);
+    const name = activeSmartListName(options);
+    if (name) showSmartListDragNotice(t, "smartListDragOutNotice", name, tasks.length);
+  });
+}
+
+function renderSmartListContextMenu(anchor: HTMLElement, event: MouseEvent, smartList: TaskHubSmartList, options: TaskRenderOptions, t: Translator): void {
+  const root = anchor.doc.body;
+  root.querySelector(".task-hub-smart-list-context-menu")?.remove();
+  const menu = root.createDiv({ cls: "menu task-hub-smart-list-context-menu" });
+  setCssStyles(menu, {
+    left: `${event.clientX}px`,
+    top: `${event.clientY}px`
+  });
+  menu.addEventListener("click", (clickEvent) => clickEvent.stopPropagation());
+  menu.addEventListener("mouseleave", () => menu.remove());
+
+  if (options.onSmartListColorChange) {
+    const group = menu.createDiv({ cls: "task-hub-smart-list-context-group has-submenu" });
+    const trigger = group.createDiv({ cls: "menu-item task-hub-smart-list-context-action" });
+    trigger.setAttr("role", "menuitem");
+    trigger.setAttr("tabindex", "0");
+    trigger.createSpan({ cls: "menu-item-title task-hub-smart-list-context-label", text: t("smartListColor") });
+    trigger.createSpan({ cls: "menu-item-icon task-hub-smart-list-context-arrow", text: ">" });
+    const submenu = group.createDiv({ cls: "menu task-hub-smart-list-color-submenu" });
+    positionSmartListColorSubmenu(group, submenu);
+    group.addEventListener("mouseenter", () => positionSmartListColorSubmenu(group, submenu));
+    group.addEventListener("focusin", () => positionSmartListColorSubmenu(group, submenu));
+    for (const color of SMART_LIST_COLORS) {
+      const isSelected = smartList.color === color.value || (!smartList.color && !color.value);
+      const colorAction = submenu.createDiv({
+        cls: `menu-item task-hub-smart-list-color-action ${isSelected ? "is-selected" : ""}`
+      });
+      colorAction.setAttr("role", "menuitem");
+      colorAction.setAttr("tabindex", "0");
+      const icon = colorAction.createSpan({ cls: "menu-item-icon task-hub-smart-list-color-icon" });
+      const dot = icon.createSpan({ cls: "task-hub-smart-list-menu-color-dot" });
+      setCssProps(dot, { "--task-hub-smart-list-menu-color": color.value ?? "var(--interactive-accent)" });
+      colorAction.createSpan({ cls: "menu-item-title task-hub-smart-list-color-label", text: t(color.key) });
+      if (isSelected) {
+        const check = colorAction.createSpan({ cls: "menu-item-icon task-hub-smart-list-color-check" });
+        setIcon(check, "check");
+        colorAction.setAttr("aria-current", "true");
+      }
+      colorAction.addEventListener("click", (clickEvent) => {
+        clickEvent.preventDefault();
+        clickEvent.stopPropagation();
+        options.onSmartListColorChange?.(smartList, color.value);
+        menu.remove();
+      });
+      colorAction.addEventListener("keydown", (keyEvent) => {
+        if (keyEvent.key !== "Enter" && keyEvent.key !== " ") return;
+        keyEvent.preventDefault();
+        options.onSmartListColorChange?.(smartList, color.value);
+        menu.remove();
+      });
+    }
+  }
+
+  if (options.onRenameSmartList) {
+    const renameAction = menu.createDiv({ cls: "menu-item task-hub-smart-list-context-action" });
+    renameAction.setAttr("role", "menuitem");
+    renameAction.setAttr("tabindex", "0");
+    renameAction.createSpan({ cls: "menu-item-title task-hub-smart-list-context-label", text: t("renameSmartList") });
+    const rename = () => {
+      menu.remove();
+      renderSmartListRenameInput(anchor, smartList, options, t);
+    };
+    renameAction.addEventListener("click", (clickEvent) => {
+      clickEvent.preventDefault();
+      clickEvent.stopPropagation();
+      rename();
+    });
+    renameAction.addEventListener("keydown", (keyEvent) => {
+      if (keyEvent.key !== "Enter" && keyEvent.key !== " ") return;
+      keyEvent.preventDefault();
+      rename();
+    });
+  }
+
+  if ((options.onSmartListColorChange || options.onRenameSmartList) && options.onDeleteSmartList) {
+    menu.createDiv({ cls: "menu-separator task-hub-smart-list-context-separator" });
+  }
+
+  if (options.onDeleteSmartList) {
+    const deleteAction = menu.createDiv({ cls: "menu-item task-hub-smart-list-context-action" });
+    deleteAction.setAttr("role", "menuitem");
+    deleteAction.setAttr("tabindex", "0");
+    deleteAction.createSpan({ cls: "menu-item-title task-hub-smart-list-context-label", text: t("deleteSmartList") });
+    deleteAction.addEventListener("click", (clickEvent) => {
+      clickEvent.preventDefault();
+      clickEvent.stopPropagation();
+      options.onDeleteSmartList?.(smartList);
+      menu.remove();
+    });
+    deleteAction.addEventListener("keydown", (keyEvent) => {
+      if (keyEvent.key !== "Enter" && keyEvent.key !== " ") return;
+      keyEvent.preventDefault();
+      options.onDeleteSmartList?.(smartList);
+      menu.remove();
+    });
+  }
+}
+
+function renderSmartListRenameInput(item: HTMLElement, smartList: TaskHubSmartList, options: TaskRenderOptions, t: Translator): void {
+  item.empty();
+  item.addClass("is-editing");
+  const input = item.createEl("input", {
+    cls: "task-hub-smart-list-rename-input",
+    attr: { "aria-label": t("renameSmartList") },
+    type: "text",
+    value: smartList.name
+  }) as HTMLInputElement;
+  let committed = false;
+  const restore = () => renderSmartListItemContent(item, smartList, options);
+  const commit = () => {
+    if (committed) return;
+    committed = true;
+    const name = input.value.trim();
+    if (!name || name === smartList.name) {
+      restore();
+      return;
+    }
+    options.onRenameSmartList?.(smartList, name);
+  };
+  input.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      committed = true;
+      restore();
+      return;
+    }
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    commit();
+  });
+  input.addEventListener("blur", commit);
+  input.focus();
+  input.selectionStart = 0;
+  input.selectionEnd = smartList.name.length;
+}
+
+function positionSmartListColorSubmenu(group: HTMLElement, submenu: HTMLElement): void {
+  const rect = group.getBoundingClientRect();
+  setCssStyles(submenu, {
+    left: `${rect.right + 4}px`,
+    top: `${rect.top - 5}px`
+  });
+}
+
+function renderSmartListCreateForm(container: HTMLElement, onSave: ((name: string) => void) | undefined, t: Translator): void {
+  if (!onSave) return;
+  container.querySelector(".task-hub-smart-list-create-form")?.remove();
+  const form = container.createDiv({ cls: "task-hub-smart-list-create-form" });
+  const input = form.createEl("input", {
+    cls: "task-hub-smart-list-name-input",
+    attr: { placeholder: t("smartListNamePrompt") },
+    type: "text"
+  });
+  const actions = form.createDiv({ cls: "task-hub-smart-list-create-actions" });
+  const cancel = actions.createEl("button", { cls: "task-hub-smart-list-create-cancel", text: t("cancel") });
+  const save = actions.createEl("button", { cls: "task-hub-smart-list-create-save mod-cta", text: t("save") });
+  save.disabled = true;
+  const updateSaveState = () => {
+    save.disabled = input.value.trim().length === 0;
+  };
+  const submit = () => {
+    const name = input.value.trim();
+    if (!name) return;
+    onSave(name);
+    form.remove();
+  };
+  input.addEventListener("input", updateSaveState);
+  input.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    submit();
+  });
+  cancel.addEventListener("click", () => form.remove());
+  save.addEventListener("click", submit);
+  input.focus();
+}
+
 function renderTaskTree(
   container: HTMLElement,
   task: TaskItem,
@@ -261,7 +602,9 @@ function renderTaskTree(
     contextTasks,
     children.length,
     isExpanded,
-    depth
+    depth,
+    rowsByTaskId,
+    selectedTaskIds
   );
   rowsByTaskId.set(task.id, row);
   if (subtaskToggle) {
@@ -408,7 +751,9 @@ function renderTaskRow(
   contextTasks: (task: TaskItem) => TaskItem[],
   childCount = 0,
   expanded = false,
-  depth = 0
+  depth = 0,
+  rowsByTaskId?: Map<string, HTMLElement>,
+  selectedTaskIds?: Set<string>
 ): { row: HTMLElement; subtaskToggle?: HTMLButtonElement } {
   const taskNoteCount = options.taskNotesEnabled && options.getTaskNoteCount ? options.getTaskNoteCount(task) : 0;
   const classes = [
@@ -425,7 +770,7 @@ function renderTaskRow(
   row.setAttr("data-task-id", task.id);
   const color = taskDisplayColor(task, options);
   if (color) setCssProps(row, { "--task-hub-source-color": color });
-  bindTaskRowDrag(row, task, handlers, options);
+  bindTaskRowDrag(row, task, handlers, options, selectedTaskIds, rowsByTaskId, t);
   bindTaskRowReorderDropTarget(row, task, handlers, options);
   const checkbox = row.createEl("input", { type: "checkbox" });
   checkbox.checked = task.completed;
@@ -559,25 +904,32 @@ function bindTaskRowDrag(
   row: HTMLElement,
   task: TaskItem,
   handlers: TaskRowHandlers,
-  options: TaskRenderOptions
+  options: TaskRenderOptions,
+  selectedTaskIds: ReadonlySet<string> | undefined,
+  rowsByTaskId: ReadonlyMap<string, HTMLElement> | undefined,
+  t: Translator
 ): void {
   if (!canDragTaskRowInList(task, options, handlers)) return;
   row.draggable = true;
   row.setAttr("draggable", "true");
   row.setAttr("aria-grabbed", "false");
   row.addEventListener("dragstart", (event) => {
+    const draggedIds = taskListDragIdsForTask(task, selectedTaskIds);
     activeDraggedTaskListItemId = task.id;
-    row.addClass("is-dragging");
-    row.setAttr("aria-grabbed", "true");
+    activeDraggedTaskListItemIds = draggedIds;
+    markActiveTaskListDragRows(draggedIds, task.id, rowsByTaskId);
+    const smartListName = activeSmartListName(options);
+    if (smartListName) {
+      new Notice(formatSmartListDragNotice(t("smartListDragStartNotice"), smartListName, draggedIds.length));
+    }
     if (event.dataTransfer) {
-      event.dataTransfer.effectAllowed = "move";
+      event.dataTransfer.effectAllowed = "copyMove";
       event.dataTransfer.setData(TASK_LIST_DRAG_MIME, task.id);
+      event.dataTransfer.setData(TASK_LIST_DRAG_IDS_MIME, JSON.stringify(draggedIds));
     }
   });
   row.addEventListener("dragend", () => {
-    if (activeDraggedTaskListItemId === task.id) activeDraggedTaskListItemId = undefined;
-    row.removeClass("is-dragging");
-    row.setAttr("aria-grabbed", "false");
+    if (activeDraggedTaskListItemId === task.id) clearActiveTaskListDrag();
   });
 }
 
@@ -604,7 +956,7 @@ function bindTaskRowReorderDropTarget(
     const position = taskRowDropPosition(row, event);
     clearTaskRowDropClasses(row);
     if (!canReorderTaskRow(draggedTask, task, handlers, options)) return;
-    activeDraggedTaskListItemId = undefined;
+    clearActiveTaskListDrag();
     event.preventDefault();
     handlers.onTaskReorder?.(draggedTask, task, position);
   });
@@ -622,9 +974,8 @@ function bindTaskListBucketDropTarget(
   if (!targetDate || !handlers.onTaskReschedule) return;
 
   section.addEventListener("dragover", (event) => {
-    const task = taskListTaskFromDragEvent(event, tasks, draggableTaskIds);
-    if (!task) return;
-    if (getTaskBucket(task, now) === bucket) return;
+    const draggedTasks = taskListTasksFromDragEvent(event, tasks, draggableTaskIds);
+    if (tasksDroppableOnBucket(draggedTasks, bucket, now).length === 0) return;
     event.preventDefault();
     if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
     section.addClass("is-drop-target");
@@ -633,30 +984,120 @@ function bindTaskListBucketDropTarget(
     section.removeClass("is-drop-target");
   });
   section.addEventListener("drop", (event) => {
-    const task = taskListTaskFromDragEvent(event, tasks, draggableTaskIds);
-    activeDraggedTaskListItemId = undefined;
-    if (!task) return;
+    const draggedTasks = taskListTasksFromDragEvent(event, tasks, draggableTaskIds);
+    clearActiveTaskListDrag();
     section.removeClass("is-drop-target");
-    if (getTaskBucket(task, now) === bucket) return;
+    const droppableTasks = tasksDroppableOnBucket(draggedTasks, bucket, now);
+    if (droppableTasks.length === 0) return;
     event.preventDefault();
-    handlers.onTaskReschedule?.(task, taskListDropTarget(task, targetDate));
+    for (const task of droppableTasks) {
+      handlers.onTaskReschedule?.(task, taskListDropTarget(task, targetDate));
+    }
   });
 }
 
-function taskListTaskFromDragEvent(
+function taskListTasksFromDragEvent(
   event: DragEvent,
   tasks: TaskItem[],
   draggableTaskIds: ReadonlySet<string>
-): TaskItem | undefined {
-  const draggedId = activeDraggedTaskListItemId ?? event.dataTransfer?.getData(TASK_LIST_DRAG_MIME);
-  if (!draggedId || !draggableTaskIds.has(draggedId)) return undefined;
-  return tasks.find((task) => task.id === draggedId);
+): TaskItem[] {
+  const draggedIds = taskListDragIdsFromEvent(event);
+  if (draggedIds.length === 0) return [];
+  const tasksById = new Map(tasks.map((task) => [task.id, task]));
+  return draggedIds
+    .filter((taskId) => draggableTaskIds.has(taskId))
+    .map((taskId) => tasksById.get(taskId))
+    .filter((task): task is TaskItem => Boolean(task));
 }
 
 function activeTaskListTaskFromDragEvent(event: DragEvent): TaskItem | undefined {
-  const draggedId = activeDraggedTaskListItemId ?? event.dataTransfer?.getData(TASK_LIST_DRAG_MIME);
+  const draggedId = taskListDragIdsFromEvent(event)[0];
   if (!draggedId || !activeDraggableTaskListItemIds.has(draggedId)) return undefined;
   return activeTaskListTasksById.get(draggedId);
+}
+
+function activeTaskListTasksFromDragEvent(event: DragEvent): TaskItem[] {
+  return taskListDragIdsFromEvent(event)
+    .filter((taskId) => activeDraggableTaskListItemIds.has(taskId))
+    .map((taskId) => activeTaskListTasksById.get(taskId))
+    .filter((task): task is TaskItem => Boolean(task));
+}
+
+function taskListDragIdsForTask(task: TaskItem, selectedTaskIds: ReadonlySet<string> | undefined): string[] {
+  if (!selectedTaskIds?.has(task.id)) return [task.id];
+  const ids = [...selectedTaskIds].filter((taskId) => activeDraggableTaskListItemIds.has(taskId));
+  return ids.length > 0 ? ids : [task.id];
+}
+
+function taskListDragIdsFromEvent(event: DragEvent): string[] {
+  if (activeDraggedTaskListItemIds.length > 0) return activeDraggedTaskListItemIds;
+  const encodedIds = event.dataTransfer?.getData(TASK_LIST_DRAG_IDS_MIME);
+  if (encodedIds) {
+    try {
+      const parsed = JSON.parse(encodedIds) as unknown;
+      if (Array.isArray(parsed)) {
+        return parsed.filter((taskId): taskId is string => typeof taskId === "string" && taskId.length > 0);
+      }
+    } catch {
+      // Fall through to the single-task payload for older drag data.
+    }
+  }
+  const draggedId = activeDraggedTaskListItemId ?? event.dataTransfer?.getData(TASK_LIST_DRAG_MIME);
+  return draggedId ? [draggedId] : [];
+}
+
+function clearActiveTaskListDrag(): void {
+  clearActiveTaskListDragRows();
+  activeDraggedTaskListItemId = undefined;
+  activeDraggedTaskListItemIds = [];
+}
+
+function clearActiveTaskListDragRows(): void {
+  for (const row of activeDraggedTaskListRows) {
+    row.removeClass("is-dragging");
+    row.removeClass("is-bulk-dragging");
+    row.setAttr("aria-grabbed", "false");
+  }
+  activeDraggedTaskListRows.clear();
+}
+
+function markActiveTaskListDragRows(
+  taskIds: string[],
+  primaryTaskId: string,
+  rowsByTaskId: ReadonlyMap<string, HTMLElement> | undefined
+): void {
+  clearActiveTaskListDragRows();
+  for (const taskId of taskIds) {
+    const row = rowsByTaskId?.get(taskId);
+    if (!row) continue;
+    row.addClass(taskId === primaryTaskId ? "is-dragging" : "is-bulk-dragging");
+    row.setAttr("aria-grabbed", "true");
+    activeDraggedTaskListRows.add(row);
+  }
+}
+
+function activeSmartListName(options: TaskRenderOptions): string | undefined {
+  if (!options.activeSmartListId) return undefined;
+  return options.smartLists?.find((smartList) => smartList.id === options.activeSmartListId)?.name;
+}
+
+function showSmartListDragNotice(
+  t: Translator,
+  key: "smartListDragInNotice" | "smartListDragOutNotice",
+  name: string,
+  count: number
+): void {
+  new Notice(formatSmartListDragNotice(t(key), name, count));
+}
+
+function formatSmartListDragNotice(template: string, name: string, count: number): string {
+  return template
+    .replace(/\{name\}/g, name)
+    .replace(/\{count\}/g, String(count));
+}
+
+function tasksDroppableOnBucket(tasks: TaskItem[], bucket: DateBucket, now: Date): TaskItem[] {
+  return tasks.filter((task) => getTaskBucket(task, now) !== bucket);
 }
 
 function canDragTaskRowInList(
@@ -680,6 +1121,7 @@ function canReorderTaskRow(
   options: TaskRenderOptions
 ): draggedTask is TaskItem {
   if (!draggedTask || !handlers.onTaskReorder) return false;
+  if (activeDraggedTaskListItemIds.length > 1) return false;
   if (!canDragTaskRowInList(draggedTask, options, handlers)) return false;
   if (draggedTask.id === targetTask.id) return false;
   const draggedDateKey = taskListDateKey(draggedTask);

@@ -276,6 +276,11 @@
   z-index: 31;
 }
 
+.task-hub-action-strip {
+  flex: 0 0 auto;
+  max-width: none;
+}
+
 .task-hub-condition-menu {
   flex: 0 0 auto;
   position: relative;
@@ -484,7 +489,15 @@
 }
 
 .task-hub-create-task-button-icon {
+  align-items: center;
+  display: inline-flex;
   flex: 0 0 auto;
+  justify-content: center;
+  line-height: 1;
+}
+
+.task-hub-create-task-button-icon svg {
+  display: block;
 }
 
 .task-hub-unscheduled-toggle {
@@ -575,11 +588,340 @@
 }
 
 .task-hub-task-workbench {
+  --task-hub-task-list-first-row-offset: calc(var(--font-ui-large) * 1.25 + 14px);
   align-items: start;
   display: grid;
   gap: 16px;
   grid-template-columns: minmax(0, 1fr) auto;
   min-width: 0;
+}
+
+.task-hub-task-workbench.has-filter-sidebar {
+  grid-template-columns: minmax(180px, 220px) minmax(0, 1fr) auto;
+}
+
+.task-hub-task-filter-sidebar {
+  align-content: start;
+  display: grid;
+  gap: 10px;
+  margin-top: var(--task-hub-task-list-first-row-offset);
+  max-height: calc(100vh - 190px - var(--task-hub-task-list-first-row-offset));
+  min-width: 0;
+  overflow: visible;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+}
+
+.task-hub-task-filter-card {
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px;
+}
+
+.task-hub-smart-list-card {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.task-hub-task-filter-card {
+  position: relative;
+  z-index: 42;
+}
+
+.task-hub-task-filter-row,
+.task-hub-task-search-row {
+  min-width: 0;
+}
+
+.task-hub-task-filter-row .task-hub-condition-menu,
+.task-hub-task-filter-row .task-hub-condition-trigger,
+.task-hub-task-search-row .task-hub-search-group {
+  width: 100%;
+}
+
+.task-hub-task-filter-row .task-hub-condition-trigger {
+  justify-content: center;
+}
+
+.task-hub-task-search-row .task-hub-search-group {
+  flex: none;
+  min-width: 0;
+}
+
+.task-hub-task-search-row .task-hub-search-button {
+  padding-inline: 10px;
+}
+
+.task-hub-smart-list-header {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.task-hub-smart-list-title {
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.task-hub-smart-list-header-actions {
+  align-items: center;
+  display: flex;
+  flex: 0 0 auto;
+  gap: 6px;
+}
+
+.task-hub-smart-list-save {
+  height: 26px;
+  min-height: 0;
+  width: 26px;
+}
+
+.task-hub-smart-list-remove-drop {
+  align-items: center;
+  color: var(--text-muted);
+  cursor: var(--cursor);
+  display: inline-flex;
+  height: 26px;
+  justify-content: center;
+  line-height: 1;
+  width: 26px;
+}
+
+.task-hub-smart-list-remove-drop:hover,
+.task-hub-smart-list-remove-drop:focus-visible {
+  color: var(--text-normal);
+  outline: none;
+}
+
+.task-hub-smart-list-remove-drop.is-drop-target {
+  color: var(--text-error);
+  outline: 1px solid var(--text-error);
+  outline-offset: 2px;
+}
+
+.task-hub-smart-list-create-form {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.task-hub-smart-list-name-input {
+  box-sizing: border-box;
+  min-width: 0;
+  width: 100%;
+}
+
+.task-hub-smart-list-create-actions {
+  align-items: center;
+  display: flex;
+  gap: 6px;
+  justify-content: end;
+  min-width: 0;
+}
+
+.task-hub-smart-list-create-cancel,
+.task-hub-smart-list-create-save {
+  min-height: 28px;
+  padding-inline: 10px;
+}
+
+.task-hub-smart-list-items {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.task-hub-smart-list-item {
+  align-items: center;
+  background: color-mix(in srgb, var(--task-hub-smart-list-color, var(--interactive-accent)) 7%, transparent);
+  border: 0;
+  border-radius: 6px;
+  box-shadow: none;
+  display: grid;
+  gap: 2px;
+  grid-template-columns: minmax(0, 1fr);
+  min-height: 32px;
+  min-width: 0;
+  overflow: hidden;
+  padding-left: 2px;
+  transition: background-color 120ms ease, box-shadow 120ms ease;
+}
+
+.task-hub-smart-list-item:hover {
+  background: color-mix(in srgb, var(--task-hub-smart-list-color, var(--interactive-accent)) 12%, transparent);
+}
+
+.task-hub-smart-list-item.is-active {
+  background: color-mix(in srgb, var(--task-hub-smart-list-color, var(--interactive-accent)) 28%, transparent);
+  box-shadow: inset 3px 0 0 var(--task-hub-smart-list-color, var(--interactive-accent));
+}
+
+.task-hub-smart-list-item.is-drop-target {
+  background: color-mix(in srgb, var(--task-hub-smart-list-color, var(--interactive-accent)) 20%, transparent);
+  outline: 1px solid var(--task-hub-smart-list-color, var(--interactive-accent));
+  outline-offset: 2px;
+}
+
+.task-hub-smart-list-item.is-editing {
+  background: transparent;
+  box-shadow: none;
+}
+
+.task-hub-smart-list-rename-input {
+  box-sizing: border-box;
+  font: inherit;
+  height: 32px;
+  min-width: 0;
+  width: 100%;
+}
+
+button.task-hub-smart-list-apply,
+body .task-hub-view button.task-hub-smart-list-apply {
+  align-items: center;
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  color: var(--text-normal);
+  display: grid;
+  gap: 6px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  height: 32px;
+  min-height: 0;
+  min-width: 0;
+  padding: 0 7px;
+  text-align: left;
+  width: 100%;
+  --button-shadow: none;
+  --button-shadow-hover: none;
+}
+
+button.task-hub-smart-list-apply.mod-cta,
+button.task-hub-smart-list-apply.mod-warning,
+body .task-hub-view button.task-hub-smart-list-apply.mod-cta,
+body .task-hub-view button.task-hub-smart-list-apply.mod-warning {
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+button.task-hub-smart-list-apply:hover,
+button.task-hub-smart-list-apply:focus-visible,
+body .task-hub-view button.task-hub-smart-list-apply:hover,
+body .task-hub-view button.task-hub-smart-list-apply:focus-visible {
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+.task-hub-smart-list-item-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-hub-smart-list-item-count {
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+}
+
+.task-hub-smart-list-empty {
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+}
+
+.task-hub-smart-list-context-menu {
+  display: grid;
+  min-width: 150px;
+  overflow: visible;
+  position: fixed;
+  z-index: 1000;
+}
+
+.task-hub-smart-list-context-group {
+  position: relative;
+}
+
+.task-hub-smart-list-context-group::after {
+  content: "";
+  display: none;
+  height: 100%;
+  left: 100%;
+  position: absolute;
+  top: 0;
+  width: 8px;
+}
+
+.task-hub-smart-list-context-group:hover::after,
+.task-hub-smart-list-context-group:focus-within::after {
+  display: block;
+}
+
+.task-hub-smart-list-context-action,
+.task-hub-smart-list-color-action {
+  cursor: var(--cursor);
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.task-hub-smart-list-context-label,
+.task-hub-smart-list-color-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-hub-smart-list-context-arrow {
+  color: var(--text-faint);
+  flex: 0 0 auto;
+}
+
+.task-hub-smart-list-color-submenu {
+  display: none;
+  min-width: 132px;
+  position: fixed;
+  z-index: 1001;
+}
+
+.task-hub-smart-list-context-group:hover > .task-hub-smart-list-color-submenu,
+.task-hub-smart-list-context-group:focus-within > .task-hub-smart-list-color-submenu {
+  display: grid;
+}
+
+.task-hub-smart-list-menu-color-dot {
+  background: var(--task-hub-smart-list-menu-color, var(--interactive-accent));
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, black 16%, transparent);
+  display: inline-block;
+  height: 0.75em;
+  width: 0.75em;
+}
+
+.task-hub-smart-list-color-icon {
+  align-items: center;
+  display: inline-flex;
+}
+
+.task-hub-smart-list-color-check {
+  align-items: center;
+  color: var(--text-accent);
+  display: inline-flex;
 }
 
 .task-hub-task-details {
@@ -605,10 +947,12 @@
 .task-hub-task-details-host {
   display: grid;
   gap: 12px;
-  max-height: calc(100vh - 190px);
+  margin-top: var(--task-hub-task-list-first-row-offset);
+  max-height: calc(100vh - 190px - var(--task-hub-task-list-first-row-offset));
   overflow-y: auto;
   position: relative;
   width: clamp(300px, 24vw, 460px);
+  z-index: 0;
 }
 
 .task-hub-task-details-host .task-hub-task-details {
@@ -1325,8 +1669,13 @@ body .task-hub-view button.task-hub-color-swatch {
 }
 
 .task-hub-task-note-body {
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 10;
+  display: -webkit-box;
   line-height: 1.45;
   margin-top: 10px;
+  max-height: calc(1.45em * 10);
+  overflow: hidden;
   overflow-wrap: anywhere;
   padding: 0 0 0 2px;
   white-space: normal;
@@ -1409,6 +1758,11 @@ button.task-hub-task-note-pin.is-active:focus-visible {
 }
 
 .task-hub-task-note-text {
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 10;
+  display: -webkit-box;
+  max-height: calc(1.45em * 10);
+  overflow: hidden;
   white-space: pre-wrap;
 }
 
@@ -1488,6 +1842,8 @@ button.task-hub-task-note-pin.is-active:focus-visible {
   min-height: 260px;
   overflow-y: auto;
   padding-inline: clamp(4px, 2vw, 24px);
+  position: relative;
+  z-index: 0;
 }
 
 .task-hub-task-list-flow {
@@ -1541,6 +1897,13 @@ button.task-hub-task-note-pin.is-active:focus-visible {
 .task-hub-task-row.is-dragging {
   cursor: grabbing;
   opacity: 0.56;
+}
+
+.task-hub-task-row.is-bulk-dragging {
+  opacity: 0.68;
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--task-hub-source-color) 42%, var(--interactive-accent)),
+    0 4px 14px color-mix(in srgb, var(--interactive-accent) 12%, transparent);
 }
 
 .task-hub-task-list-flow .task-hub-task-row:last-child {
@@ -4265,7 +4628,17 @@ input.task-hub-tag-editor-input:focus {
   }
 
   .task-hub-task-workbench {
+    --task-hub-task-list-first-row-offset: 0px;
     grid-template-columns: 1fr;
+  }
+
+  .task-hub-task-workbench.has-filter-sidebar {
+    grid-template-columns: 1fr;
+  }
+
+  .task-hub-task-filter-sidebar {
+    max-height: none;
+    position: static;
   }
 
   .task-hub-task-details {

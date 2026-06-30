@@ -1,4 +1,4 @@
-import { renderShell, type DashboardView } from "./renderShell";
+import { renderShell, renderTaskFilterPanel, type DashboardView } from "./renderShell";
 import type { TaskFilterState } from "../filtering/filters";
 
 jest.mock("obsidian", () => ({
@@ -10,11 +10,18 @@ class FakeElement {
   attrs = new Map<string, string>();
   checked = false;
   disabled = false;
+  open = false;
+  ownerDocument: FakeDocument;
+  parentElement: FakeElement | undefined;
   text = "";
   type = "";
   value = "";
   classes = new Set<string>();
   listeners = new Map<string, Array<(event: FakeEvent) => void>>();
+
+  constructor(ownerDocument = new FakeDocument()) {
+    this.ownerDocument = ownerDocument;
+  }
 
   empty(): void {
     this.children = [];
@@ -52,8 +59,13 @@ class FakeElement {
     }
   }
 
+  contains(target: FakeElement): boolean {
+    return this === target || this.children.some((child) => child.contains(target));
+  }
+
   private append(options: { cls?: string; text?: string } = {}): FakeElement {
-    const child = new FakeElement();
+    const child = new FakeElement(this.ownerDocument);
+    child.parentElement = this;
     child.text = options.text ?? "";
     for (const cls of (options.cls ?? "").split(" ").filter(Boolean)) {
       child.classes.add(cls);
@@ -63,8 +75,27 @@ class FakeElement {
   }
 }
 
+class FakeDocument {
+  listeners = new Map<string, Array<(event: FakeEvent) => void>>();
+
+  addEventListener(name: string, listener: (event: FakeEvent) => void): void {
+    this.listeners.set(name, [...(this.listeners.get(name) ?? []), listener]);
+  }
+
+  removeEventListener(name: string, listener: (event: FakeEvent) => void): void {
+    this.listeners.set(name, (this.listeners.get(name) ?? []).filter((candidate) => candidate !== listener));
+  }
+
+  trigger(name: string, event: Partial<FakeEvent> = {}): void {
+    for (const listener of this.listeners.get(name) ?? []) {
+      listener({ key: "", preventDefault: jest.fn(), stopPropagation: jest.fn(), ...event });
+    }
+  }
+}
+
 type FakeEvent = {
   key: string;
+  target?: FakeElement;
   preventDefault(): void;
   stopPropagation(): void;
 };
@@ -121,6 +152,35 @@ function renderForTest(overrides: Partial<TaskFilterState> = {}) {
   return { container, handlers, bindTagInputSuggest };
 }
 
+function renderTaskFilterPanelForTest(overrides: Partial<TaskFilterState> = {}) {
+  const container = new FakeElement();
+  const bindTagInputSuggest = jest.fn();
+  const handlers = {
+    onConditionChange: jest.fn(),
+    onClearFilters: jest.fn(),
+    onTagQueryChange: jest.fn(),
+    onSourceFilterChange: jest.fn(),
+    onTextQueryChange: jest.fn()
+  };
+
+  renderTaskFilterPanel(
+    container as unknown as HTMLElement,
+    {
+      sourceFilters: [
+        { id: "all", label: "all", count: 37 },
+        { id: "vault", label: "vaultTasks", count: 20 },
+        { id: "apple-reminders", label: "Apple Reminders", count: 17 }
+      ],
+      filters: { ...baseFilters(), ...overrides },
+      t: (key) => key
+    },
+    handlers,
+    { bindTagInputSuggest }
+  );
+
+  return { container, handlers, bindTagInputSuggest };
+}
+
 function renderShellForState(stateOverrides: Partial<Parameters<typeof renderShell>[1]> = {}) {
   const container = new FakeElement();
   const bindTagInputSuggest = jest.fn();
@@ -161,7 +221,7 @@ function renderShellForState(stateOverrides: Partial<Parameters<typeof renderShe
 
 describe("renderShell", () => {
   it("applies search only when Enter or the search button is used", () => {
-    const { container, handlers } = renderForTest();
+    const { container, handlers } = renderTaskFilterPanelForTest();
     const searchInput = collect(container).find((element) => element.attrs.get("placeholder") === "searchTasks");
     expect(searchInput).toBeDefined();
 
@@ -180,7 +240,7 @@ describe("renderShell", () => {
   });
 
   it("applies condition filters only from the panel action", () => {
-    const { container, handlers, bindTagInputSuggest } = renderForTest();
+    const { container, handlers, bindTagInputSuggest } = renderTaskFilterPanelForTest();
     const tagInput = collect(container).find((element) => element.attrs.get("placeholder") === "#project");
     const textInput = collect(container).find((element) => element.attrs.get("placeholder") === "conditionText");
     const applyButton = collect(container).find((element) => element.text === "applyFilters");
@@ -204,7 +264,7 @@ describe("renderShell", () => {
   });
 
   it("clears quick tag filters from the condition panel clear action", () => {
-    const { container, handlers } = renderForTest({ tagQuery: "#work" });
+    const { container, handlers } = renderTaskFilterPanelForTest({ tagQuery: "#work" });
     const clearButton = collect(container).find((element) => element.text === "clearFilters");
     const activeCount = collect(container).find((element) => element.classes.has("task-hub-condition-count"));
 
@@ -214,7 +274,7 @@ describe("renderShell", () => {
   });
 
   it("shows quick tag filters in the condition panel and lets them be cleared inline", () => {
-    const { container, handlers } = renderForTest({ tagQuery: "#work" });
+    const { container, handlers } = renderTaskFilterPanelForTest({ tagQuery: "#work" });
     const label = collect(container).find((element) => element.text === "quickTagFilter");
     const chip = collect(container).find((element) => element.classes.has("task-hub-condition-quick-tag-chip"));
     const clearButton = collect(container).find((element) => element.classes.has("task-hub-condition-quick-tag-clear"));
@@ -227,7 +287,7 @@ describe("renderShell", () => {
   });
 
   it("places the condition operator with the date and text labels", () => {
-    const { container } = renderForTest();
+    const { container } = renderTaskFilterPanelForTest();
     const header = collect(container).find((element) => element.classes.has("task-hub-condition-panel-header"));
     const dateRow = collect(container).find((element) => element.classes.has("task-hub-condition-row") && collect(element).some((child) => child.text === "conditionDate"));
     const textRow = collect(container).find((element) => element.classes.has("task-hub-condition-row") && collect(element).some((child) => child.text === "conditionText"));
@@ -241,7 +301,7 @@ describe("renderShell", () => {
   });
 
   it("renders source filters inside the condition panel", () => {
-    const { container, handlers } = renderForTest({ sourceQuery: "apple-reminders" });
+    const { container, handlers } = renderTaskFilterPanelForTest({ sourceQuery: "apple-reminders" });
     const panel = collect(container).find((element) => element.classes.has("task-hub-condition-panel"));
     const sourceRow = collect(container).find((element) => element.classes.has("task-hub-condition-source-row"));
     const appleChip = collect(container).find((element) => element.classes.has("task-hub-source-filter-chip") && collect(element).some((child) => child.text === "Apple Reminders"));
@@ -255,6 +315,23 @@ describe("renderShell", () => {
 
     appleChip!.trigger("click");
     expect(handlers.onSourceFilterChange).toHaveBeenCalledWith("apple-reminders");
+  });
+
+  it("closes the condition panel when clicking outside it", () => {
+    const { container } = renderTaskFilterPanelForTest();
+    const menu = collect(container).find((element) => element.classes.has("task-hub-condition-menu"));
+    const panel = collect(container).find((element) => element.classes.has("task-hub-condition-panel"));
+    const outside = new FakeElement(container.ownerDocument);
+    expect(menu).toBeDefined();
+    expect(panel).toBeDefined();
+
+    menu!.open = true;
+    menu!.trigger("toggle");
+    container.ownerDocument.trigger("pointerdown", { target: panel });
+    expect(menu!.open).toBe(true);
+
+    container.ownerDocument.trigger("pointerdown", { target: outside });
+    expect(menu!.open).toBe(false);
   });
 
   it("shows disabled busy feedback while rescanning", () => {

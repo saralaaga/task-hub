@@ -41,6 +41,12 @@ export type ShellRenderOptions = {
   bindTagInputSuggest?: (input: HTMLInputElement) => void;
 };
 
+export type TaskFilterControlState = Pick<ShellState, "filters" | "sourceFilters" | "t">;
+export type TaskFilterControlHandlers = Pick<
+  ShellHandlers,
+  "onConditionChange" | "onClearFilters" | "onTagQueryChange" | "onSourceFilterChange" | "onTextQueryChange"
+>;
+
 export function renderShell(container: HTMLElement, state: ShellState, handlers: ShellHandlers, options: ShellRenderOptions = {}): HTMLElement {
   container.empty();
   const root = container.createDiv({ cls: "task-hub-root" });
@@ -77,9 +83,11 @@ function renderFilters(container: HTMLElement, state: ShellState, handlers: Shel
   });
   showCompleted.createSpan({ text: state.t("showCompletedInView") });
 
-  const filters = container.createDiv({ cls: "task-hub-filter-strip" });
-  renderConditionMenu(filters, state, handlers, options);
-  renderSearch(filters, state, handlers);
+  const filters = container.createDiv({ cls: `task-hub-filter-strip ${state.view === "tasks" ? "task-hub-action-strip" : ""}` });
+  if (state.view !== "tasks") {
+    renderConditionMenu(filters, state, handlers, options);
+    renderSearch(filters, state, handlers);
+  }
 
   const createTask = filters.createEl("button", { cls: "task-hub-create-task-button" });
   createTask.setAttr("aria-label", state.t("add"));
@@ -117,7 +125,24 @@ function renderFilters(container: HTMLElement, state: ShellState, handlers: Shel
   });
 }
 
-function renderConditionMenu(container: HTMLElement, state: ShellState, handlers: ShellHandlers, options: ShellRenderOptions): void {
+export function renderTaskFilterPanel(
+  container: HTMLElement,
+  state: TaskFilterControlState,
+  handlers: TaskFilterControlHandlers,
+  options: ShellRenderOptions = {}
+): void {
+  const filterRow = container.createDiv({ cls: "task-hub-task-filter-row" });
+  renderConditionMenu(filterRow, state, handlers, options);
+  const searchRow = container.createDiv({ cls: "task-hub-task-search-row" });
+  renderSearch(searchRow, state, handlers);
+}
+
+function renderConditionMenu(
+  container: HTMLElement,
+  state: TaskFilterControlState,
+  handlers: TaskFilterControlHandlers,
+  options: ShellRenderOptions
+): void {
   const conditions = state.filters.conditions ?? { operator: "and" as const, tag: "", dateBucket: "" as const, text: "" };
   const conditionTag = conditions.tag.trim();
   const quickTagQuery = state.filters.tagQuery?.trim() ?? "";
@@ -130,6 +155,7 @@ function renderConditionMenu(container: HTMLElement, state: ShellState, handlers
     quickTagQuery && quickTagQuery !== conditionTag ? quickTagQuery : ""
   ].filter(Boolean).length;
   const menu = container.createEl("details", { cls: "task-hub-condition-menu" });
+  bindConditionMenuOutsideClick(menu);
 
   const trigger = menu.createEl("summary", { cls: activeConditionCount > 0 ? "task-hub-condition-trigger is-active" : "task-hub-condition-trigger" });
   setIcon(trigger.createSpan({ cls: "task-hub-condition-trigger-icon" }), "filter");
@@ -245,7 +271,28 @@ function renderConditionMenu(container: HTMLElement, state: ShellState, handlers
   applyButton.addEventListener("click", apply);
 }
 
-function renderSearch(container: HTMLElement, state: ShellState, handlers: ShellHandlers): void {
+function bindConditionMenuOutsideClick(menu: HTMLElement): void {
+  let listening = false;
+  const ownerDocument = menu.ownerDocument;
+  const closeOnOutsideClick = (event: PointerEvent) => {
+    const target = event.target;
+    if (target && menu.contains(target as Node)) return;
+    (menu as HTMLDetailsElement).open = false;
+  };
+  const syncListener = () => {
+    const open = Boolean((menu as HTMLDetailsElement).open);
+    if (open && !listening) {
+      ownerDocument.addEventListener("pointerdown", closeOnOutsideClick, true);
+      listening = true;
+    } else if (!open && listening) {
+      ownerDocument.removeEventListener("pointerdown", closeOnOutsideClick, true);
+      listening = false;
+    }
+  };
+  menu.addEventListener("toggle", syncListener);
+}
+
+function renderSearch(container: HTMLElement, state: TaskFilterControlState, handlers: Pick<ShellHandlers, "onTextQueryChange">): void {
   const search = container.createDiv({ cls: "task-hub-search-group" });
   const text = search.createEl("input", {
     cls: "task-hub-search-control",

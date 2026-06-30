@@ -1,7 +1,9 @@
 import {
   TaskHubView,
+  buildSavedSmartList,
   createTaskHubSessionSnapshot,
   collectCalendarUnscheduledTasks,
+  clearTaskViewFilters,
   collectUnscheduledTasks,
   reconcileVisibleTaskSelection,
   restoreContentScrollAfterRender,
@@ -10,14 +12,17 @@ import {
   shouldHandleTaskHubUndoShortcut
 } from "./TaskHubView";
 import type { TaskFilterState } from "../filtering/filters";
-import type { TaskViewFilterSettings } from "../types";
+import type { TaskHubSmartList, TaskViewFilterSettings } from "../types";
 import type { TaskItem } from "../types";
 
 jest.mock("obsidian", () => ({
   AbstractInputSuggest: class {},
+  ButtonComponent: class {},
   ItemView: class {},
   MarkdownRenderer: { render: jest.fn() },
+  Modal: class {},
   Notice: class {},
+  Setting: class {},
   WorkspaceLeaf: class {}
 }), { virtual: true });
 
@@ -262,6 +267,25 @@ describe("restoreContentScrollAfterRender", () => {
 });
 
 describe("Task Hub session state", () => {
+  it("clears every task filter field from the condition panel clear action", () => {
+    expect(clearTaskViewFilters({
+      status: "all",
+      dateBucket: "today",
+      tags: ["#work"],
+      tagQuery: "#focus",
+      sourceQuery: "apple-reminders",
+      textQuery: "proposal",
+      conditions: { operator: "or", tag: "#client", dateBucket: "tomorrow", text: "call" }
+    })).toEqual({
+      status: "open",
+      tags: [],
+      tagQuery: "",
+      sourceQuery: "",
+      textQuery: "",
+      conditions: { operator: "and", tag: "", dateBucket: "", text: "" }
+    });
+  });
+
   it("restores the last closed view state ahead of the default view", () => {
     const restored = restoreTaskHubSessionState(
       {
@@ -419,6 +443,305 @@ describe("Task Hub session state", () => {
       "apple-reminders",
       "apple-calendar:work"
     ]);
+  });
+});
+
+describe("buildSavedSmartList", () => {
+  it("builds a persisted smart list from the current filters and selected tasks", () => {
+    const result = buildSavedSmartList({
+      existingSmartLists: [],
+      filters: {
+        status: "all",
+        tags: ["#work"],
+        tagQuery: "#client",
+        sourceQuery: "apple-reminders",
+        textQuery: "proposal"
+      },
+      name: "  Focus  ",
+      selectedTasks: [
+        task({ id: "task-1", stableId: "vault:th_task1" }),
+        task({ id: "task-2" })
+      ],
+      now: new Date("2026-06-30T12:00:00.000Z"),
+      createId: () => "smart_focus"
+    });
+
+    expect(result).toEqual({
+      id: "smart_focus",
+      name: "Focus",
+      filters: {
+        status: "all",
+        tags: ["#work"],
+        tagQuery: "#client",
+        sourceQuery: "apple-reminders",
+        textQuery: "proposal"
+      },
+      taskStableIds: ["vault:th_task1"],
+      taskIds: ["task-2"],
+      createdAt: "2026-06-30T12:00:00.000Z",
+      updatedAt: "2026-06-30T12:00:00.000Z"
+    });
+  });
+
+  it("does not create a smart list without a name", () => {
+    expect(buildSavedSmartList({
+      existingSmartLists: [],
+      filters: fallbackFilters(),
+      name: "   ",
+      selectedTasks: [],
+      now: new Date("2026-06-30T12:00:00.000Z"),
+      createId: () => "smart_focus"
+    })).toBeUndefined();
+  });
+});
+
+describe("TaskHubView smart list interactions", () => {
+  function smartList(overrides: Partial<TaskHubSmartList> = {}): TaskHubSmartList {
+    return {
+      id: "smart_focus",
+      name: "Focus",
+      filters: fallbackFilters(),
+      taskStableIds: ["vault:th_focus"],
+      taskIds: [],
+      createdAt: "2026-06-30T12:00:00.000Z",
+      updatedAt: "2026-06-30T12:00:00.000Z",
+      ...overrides
+    };
+  }
+
+  it("toggles the active smart list off when clicking the selected list again", () => {
+    const list = smartList();
+    const plugin = {
+      settings: {
+        defaultView: "tasks",
+        language: "en",
+        taskViewFilters: fallbackFilters(),
+        lastSessionState: undefined,
+        smartLists: [list]
+      },
+      saveSettings: jest.fn(async () => undefined)
+    };
+    const view = new TaskHubView({} as never, plugin as never);
+    const render = jest.spyOn(view as unknown as { render(options?: unknown): void }, "render").mockImplementation(() => undefined);
+
+    (view as unknown as { applySmartList(smartList: typeof list, allTasks: TaskItem[]): void }).applySmartList(list, [
+      task({ id: "task-1", stableId: "vault:th_focus" })
+    ]);
+    expect((view as unknown as { activeSmartListId?: string }).activeSmartListId).toBe("smart_focus");
+
+    (view as unknown as { applySmartList(smartList: typeof list, allTasks: TaskItem[]): void }).applySmartList(list, [
+      task({ id: "task-1", stableId: "vault:th_focus" })
+    ]);
+
+    expect((view as unknown as { activeSmartListId?: string }).activeSmartListId).toBeUndefined();
+    expect([...(view as unknown as { selectedTaskIds: Set<string> }).selectedTaskIds]).toEqual([]);
+    expect(render).toHaveBeenCalledWith({ preserveTaskListScroll: true, preserveContentScroll: true });
+  });
+
+  it("activates a smart list without mutating the current task filters", () => {
+    const currentFilters: TaskViewFilterSettings = {
+      status: "open",
+      tags: [],
+      tagQuery: "#inbox",
+      sourceQuery: "",
+      textQuery: ""
+    };
+    const list = smartList({
+      filters: {
+        status: "all",
+        tags: ["#work"],
+        tagQuery: "#client",
+        sourceQuery: "vault",
+        textQuery: "proposal"
+      }
+    });
+    const plugin = {
+      settings: {
+        defaultView: "tasks",
+        language: "en",
+        taskViewFilters: currentFilters,
+        lastSessionState: undefined,
+        smartLists: [list]
+      },
+      saveSettings: jest.fn(async () => undefined)
+    };
+    const view = new TaskHubView({} as never, plugin as never);
+    const render = jest.spyOn(view as unknown as { render(options?: unknown): void }, "render").mockImplementation(() => undefined);
+
+    (view as unknown as { applySmartList(smartList: typeof list, allTasks: TaskItem[]): void }).applySmartList(list, [
+      task({ id: "task-1", stableId: "vault:th_focus" })
+    ]);
+
+    expect((view as unknown as { activeSmartListId?: string }).activeSmartListId).toBe("smart_focus");
+    expect((view as unknown as { filters: TaskViewFilterSettings }).filters).toEqual(currentFilters);
+    expect(plugin.settings.taskViewFilters).toEqual(currentFilters);
+    expect(plugin.saveSettings).not.toHaveBeenCalled();
+    expect(render).toHaveBeenCalledWith({ preserveTaskListScroll: true, preserveContentScroll: true });
+  });
+
+  it("deletes a smart list without leaving active selection references behind", async () => {
+    const list = smartList();
+    const other = smartList({ id: "smart_other", name: "Other", taskStableIds: [] });
+    const plugin = {
+      settings: {
+        defaultView: "tasks",
+        language: "en",
+        taskViewFilters: fallbackFilters(),
+        lastSessionState: undefined,
+        smartLists: [list, other]
+      },
+      saveSettings: jest.fn(async () => undefined)
+    };
+    const view = new TaskHubView({} as never, plugin as never);
+    jest.spyOn(view as unknown as { render(options?: unknown): void }, "render").mockImplementation(() => undefined);
+    Object.assign(view, {
+      containerEl: {
+        win: { confirm: jest.fn(() => true) }
+      }
+    });
+
+    (view as unknown as { applySmartList(smartList: typeof list, allTasks: TaskItem[]): void }).applySmartList(list, [
+      task({ id: "task-1", stableId: "vault:th_focus" })
+    ]);
+    expect([...(view as unknown as { selectedTaskIds: Set<string> }).selectedTaskIds]).toEqual(["task-1"]);
+
+    (view as unknown as { deleteSmartList(smartList: typeof list): void }).deleteSmartList(list);
+    await Promise.resolve();
+
+    expect(plugin.settings.smartLists.map((item) => item.id)).toEqual(["smart_other"]);
+    expect((view as unknown as { activeSmartListId?: string }).activeSmartListId).toBeUndefined();
+    expect((view as unknown as { selectedTaskId?: string }).selectedTaskId).toBeUndefined();
+    expect((view as unknown as { selectedTaskStableId?: string }).selectedTaskStableId).toBeUndefined();
+    expect([...(view as unknown as { selectedTaskIds: Set<string> }).selectedTaskIds]).toEqual([]);
+    expect(plugin.saveSettings).toHaveBeenCalled();
+  });
+
+  it("persists smart list color changes", async () => {
+    const list = smartList();
+    const plugin = {
+      settings: {
+        defaultView: "tasks",
+        language: "en",
+        taskViewFilters: fallbackFilters(),
+        lastSessionState: undefined,
+        smartLists: [list]
+      },
+      saveSettings: jest.fn(async () => undefined)
+    };
+    const view = new TaskHubView({} as never, plugin as never);
+    jest.spyOn(view as unknown as { render(options?: unknown): void }, "render").mockImplementation(() => undefined);
+
+    (view as unknown as { updateSmartListColor(smartList: typeof list, color: string | undefined): void }).updateSmartListColor(list, "#6f94b8");
+    await Promise.resolve();
+
+    expect(plugin.settings.smartLists[0]).toMatchObject({
+      id: "smart_focus",
+      color: "#6f94b8"
+    });
+    expect(plugin.saveSettings).toHaveBeenCalled();
+  });
+
+  it("adds dropped tasks to a smart list with stable references first", async () => {
+    const list = smartList({
+      taskStableIds: ["vault:th_existing"],
+      taskIds: ["runtime-old"],
+      excludedTaskStableIds: ["vault:th_new"],
+      excludedTaskIds: ["runtime-only"]
+    });
+    const plugin = {
+      settings: {
+        defaultView: "tasks",
+        language: "en",
+        taskViewFilters: fallbackFilters(),
+        lastSessionState: undefined,
+        smartLists: [list]
+      },
+      saveSettings: jest.fn(async () => undefined)
+    };
+    const view = new TaskHubView({} as never, plugin as never);
+    const render = jest.spyOn(view as unknown as { render(options?: unknown): void }, "render").mockImplementation(() => undefined);
+
+    (view as unknown as { addTasksToSmartList(smartList: typeof list, tasks: TaskItem[]): void }).addTasksToSmartList(list, [
+      task({ id: "runtime-stable", stableId: "vault:th_new" }),
+      task({ id: "runtime-only" })
+    ]);
+    await Promise.resolve();
+
+    expect(plugin.settings.smartLists[0]).toMatchObject({
+      id: "smart_focus",
+      taskStableIds: ["vault:th_existing", "vault:th_new"],
+      taskIds: ["runtime-old", "runtime-only"],
+      excludedTaskStableIds: [],
+      excludedTaskIds: []
+    });
+    expect(plugin.saveSettings).toHaveBeenCalled();
+    expect(render).toHaveBeenCalledWith({ preserveTaskListScroll: true, preserveContentScroll: true });
+  });
+
+  it("removes dropped tasks from the active smart list using exclusion references", async () => {
+    const list = smartList({ taskStableIds: ["vault:th_existing", "vault:th_remove"], taskIds: ["runtime-only"] });
+    const plugin = {
+      settings: {
+        defaultView: "tasks",
+        language: "en",
+        taskViewFilters: fallbackFilters(),
+        lastSessionState: undefined,
+        smartLists: [list]
+      },
+      saveSettings: jest.fn(async () => undefined)
+    };
+    const view = new TaskHubView({} as never, plugin as never);
+    const render = jest.spyOn(view as unknown as { render(options?: unknown): void }, "render").mockImplementation(() => undefined);
+    Object.assign(view, {
+      activeSmartListId: "smart_focus",
+      selectedTaskId: "remove-stable",
+      selectedTaskStableId: "vault:th_remove",
+      selectedTaskIds: new Set(["remove-stable", "runtime-only"])
+    });
+
+    (view as unknown as { removeTasksFromActiveSmartList(tasks: TaskItem[]): void }).removeTasksFromActiveSmartList([
+      task({ id: "remove-stable", stableId: "vault:th_remove" }),
+      task({ id: "runtime-only" })
+    ]);
+    await Promise.resolve();
+
+    expect(plugin.settings.smartLists[0]).toMatchObject({
+      id: "smart_focus",
+      taskStableIds: ["vault:th_existing"],
+      taskIds: [],
+      excludedTaskStableIds: ["vault:th_remove"],
+      excludedTaskIds: ["runtime-only"]
+    });
+    expect([...(view as unknown as { selectedTaskIds: Set<string> }).selectedTaskIds]).toEqual([]);
+    expect((view as unknown as { selectedTaskId?: string }).selectedTaskId).toBeUndefined();
+    expect(plugin.saveSettings).toHaveBeenCalled();
+    expect(render).toHaveBeenCalledWith({ preserveTaskListScroll: true, preserveContentScroll: true });
+  });
+
+  it("persists smart list renames", async () => {
+    const list = smartList();
+    const plugin = {
+      settings: {
+        defaultView: "tasks",
+        language: "en",
+        taskViewFilters: fallbackFilters(),
+        lastSessionState: undefined,
+        smartLists: [list]
+      },
+      saveSettings: jest.fn(async () => undefined)
+    };
+    const view = new TaskHubView({} as never, plugin as never);
+    jest.spyOn(view as unknown as { render(options?: unknown): void }, "render").mockImplementation(() => undefined);
+
+    (view as unknown as { renameSmartList(smartList: typeof list, name: string): void }).renameSmartList(list, " Deep work ");
+    await Promise.resolve();
+
+    expect(plugin.settings.smartLists[0]).toMatchObject({
+      id: "smart_focus",
+      name: "Deep work"
+    });
+    expect(plugin.settings.smartLists[0].updatedAt).not.toBe(list.updatedAt);
+    expect(plugin.saveSettings).toHaveBeenCalled();
   });
 });
 

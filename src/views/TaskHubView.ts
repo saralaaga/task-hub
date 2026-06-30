@@ -2,9 +2,10 @@ import { ItemView, MarkdownRenderer, Notice, WorkspaceLeaf } from "obsidian";
 import { TASK_HUB_VIEW_TYPE } from "../constants";
 import { toLocalDateKey } from "../calendar/dateBuckets";
 import { filterTasks, type TaskFilterState } from "../filtering/filters";
+import { applySmartListToTasks, smartListTaskReferences } from "../filtering/smartLists";
 import { createTranslator } from "../i18n";
 import type TaskHubPlugin from "../main";
-import type { TaskHubLastSessionState, TaskHubSettings, TaskItem } from "../types";
+import type { TaskHubLastSessionState, TaskHubSettings, TaskHubSmartList, TaskItem } from "../types";
 import { parseTasksFromMarkdown } from "../parsing/taskParser";
 import { type CalendarViewMode } from "../calendar/calendarModel";
 import { taskPlannedDateKey } from "../taskDates";
@@ -44,6 +45,7 @@ export class TaskHubView extends ItemView {
   private unscheduledPanelCloseTimer: number | undefined;
   private expandedTaskIds = new Set<string>();
   private expandingTaskIds = new Set<string>();
+  private activeSmartListId: string | undefined;
   private pendingExpandedTaskScrollId: string | undefined;
   private pendingExpandedTaskScrollTimers: number[] = [];
   private readonly undoShortcutHandler = (event: KeyboardEvent) => {
@@ -126,13 +128,14 @@ export class TaskHubView extends ItemView {
     const bindTagInputSuggest = (input: TaskHubTagInputElement) => {
       bindTaskHubTagInputSuggest(this.plugin.app, input, () => collectObsidianTags(this.plugin.app, this.plugin.getTasks()));
     };
+    const sourceFilters = taskSourceFilterOptions(allTasks, this.filters, new Date(), t);
     const main = renderShell(
       container,
       {
         view: this.view,
         filters: this.filters,
         availableTags: collectTags(allTasks),
-        sourceFilters: taskSourceFilterOptions(allTasks, this.filters, new Date(), t),
+        sourceFilters,
         stats: this.plugin.taskIndex.getStats(),
         isRefreshing: this.isRefreshing,
         unscheduledPanelOpen: this.view === "calendar" && this.unscheduledPanelOpen,
@@ -164,11 +167,7 @@ export class TaskHubView extends ItemView {
           this.updateFilters({ ...this.filters, conditions });
         },
         onClearFilters: () => {
-          this.updateFilters({
-            ...this.filters,
-            tagQuery: "",
-            conditions: { operator: "and", tag: "", dateBucket: "", text: "" }
-          }, { preserveTaskListScroll: true });
+          this.updateFilters(clearTaskViewFilters(this.filters), { preserveTaskListScroll: true });
         },
         onTagQueryChange: (tagQuery) => {
           this.updateFilters({ ...this.filters, tagQuery }, { preserveTaskListScroll: true });
@@ -269,6 +268,34 @@ export class TaskHubView extends ItemView {
           bindTagInputSuggest,
           taskListScrollTop: this.taskListScrollTop,
           taskListManualOrder: this.plugin.settings.taskListManualOrder,
+          sourceFilters,
+          filterHandlers: {
+            onConditionChange: (conditions) => {
+              this.updateFilters({ ...this.filters, conditions });
+            },
+            onClearFilters: () => {
+              this.updateFilters(clearTaskViewFilters(this.filters), { preserveTaskListScroll: true });
+            },
+            onTagQueryChange: (tagQuery) => {
+              this.updateFilters({ ...this.filters, tagQuery }, { preserveTaskListScroll: true });
+            },
+            onSourceFilterChange: (source) => {
+              this.updateFilters({ ...this.filters, sourceQuery: source === "all" ? "" : source });
+            },
+            onTextQueryChange: (textQuery) => {
+              this.updateFilters({ ...this.filters, textQuery });
+            }
+          },
+          smartLists: this.plugin.settings.smartLists,
+          smartListCounts: smartListCountsForTasks(allTasks, this.plugin.settings.smartLists, now),
+          activeSmartListId: this.activeSmartListId,
+          onSaveSmartList: (name) => this.saveSmartList(allTasks, name),
+          onApplySmartList: (smartList) => this.applySmartList(smartList, allTasks),
+          onAddTasksToSmartList: (smartList, tasks) => this.addTasksToSmartList(smartList, tasks),
+          onRemoveTasksFromActiveSmartList: (tasks) => this.removeTasksFromActiveSmartList(tasks),
+          onDeleteSmartList: (smartList) => this.deleteSmartList(smartList),
+          onRenameSmartList: (smartList, name) => this.renameSmartList(smartList, name),
+          onSmartListColorChange: (smartList, color) => this.updateSmartListColor(smartList, color),
           exitingTaskIds: this.exitingTaskIds(allTasks),
           taskNotesEnabled: this.plugin.settings.taskNotes.enabled,
           allowThinoNoteEdit: this.plugin.settings.taskNotes.thinoIntegrationEnabled,
@@ -543,17 +570,167 @@ export class TaskHubView extends ItemView {
   }
 
   private taskViewVisibleTasks(allTasks: TaskItem[], now: Date): TaskItem[] {
-    const visibleTasks = filterTasks(allTasks, this.filters, now);
-    if (this.filters.status !== "open" || this.completingTaskIds.size === 0) {
+    const activeSmartList = this.activeSmartList();
+    const visibleTasks = activeSmartList
+      ? applySmartListToTasks(allTasks, activeSmartList, now)
+      : filterTasks(allTasks, this.filters, now);
+    const exitFilters = activeSmartList?.filters ?? this.filters;
+    if (exitFilters.status !== "open" || this.completingTaskIds.size === 0) {
       return visibleTasks;
     }
 
     const visibleIds = new Set(visibleTasks.map((task) => task.id));
     const exitingTasks = allTasks.filter((task) => {
       if (!this.completingTaskIds.has(task.id) || visibleIds.has(task.id) || !task.completed) return false;
-      return filterTasks([task], { ...this.filters, status: "all" }, now).length > 0;
+      if (!activeSmartList) return filterTasks([task], { ...this.filters, status: "all" }, now).length > 0;
+      return applySmartListToTasks([task], {
+        ...activeSmartList,
+        filters: { ...activeSmartList.filters, status: "all" }
+      }, now).length > 0;
     });
     return [...visibleTasks, ...exitingTasks];
+  }
+
+  private saveSmartList(allTasks: TaskItem[], name: string): void {
+    const t = createTranslator(this.plugin.settings.language);
+    const smartList = buildSavedSmartList({
+      existingSmartLists: this.plugin.settings.smartLists,
+      filters: this.filters,
+      name,
+      selectedTasks: allTasks.filter((task) => this.selectedTaskIds.has(task.id)),
+      now: new Date()
+    });
+    if (!smartList) return;
+    this.plugin.settings.smartLists = [...this.plugin.settings.smartLists, smartList];
+    this.activeSmartListId = smartList.id;
+    void this.plugin.saveSettings().then(() => {
+      new Notice(t("smartListSaved"));
+      this.render({ preserveTaskListScroll: true, preserveContentScroll: true });
+    });
+  }
+
+  private applySmartList(smartList: TaskHubSmartList, allTasks: TaskItem[]): void {
+    if (this.activeSmartListId === smartList.id) {
+      this.clearActiveSmartListState();
+      this.render({ preserveTaskListScroll: true, preserveContentScroll: true });
+      return;
+    }
+    this.activeSmartListId = smartList.id;
+    const selectedTaskIds = taskIdsReferencedBySmartList(allTasks, smartList);
+    this.selectedTaskIds = new Set(selectedTaskIds);
+    const selectedTask = allTasks.find((task) => selectedTaskIds.includes(task.id));
+    this.selectedTaskId = selectedTask?.id;
+    this.selectedTaskStableId = selectedTask ? selectedTask.stableId ?? selectedTask.id : undefined;
+    this.render({ preserveTaskListScroll: true, preserveContentScroll: true });
+  }
+
+  private addTasksToSmartList(smartList: TaskHubSmartList, tasks: TaskItem[]): void {
+    if (tasks.length === 0) return;
+    const now = new Date().toISOString();
+    let changed = false;
+    this.plugin.settings.smartLists = this.plugin.settings.smartLists.map((item) => {
+      if (item.id !== smartList.id) return item;
+      const references = mergeSmartListTaskReferences(item, tasks);
+      if (smartListReferencesEqual(item, references)) {
+        return item;
+      }
+      changed = true;
+      return {
+        ...item,
+        ...references,
+        updatedAt: now
+      };
+    });
+    if (!changed) return;
+    void this.plugin.saveSettings().then(() => {
+      this.render({ preserveTaskListScroll: true, preserveContentScroll: true });
+    });
+  }
+
+  private removeTasksFromActiveSmartList(tasks: TaskItem[]): void {
+    if (tasks.length === 0 || !this.activeSmartListId) return;
+    const now = new Date().toISOString();
+    let changed = false;
+    this.plugin.settings.smartLists = this.plugin.settings.smartLists.map((item) => {
+      if (item.id !== this.activeSmartListId) return item;
+      const references = removeSmartListTaskReferences(item, tasks);
+      if (smartListReferencesEqual(item, references)) {
+        return item;
+      }
+      changed = true;
+      return {
+        ...item,
+        ...references,
+        updatedAt: now
+      };
+    });
+    if (!changed) return;
+    this.selectedTaskIds = new Set([...this.selectedTaskIds].filter((taskId) => !tasks.some((task) => task.id === taskId)));
+    if (this.selectedTaskId && tasks.some((task) => task.id === this.selectedTaskId)) {
+      this.selectedTaskId = undefined;
+      this.selectedTaskStableId = undefined;
+    }
+    void this.plugin.saveSettings().then(() => {
+      this.render({ preserveTaskListScroll: true, preserveContentScroll: true });
+    });
+  }
+
+  private deleteSmartList(smartList: TaskHubSmartList): void {
+    const t = createTranslator(this.plugin.settings.language);
+    const confirmed = this.containerEl.win.confirm(`${t("deleteSmartList")}: ${smartList.name}?`);
+    if (!confirmed) return;
+    this.plugin.settings.smartLists = this.plugin.settings.smartLists.filter((item) => item.id !== smartList.id);
+    if (this.activeSmartListId === smartList.id) this.clearActiveSmartListState();
+    void this.plugin.saveSettings().then(() => {
+      new Notice(t("smartListDeleted"));
+      this.render({ preserveTaskListScroll: true, preserveContentScroll: true });
+    });
+  }
+
+  private renameSmartList(smartList: TaskHubSmartList, name: string): void {
+    const trimmedName = name.trim();
+    if (!trimmedName || trimmedName === smartList.name) return;
+    const now = new Date().toISOString();
+    let changed = false;
+    this.plugin.settings.smartLists = this.plugin.settings.smartLists.map((item) => {
+      if (item.id !== smartList.id) return item;
+      changed = true;
+      return {
+        ...item,
+        name: trimmedName,
+        updatedAt: now
+      };
+    });
+    if (!changed) return;
+    void this.plugin.saveSettings().then(() => {
+      this.render({ preserveTaskListScroll: true, preserveContentScroll: true });
+    });
+  }
+
+  private updateSmartListColor(smartList: TaskHubSmartList, color: string | undefined): void {
+    const now = new Date().toISOString();
+    this.plugin.settings.smartLists = this.plugin.settings.smartLists.map((item) => {
+      if (item.id !== smartList.id) return item;
+      return {
+        ...item,
+        ...(color ? { color } : { color: undefined }),
+        updatedAt: now
+      };
+    });
+    void this.plugin.saveSettings().then(() => {
+      this.render({ preserveTaskListScroll: true, preserveContentScroll: true });
+    });
+  }
+
+  private activeSmartList(): TaskHubSmartList | undefined {
+    return (this.plugin.settings.smartLists ?? []).find((smartList) => smartList.id === this.activeSmartListId);
+  }
+
+  private clearActiveSmartListState(): void {
+    this.activeSmartListId = undefined;
+    this.selectedTaskIds = new Set();
+    this.selectedTaskId = undefined;
+    this.selectedTaskStableId = undefined;
   }
 
   private withLinkedNoteSubtasks(tasks: TaskItem[]): TaskItem[] {
@@ -645,7 +822,7 @@ export class TaskHubView extends ItemView {
   }
 
   private exitingTaskIds(allTasks: TaskItem[]): ReadonlySet<string> {
-    if (this.filters.status !== "open" || this.completingTaskIds.size === 0) {
+    if ((this.activeSmartList()?.filters.status ?? this.filters.status) !== "open" || this.completingTaskIds.size === 0) {
       return new Set();
     }
     const completedIds = new Set(allTasks.filter((task) => task.completed).map((task) => task.id));
@@ -660,7 +837,7 @@ export class TaskHubView extends ItemView {
     let keepForExitAnimation = false;
     try {
       const result = await this.plugin.completeTask(task);
-      if (result.status === "updated" && !task.completed && this.filters.status === "open") {
+      if (result.status === "updated" && !task.completed && (this.activeSmartList()?.filters.status ?? this.filters.status) === "open") {
         keepForExitAnimation = true;
         this.containerEl.win.setTimeout(() => {
           this.completingTaskIds.delete(task.id);
@@ -719,7 +896,12 @@ export class TaskHubView extends ItemView {
     return action();
   }
 
-  private updateFilters(filters: TaskFilterState, options: TaskHubRenderOptions = {}): void {
+  private updateFilters(
+    filters: TaskFilterState,
+    options: TaskHubRenderOptions = {},
+    updateOptions: { keepActiveSmartList?: boolean } = {}
+  ): void {
+    if (!updateOptions.keepActiveSmartList) this.activeSmartListId = undefined;
     this.filters = cloneTaskFilters(filters);
     this.plugin.settings.taskViewFilters = cloneTaskFilters(this.filters);
     this.syncSessionStateToSettings();
@@ -1094,6 +1276,115 @@ function cloneTaskFilters(filters: TaskFilterState): TaskFilterState {
     tags: [...filters.tags],
     conditions: filters.conditions ? { ...filters.conditions } : undefined
   };
+}
+
+export function clearTaskViewFilters(filters: TaskFilterState): TaskFilterState {
+  return {
+    ...filters,
+    status: "open",
+    dateBucket: undefined,
+    tags: [],
+    tagQuery: "",
+    sourceQuery: "",
+    textQuery: "",
+    conditions: { operator: "and", tag: "", dateBucket: "", text: "" }
+  };
+}
+
+export function buildSavedSmartList(input: {
+  existingSmartLists: readonly TaskHubSmartList[];
+  filters: TaskFilterState;
+  name: string;
+  selectedTasks: TaskItem[];
+  now: Date;
+  createId?: (existing: readonly TaskHubSmartList[]) => string;
+}): TaskHubSmartList | undefined {
+  const name = input.name.trim();
+  if (!name) return undefined;
+  const timestamp = input.now.toISOString();
+  return {
+    id: (input.createId ?? createSmartListId)(input.existingSmartLists),
+    name,
+    filters: cloneTaskFilters(input.filters),
+    ...smartListTaskReferences(input.selectedTasks),
+    createdAt: timestamp,
+    updatedAt: timestamp
+  };
+}
+
+function createSmartListId(existing: readonly TaskHubSmartList[]): string {
+  const existingIds = new Set(existing.map((smartList) => smartList.id));
+  let id = "";
+  do {
+    id = `smart_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
+  } while (existingIds.has(id));
+  return id;
+}
+
+function taskIdsReferencedBySmartList(tasks: TaskItem[], smartList: TaskHubSmartList): string[] {
+  const stableIds = new Set(smartList.taskStableIds);
+  const taskIds = new Set(smartList.taskIds);
+  const excludedStableIds = new Set(smartList.excludedTaskStableIds ?? []);
+  const excludedTaskIds = new Set(smartList.excludedTaskIds ?? []);
+  return tasks
+    .filter((task) => {
+      if ((task.stableId && excludedStableIds.has(task.stableId)) || excludedTaskIds.has(task.id)) return false;
+      return taskIds.has(task.id) || (task.stableId && stableIds.has(task.stableId));
+    })
+    .map((task) => task.id);
+}
+
+function smartListCountsForTasks(tasks: TaskItem[], smartLists: readonly TaskHubSmartList[], now: Date): ReadonlyMap<string, number> {
+  return new Map(smartLists.map((smartList) => [smartList.id, applySmartListToTasks(tasks, smartList, now).length]));
+}
+
+function mergeSmartListTaskReferences(
+  smartList: TaskHubSmartList,
+  tasks: TaskItem[]
+): Pick<TaskHubSmartList, "taskStableIds" | "taskIds" | "excludedTaskStableIds" | "excludedTaskIds"> {
+  const references = smartListTaskReferences(tasks);
+  const stableBackedTaskIds = new Set(tasks.filter((task) => task.stableId).map((task) => task.id));
+  const stableIds = new Set(references.taskStableIds);
+  const taskIds = new Set(tasks.map((task) => task.id));
+  return {
+    taskStableIds: uniqueStrings([...smartList.taskStableIds, ...references.taskStableIds]).slice(0, 500),
+    taskIds: uniqueStrings([...smartList.taskIds.filter((taskId) => !stableBackedTaskIds.has(taskId)), ...references.taskIds]).slice(0, 500),
+    excludedTaskStableIds: uniqueStrings((smartList.excludedTaskStableIds ?? []).filter((stableId) => !stableIds.has(stableId))).slice(0, 500),
+    excludedTaskIds: uniqueStrings((smartList.excludedTaskIds ?? []).filter((taskId) => !taskIds.has(taskId))).slice(0, 500)
+  };
+}
+
+function removeSmartListTaskReferences(
+  smartList: TaskHubSmartList,
+  tasks: TaskItem[]
+): Pick<TaskHubSmartList, "taskStableIds" | "taskIds" | "excludedTaskStableIds" | "excludedTaskIds"> {
+  const references = smartListTaskReferences(tasks);
+  const stableIds = new Set(references.taskStableIds);
+  const taskIds = new Set(tasks.map((task) => task.id));
+  return {
+    taskStableIds: uniqueStrings(smartList.taskStableIds.filter((stableId) => !stableIds.has(stableId))).slice(0, 500),
+    taskIds: uniqueStrings(smartList.taskIds.filter((taskId) => !taskIds.has(taskId))).slice(0, 500),
+    excludedTaskStableIds: uniqueStrings([...(smartList.excludedTaskStableIds ?? []), ...references.taskStableIds]).slice(0, 500),
+    excludedTaskIds: uniqueStrings([...(smartList.excludedTaskIds ?? []).filter((taskId) => !taskIds.has(taskId)), ...references.taskIds]).slice(0, 500)
+  };
+}
+
+function smartListReferencesEqual(
+  smartList: TaskHubSmartList,
+  references: Pick<TaskHubSmartList, "taskStableIds" | "taskIds" | "excludedTaskStableIds" | "excludedTaskIds">
+): boolean {
+  return arraysEqual(smartList.taskStableIds, references.taskStableIds) &&
+    arraysEqual(smartList.taskIds, references.taskIds) &&
+    arraysEqual(smartList.excludedTaskStableIds ?? [], references.excludedTaskStableIds ?? []) &&
+    arraysEqual(smartList.excludedTaskIds ?? [], references.excludedTaskIds ?? []);
+}
+
+function uniqueStrings(values: readonly string[]): string[] {
+  return Array.from(new Set(values.filter((value) => value.length > 0)));
+}
+
+function arraysEqual<T>(left: readonly T[], right: readonly T[]): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
 }
 
 type RestoredTaskHubSessionState = {

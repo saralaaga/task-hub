@@ -237,6 +237,7 @@ export type TranslationKey =
   | "notes"
   | "noMatchingTasks"
   | "noOpenTasks"
+  | "noSmartLists"
   | "noTags"
   | "noDate"
   | "noUnscheduledTasks"
@@ -256,6 +257,13 @@ export type TranslationKey =
   | "rescanning"
   | "rescanTaskHub"
   | "remove"
+  | "removeFromSmartList"
+  | "removeFromSmartListHint"
+  | "smartListDragInNotice"
+  | "smartListDragOutNotice"
+  | "smartListDragStartNotice"
+  | "deleteSmartList"
+  | "renameSmartList"
   | "recurrence"
   | "recurrenceApplyTo"
   | "recurrenceCustom"
@@ -280,6 +288,7 @@ export type TranslationKey =
   | "search"
   | "searchTags"
   | "searchTasks"
+  | "saveSmartList"
   | "settingsTitle"
   | "friday"
   | "sendCurrentTaskToAppleReminders"
@@ -305,6 +314,18 @@ export type TranslationKey =
   | "sourceVaultTask"
   | "source"
   | "sourceFile"
+  | "smartLists"
+  | "smartListColor"
+  | "smartListColorBlue"
+  | "smartListColorCyan"
+  | "smartListColorDefault"
+  | "smartListColorGreen"
+  | "smartListColorOrange"
+  | "smartListColorPurple"
+  | "smartListColorRed"
+  | "smartListDeleted"
+  | "smartListNamePrompt"
+  | "smartListSaved"
   | "save"
   | "startTime"
   | "endTime"
@@ -1020,6 +1041,7 @@ const TRANSLATIONS: Record<"en" | "zh", Record<TranslationKey, string>> &
     notes: "Notes",
     noMatchingTasks: "No tasks match the current filters.",
     noOpenTasks: "No open tasks found in the indexed vault.",
+    noSmartLists: "No smart lists yet.",
     noTags: "No tags found in indexed tasks.",
     noDate: "No date",
     noUnscheduledTasks: "No unscheduled tasks.",
@@ -1039,6 +1061,10 @@ const TRANSLATIONS: Record<"en" | "zh", Record<TranslationKey, string>> &
     rescanning: "Rescanning...",
     rescanTaskHub: "Rescan Task Hub",
     remove: "Remove",
+    removeFromSmartList: "Remove from smart list",
+    removeFromSmartListHint: "Drag tasks from the smart list here to remove them from the smart list.",
+    deleteSmartList: "Delete smart list",
+    renameSmartList: "Rename",
     recurrence: "Repeat",
     recurrenceApplyTo: "Apply to",
     recurrenceCustom: "Custom repeat",
@@ -1067,6 +1093,7 @@ const TRANSLATIONS: Record<"en" | "zh", Record<TranslationKey, string>> &
     search: "Search",
     searchTags: "Search tags",
     searchTasks: "Search tasks",
+    saveSmartList: "Save smart list",
     settingsTitle: "Task Hub Settings",
     friday: "Friday",
     sendCurrentTaskToAppleReminders: "Send current task to Apple Reminders",
@@ -1092,6 +1119,21 @@ const TRANSLATIONS: Record<"en" | "zh", Record<TranslationKey, string>> &
     sourceSearch: "Folder or file",
     source: "Source",
     sourceFile: "Source file",
+    smartListDragInNotice: "Dragged {count} tasks into {name}.",
+    smartListDragOutNotice: "Dragged {count} tasks out of {name}.",
+    smartListDragStartNotice: "Dragging {count} tasks from {name}.",
+    smartLists: "Smart lists",
+    smartListColor: "Color",
+    smartListColorBlue: "Blue",
+    smartListColorCyan: "Cyan",
+    smartListColorDefault: "Default",
+    smartListColorGreen: "Green",
+    smartListColorOrange: "Orange",
+    smartListColorPurple: "Purple",
+    smartListColorRed: "Red",
+    smartListDeleted: "Smart list deleted.",
+    smartListNamePrompt: "Smart list name",
+    smartListSaved: "Smart list saved.",
     startTime: "Start time",
     subtaskProgress: "Subtask progress",
     subtaskProgressTreeHint: "Based on the full subtask tree.",
@@ -1389,6 +1431,7 @@ const TRANSLATIONS: Record<"en" | "zh", Record<TranslationKey, string>> &
     notes: "笔记",
     noMatchingTasks: "没有符合当前筛选条件的任务。",
     noOpenTasks: "当前索引的仓库中没有未完成任务。",
+    noSmartLists: "还没有智能列表。",
     noTags: "索引任务中没有标签。",
     noDate: "无日期",
     noUnscheduledTasks: "没有未排期任务。",
@@ -1409,6 +1452,10 @@ const TRANSLATIONS: Record<"en" | "zh", Record<TranslationKey, string>> &
     rescanning: "刷新中...",
     rescanTaskHub: "重新扫描 Task Hub",
     remove: "删除",
+    removeFromSmartList: "从智能列表中移除",
+    removeFromSmartListHint: "将智能列表中的任务拖到这里会将任务从智能列表中移除",
+    deleteSmartList: "删除智能列表",
+    renameSmartList: "重命名",
     recurrence: "重复",
     recurrenceApplyTo: "应用到",
     recurrenceCustom: "自定义重复",
@@ -1436,6 +1483,7 @@ const TRANSLATIONS: Record<"en" | "zh", Record<TranslationKey, string>> &
     search: "搜索",
     searchTags: "搜索标签",
     searchTasks: "搜索任务",
+    saveSmartList: "保存智能列表",
     settingsTitle: "Task Hub 设置",
     friday: "周五",
     sendCurrentTaskToAppleReminders: "将当前任务发送到 Apple 提醒事项",
@@ -1461,6 +1509,21 @@ const TRANSLATIONS: Record<"en" | "zh", Record<TranslationKey, string>> &
     sourceSearch: "文件夹或文件",
     source: "来源",
     sourceFile: "来源文件",
+    smartListDragInNotice: "已将 {count} 个任务拖入「{name}」。",
+    smartListDragOutNotice: "已从「{name}」拖出 {count} 个任务。",
+    smartListDragStartNotice: "从「{name}」智能列表中拖动 {count} 个任务。",
+    smartLists: "智能列表",
+    smartListColor: "配色",
+    smartListColorBlue: "蓝色",
+    smartListColorCyan: "青色",
+    smartListColorDefault: "默认",
+    smartListColorGreen: "绿色",
+    smartListColorOrange: "橙色",
+    smartListColorPurple: "紫色",
+    smartListColorRed: "红色",
+    smartListDeleted: "智能列表已删除。",
+    smartListNamePrompt: "智能列表名称",
+    smartListSaved: "智能列表已保存。",
     startTime: "时间",
     subtaskProgress: "子任务进度",
     subtaskProgressTreeHint: "基于完整子任务树计算。",

@@ -49,6 +49,7 @@ export const DEFAULT_SETTINGS: TaskHubSettings = {
   taskListManualOrder: {},
   taskNoteManualOrder: {},
   taskNotePinned: {},
+  smartLists: [],
   vaultTaskStableState: {},
   externalTaskLookbackDays: 100,
   externalTaskLookaheadDays: 100,
@@ -149,6 +150,7 @@ export function normalizeTaskHubSettings(loaded: Partial<TaskHubSettings> | null
     taskListManualOrder: normalizeTaskListManualOrder(loaded?.taskListManualOrder),
     taskNoteManualOrder: normalizeTaskNoteManualOrder(loaded?.taskNoteManualOrder),
     taskNotePinned: normalizeTaskNotePinned(loaded?.taskNotePinned),
+    smartLists: normalizeSmartLists(loaded?.smartLists, loaded?.showCompletedByDefault),
     vaultTaskStableState: normalizeVaultTaskStableState(loaded?.vaultTaskStableState),
     externalTaskLookbackDays: normalizeWindowDays(loaded?.externalTaskLookbackDays, DEFAULT_SETTINGS.externalTaskLookbackDays),
     externalTaskLookaheadDays: normalizeWindowDays(loaded?.externalTaskLookaheadDays, DEFAULT_SETTINGS.externalTaskLookaheadDays),
@@ -231,6 +233,68 @@ function normalizeTaskNotePinned(value: unknown): TaskHubSettings["taskNotePinne
     if (normalized.length > 0) result[scopeKey] = normalized;
   }
   return result;
+}
+
+function normalizeSmartLists(value: unknown, showCompletedByDefault: boolean | undefined): TaskHubSettings["smartLists"] {
+  if (!Array.isArray(value)) return [];
+  const seenIds = new Set<string>();
+  const result: TaskHubSettings["smartLists"] = [];
+  for (const item of value) {
+    const normalized = normalizeSmartList(item, showCompletedByDefault);
+    if (!normalized || seenIds.has(normalized.id)) continue;
+    seenIds.add(normalized.id);
+    result.push(normalized);
+    if (result.length >= 100) break;
+  }
+  return result;
+}
+
+function normalizeSmartList(value: unknown, showCompletedByDefault: boolean | undefined): TaskHubSettings["smartLists"][number] | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const candidate = value as Record<string, unknown>;
+  const id = typeof candidate.id === "string" ? candidate.id.trim() : "";
+  const name = typeof candidate.name === "string" ? candidate.name.trim() : "";
+  const color = normalizeSmartListColor(candidate.color);
+  const createdAt = normalizeSmartListTimestamp(candidate.createdAt);
+  const updatedAt = normalizeSmartListTimestamp(candidate.updatedAt);
+  if (!/^[a-z0-9][a-z0-9_-]{0,63}$/u.test(id) || !name || !createdAt || !updatedAt) return undefined;
+  return {
+    id,
+    name,
+    ...(color ? { color } : {}),
+    filters: normalizeTaskViewFilters(candidate.filters as Partial<TaskHubSettings["taskViewFilters"]> | undefined, showCompletedByDefault),
+    taskStableIds: normalizeSmartListStableIds(candidate.taskStableIds),
+    taskIds: normalizeSmartListTaskIds(candidate.taskIds),
+    excludedTaskStableIds: normalizeSmartListStableIds(candidate.excludedTaskStableIds),
+    excludedTaskIds: normalizeSmartListTaskIds(candidate.excludedTaskIds),
+    createdAt,
+    updatedAt
+  };
+}
+
+function normalizeSmartListColor(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  return /^#[0-9a-fA-F]{6}$/u.test(trimmed) ? trimmed : undefined;
+}
+
+function normalizeSmartListTimestamp(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const timestamp = Date.parse(value);
+  if (Number.isNaN(timestamp)) return undefined;
+  return new Date(timestamp).toISOString();
+}
+
+function normalizeSmartListStableIds(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return Array.from(new Set(value.filter((stableId): stableId is string => isTaskStableId(stableId)))).slice(0, 500);
+}
+
+function normalizeSmartListTaskIds(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return Array.from(
+    new Set(value.filter((taskId): taskId is string => typeof taskId === "string" && taskId.trim().length > 0).map((taskId) => taskId.trim()))
+  ).slice(0, 500);
 }
 
 function normalizeVaultTaskStableState(value: unknown): TaskHubSettings["vaultTaskStableState"] {

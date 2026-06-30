@@ -79,11 +79,70 @@ describe("normalizeTaskHubSettings", () => {
     expect(settings.taskListManualOrder).toEqual({});
     expect(settings.taskNoteManualOrder).toEqual({});
     expect(settings.taskNotePinned).toEqual({});
+    expect(settings.smartLists).toEqual([]);
     expect(settings.vaultTaskStableState).toEqual({});
     expect(settings.externalTaskLookbackDays).toBe(100);
     expect(settings.externalTaskLookaheadDays).toBe(100);
     expect(settings.externalTaskMetadata).toEqual({});
     expect(settings.ignoredPaths).toEqual(["Archive/"]);
+  });
+
+  it("normalizes smart lists with filters and stable task references", () => {
+    const settings = normalizeTaskHubSettings({
+      smartLists: [
+        {
+          id: "bad id",
+          name: "  ",
+          filters: { status: "unknown" },
+          taskStableIds: ["vault:th_bad123", "", "vault:th_bad123"],
+          taskIds: ["task-a", "", "task-a"],
+          createdAt: "not a date",
+          updatedAt: "2026-06-30T08:00:00.000Z"
+        },
+        {
+          id: "focus-list",
+          name: "Focus",
+          color: "#6f94b8",
+          filters: {
+            status: "all",
+            tags: ["#work"],
+            tagQuery: "#client",
+            sourceQuery: "vault",
+            textQuery: "proposal",
+            conditions: { operator: "or", tag: "#next", dateBucket: "today", text: "call" }
+          },
+          taskStableIds: ["vault:th_projects12", "apple-reminders:list:item"],
+          taskIds: ["task-1", "task-2"],
+          excludedTaskStableIds: ["vault:th_hidden", "", "vault:th_hidden"],
+          excludedTaskIds: ["task-hidden", "", "task-hidden"],
+          createdAt: "2026-06-29T08:00:00.000Z",
+          updatedAt: "2026-06-30T08:00:00.000Z"
+        }
+      ]
+    } as never);
+
+    expect(settings.smartLists).toEqual([
+        {
+          id: "focus-list",
+          name: "Focus",
+          color: "#6f94b8",
+          filters: {
+            status: "all",
+            dateBucket: undefined,
+          tags: ["#work"],
+          tagQuery: "#client",
+          sourceQuery: "vault",
+          textQuery: "proposal",
+          conditions: { operator: "or", tag: "#next", dateBucket: "today", text: "call" }
+        },
+        taskStableIds: ["vault:th_projects12", "apple-reminders:list:item"],
+        taskIds: ["task-1", "task-2"],
+        excludedTaskStableIds: ["vault:th_hidden"],
+        excludedTaskIds: ["task-hidden"],
+        createdAt: "2026-06-29T08:00:00.000Z",
+        updatedAt: "2026-06-30T08:00:00.000Z"
+      }
+    ]);
   });
 
   it("normalizes external task window and metadata records", () => {

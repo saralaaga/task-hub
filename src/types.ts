@@ -55,6 +55,19 @@ export type TaskViewFilterSettings = {
   textQuery: string;
 };
 
+export type TaskHubSmartList = {
+  id: string;
+  name: string;
+  color?: string;
+  filters: TaskViewFilterSettings;
+  taskStableIds: string[];
+  taskIds: string[];
+  excludedTaskStableIds?: string[];
+  excludedTaskIds?: string[];
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type TaskHubLastSessionState = {
   view: DefaultView;
   taskViewFilters: TaskViewFilterSettings;
@@ -268,6 +281,7 @@ export type TaskHubSettings = {
   taskListManualOrder: TaskListManualOrder;
   taskNoteManualOrder: TaskNoteManualOrder;
   taskNotePinned: TaskNotePinned;
+  smartLists: TaskHubSmartList[];
   vaultTaskStableState: Record<string, PersistedVaultTaskStableRecord[]>;
   externalTaskLookbackDays: number;
   externalTaskLookaheadDays: number;

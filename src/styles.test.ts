@@ -92,10 +92,34 @@ describe("Task Hub styles", () => {
     expect(conditionPanelRule).toContain("z-index: 41");
   });
 
+  it("keeps the task filter popover above task list checkboxes", () => {
+    const styles = readFileSync(path.join(__dirname, "styles.css"), "utf8");
+    const sidebarRule = styles.match(/\.task-hub-task-filter-sidebar\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const paneRule = styles.match(/\.task-hub-task-list-pane\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const detailsHostRule = styles.match(/\.task-hub-task-details-host\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const workbenchRule = styles.match(/\.task-hub-task-workbench\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const mobileRule = styles.match(/@media \(max-width: 720px\)\s*\{(?<body>[\s\S]+?)\n\}/)?.groups?.body ?? "";
+
+    expect(workbenchRule).toContain("--task-hub-task-list-first-row-offset: calc(var(--font-ui-large) * 1.25 + 14px)");
+    expect(sidebarRule).toContain("position: sticky");
+    expect(sidebarRule).toContain("overflow: visible");
+    expect(sidebarRule).toContain("margin-top: var(--task-hub-task-list-first-row-offset)");
+    expect(sidebarRule).toContain("max-height: calc(100vh - 190px - var(--task-hub-task-list-first-row-offset))");
+    expect(sidebarRule).toContain("z-index: 50");
+    expect(paneRule).toContain("position: relative");
+    expect(paneRule).toContain("z-index: 0");
+    expect(detailsHostRule).toContain("margin-top: var(--task-hub-task-list-first-row-offset)");
+    expect(detailsHostRule).toContain("max-height: calc(100vh - 190px - var(--task-hub-task-list-first-row-offset))");
+    expect(detailsHostRule).toContain("position: relative");
+    expect(detailsHostRule).toContain("z-index: 0");
+    expect(mobileRule).toContain("--task-hub-task-list-first-row-offset: 0px");
+  });
+
   it("renders task list rows as compact dividers instead of tall cards", () => {
     const styles = readFileSync(path.join(__dirname, "styles.css"), "utf8");
     const flowRule = styles.match(/\.task-hub-task-list-flow\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const rowRule = styles.match(/\.task-hub-task-list-flow\s+\.task-hub-task-row\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const bulkDragRule = styles.match(/\.task-hub-task-row\.is-bulk-dragging\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const subtaskListRule = styles.match(/\.task-hub-task-list-flow\s+\.task-hub-subtask-list\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const textRule = styles.match(/\.task-hub-task-list-flow\s+\.task-hub-task-text\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const tagRule = styles.match(/\.task-hub-task-list-flow\s+\.task-hub-task-row\s+\.task-hub-task-tag\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
@@ -106,10 +130,72 @@ describe("Task Hub styles", () => {
     expect(rowRule).toContain("border-left: 3px solid");
     expect(rowRule).toContain("border-radius: 0");
     expect(rowRule).toContain("min-height: 32px");
+    expect(bulkDragRule).toContain("opacity: 0.68");
+    expect(bulkDragRule).toContain("box-shadow:");
     expect(subtaskListRule).toContain("margin-left: 19px");
     expect(textRule).toContain("line-height: 1.2");
     expect(tagRule).toContain("box-shadow:");
     expect(tagRule).toContain("font-size: var(--font-ui-medium)");
+  });
+
+  it("keeps smart list selection styled as one compact row", () => {
+    const styles = readFileSync(path.join(__dirname, "styles.css"), "utf8");
+    const cardRule = styles.match(/\.task-hub-smart-list-card\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const itemRule = styles.match(/\.task-hub-smart-list-item\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const headerActionsRule = styles.match(/\.task-hub-smart-list-header-actions\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const removeRule = styles.match(/\.task-hub-smart-list-remove-drop\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const removeDropRule = styles.match(/\.task-hub-smart-list-remove-drop\.is-drop-target\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const hoverRule = styles.match(/\.task-hub-smart-list-item:hover\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const activeRule = styles.match(/\.task-hub-smart-list-item\.is-active\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const dropRule = styles.match(/\.task-hub-smart-list-item\.is-drop-target\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const applyButtonRule = styles.match(/button\.task-hub-smart-list-apply,\s*body\s+\.task-hub-view\s+button\.task-hub-smart-list-apply\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const applyButtonHoverRule = styles.match(/button\.task-hub-smart-list-apply:hover,\s*button\.task-hub-smart-list-apply:focus-visible,\s*body\s+\.task-hub-view\s+button\.task-hub-smart-list-apply:hover,\s*body\s+\.task-hub-view\s+button\.task-hub-smart-list-apply:focus-visible\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const renameInputRule = styles.match(/\.task-hub-smart-list-rename-input\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const contextMenuRule = styles.match(/\.task-hub-smart-list-context-menu\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const colorSubmenuRule = styles.match(/\.task-hub-smart-list-color-submenu\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const colorSubmenuOpenRule = styles.match(/\.task-hub-smart-list-context-group:hover\s*>\s*\.task-hub-smart-list-color-submenu,\s*\.task-hub-smart-list-context-group:focus-within\s*>\s*\.task-hub-smart-list-color-submenu\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const dotRule = styles.match(/\.task-hub-smart-list-menu-color-dot\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+
+    expect(cardRule).not.toContain("border:");
+    expect(headerActionsRule).toContain("display: flex");
+    expect(removeRule).toContain("display: inline-flex");
+    expect(removeRule).toContain("color: var(--text-muted)");
+    expect(removeRule).not.toContain("background:");
+    expect(removeDropRule).toContain("outline: 1px solid var(--text-error)");
+    expect(removeDropRule).not.toContain("background:");
+    expect(itemRule).toContain("background: color-mix(in srgb, var(--task-hub-smart-list-color, var(--interactive-accent)) 7%, transparent)");
+    expect(itemRule).toContain("border: 0");
+    expect(itemRule).toContain("box-shadow: none");
+    expect(itemRule).not.toContain("border-left:");
+    expect(hoverRule).toContain("background: color-mix(in srgb, var(--task-hub-smart-list-color, var(--interactive-accent)) 12%, transparent)");
+    expect(activeRule).toContain("background: color-mix(in srgb, var(--task-hub-smart-list-color, var(--interactive-accent)) 28%, transparent)");
+    expect(activeRule).toContain("box-shadow: inset 3px 0 0 var(--task-hub-smart-list-color, var(--interactive-accent))");
+    expect(dropRule).toContain("outline: 1px solid var(--task-hub-smart-list-color, var(--interactive-accent))");
+    expect(applyButtonRule).toContain("background: transparent !important");
+    expect(applyButtonRule).toContain("background-color: transparent !important");
+    expect(applyButtonRule).toContain("background-image: none !important");
+    expect(applyButtonRule).toContain("border: 0 !important");
+    expect(applyButtonRule).toContain("box-shadow: none !important");
+    expect(applyButtonRule).toContain("--button-shadow: none");
+    expect(applyButtonRule).toContain("--button-shadow-hover: none");
+    expect(applyButtonHoverRule).toContain("background: transparent !important");
+    expect(renameInputRule).toContain("height: 32px");
+    expect(renameInputRule).toContain("width: 100%");
+    expect(contextMenuRule).toContain("position: fixed");
+    expect(contextMenuRule).toContain("overflow: visible");
+    expect(contextMenuRule).not.toContain("background:");
+    expect(contextMenuRule).not.toContain("border:");
+    expect(contextMenuRule).not.toContain("box-shadow:");
+    expect(colorSubmenuRule).toContain("display: none");
+    expect(colorSubmenuRule).toContain("position: fixed");
+    expect(colorSubmenuRule).toContain("z-index: 1001");
+    expect(colorSubmenuRule).not.toContain("background:");
+    expect(colorSubmenuRule).not.toContain("border:");
+    expect(colorSubmenuRule).not.toContain("box-shadow:");
+    expect(colorSubmenuOpenRule).toContain("display: grid");
+    expect(dotRule).toContain("background: var(--task-hub-smart-list-menu-color, var(--interactive-accent))");
+    expect(dotRule).toContain("border-radius: 999px");
+    expect(styles).not.toContain("task-hub-smart-list-delete");
   });
 
   it("animates task progress bars when recursive completion percentages change", () => {

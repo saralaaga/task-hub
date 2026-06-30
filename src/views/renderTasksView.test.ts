@@ -1,24 +1,26 @@
 jest.mock("obsidian", () => ({
   setIcon: jest.fn(),
+  Notice: jest.fn(),
   Menu: class {
-    items: Array<{ title: string; icon: string; disabled?: boolean; click?: () => void }> = [];
+    items: Array<{ title: string; icon: string | null; disabled?: boolean; click?: (event?: Partial<FakeEvent>) => void }> = [];
+    separators = 0;
     shownAt: unknown;
 
     constructor() {
       mockMenus.push(this);
     }
 
-    addItem(build: (item: { setTitle(title: string): unknown; setIcon(icon: string): unknown; setDisabled(disabled: boolean): unknown; onClick(click: () => void): unknown }) => void): void {
+    addItem(build: (item: { setTitle(title: string | DocumentFragment): unknown; setIcon(icon: string | null): unknown; setDisabled(disabled: boolean): unknown; onClick(click: (event?: Partial<FakeEvent>) => void): unknown }) => void): void {
       const item = {
         title: "",
-        icon: "",
+        icon: "" as string | null,
         disabled: undefined as boolean | undefined,
-        click: undefined as (() => void) | undefined,
-        setTitle(title: string) {
-          this.title = title;
+        click: undefined as ((event?: Partial<FakeEvent>) => void) | undefined,
+        setTitle(title: string | DocumentFragment) {
+          this.title = typeof title === "string" ? title : fragmentText(title);
           return this;
         },
-        setIcon(icon: string) {
+        setIcon(icon: string | null) {
           this.icon = icon;
           return this;
         },
@@ -35,19 +37,64 @@ jest.mock("obsidian", () => ({
       this.items.push(item);
     }
 
+    addSeparator(): void {
+      this.separators += 1;
+    }
+
     showAtMouseEvent(event: unknown): void {
       this.shownAt = event;
+    }
+
+    showAtPosition(position: unknown): void {
     }
   }
 }), { virtual: true });
 
 import { renderTasksView } from "./renderTasksView";
-import type { TaskItem } from "../types";
+import type { TaskHubSmartList, TaskItem } from "../types";
 
-const mockMenus: Array<{ items: Array<{ title: string; icon: string; disabled?: boolean; click?: () => void }>; shownAt: unknown }> = [];
+const mockMenus: Array<{
+  items: Array<{ title: string; icon: string | null; disabled?: boolean; click?: (event?: Partial<FakeEvent>) => void }>;
+  separators: number;
+  shownAt: unknown;
+}> = [];
 const fakeWindow = {
   matchMedia: undefined as ((query: string) => MediaQueryList) | undefined
 };
+
+class FakeDocumentFragment {
+  parts: string[] = [];
+
+  appendChild(child: { textContent?: string; text?: string }): void {
+    this.parts.push(child.textContent ?? child.text ?? "");
+  }
+}
+
+const fakeDocument = {
+  body: undefined as unknown as FakeElement,
+  createDocumentFragment: () => new FakeDocumentFragment(),
+  createElement: () => ({
+    className: "",
+    textContent: "● ",
+    setCssProps: jest.fn()
+  }),
+  createTextNode: (text: string) => ({ textContent: text }),
+  querySelector(selector: string): FakeElement | null {
+    return this.body?.querySelector(selector) ?? null;
+  }
+};
+
+function fragmentText(fragment: DocumentFragment): string {
+  return (fragment as unknown as FakeDocumentFragment).parts?.join("") ?? "";
+}
+
+(globalThis as unknown as {
+  document: {
+    createDocumentFragment(): FakeDocumentFragment;
+    createElement(tag: string): { className: string; textContent: string; setCssProps(props: Record<string, string>): void };
+    createTextNode(text: string): { textContent: string };
+  };
+}).document = fakeDocument;
 
 class FakeElement {
   children: FakeElement[] = [];
@@ -65,6 +112,7 @@ class FakeElement {
   focused = false;
   scrollTop = 0;
   clientY = 0;
+  clientX = 0;
   classes = new Set<string>();
   style = { setProperty: jest.fn() };
   showPicker = jest.fn();
@@ -72,6 +120,10 @@ class FakeElement {
 
   get win(): Window {
     return fakeWindow as unknown as Window;
+  }
+
+  get doc(): Document {
+    return fakeDocument as unknown as Document;
   }
 
   setCssProps(props: Record<string, string>): void {
@@ -103,6 +155,9 @@ class FakeElement {
     const child = this.append(options);
     child.type = options.type ?? tag;
     child.value = options.value ?? "";
+    for (const [name, value] of Object.entries(options.attr ?? {})) {
+      child.attrs.set(name, value);
+    }
     return child;
   }
 
@@ -153,6 +208,12 @@ class FakeElement {
       child.attrs.set(name, value);
     }
     return child;
+  }
+
+  querySelector(selector: string): FakeElement | null {
+    if (!selector.startsWith(".")) return null;
+    const classes = selector.split(".").filter(Boolean);
+    return collect(this).find((element) => classes.every((cls) => element.classes.has(cls))) ?? null;
   }
 
   setAttr(name: string, value: string): void {
@@ -239,7 +300,11 @@ class FakeElement {
   }
 
   getBoundingClientRect(): { top: number; height: number } {
-    return { top: this.clientY, height: 40 };
+    const style = this.style as { left?: string; top?: string };
+    const parentRect = this.parent?.getBoundingClientRect() as ({ top: number; right?: number; left?: number } | undefined);
+    const left = Number.parseFloat(style.left ?? "") || this.clientX || parentRect?.left || 0;
+    const top = Number.parseFloat(style.top ?? "") || this.clientY || parentRect?.top || 0;
+    return { left, top, right: left + 150, height: 40 } as { left: number; top: number; height: number; right: number };
   }
 
   private append(options: { cls?: string; text?: string } = {}): FakeElement {
@@ -254,11 +319,14 @@ class FakeElement {
   }
 }
 
+fakeDocument.body = new FakeElement();
+
 type FakeEvent = {
   key: string;
   isComposing?: boolean;
   ctrlKey?: boolean;
   metaKey?: boolean;
+  clientX?: number;
   clientY?: number;
   dataTransfer?: {
     effectAllowed?: string;
@@ -324,6 +392,14 @@ function fakeDataTransfer() {
   };
 }
 
+function smartListTranslator(key: string): string {
+  return ({
+    smartListDragInNotice: "已将 {count} 个任务拖入「{name}」。",
+    smartListDragOutNotice: "已从「{name}」拖出 {count} 个任务。",
+    smartListDragStartNotice: "从「{name}」智能列表中拖动 {count} 个任务。"
+  }[key] ?? key);
+}
+
 function leaveTaskDetailEditor(element: FakeElement): void {
   collect(element).find((child) => child.classes.has("task-hub-detail-editor"))?.dispatchSelf("mouseleave");
 }
@@ -367,6 +443,9 @@ function inlineStyleWidth(element: FakeElement | undefined): string | undefined 
 describe("renderTasksView", () => {
   beforeEach(() => {
     mockMenus.length = 0;
+    fakeDocument.body.empty();
+    const { Notice } = jest.requireMock("obsidian") as { Notice: jest.Mock };
+    Notice.mockClear();
   });
 
   const handlers = () => ({
@@ -424,6 +503,400 @@ describe("renderTasksView", () => {
     );
 
     expect(findCheckbox(container)?.disabled).toBe(false);
+  });
+
+  it("opens an inline smart list name form before saving a smart list", () => {
+    const container = new FakeElement();
+    const onSaveSmartList = jest.fn();
+
+    renderTasksView(
+      container as unknown as HTMLElement,
+      [baseTask],
+      [baseTask],
+      { status: "open", tags: [], sourceQuery: "", textQuery: "" },
+      handlers(),
+      new Date("2026-05-08T12:00:00Z"),
+      (key) => key,
+      { allowAppleReminderWriteback: false, smartLists: [], onSaveSmartList }
+    );
+
+    const add = collect(container).find((element) => element.attrs.get("aria-label") === "saveSmartList");
+    expect(add).toBeDefined();
+    add!.click();
+
+    const input = collect(container).find((element) => element.classes.has("task-hub-smart-list-name-input"));
+    expect(input).toBeDefined();
+    input!.value = "Focus";
+    input!.input();
+    const save = collect(container).find((element) => element.classes.has("task-hub-smart-list-create-save"));
+    expect(save).toBeDefined();
+    save!.click();
+
+    expect(onSaveSmartList).toHaveBeenCalledWith("Focus");
+  });
+
+  it("uses a context menu for smart list color and deletion instead of an inline delete button", () => {
+    const container = new FakeElement();
+    const onApplySmartList = jest.fn();
+    const onDeleteSmartList = jest.fn();
+    const onSmartListColorChange = jest.fn();
+    const onRenameSmartList = jest.fn();
+    const smartList: TaskHubSmartList = {
+      id: "focus",
+      name: "Focus",
+      color: "#6f94b8",
+      filters: { status: "open", tags: [], sourceQuery: "", textQuery: "" },
+      taskStableIds: ["vault:th_focus"],
+      taskIds: [],
+      createdAt: "2026-06-30T00:00:00.000Z",
+      updatedAt: "2026-06-30T00:00:00.000Z"
+    };
+
+    renderTasksView(
+      container as unknown as HTMLElement,
+      [baseTask],
+      [baseTask],
+      { status: "open", tags: [], sourceQuery: "", textQuery: "" },
+      handlers(),
+      new Date("2026-05-08T12:00:00Z"),
+      (key) => key,
+      {
+        allowAppleReminderWriteback: false,
+        smartLists: [smartList],
+        activeSmartListId: "focus",
+        onApplySmartList,
+        onDeleteSmartList,
+        onRenameSmartList,
+        onSmartListColorChange
+      }
+    );
+
+    const item = collect(container).find((element) => element.classes.has("task-hub-smart-list-item"));
+    const apply = collect(container).find((element) => element.classes.has("task-hub-smart-list-apply"));
+    expect(item?.style.setProperty).toHaveBeenCalledWith("--task-hub-smart-list-color", "#6f94b8");
+    expect(collect(container).some((element) => element.classes.has("task-hub-smart-list-delete"))).toBe(false);
+
+    apply!.click();
+    expect(onApplySmartList).toHaveBeenCalledWith(smartList);
+
+    item!.clientX = 420;
+    item!.clientY = 150;
+    item!.dispatch("contextmenu", { clientX: 120, clientY: 48 });
+    expect(mockMenus.length).toBe(0);
+    const menu = collect(fakeDocument.body).find((element) => element.classes.has("task-hub-smart-list-context-menu"));
+    expect(menu).toBeDefined();
+    expect(menu?.classes.has("menu")).toBe(true);
+    expect(menu?.parent).toBe(fakeDocument.body);
+    expect((menu?.style as { left?: string }).left).toBe("120px");
+    expect((menu?.style as { top?: string }).top).toBe("48px");
+    const contextActions = collect(menu!).filter((element) => element.classes.has("task-hub-smart-list-context-action"));
+    expect(textValues(menu!)).toEqual(expect.arrayContaining(["smartListColor", ">", "renameSmartList", "deleteSmartList"]));
+    expect(contextActions).toHaveLength(3);
+    expect(contextActions.every((element) => element.classes.has("menu-item"))).toBe(true);
+    expect(collect(menu!).some((element) => element.classes.has("menu-separator"))).toBe(true);
+    const colorSubmenu = collect(menu!).find((element) => element.classes.has("task-hub-smart-list-color-submenu"));
+    expect(colorSubmenu).toBeDefined();
+    expect(colorSubmenu?.classes.has("menu")).toBe(true);
+    expect(collect(colorSubmenu!).filter((element) => element.classes.has("task-hub-smart-list-menu-color-dot"))).toHaveLength(7);
+    const blueColor = collect(colorSubmenu!).find((element) => element.classes.has("task-hub-smart-list-color-label") && element.text === "smartListColorBlue");
+    expect(blueColor).toBeDefined();
+    expect(collect(colorSubmenu!).some((element) => element.classes.has("task-hub-smart-list-color-check"))).toBe(true);
+    expect((colorSubmenu?.style as { left?: string }).left).toBe("274px");
+    expect((colorSubmenu?.style as { top?: string }).top).toBe("43px");
+
+    const defaultColorAction = collect(colorSubmenu!).find((element) => {
+      return element.classes.has("task-hub-smart-list-color-action") && collect(element).some((child) => child.text === "smartListColorDefault");
+    });
+    defaultColorAction!.click();
+    const deleteAction = contextActions.find((element) => collect(element).some((child) => child.text === "deleteSmartList"));
+    deleteAction!.click();
+
+    expect(onSmartListColorChange).toHaveBeenCalledWith(smartList, undefined);
+    expect(onDeleteSmartList).toHaveBeenCalledWith(smartList);
+  });
+
+  it("shows the runtime smart list task count when provided", () => {
+    const container = new FakeElement();
+    const smartList: TaskHubSmartList = {
+      id: "focus",
+      name: "Focus",
+      filters: { status: "open", tags: [], sourceQuery: "", textQuery: "" },
+      taskStableIds: [],
+      taskIds: [],
+      createdAt: "2026-06-30T00:00:00.000Z",
+      updatedAt: "2026-06-30T00:00:00.000Z"
+    };
+
+    renderTasksView(
+      container as unknown as HTMLElement,
+      [baseTask],
+      [baseTask],
+      { status: "open", tags: [], sourceQuery: "", textQuery: "" },
+      handlers(),
+      new Date("2026-05-08T12:00:00Z"),
+      (key) => key,
+      {
+        allowAppleReminderWriteback: false,
+        smartLists: [smartList],
+        smartListCounts: new Map([["focus", 7]])
+      }
+    );
+
+    expect(collect(container).find((element) => element.classes.has("task-hub-smart-list-item-count"))?.text).toBe("7");
+  });
+
+  it("drops selected tasks onto a smart list", () => {
+    const container = new FakeElement();
+    const onAddTasksToSmartList = jest.fn();
+    const firstTask: TaskItem = {
+      ...baseTask,
+      id: "first",
+      stableId: "vault:th_first",
+      source: "vault",
+      externalId: undefined,
+      externalSourceName: undefined,
+      filePath: "Project.md",
+      rawLine: "- [ ] First 📅 2026-05-08",
+      text: "First",
+      dueDate: "2026-05-08"
+    };
+    const secondTask: TaskItem = {
+      ...firstTask,
+      id: "second",
+      stableId: "vault:th_second",
+      rawLine: "- [ ] Second 📅 2026-05-09",
+      text: "Second",
+      dueDate: "2026-05-09"
+    };
+    const smartList: TaskHubSmartList = {
+      id: "focus",
+      name: "Focus",
+      filters: { status: "open", tags: [], sourceQuery: "", textQuery: "" },
+      taskStableIds: [],
+      taskIds: [],
+      createdAt: "2026-06-30T00:00:00.000Z",
+      updatedAt: "2026-06-30T00:00:00.000Z"
+    };
+
+    renderTasksView(
+      container as unknown as HTMLElement,
+      [firstTask, secondTask],
+      [firstTask, secondTask],
+      { status: "open", tags: [], sourceQuery: "", textQuery: "" },
+      handlers(),
+      new Date("2026-05-08T12:00:00Z"),
+      smartListTranslator,
+      {
+        allowAppleReminderWriteback: true,
+        selectedTaskIds: new Set(["first", "second"]),
+        smartLists: [smartList],
+        onAddTasksToSmartList
+      }
+    );
+
+    const dragRow = taskRowByTitle(container, "First");
+    const smartListItem = collect(container).find((element) => element.classes.has("task-hub-smart-list-item"));
+    const dataTransfer = fakeDataTransfer();
+
+    dragRow?.dispatch("dragstart", { dataTransfer });
+    const dragover = smartListItem?.dispatch("dragover", { dataTransfer });
+    smartListItem?.dispatch("drop", { dataTransfer });
+
+    expect(dragover?.preventDefault).toHaveBeenCalled();
+    expect(onAddTasksToSmartList).toHaveBeenCalledWith(smartList, [firstTask, secondTask]);
+  });
+
+  it("uses the live command selection when batch dragging tasks onto a smart list", () => {
+    const container = new FakeElement();
+    const onAddTasksToSmartList = jest.fn();
+    const firstTask: TaskItem = {
+      ...baseTask,
+      id: "first",
+      stableId: "vault:th_first",
+      source: "vault",
+      externalId: undefined,
+      externalSourceName: undefined,
+      filePath: "Project.md",
+      rawLine: "- [ ] First 📅 2026-05-08",
+      text: "First",
+      dueDate: "2026-05-08"
+    };
+    const secondTask: TaskItem = {
+      ...firstTask,
+      id: "second",
+      stableId: "vault:th_second",
+      rawLine: "- [ ] Second 📅 2026-05-09",
+      text: "Second",
+      dueDate: "2026-05-09"
+    };
+    const focusList: TaskHubSmartList = {
+      id: "focus",
+      name: "Focus",
+      filters: { status: "open", tags: [], sourceQuery: "", textQuery: "" },
+      taskStableIds: [],
+      taskIds: [],
+      createdAt: "2026-06-30T00:00:00.000Z",
+      updatedAt: "2026-06-30T00:00:00.000Z"
+    };
+    const inboxList: TaskHubSmartList = { ...focusList, id: "inbox", name: "Inbox" };
+
+    renderTasksView(
+      container as unknown as HTMLElement,
+      [firstTask, secondTask],
+      [firstTask, secondTask],
+      { status: "open", tags: [], sourceQuery: "", textQuery: "" },
+      handlers(),
+      new Date("2026-05-08T12:00:00Z"),
+      smartListTranslator,
+      {
+        allowAppleReminderWriteback: true,
+        selectedTaskId: "first",
+        smartLists: [focusList, inboxList],
+        activeSmartListId: "focus",
+        onAddTasksToSmartList
+      }
+    );
+
+    const secondRow = taskRowByTitle(container, "Second");
+    secondRow?.dispatch("click", { metaKey: true });
+    const dragRow = taskRowByTitle(container, "First");
+    const inboxItem = collect(container)
+      .filter((element) => element.classes.has("task-hub-smart-list-item"))
+      .find((element) => textValues(element).includes("Inbox"));
+    const dataTransfer = fakeDataTransfer();
+
+    dragRow?.dispatch("dragstart", { dataTransfer });
+    expect(dragRow?.classes.has("is-dragging")).toBe(true);
+    expect(secondRow?.classes.has("is-bulk-dragging")).toBe(true);
+    inboxItem?.dispatch("drop", { dataTransfer });
+
+    const { Notice } = jest.requireMock("obsidian") as { Notice: jest.Mock };
+    expect(onAddTasksToSmartList).toHaveBeenCalledWith(inboxList, [firstTask, secondTask]);
+    expect(Notice).toHaveBeenCalledWith("从「Focus」智能列表中拖动 2 个任务。");
+    expect(Notice).toHaveBeenCalledWith("已将 2 个任务拖入「Inbox」。");
+    expect(dragRow?.classes.has("is-dragging")).toBe(false);
+    expect(secondRow?.classes.has("is-bulk-dragging")).toBe(false);
+  });
+
+  it("shows a trash drop target only for the active smart list view and removes selected tasks", () => {
+    const container = new FakeElement();
+    const onRemoveTasksFromActiveSmartList = jest.fn();
+    const firstTask: TaskItem = {
+      ...baseTask,
+      id: "first",
+      stableId: "vault:th_first",
+      source: "vault",
+      externalId: undefined,
+      externalSourceName: undefined,
+      filePath: "Project.md",
+      rawLine: "- [ ] First 📅 2026-05-08",
+      text: "First",
+      dueDate: "2026-05-08"
+    };
+    const secondTask: TaskItem = {
+      ...firstTask,
+      id: "second",
+      stableId: "vault:th_second",
+      rawLine: "- [ ] Second 📅 2026-05-09",
+      text: "Second",
+      dueDate: "2026-05-09"
+    };
+    const smartList: TaskHubSmartList = {
+      id: "focus",
+      name: "Focus",
+      filters: { status: "open", tags: [], sourceQuery: "", textQuery: "" },
+      taskStableIds: [],
+      taskIds: [],
+      createdAt: "2026-06-30T00:00:00.000Z",
+      updatedAt: "2026-06-30T00:00:00.000Z"
+    };
+
+    renderTasksView(
+      container as unknown as HTMLElement,
+      [firstTask, secondTask],
+      [firstTask, secondTask],
+      { status: "open", tags: [], sourceQuery: "", textQuery: "" },
+      handlers(),
+      new Date("2026-05-08T12:00:00Z"),
+      smartListTranslator,
+      {
+        allowAppleReminderWriteback: true,
+        selectedTaskIds: new Set(["first", "second"]),
+        smartLists: [smartList],
+        activeSmartListId: "focus",
+        onRemoveTasksFromActiveSmartList
+      }
+    );
+
+    const remove = collect(container).find((element) => element.classes.has("task-hub-smart-list-remove-drop"));
+    expect(remove).toBeDefined();
+    expect(remove?.type).not.toBe("button");
+    expect(remove?.attrs.get("role")).toBe("button");
+    expect(remove?.attrs.get("aria-label")).toBe("removeFromSmartListHint");
+    remove!.click();
+    const { Notice } = jest.requireMock("obsidian") as { Notice: jest.Mock };
+    expect(Notice).toHaveBeenCalledWith("removeFromSmartListHint");
+
+    const dragRow = taskRowByTitle(container, "First");
+    const dataTransfer = fakeDataTransfer();
+    dragRow?.dispatch("dragstart", { dataTransfer });
+    const dragover = remove?.dispatch("dragover", { dataTransfer });
+    remove?.dispatch("drop", { dataTransfer });
+
+    expect(dragover?.preventDefault).toHaveBeenCalled();
+    expect(onRemoveTasksFromActiveSmartList).toHaveBeenCalledWith([firstTask, secondTask]);
+    expect(Notice).toHaveBeenCalledWith("已从「Focus」拖出 2 个任务。");
+  });
+
+  it("renames a smart list inline from its context menu on enter or blur", () => {
+    const smartList: TaskHubSmartList = {
+      id: "focus",
+      name: "Focus",
+      filters: { status: "open", tags: [], sourceQuery: "", textQuery: "" },
+      taskStableIds: [],
+      taskIds: [],
+      createdAt: "2026-06-30T00:00:00.000Z",
+      updatedAt: "2026-06-30T00:00:00.000Z"
+    };
+
+    const render = () => {
+      const container = new FakeElement();
+      const onRenameSmartList = jest.fn();
+      renderTasksView(
+        container as unknown as HTMLElement,
+        [baseTask],
+        [baseTask],
+        { status: "open", tags: [], sourceQuery: "", textQuery: "" },
+        handlers(),
+        new Date("2026-05-08T12:00:00Z"),
+        (key) => key,
+        {
+          allowAppleReminderWriteback: false,
+          smartLists: [smartList],
+          onRenameSmartList
+        }
+      );
+      const item = collect(container).find((element) => element.classes.has("task-hub-smart-list-item"));
+      item!.dispatch("contextmenu", { clientX: 120, clientY: 48 });
+      const menu = collect(fakeDocument.body).find((element) => element.classes.has("task-hub-smart-list-context-menu"));
+      const renameAction = collect(menu!).find((element) => element.classes.has("task-hub-smart-list-context-action") && collect(element).some((child) => child.text === "renameSmartList"));
+      renameAction!.click();
+      const input = collect(item!).find((element) => element.classes.has("task-hub-smart-list-rename-input"));
+      return { input, onRenameSmartList };
+    };
+
+    const enterCase = render();
+    expect(enterCase.input).toBeDefined();
+    expect(enterCase.input!.value).toBe("Focus");
+    expect(enterCase.input!.focused).toBe(true);
+    enterCase.input!.value = "Deep work";
+    enterCase.input!.dispatchSelf("keydown", { key: "Enter" });
+    expect(enterCase.onRenameSmartList).toHaveBeenCalledWith(smartList, "Deep work");
+
+    const blurCase = render();
+    blurCase.input!.value = "Later";
+    blurCase.input!.dispatchSelf("blur");
+    expect(blurCase.onRenameSmartList).toHaveBeenCalledWith(smartList, "Later");
   });
 
   it("renders a subtask chevron and expands child rows under the parent", () => {
@@ -2218,6 +2691,42 @@ describe("renderTasksView", () => {
     expect(elements.some((element) => element.classes.has("task-hub-empty") && element.text === "noMatchingTasks")).toBe(true);
   });
 
+  it("keeps the smart list sidebar visible when an active smart list has no tasks", () => {
+    const container = new FakeElement();
+    const smartList: TaskHubSmartList = {
+      id: "empty",
+      name: "Empty",
+      filters: { status: "open", tags: [], sourceQuery: "", textQuery: "" },
+      taskStableIds: [],
+      taskIds: [],
+      createdAt: "2026-06-30T00:00:00.000Z",
+      updatedAt: "2026-06-30T00:00:00.000Z"
+    };
+
+    renderTasksView(
+      container as unknown as HTMLElement,
+      [],
+      [baseTask],
+      { status: "open", tags: [], sourceQuery: "", textQuery: "" },
+      handlers(),
+      new Date("2026-05-08T12:00:00Z"),
+      (key) => key,
+      {
+        allowAppleReminderWriteback: true,
+        smartLists: [smartList],
+        activeSmartListId: "empty"
+      }
+    );
+
+    const elements = collect(container);
+    expect(elements.some((element) => element.classes.has("task-hub-task-workbench"))).toBe(true);
+    expect(elements.some((element) => element.classes.has("task-hub-smart-list-card"))).toBe(true);
+    expect(elements.some((element) => element.classes.has("task-hub-smart-list-item") && element.classes.has("is-active"))).toBe(true);
+    expect(elements.some((element) => element.classes.has("task-hub-task-list-pane"))).toBe(true);
+    expect(elements.some((element) => element.classes.has("task-hub-empty") && element.text === "noMatchingTasks")).toBe(true);
+    expect(elements.some((element) => element.classes.has("task-hub-empty") && element.text === "noOpenTasks")).toBe(false);
+  });
+
   it("restores the task list scroll position after rendering", () => {
     const container = new FakeElement();
 
@@ -2402,6 +2911,60 @@ describe("renderTasksView", () => {
     thisWeekSection?.dispatch("drop", { dataTransfer });
 
     expect(viewHandlers.onTaskReschedule).toHaveBeenCalledWith(todayTask, "2026-05-10");
+  });
+
+  it("reschedules command-selected tasks together when dropped onto a date bucket", () => {
+    const container = new FakeElement();
+    const viewHandlers = handlers();
+    const overdueTask: TaskItem = {
+      ...baseTask,
+      id: "overdue",
+      stableId: "vault:th_overdue",
+      source: "vault",
+      externalId: undefined,
+      externalSourceName: undefined,
+      filePath: "Project.md",
+      rawLine: "- [ ] Overdue 📅 2026-05-07",
+      text: "Overdue",
+      dueDate: "2026-05-07"
+    };
+    const todayTask: TaskItem = {
+      ...baseTask,
+      id: "today",
+      stableId: "vault:th_today",
+      source: "vault",
+      externalId: undefined,
+      externalSourceName: undefined,
+      filePath: "Project.md",
+      rawLine: "- [ ] Today 📅 2026-05-08",
+      text: "Today",
+      dueDate: "2026-05-08"
+    };
+
+    renderTasksView(
+      container as unknown as HTMLElement,
+      [overdueTask, todayTask],
+      [overdueTask, todayTask],
+      { status: "open", tags: [], sourceQuery: "", textQuery: "" },
+      viewHandlers,
+      new Date("2026-05-08T12:00:00Z"),
+      (key) => key,
+      {
+        allowAppleReminderWriteback: true,
+        selectedTaskIds: new Set(["overdue", "today"])
+      }
+    );
+
+    const dragRow = taskRowByTitle(container, "Overdue");
+    const tomorrowSection = collect(container).find((element) => element.classes.has("task-hub-task-section") && collect(element).some((child) => child.text === "tomorrow (0)"));
+    const dataTransfer = fakeDataTransfer();
+
+    dragRow?.dispatch("dragstart", { dataTransfer });
+    tomorrowSection?.dispatch("drop", { dataTransfer });
+
+    expect(viewHandlers.onTaskReschedule).toHaveBeenCalledTimes(2);
+    expect(viewHandlers.onTaskReschedule).toHaveBeenNthCalledWith(1, overdueTask, "2026-05-09");
+    expect(viewHandlers.onTaskReschedule).toHaveBeenNthCalledWith(2, todayTask, "2026-05-09");
   });
 
   it("does not reschedule when a task is dropped back into its current bucket", () => {
