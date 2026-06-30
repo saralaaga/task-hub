@@ -865,6 +865,10 @@ body .task-hub-view button.task-hub-smart-list-apply:focus-visible {
   position: relative;
 }
 
+.task-hub-smart-list-context-group + .task-hub-smart-list-context-action {
+  border-top: 1px solid var(--background-modifier-border);
+}
+
 .task-hub-smart-list-context-group::after {
   content: "";
   display: none;
@@ -882,13 +886,26 @@ body .task-hub-view button.task-hub-smart-list-apply:focus-visible {
 
 .task-hub-smart-list-context-action,
 .task-hub-smart-list-color-action {
+  align-items: center;
   cursor: var(--cursor);
+  font-size: var(--font-ui-medium);
   justify-content: space-between;
+  line-height: 1.25;
+  min-height: 38px;
   min-width: 0;
+  padding: 7px 16px;
+}
+
+.task-hub-smart-list-context-separator.menu-separator {
+  box-sizing: border-box;
+  margin: 4px 0;
+  width: 100%;
 }
 
 .task-hub-smart-list-context-label,
 .task-hub-smart-list-color-label {
+  font-size: inherit;
+  line-height: inherit;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -898,6 +915,8 @@ body .task-hub-view button.task-hub-smart-list-apply:focus-visible {
 .task-hub-smart-list-context-arrow {
   color: var(--text-faint);
   flex: 0 0 auto;
+  font-size: inherit;
+  line-height: 1;
 }
 
 .task-hub-smart-list-color-submenu {

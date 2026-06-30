@@ -21,7 +21,7 @@ export type TaskConditionFilters = {
 
 export function filterTasks(tasks: TaskItem[], filters: TaskFilterState, now: Date): TaskItem[] {
   const sourceQuery = filters.sourceQuery.toLowerCase();
-  const textQuery = filters.textQuery.toLowerCase();
+  const textQuery = filters.textQuery.trim().toLowerCase();
   const tagQuery = filters.tagQuery?.trim();
 
   return sortTasksByCompletion(tasks.filter((task) => {
@@ -36,7 +36,7 @@ export function filterTasks(tasks: TaskItem[], filters: TaskFilterState, now: Da
       return false;
     }
     if (!matchesConditions(task, filters.conditions, now)) return false;
-    if (textQuery && !task.text.toLowerCase().includes(textQuery)) return false;
+    if (textQuery && !matchesTaskTextQuery(task, textQuery)) return false;
     return true;
   }));
 }
@@ -85,10 +85,17 @@ function matchesConditions(task: TaskItem, conditions: TaskConditionFilters | un
     checks.push(getTaskBucket(task, now) === conditions.dateBucket);
   }
   if (text) {
-    checks.push(task.text.toLowerCase().includes(text));
+    checks.push(matchesTaskTextQuery(task, text));
   }
   if (checks.length === 0) return true;
   return conditions.operator === "or" ? checks.some(Boolean) : checks.every(Boolean);
+}
+
+function matchesTaskTextQuery(task: TaskItem, query: string): boolean {
+  return [
+    task.text,
+    ...task.tags
+  ].some((value) => value.toLowerCase().includes(query));
 }
 
 function splitFilterTags(value: string): string[] {

@@ -91,6 +91,19 @@ describe("filterTasks", () => {
     expect(results.map((item) => item.id)).toEqual(["today"]);
   });
 
+  it("matches text search against task tags from Apple Reminders", () => {
+    const results = filterTasks(
+      [
+        task({ id: "restaurant", text: "Book table", tags: ["#p-天香居"], source: "apple-reminders", filePath: "Apple Reminders/MyNotes" }),
+        task({ id: "other", text: "Buy groceries", tags: ["#p-超市"], source: "apple-reminders", filePath: "Apple Reminders/MyNotes" })
+      ],
+      { ...BASE_FILTERS, textQuery: "天香居" },
+      NOW
+    );
+
+    expect(results.map((item) => item.id)).toEqual(["restaurant"]);
+  });
+
   it("filters source shortcuts by task source", () => {
     const results = filterTasks(
       [
@@ -120,6 +133,27 @@ describe("filterTasks", () => {
     );
 
     expect(results.map((item) => item.id)).toEqual(["today"]);
+  });
+
+  it("matches advanced condition text against task tags", () => {
+    const results = filterTasks(
+      [
+        task({ id: "restaurant", text: "Book table", tags: ["#p-天香居"], source: "apple-reminders" }),
+        task({ id: "other", text: "Buy groceries", tags: ["#p-超市"], source: "apple-reminders" })
+      ],
+      {
+        ...BASE_FILTERS,
+        conditions: {
+          operator: "and",
+          tag: "",
+          dateBucket: "",
+          text: "天香居"
+        }
+      },
+      NOW
+    );
+
+    expect(results.map((item) => item.id)).toEqual(["restaurant"]);
   });
 
   it("matches multiple advanced condition tags from chip input", () => {

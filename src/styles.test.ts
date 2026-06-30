@@ -152,6 +152,9 @@ describe("Task Hub styles", () => {
     const applyButtonHoverRule = styles.match(/button\.task-hub-smart-list-apply:hover,\s*button\.task-hub-smart-list-apply:focus-visible,\s*body\s+\.task-hub-view\s+button\.task-hub-smart-list-apply:hover,\s*body\s+\.task-hub-view\s+button\.task-hub-smart-list-apply:focus-visible\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const renameInputRule = styles.match(/\.task-hub-smart-list-rename-input\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const contextMenuRule = styles.match(/\.task-hub-smart-list-context-menu\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const contextActionRule = styles.match(/\.task-hub-smart-list-context-action,\s*\.task-hub-smart-list-color-action\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const contextGroupDividerRule = styles.match(/\.task-hub-smart-list-context-group\s+\+\s+\.task-hub-smart-list-context-action\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const contextSeparatorRule = styles.match(/\.task-hub-smart-list-context-separator\.menu-separator\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const colorSubmenuRule = styles.match(/\.task-hub-smart-list-color-submenu\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const colorSubmenuOpenRule = styles.match(/\.task-hub-smart-list-context-group:hover\s*>\s*\.task-hub-smart-list-color-submenu,\s*\.task-hub-smart-list-context-group:focus-within\s*>\s*\.task-hub-smart-list-color-submenu\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const dotRule = styles.match(/\.task-hub-smart-list-menu-color-dot\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
@@ -187,6 +190,14 @@ describe("Task Hub styles", () => {
     expect(contextMenuRule).not.toContain("background:");
     expect(contextMenuRule).not.toContain("border:");
     expect(contextMenuRule).not.toContain("box-shadow:");
+    expect(contextActionRule).toContain("font-size: var(--font-ui-medium)");
+    expect(contextActionRule).toContain("line-height: 1.25");
+    expect(contextActionRule).toContain("min-height: 38px");
+    expect(contextActionRule).toContain("padding: 7px 16px");
+    expect(contextGroupDividerRule).toContain("border-top: 1px solid var(--background-modifier-border)");
+    expect(contextSeparatorRule).toContain("box-sizing: border-box");
+    expect(contextSeparatorRule).toContain("margin: 4px 0");
+    expect(contextSeparatorRule).toContain("width: 100%");
     expect(colorSubmenuRule).toContain("display: none");
     expect(colorSubmenuRule).toContain("position: fixed");
     expect(colorSubmenuRule).toContain("z-index: 1001");
