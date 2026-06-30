@@ -18,6 +18,7 @@ import { createRecurrenceSelect, recurrenceValueFromSelect } from "./recurrenceC
 import { resolveTaskBulkActions, type TaskBulkActionId } from "./taskSelection";
 import { renderSourceLogo, sourceLogoKindForTask } from "./sourceLogos";
 import type { TaskHubTagInputElement } from "./tagInputSuggest";
+import { createTagChipEditor, type TagChipEditor } from "./tagChipEditor";
 import { setCssProps, setCssStyles } from "./domStyles";
 
 export type TaskRowHandlers = {
@@ -79,6 +80,8 @@ export type TaskRenderOptions = {
   expandingTaskIds?: ReadonlySet<string>;
   onToggleTaskExpanded?: (task: TaskItem) => void;
   taskListManualOrder?: TaskListManualOrder;
+  animateTaskListTransition?: boolean;
+  availableTags?: string[];
   sourceFilters?: SourceFilterOption[];
   filterHandlers?: TaskFilterControlHandlers;
   smartLists?: TaskHubSmartList[];
@@ -132,6 +135,8 @@ export function renderTasksView(
     filters.status !== "open" ||
     Boolean(filters.dateBucket) ||
     filters.tags.length > 0 ||
+    Boolean(filters.tagQuery?.trim()) ||
+    hasActiveConditionFilters(filters.conditions) ||
     Boolean(filters.sourceQuery) ||
     Boolean(filters.textQuery) ||
     Boolean(options.activeSmartListId);
@@ -155,7 +160,9 @@ export function renderTasksView(
   if (hasSidebar) {
     renderTaskSidebar(workbench, filters, options, t);
   }
-  const list = workbench.createDiv({ cls: "task-hub-task-list-pane" });
+  const list = workbench.createDiv({
+    cls: `task-hub-task-list-pane ${options.animateTaskListTransition ? "task-hub-task-list-pane-transition" : ""}`
+  });
   const draggableTaskIds = new Set(sortedTasks.filter((task) => canDragTaskRowInList(task, options, handlers)).map((task) => task.id));
   activeTaskListTasksById = new Map(sortedTasks.map((task) => [task.id, task]));
   activeDraggableTaskListItemIds = new Set(draggableTaskIds);
@@ -270,6 +277,7 @@ function renderTaskSidebar(
     renderTaskFilterPanel(
       controls,
       {
+        availableTags: options.availableTags ?? [],
         filters,
         sourceFilters: options.sourceFilters,
         t
@@ -302,7 +310,6 @@ function renderTaskSidebar(
   if (options.onSaveSmartList) {
     const save = actions.createEl("button", { cls: "task-hub-icon-button task-hub-smart-list-save" });
     save.setAttr("aria-label", t("saveSmartList"));
-    save.setAttr("title", t("saveSmartList"));
     setIcon(save, "plus");
     save.addEventListener("click", () => {
       renderSmartListCreateForm(smartLists, options.onSaveSmartList, t);
@@ -729,6 +736,11 @@ function normalizedSelectedTaskIds(options: TaskRenderOptions, selectedTask: Tas
   const selectedTaskIds = new Set(options.selectedTaskIds ?? []);
   if (selectedTaskIds.size === 0 && selectedTask) selectedTaskIds.add(selectedTask.id);
   return selectedTaskIds;
+}
+
+function hasActiveConditionFilters(conditions: TaskFilterState["conditions"]): boolean {
+  if (!conditions) return false;
+  return Boolean(conditions.tag.trim() || conditions.dateBucket || conditions.text.trim());
 }
 
 function restoreTaskListScroll(list: HTMLElement, options: TaskRenderOptions): void {
@@ -1836,15 +1848,6 @@ function openNativeDatePicker(input: HTMLInputElement): void {
   input.showPicker?.();
 }
 
-function splitTaskTags(value: string): string[] {
-  return Array.from(new Set(value.split(/\s+/).map(normalizeTaskTag).filter(Boolean)));
-}
-
-type TagChipEditor = {
-  input: HTMLInputElement;
-  getTags: () => string[];
-};
-
 function tagChipEditor(
   container: HTMLElement,
   label: string,
@@ -1855,146 +1858,13 @@ function tagChipEditor(
 ): TagChipEditor {
   const row = detailRow(container, label);
   row.row.addClass("task-hub-tag-editor-field");
-  const editor = row.control.createDiv({ cls: "task-hub-tag-editor" });
-  editor.setAttr("role", "textbox");
-  editor.setAttr("aria-label", label);
-  const tags = splitTaskTags(initialTags.join(" "));
-  let selectedIndex = -1;
-  let composing = false;
-
-  const input = editor.createEl("input", {
-    cls: "task-hub-tag-editor-input",
-    type: "text",
-    value: ""
+  return createTagChipEditor(row.control, {
+    label,
+    placeholder,
+    initialTags,
+    bindTagInputSuggest,
+    onChange
   });
-  input.setAttr("aria-label", label);
-  editor.addEventListener("click", (event) => {
-    const target = event.target as { classList?: { contains(cls: string): boolean } } | null;
-    if (event.target !== input && target?.classList?.contains("task-hub-tag-editor-chip")) return;
-    selectedIndex = -1;
-    render({ focusInput: true });
-  });
-
-  const render = (options: { focusInput?: boolean; focusSelectedChip?: boolean } = {}) => {
-    let selectedChip: HTMLElement | undefined;
-    for (const child of Array.from(editor.children)) {
-      if (child !== input) child.remove();
-    }
-    editor.toggleClass("is-empty", tags.length === 0);
-    if (tags.length === 0) {
-      const empty = editor.createSpan({ cls: "task-hub-tag-editor-placeholder", text: placeholder });
-      empty.addEventListener("click", (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        input.focus();
-      });
-    }
-    for (const [index, tag] of tags.entries()) {
-      const chip = editor.createSpan({ cls: "task-hub-tag-editor-chip", text: tag });
-      chip.toggleClass("is-selected", index === selectedIndex);
-      chip.setAttr("tabindex", index === selectedIndex ? "0" : "-1");
-      if (index === selectedIndex) selectedChip = chip;
-      chip.addEventListener("click", (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        selectedIndex = index;
-        render({ focusSelectedChip: true });
-      });
-    }
-    editor.appendChild(input);
-    if (options.focusSelectedChip && selectedChip) selectedChip.focus();
-    else if (options.focusInput) input.focus();
-  };
-
-  const commit = () => {
-    if (composing) return;
-    const nextTags = splitTaskTags(input.value);
-    if (nextTags.length === 0) return;
-    let changed = false;
-    for (const tag of nextTags) {
-      if (!tags.includes(tag)) {
-        tags.push(tag);
-        changed = true;
-      }
-    }
-    input.value = "";
-    selectedIndex = -1;
-    render({ focusInput: true });
-    if (changed) onChange?.();
-  };
-
-  const removeSelectedTag = () => {
-    if (selectedIndex < 0 || selectedIndex >= tags.length) return false;
-    tags.splice(selectedIndex, 1);
-    selectedIndex = tags.length === 0 ? -1 : Math.min(selectedIndex, tags.length - 1);
-    render(selectedIndex === -1 ? { focusInput: true } : { focusSelectedChip: true });
-    onChange?.();
-    return true;
-  };
-
-  const inputCursorAtStart = () => (input.selectionStart ?? 0) === 0 && (input.selectionEnd ?? 0) === 0;
-  const targetIsInput = (target: EventTarget | null) => target === input;
-
-  editor.addEventListener("keydown", (event) => {
-    if (event.isComposing || composing) return;
-    if ((event.key === "Backspace" || event.key === "Delete") && selectedIndex !== -1) {
-      event.preventDefault();
-      removeSelectedTag();
-      return;
-    }
-    if (event.key === "ArrowLeft" && (!targetIsInput(event.target) || inputCursorAtStart()) && tags.length > 0) {
-      event.preventDefault();
-      selectedIndex = selectedIndex === -1 ? tags.length - 1 : Math.max(0, selectedIndex - 1);
-      render({ focusSelectedChip: true });
-      return;
-    }
-    if (event.key === "ArrowRight" && selectedIndex !== -1) {
-      event.preventDefault();
-      selectedIndex = selectedIndex >= tags.length - 1 ? -1 : selectedIndex + 1;
-      render(selectedIndex === -1 ? { focusInput: true } : { focusSelectedChip: true });
-      return;
-    }
-    if (targetIsInput(event.target) && (event.key === "Backspace" || event.key === "Delete") && input.value === "" && tags.length > 0) {
-      event.preventDefault();
-      selectedIndex = tags.length - 1;
-      removeSelectedTag();
-      return;
-    }
-    if (!targetIsInput(event.target)) return;
-    selectedIndex = -1;
-    if (event.key !== "Enter" && event.key !== " " && event.key !== ",") return;
-    event.preventDefault();
-    commit();
-  }, { capture: true });
-  input.addEventListener("blur", commit);
-  input.addEventListener("input", (event) => {
-    if ((event as InputEvent).isComposing || composing) return;
-    selectedIndex = -1;
-    if (/\s$/u.test(input.value)) commit();
-  });
-  input.addEventListener("compositionstart", () => {
-    composing = true;
-  });
-  input.addEventListener("compositionend", () => {
-    composing = false;
-    if (/\s$/u.test(input.value)) commit();
-  });
-  input.addEventListener("task-hub-tag-selected", commit);
-  bindTagInputSuggest?.(input);
-  render();
-
-  return {
-    input,
-    getTags: () => {
-      commit();
-      return [...tags];
-    }
-  };
-}
-
-function normalizeTaskTag(tag: string): string {
-  const normalized = tag.trim().replace(/^#+/u, "");
-  return normalized ? `#${normalized}` : "";
 }
 
 function timeFromTask(task: TaskItem): string | undefined {

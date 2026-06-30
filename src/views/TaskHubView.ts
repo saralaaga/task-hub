@@ -46,6 +46,7 @@ export class TaskHubView extends ItemView {
   private expandedTaskIds = new Set<string>();
   private expandingTaskIds = new Set<string>();
   private activeSmartListId: string | undefined;
+  private lastTaskViewTransitionKey: string | undefined;
   private pendingExpandedTaskScrollId: string | undefined;
   private pendingExpandedTaskScrollTimers: number[] = [];
   private readonly undoShortcutHandler = (event: KeyboardEvent) => {
@@ -184,6 +185,11 @@ export class TaskHubView extends ItemView {
 
     if (this.view === "tasks") {
       const now = new Date();
+      const taskViewTransitionKey = buildTaskViewTransitionKey(this.filters, this.activeSmartListId);
+      const shouldAnimateTaskList =
+        this.lastTaskViewTransitionKey !== undefined &&
+        this.lastTaskViewTransitionKey !== taskViewTransitionKey;
+      this.lastTaskViewTransitionKey = taskViewTransitionKey;
       const visibleTasks = this.taskViewVisibleTasks(allTasks, now);
       const selection = reconcileVisibleTaskSelection(
         visibleTasks,
@@ -268,6 +274,8 @@ export class TaskHubView extends ItemView {
           bindTagInputSuggest,
           taskListScrollTop: this.taskListScrollTop,
           taskListManualOrder: this.plugin.settings.taskListManualOrder,
+          animateTaskListTransition: shouldAnimateTaskList,
+          availableTags: collectTags(allTasks),
           sourceFilters,
           filterHandlers: {
             onConditionChange: (conditions) => {
@@ -1029,6 +1037,26 @@ export function scrollExpandedTaskIntoView(
 
 function shouldPreserveScroll(options: TaskHubRenderOptions): boolean {
   return Boolean(options.preserveTaskListScroll || options.preserveContentScroll || options.preserveCalendarAgendaScroll);
+}
+
+export function buildTaskViewTransitionKey(filters: TaskFilterState, activeSmartListId: string | undefined): string {
+  return JSON.stringify({
+    activeSmartListId: activeSmartListId ?? "",
+    status: filters.status,
+    dateBucket: filters.dateBucket ?? "",
+    tags: [...filters.tags].sort(),
+    tagQuery: filters.tagQuery?.trim() ?? "",
+    sourceQuery: filters.sourceQuery ?? "",
+    textQuery: filters.textQuery?.trim() ?? "",
+    conditions: filters.conditions
+      ? {
+          operator: filters.conditions.operator ?? "and",
+          tag: filters.conditions.tag?.trim() ?? "",
+          dateBucket: filters.conditions.dateBucket ?? "",
+          text: filters.conditions.text?.trim() ?? ""
+        }
+      : undefined
+  });
 }
 
 export function collectUnscheduledTasks(

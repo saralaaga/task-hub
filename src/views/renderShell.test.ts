@@ -10,6 +10,7 @@ class FakeElement {
   attrs = new Map<string, string>();
   checked = false;
   disabled = false;
+  focused = false;
   open = false;
   ownerDocument: FakeDocument;
   parentElement: FakeElement | undefined;
@@ -49,8 +50,33 @@ class FakeElement {
     this.attrs.set(name, value);
   }
 
+  toggleClass(cls: string, enabled: boolean): void {
+    if (enabled) {
+      this.classes.add(cls);
+    } else {
+      this.classes.delete(cls);
+    }
+  }
+
   addEventListener(name: string, listener: (event: FakeEvent) => void): void {
     this.listeners.set(name, [...(this.listeners.get(name) ?? []), listener]);
+  }
+
+  appendChild(child: FakeElement): FakeElement {
+    child.parentElement = this;
+    this.children = this.children.filter((existing) => existing !== child);
+    this.children.push(child);
+    return child;
+  }
+
+  focus(): void {
+    this.focused = true;
+  }
+
+  remove(): void {
+    if (!this.parentElement) return;
+    this.parentElement.children = this.parentElement.children.filter((child) => child !== this);
+    this.parentElement = undefined;
   }
 
   trigger(name: string, event: Partial<FakeEvent> = {}): void {
@@ -166,6 +192,7 @@ function renderTaskFilterPanelForTest(overrides: Partial<TaskFilterState> = {}) 
   renderTaskFilterPanel(
     container as unknown as HTMLElement,
     {
+      availableTags: ["#home", "#errand", "#later", "#work", "#测试"],
       sourceFilters: [
         { id: "all", label: "all", count: 37 },
         { id: "vault", label: "vaultTasks", count: 20 },
@@ -201,7 +228,7 @@ function renderShellForState(stateOverrides: Partial<Parameters<typeof renderShe
     container as unknown as HTMLElement,
     {
       view: "tasks",
-      availableTags: [],
+      availableTags: ["#home", "#errand", "#later", "#work", "#测试"],
       sourceFilters: [
         { id: "all", label: "all", count: 37 },
         { id: "vault", label: "vaultTasks", count: 20 },
@@ -241,9 +268,13 @@ describe("renderShell", () => {
 
   it("applies condition filters only from the panel action", () => {
     const { container, handlers, bindTagInputSuggest } = renderTaskFilterPanelForTest();
-    const tagInput = collect(container).find((element) => element.attrs.get("placeholder") === "#project");
+    const tagEditor = collect(container).find((element) => element.classes.has("task-hub-tag-editor"));
+    const tagInput = collect(container).find((element) => element.classes.has("task-hub-tag-editor-input"));
     const textInput = collect(container).find((element) => element.attrs.get("placeholder") === "conditionText");
     const applyButton = collect(container).find((element) => element.text === "applyFilters");
+    expect(tagEditor).toBeDefined();
+    expect(tagEditor?.attrs.get("role")).toBe("textbox");
+    expect(collect(tagEditor!).find((element) => element.classes.has("task-hub-tag-editor-placeholder"))?.text).toBe("#project");
     expect(tagInput).toBeDefined();
     expect(textInput).toBeDefined();
     expect(applyButton).toBeDefined();
@@ -258,6 +289,68 @@ describe("renderShell", () => {
     expect(handlers.onConditionChange).toHaveBeenCalledWith({
       operator: "and",
       tag: "#work",
+      dateBucket: "",
+      text: ""
+    });
+  });
+
+  it("renders condition tags as reusable chips and applies multiple tags", () => {
+    const { container, handlers } = renderTaskFilterPanelForTest({
+      conditions: { operator: "and", tag: "#home #errand", dateBucket: "", text: "" }
+    });
+    const editor = collect(container).find((element) => element.classes.has("task-hub-tag-editor"));
+    const input = collect(container).find((element) => element.classes.has("task-hub-tag-editor-input"));
+    const applyButton = collect(container).find((element) => element.text === "applyFilters");
+
+    expect(collect(editor!).filter((element) => element.classes.has("task-hub-tag-editor-chip")).map((chip) => chip.text)).toEqual(["#home", "#errand"]);
+    expect(collect(editor!).every((element) => !element.classes.has("task-hub-tag-editor-chip") || element.classes.has("task-hub-task-tag"))).toBe(true);
+    input!.value = "#later";
+    input!.trigger("keydown", { key: " " });
+    applyButton!.trigger("click");
+
+    expect(handlers.onConditionChange).toHaveBeenCalledWith({
+      operator: "and",
+      tag: "#home #errand #later",
+      dateBucket: "",
+      text: ""
+    });
+  });
+
+  it("does not add unavailable condition tags", () => {
+    const { container, handlers } = renderTaskFilterPanelForTest();
+    const input = collect(container).find((element) => element.classes.has("task-hub-tag-editor-input"));
+    const applyButton = collect(container).find((element) => element.text === "applyFilters");
+
+    input!.value = "#不存在";
+    input!.trigger("keydown", { key: " " });
+    applyButton!.trigger("click");
+
+    expect(handlers.onConditionChange).toHaveBeenCalledWith({
+      operator: "and",
+      tag: "",
+      dateBucket: "",
+      text: ""
+    });
+  });
+
+  it("keeps suggestion-selected condition tags from duplicating partial input", () => {
+    const { container, handlers } = renderTaskFilterPanelForTest();
+    const editor = collect(container).find((element) => element.classes.has("task-hub-tag-editor"));
+    const input = collect(container).find((element) => element.classes.has("task-hub-tag-editor-input"));
+    const applyButton = collect(container).find((element) => element.text === "applyFilters");
+
+    input!.value = "#测";
+    input!.trigger("keydown", { key: "Enter", target: input });
+    expect(collect(editor!).filter((element) => element.classes.has("task-hub-tag-editor-chip"))).toHaveLength(0);
+
+    input!.value = "#测试";
+    input!.trigger("task-hub-tag-selected");
+    applyButton!.trigger("click");
+
+    expect(collect(editor!).filter((element) => element.classes.has("task-hub-tag-editor-chip")).map((chip) => chip.text)).toEqual(["#测试"]);
+    expect(handlers.onConditionChange).toHaveBeenCalledWith({
+      operator: "and",
+      tag: "#测试",
       dateBucket: "",
       text: ""
     });

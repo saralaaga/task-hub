@@ -1,5 +1,6 @@
 import {
   TaskHubView,
+  buildTaskViewTransitionKey,
   buildSavedSmartList,
   createTaskHubSessionSnapshot,
   collectCalendarUnscheduledTasks,
@@ -742,6 +743,18 @@ describe("TaskHubView smart list interactions", () => {
     });
     expect(plugin.settings.smartLists[0].updatedAt).not.toBe(list.updatedAt);
     expect(plugin.saveSettings).toHaveBeenCalled();
+  });
+});
+
+describe("buildTaskViewTransitionKey", () => {
+  it("changes only when task filtering or the active smart list changes", () => {
+    const base = baseFilters();
+    const sameTagsDifferentOrder = buildTaskViewTransitionKey({ ...base, tags: ["#b", "#a"] }, "smart_focus");
+    const normalizedTags = buildTaskViewTransitionKey({ ...base, tags: ["#a", "#b"] }, "smart_focus");
+
+    expect(sameTagsDifferentOrder).toBe(normalizedTags);
+    expect(buildTaskViewTransitionKey({ ...base, textQuery: "call" }, "smart_focus")).not.toBe(normalizedTags);
+    expect(buildTaskViewTransitionKey({ ...base, tags: ["#a", "#b"] }, undefined)).not.toBe(normalizedTags);
   });
 });
 

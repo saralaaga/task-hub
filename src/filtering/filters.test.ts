@@ -122,6 +122,24 @@ describe("filterTasks", () => {
     expect(results.map((item) => item.id)).toEqual(["today"]);
   });
 
+  it("matches multiple advanced condition tags from chip input", () => {
+    const results = filterTasks(
+      TASKS,
+      {
+        ...BASE_FILTERS,
+        conditions: {
+          operator: "and",
+          tag: "#work #client",
+          dateBucket: "",
+          text: ""
+        }
+      },
+      NOW
+    );
+
+    expect(results.map((item) => item.id)).toEqual(["today"]);
+  });
+
   it("matches advanced conditions with OR semantics", () => {
     const results = filterTasks(
       TASKS,

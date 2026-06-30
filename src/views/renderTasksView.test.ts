@@ -522,6 +522,7 @@ describe("renderTasksView", () => {
 
     const add = collect(container).find((element) => element.attrs.get("aria-label") === "saveSmartList");
     expect(add).toBeDefined();
+    expect(add!.attrs.has("title")).toBe(false);
     add!.click();
 
     const input = collect(container).find((element) => element.classes.has("task-hub-smart-list-name-input"));
@@ -1589,7 +1590,8 @@ describe("renderTasksView", () => {
       { allowAppleReminderWriteback: true }
     );
 
-    const chips = collect(container).filter((element) => element.classes.has("task-hub-task-tag"));
+    const row = collect(container).find((element) => element.classes.has("task-hub-task-row"));
+    const chips = collect(row!).filter((element) => element.classes.has("task-hub-task-tag"));
     expect(chips.map((chip) => chip.text)).toEqual(["#project", "#client/acme"]);
   });
 
@@ -2172,6 +2174,7 @@ describe("renderTasksView", () => {
     const editor = collect(container).find((element) => element.classes.has("task-hub-tag-editor"));
     const input = collect(container).find((element) => element.classes.has("task-hub-tag-editor-input"));
     expect(collect(editor!).filter((element) => element.classes.has("task-hub-tag-editor-chip")).map((chip) => chip.text)).toEqual(["#home"]);
+    expect(collect(editor!).find((element) => element.classes.has("task-hub-tag-editor-chip") && element.text === "#home")?.classes.has("task-hub-task-tag")).toBe(true);
 
     input!.value = "#errand";
     input!.dispatch("keydown", { key: " " });
@@ -2691,6 +2694,43 @@ describe("renderTasksView", () => {
     expect(elements.some((element) => element.classes.has("task-hub-empty") && element.text === "noMatchingTasks")).toBe(true);
   });
 
+  it("keeps the filter sidebar visible when condition filters match no tasks", () => {
+    const container = new FakeElement();
+
+    renderTasksView(
+      container as unknown as HTMLElement,
+      [],
+      [baseTask],
+      {
+        status: "open",
+        tags: [],
+        sourceQuery: "",
+        textQuery: "",
+        conditions: { operator: "and", tag: "#missing", dateBucket: "", text: "" }
+      },
+      handlers(),
+      new Date("2026-05-08T12:00:00Z"),
+      (key) => key,
+      {
+        allowAppleReminderWriteback: true,
+        filterHandlers: {
+          onConditionChange: jest.fn(),
+          onClearFilters: jest.fn(),
+          onTagQueryChange: jest.fn(),
+          onSourceFilterChange: jest.fn(),
+          onTextQueryChange: jest.fn()
+        }
+      }
+    );
+
+    const elements = collect(container);
+    expect(elements.some((element) => element.classes.has("task-hub-task-workbench"))).toBe(true);
+    expect(elements.some((element) => element.classes.has("task-hub-task-filter-sidebar"))).toBe(true);
+    expect(elements.some((element) => element.classes.has("task-hub-task-list-pane"))).toBe(true);
+    expect(elements.some((element) => element.classes.has("task-hub-empty") && element.text === "noMatchingTasks")).toBe(true);
+    expect(elements.some((element) => element.classes.has("task-hub-empty") && element.text === "noOpenTasks")).toBe(false);
+  });
+
   it("keeps the smart list sidebar visible when an active smart list has no tasks", () => {
     const container = new FakeElement();
     const smartList: TaskHubSmartList = {
@@ -2744,6 +2784,25 @@ describe("renderTasksView", () => {
     const list = collect(container).find((element) => element.classes.has("task-hub-task-list-pane"));
 
     expect(list?.scrollTop).toBe(320);
+  });
+
+  it("marks the task list pane for a lightweight transition when requested", () => {
+    const container = new FakeElement();
+
+    renderTasksView(
+      container as unknown as HTMLElement,
+      [baseTask],
+      [baseTask],
+      { status: "open", tags: [], sourceQuery: "", textQuery: "" },
+      handlers(),
+      new Date("2026-05-08T12:00:00Z"),
+      (key) => key,
+      { allowAppleReminderWriteback: true, animateTaskListTransition: true }
+    );
+
+    const list = collect(container).find((element) => element.classes.has("task-hub-task-list-pane"));
+
+    expect(list?.classes.has("task-hub-task-list-pane-transition")).toBe(true);
   });
 
   it("selects a task in place without rebuilding the task list", () => {

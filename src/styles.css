@@ -448,6 +448,11 @@
   gap: 8px;
   min-height: 30px;
   padding: 0 9px;
+  transition:
+    background-color 300ms ease,
+    border-color 300ms ease,
+    box-shadow 300ms ease,
+    color 300ms ease;
 }
 
 .task-hub-source-filter-chip:hover,
@@ -754,7 +759,10 @@
   min-width: 0;
   overflow: hidden;
   padding-left: 2px;
-  transition: background-color 120ms ease, box-shadow 120ms ease;
+  transition:
+    background-color 300ms ease,
+    box-shadow 300ms ease,
+    outline-color 300ms ease;
 }
 
 .task-hub-smart-list-item:hover {
@@ -1341,10 +1349,10 @@ body .task-hub-view button.task-hub-color-swatch {
   background:
     linear-gradient(
       135deg,
-      color-mix(in srgb, var(--task-hub-source-color) 100%, white 12%),
-      color-mix(in srgb, var(--task-hub-source-color) 82%, black 10%)
+      color-mix(in srgb, var(--task-hub-source-color, var(--interactive-accent)) 100%, white 12%),
+      color-mix(in srgb, var(--task-hub-source-color, var(--interactive-accent)) 82%, black 10%)
     );
-  border: 1px solid color-mix(in srgb, var(--task-hub-source-color) 70%, white 24%);
+  border: 1px solid color-mix(in srgb, var(--task-hub-source-color, var(--interactive-accent)) 70%, white 24%);
   border-radius: 999px;
   color: white;
   cursor: pointer;
@@ -1367,7 +1375,7 @@ body .task-hub-view button.task-hub-color-swatch {
 
 .task-hub-task-row .task-hub-task-tag {
   box-shadow:
-    0 3px 8px color-mix(in srgb, var(--task-hub-source-color) 28%, transparent),
+    0 3px 8px color-mix(in srgb, var(--task-hub-source-color, var(--interactive-accent)) 28%, transparent),
     0 1px 2px rgb(0 0 0 / 16%);
   color: white;
   font-weight: 400;
@@ -1376,7 +1384,7 @@ body .task-hub-view button.task-hub-color-swatch {
 
 .task-hub-task-note-body .task-hub-task-tag {
   box-shadow:
-    0 3px 8px color-mix(in srgb, var(--task-hub-source-color) 28%, transparent),
+    0 3px 8px color-mix(in srgb, var(--task-hub-source-color, var(--interactive-accent)) 28%, transparent),
     0 1px 2px rgb(0 0 0 / 16%);
   color: white;
   font-weight: 400;
@@ -1846,6 +1854,22 @@ button.task-hub-task-note-pin.is-active:focus-visible {
   z-index: 0;
 }
 
+.task-hub-task-list-pane-transition {
+  animation: task-hub-task-list-refresh 300ms cubic-bezier(0.2, 0.85, 0.25, 1) both;
+}
+
+@keyframes task-hub-task-list-refresh {
+  from {
+    opacity: 0.72;
+    transform: translateY(3px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .task-hub-task-list-flow {
   display: flex;
   flex-direction: column;
@@ -2039,18 +2063,22 @@ button.task-hub-task-note-pin.is-active:focus-visible {
   font-size: calc(var(--font-ui-smaller) - 1px);
 }
 
-.task-hub-task-row .task-hub-task-tag {
+.task-hub-task-row .task-hub-task-tag,
+.task-hub-tag-editor .task-hub-task-tag {
   max-width: min(18ch, 100%);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.task-hub-task-list-flow .task-hub-task-row .task-hub-task-tag {
+.task-hub-task-list-flow .task-hub-task-row .task-hub-task-tag,
+.task-hub-tag-editor .task-hub-task-tag {
   box-shadow:
-    0 3px 8px color-mix(in srgb, var(--task-hub-source-color) 28%, transparent),
+    0 3px 8px color-mix(in srgb, var(--task-hub-source-color, var(--interactive-accent)) 28%, transparent),
     0 1px 2px rgb(0 0 0 / 16%);
+  color: white;
   font-size: var(--font-ui-medium);
+  font-weight: 400;
   line-height: 1.15;
   padding: 1px 6px;
   text-shadow: 0 1px 1px rgb(0 0 0 / 18%);
@@ -2305,6 +2333,11 @@ button.task-hub-task-note-pin.is-active:focus-visible {
   resize: none;
 }
 
+.task-hub-detail-control textarea.task-hub-detail-title-input {
+  font-size: var(--font-ui-medium);
+  line-height: 1.2;
+}
+
 .task-hub-detail-control input[type="checkbox"] {
   height: 18px;
   margin: 0;
@@ -2364,26 +2397,14 @@ input.task-hub-tag-editor-input:focus {
 }
 
 .task-hub-tag-editor-chip {
-  appearance: none;
-  background: color-mix(in srgb, var(--task-hub-source-color, var(--interactive-accent)) 12%, var(--background-secondary));
-  border: 1px solid color-mix(in srgb, var(--task-hub-source-color, var(--interactive-accent)) 28%, var(--background-modifier-border));
-  border-radius: 5px;
-  box-shadow: none;
-  color: var(--text-normal);
   cursor: text;
-  display: inline-flex;
-  font-size: var(--font-ui-smaller);
-  font-weight: 400;
-  align-items: center;
-  line-height: 1.2;
   max-width: 100%;
-  padding: 3px 8px;
 }
 
 .task-hub-tag-editor-chip:hover,
 .task-hub-tag-editor-chip:focus-visible,
 .task-hub-tag-editor-chip.is-selected {
-  background: color-mix(in srgb, var(--task-hub-source-color, var(--interactive-accent)) 18%, var(--background-secondary));
+  filter: brightness(1.04) saturate(1.08);
 }
 
 .task-hub-tag-editor-chip.is-selected {
@@ -3696,6 +3717,7 @@ input.task-hub-tag-editor-input:focus {
   .task-hub-subtask-list.is-closing,
   .task-hub-subtask-list.is-opening > .task-hub-task-row,
   .task-hub-subtask-list.is-closing > .task-hub-task-row,
+  .task-hub-task-list-pane-transition,
   .task-hub-task-progress-fill,
   .task-hub-task-progress-value,
   .task-hub-calendar-view-stage.is-slide-left,

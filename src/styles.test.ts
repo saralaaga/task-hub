@@ -122,7 +122,7 @@ describe("Task Hub styles", () => {
     const bulkDragRule = styles.match(/\.task-hub-task-row\.is-bulk-dragging\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const subtaskListRule = styles.match(/\.task-hub-task-list-flow\s+\.task-hub-subtask-list\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const textRule = styles.match(/\.task-hub-task-list-flow\s+\.task-hub-task-text\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
-    const tagRule = styles.match(/\.task-hub-task-list-flow\s+\.task-hub-task-row\s+\.task-hub-task-tag\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const tagRule = styles.match(/\.task-hub-task-list-flow\s+\.task-hub-task-row\s+\.task-hub-task-tag,\s*\.task-hub-tag-editor\s+\.task-hub-task-tag\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
 
     expect(flowRule).toContain("gap: 0");
     expect(rowRule).toContain("background: transparent");
@@ -166,6 +166,7 @@ describe("Task Hub styles", () => {
     expect(itemRule).toContain("background: color-mix(in srgb, var(--task-hub-smart-list-color, var(--interactive-accent)) 7%, transparent)");
     expect(itemRule).toContain("border: 0");
     expect(itemRule).toContain("box-shadow: none");
+    expect(itemRule).toContain("background-color 300ms ease");
     expect(itemRule).not.toContain("border-left:");
     expect(hoverRule).toContain("background: color-mix(in srgb, var(--task-hub-smart-list-color, var(--interactive-accent)) 12%, transparent)");
     expect(activeRule).toContain("background: color-mix(in srgb, var(--task-hub-smart-list-color, var(--interactive-accent)) 28%, transparent)");
@@ -436,7 +437,7 @@ describe("Task Hub styles", () => {
 
     expect(taskListChipRule).toContain("color: white");
     expect(taskListChipRule).toContain("font-weight: 400");
-    expect(taskListChipRule).toContain("0 3px 8px color-mix(in srgb, var(--task-hub-source-color) 28%, transparent)");
+    expect(taskListChipRule).toContain("0 3px 8px color-mix(in srgb, var(--task-hub-source-color, var(--interactive-accent)) 28%, transparent)");
     expect(taskListChipRule).toContain("0 1px 2px rgb(0 0 0 / 16%)");
   });
 
@@ -448,6 +449,9 @@ describe("Task Hub styles", () => {
     const placeholderRule = styles.match(/\.task-hub-tag-editor-placeholder\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const inputRule = styles.match(/input\.task-hub-tag-editor-input\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const chipRule = styles.match(/\.task-hub-tag-editor-chip\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const sharedChipRule = styles.match(/\.task-hub-task-list-flow\s+\.task-hub-task-row\s+\.task-hub-task-tag,\s*\.task-hub-tag-editor\s+\.task-hub-task-tag\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const taskTagRule = styles.match(/\.task-hub-task-tag\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const detailTitleInputRule = styles.match(/\.task-hub-detail-control\s+textarea\.task-hub-detail-title-input\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
 
     expect(editorRule).toContain("background: transparent");
     expect(editorRule).toContain("border: 1px solid transparent");
@@ -460,8 +464,14 @@ describe("Task Hub styles", () => {
     expect(inputRule).toContain("background: transparent");
     expect(inputRule).toContain("border: 0");
     expect(inputRule).toContain("min-width: 1ch");
-    expect(chipRule).toContain("background: color-mix(in srgb, var(--task-hub-source-color, var(--interactive-accent)) 12%, var(--background-secondary))");
-    expect(chipRule).toContain("color: var(--text-normal)");
+    expect(chipRule).toContain("cursor: text");
+    expect(chipRule).not.toContain("background:");
+    expect(chipRule).not.toContain("color: var(--text-normal)");
+    expect(taskTagRule).toContain("var(--task-hub-source-color, var(--interactive-accent))");
+    expect(sharedChipRule).toContain("font-size: var(--font-ui-medium)");
+    expect(sharedChipRule).toContain("font-weight: 400");
+    expect(sharedChipRule).toContain("padding: 1px 6px");
+    expect(detailTitleInputRule).toContain("font-size: var(--font-ui-medium)");
   });
 
   it("keeps task detail reminder controls aligned with the shared input column", () => {
@@ -704,16 +714,24 @@ describe("Task Hub styles", () => {
     expect(styles).not.toContain(".task-hub-task-sidebar {");
     expect(chipRule).toContain("display: inline-flex");
     expect(chipRule).toContain("border-radius: 7px");
+    expect(chipRule).toContain("background-color 300ms ease");
     expect(activeChipRule).toContain("var(--interactive-accent)");
   });
 
   it("centers the task list at a comfortable responsive width", () => {
     const styles = readFileSync(path.join(__dirname, "styles.css"), "utf8");
     const paneRule = styles.match(/\.task-hub-task-list-pane\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const transitionRule = styles.match(/\.task-hub-task-list-pane-transition\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const refreshKeyframes = styles.match(/@keyframes task-hub-task-list-refresh\s*\{(?<body>[\s\S]+?)\n\}/)?.groups?.body ?? "";
+    const reducedMotionRule = styles.match(/@media \(prefers-reduced-motion: reduce\)\s*\{(?<body>[\s\S]+?)\n\}/)?.groups?.body ?? "";
     const sectionRule = styles.match(/\.task-hub-task-section\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
 
     expect(paneRule).toContain("justify-items: center");
     expect(paneRule).toContain("padding-inline: clamp(4px, 2vw, 24px)");
+    expect(transitionRule).toContain("task-hub-task-list-refresh 300ms");
+    expect(refreshKeyframes).toContain("opacity: 0.72");
+    expect(refreshKeyframes).toContain("transform: translateY(3px)");
+    expect(reducedMotionRule).toContain(".task-hub-task-list-pane-transition");
     expect(sectionRule).toContain("margin-inline: auto");
     expect(sectionRule).toContain("width: min(760px, 100%)");
   });

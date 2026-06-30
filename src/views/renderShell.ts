@@ -3,6 +3,8 @@ import type { DateBucket } from "../calendar/dateBuckets";
 import { type TaskFilterState } from "../filtering/filters";
 import type { Translator } from "../i18n";
 import type { TaskIndexStats } from "../indexing/taskIndex";
+import { createTagChipEditor } from "./tagChipEditor";
+import type { TaskHubTagInputElement } from "./tagInputSuggest";
 
 export type DashboardView = "tasks" | "calendar" | "tags";
 
@@ -38,10 +40,10 @@ export type ShellHandlers = {
 };
 
 export type ShellRenderOptions = {
-  bindTagInputSuggest?: (input: HTMLInputElement) => void;
+  bindTagInputSuggest?: (input: TaskHubTagInputElement) => void;
 };
 
-export type TaskFilterControlState = Pick<ShellState, "filters" | "sourceFilters" | "t">;
+export type TaskFilterControlState = Pick<ShellState, "availableTags" | "filters" | "sourceFilters" | "t">;
 export type TaskFilterControlHandlers = Pick<
   ShellHandlers,
   "onConditionChange" | "onClearFilters" | "onTagQueryChange" | "onSourceFilterChange" | "onTextQueryChange"
@@ -170,13 +172,14 @@ function renderConditionMenu(
 
   const tagRow = panel.createEl("label", { cls: "task-hub-condition-row" });
   tagRow.createSpan({ text: state.t("conditionTag") });
-  const tag = tagRow.createEl("input", {
-    cls: "task-hub-condition-control",
-    attr: { placeholder: "#project" },
-    type: "search",
-    value: conditions.tag
+  const tagControl = tagRow.createDiv({ cls: "task-hub-condition-control task-hub-condition-tag-control" });
+  const tagEditor = createTagChipEditor(tagControl, {
+    label: state.t("conditionTag"),
+    placeholder: "#project",
+    initialTags: splitConditionTags(conditions.tag),
+    allowedTags: state.availableTags,
+    bindTagInputSuggest: options.bindTagInputSuggest
   });
-  options.bindTagInputSuggest?.(tag);
 
   if (quickTagQuery && quickTagQuery !== conditionTag && handlers.onTagQueryChange) {
     const quickTagRow = panel.createDiv({ cls: "task-hub-condition-row task-hub-condition-quick-tag-row" });
@@ -243,7 +246,7 @@ function renderConditionMenu(
   const apply = () => {
     handlers.onConditionChange({
       operator: operator.value === "or" ? "or" : "and",
-      tag: tag.value.trim(),
+      tag: tagEditor.getTags().join(" "),
       dateBucket: date.value as "" | DateBucket,
       text: text.value.trim()
     });
@@ -251,10 +254,11 @@ function renderConditionMenu(
 
   const applyOnEnter = (event: KeyboardEvent) => {
     if (event.key !== "Enter") return;
+    if (event.target === tagEditor.input && tagEditor.input.value.trim()) return;
     event.preventDefault();
     apply();
   };
-  tag.addEventListener("keydown", applyOnEnter);
+  tagEditor.input.addEventListener("keydown", applyOnEnter);
   text.addEventListener("keydown", applyOnEnter);
 
   const actions = panel.createDiv({ cls: "task-hub-condition-actions" });
@@ -269,6 +273,13 @@ function renderConditionMenu(
 
   const applyButton = actions.createEl("button", { cls: "mod-cta", text: state.t("applyFilters") });
   applyButton.addEventListener("click", apply);
+}
+
+function splitConditionTags(value: string): string[] {
+  return Array.from(new Set(value.split(/\s+/).map((tag) => {
+    const normalized = tag.trim().replace(/^#+/u, "");
+    return normalized ? `#${normalized}` : "";
+  }).filter(Boolean)));
 }
 
 function bindConditionMenuOutsideClick(menu: HTMLElement): void {

@@ -76,10 +76,10 @@ function isTagMatch(taskTag: string, selectedTag: string): boolean {
 function matchesConditions(task: TaskItem, conditions: TaskConditionFilters | undefined, now: Date): boolean {
   if (!conditions) return true;
   const checks: boolean[] = [];
-  const tag = conditions.tag.trim();
+  const tags = splitFilterTags(conditions.tag);
   const text = conditions.text.trim().toLowerCase();
-  if (tag) {
-    checks.push(task.tags.some((taskTag) => isTagMatch(taskTag, tag)));
+  if (tags.length > 0) {
+    checks.push(tags.every((tag) => task.tags.some((taskTag) => isTagMatch(taskTag, tag))));
   }
   if (conditions.dateBucket) {
     checks.push(getTaskBucket(task, now) === conditions.dateBucket);
@@ -89,4 +89,11 @@ function matchesConditions(task: TaskItem, conditions: TaskConditionFilters | un
   }
   if (checks.length === 0) return true;
   return conditions.operator === "or" ? checks.some(Boolean) : checks.every(Boolean);
+}
+
+function splitFilterTags(value: string): string[] {
+  return Array.from(new Set(value.split(/\s+/).map((tag) => {
+    const normalized = tag.trim().replace(/^#+/u, "");
+    return normalized ? `#${normalized}` : "";
+  }).filter(Boolean)));
 }
