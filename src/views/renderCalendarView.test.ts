@@ -70,7 +70,6 @@ class FakeDocument {
       ctrlKey: event.ctrlKey ?? false,
       key: event.key,
       isComposing: event.isComposing ?? false,
-      keyCode: event.keyCode,
       pointerId: event.pointerId,
       target: event.target,
       preventDefault: event.preventDefault ?? jest.fn(),
@@ -312,7 +311,6 @@ class FakeElement {
       ctrlKey: event.ctrlKey ?? false,
       key: event.key,
       isComposing: event.isComposing ?? false,
-      keyCode: event.keyCode,
       pointerId: event.pointerId,
       target: event.target,
       preventDefault: event.preventDefault ?? jest.fn(),
@@ -351,7 +349,6 @@ type FakeEvent = {
   ctrlKey: boolean;
   key?: string;
   isComposing?: boolean;
-  keyCode?: number;
   preventDefault(): void;
   stopPropagation(): void;
   pointerId?: number;
@@ -2799,7 +2796,7 @@ describe("renderCalendarView", () => {
 
     title!.value = "task";
     title!.dispatch("input");
-    title!.dispatch("keydown", { key: "Enter", isComposing: true, keyCode: 229 });
+    title!.dispatch("keydown", { key: "Enter", isComposing: true });
 
     expect(onTaskUpdate).not.toHaveBeenCalled();
   });

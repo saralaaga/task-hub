@@ -679,7 +679,7 @@ function animateSubtaskListEnter(list: HTMLElement): void {
   };
 
   list.addEventListener("transitionend", finish);
-  setTimeout(() => finish(), 260);
+  list.win.setTimeout(() => finish(), 260);
 }
 
 function animateSubtaskListExit(list: HTMLElement, onFinish: () => void): void {
@@ -705,7 +705,7 @@ function animateSubtaskListExit(list: HTMLElement, onFinish: () => void): void {
   };
 
   list.addEventListener("transitionend", finish);
-  setTimeout(() => finish(), 260);
+  list.win.setTimeout(() => finish(), 260);
 }
 
 function measureSubtaskListHeight(list: HTMLElement): number {
@@ -1411,7 +1411,7 @@ function renderTaskProgressRow(
   scheduleTaskProgressAnimation(progress, () => {
     setCssStyles(fill, { width: `${nextPercent}%` });
   });
-  setTimeout(() => {
+  progress.win.setTimeout(() => {
     progress.removeClass("is-progress-animating");
     progress.removeClass("is-progress-increasing");
     progress.removeClass("is-progress-decreasing");
@@ -1424,7 +1424,7 @@ function scheduleTaskProgressAnimation(element: HTMLElement, callback: () => voi
     requestAnimationFrameFn(() => callback());
     return;
   }
-  setTimeout(callback, 0);
+  element.win.setTimeout(callback, 0);
 }
 
 function clampTaskProgressPercent(value: number): number {
@@ -1462,7 +1462,7 @@ function toggleDetailExtra(extra: HTMLElement, expanded: boolean): void {
       extra.removeEventListener?.("transitionend", finish);
     };
     extra.addEventListener("transitionend", finish);
-    setTimeout(() => finish(), 280);
+    extra.win.setTimeout(() => finish(), 280);
     return;
   }
 
@@ -1482,7 +1482,7 @@ function toggleDetailExtra(extra: HTMLElement, expanded: boolean): void {
     extra.removeEventListener?.("transitionend", finish);
   };
   extra.addEventListener("transitionend", finish);
-  setTimeout(() => finish(), 280);
+  extra.win.setTimeout(() => finish(), 280);
 }
 
 function renderTaskDetailCompleteCheckbox(

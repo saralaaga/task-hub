@@ -30,7 +30,6 @@ type FakeElement = {
 type FakeDomEvent = {
   key?: string;
   isComposing?: boolean;
-  keyCode?: number;
   preventDefault?: jest.Mock;
   stopPropagation?: jest.Mock;
 };
@@ -1415,7 +1414,7 @@ describe("Apple Reminders migration", () => {
 
     bodyInput!.value = "task";
     dispatchFake(bodyInput!, "input");
-    dispatchFake(bodyInput!, "keydown", { key: "Enter", isComposing: true, keyCode: 229 });
+    dispatchFake(bodyInput!, "keydown", { key: "Enter", isComposing: true });
     await flushAsync();
 
     expect(createAppleReminder).not.toHaveBeenCalled();

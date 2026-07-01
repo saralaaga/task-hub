@@ -2561,7 +2561,8 @@ export default class TaskHubPlugin extends Plugin {
       },
       deletePersistedTaskState: (path) => {
         if (!this.settings.vaultTaskStableState[path]) return;
-        const { [path]: _removed, ...rest } = this.settings.vaultTaskStableState;
+        const rest = { ...this.settings.vaultTaskStableState };
+        delete rest[path];
         this.settings.vaultTaskStableState = rest;
       }
     });
@@ -2923,8 +2924,7 @@ class TaskNoteModal extends Modal {
 }
 
 function isImeComposingEnterEvent(event: KeyboardEvent): boolean {
-  const keyCode = Number((event as KeyboardEvent & { keyCode?: number }).keyCode ?? 0);
-  return Boolean(event.isComposing || keyCode === 229);
+  return event.isComposing;
 }
 
 function createDetachedWorkspaceLeaf(app: TaskHubPlugin["app"]): WorkspaceLeaf {

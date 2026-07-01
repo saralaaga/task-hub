@@ -59,7 +59,8 @@ const mockMenus: Array<{
   shownAt: unknown;
 }> = [];
 const fakeWindow = {
-  matchMedia: undefined as ((query: string) => MediaQueryList) | undefined
+  matchMedia: undefined as ((query: string) => MediaQueryList) | undefined,
+  setTimeout: (callback: () => void, delay?: number) => globalThis.setTimeout(callback, delay)
 };
 
 class FakeDocumentFragment {

@@ -760,10 +760,6 @@ function isTaskPointHiddenByOverlap(layout: TimedItemLayout | undefined): boolea
   return Boolean(layout && (layout.overlapCount ?? 1) > 1 && !layout.isOverlapRepresentative);
 }
 
-function isOverlapStackSummary(layout: TimedItemLayout | undefined): boolean {
-  return Boolean(layout && (layout.overlapCount ?? 1) > 1 && layout.isOverlapRepresentative);
-}
-
 function bindCalendarItemResize(
   row: HTMLElement,
   column: HTMLElement,
@@ -1930,8 +1926,7 @@ function isHTMLElement(value: HTMLElement | undefined): value is HTMLElement {
 }
 
 function isImeComposingEnterEvent(event: KeyboardEvent): boolean {
-  const keyCode = Number((event as KeyboardEvent & { keyCode?: number }).keyCode ?? 0);
-  return Boolean(event.isComposing || keyCode === 229);
+  return event.isComposing;
 }
 
 function bindDetailCommitKeys(field: HTMLElement, commit: () => void): void {
@@ -1974,7 +1969,7 @@ function toggleDetailExtra(extra: HTMLElement, expanded: boolean): void {
       extra.removeEventListener?.("transitionend", finish);
     };
     extra.addEventListener("transitionend", finish);
-    setTimeout(() => finish(), 280);
+    extra.win.setTimeout(() => finish(), 280);
     return;
   }
 
@@ -1994,7 +1989,7 @@ function toggleDetailExtra(extra: HTMLElement, expanded: boolean): void {
     extra.removeEventListener?.("transitionend", finish);
   };
   extra.addEventListener("transitionend", finish);
-  setTimeout(() => finish(), 280);
+  extra.win.setTimeout(() => finish(), 280);
 }
 
 function renderRecurrenceScopeSelect(container: HTMLElement, state: CalendarViewState): HTMLSelectElement {

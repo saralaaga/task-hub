@@ -432,10 +432,6 @@ function titleFromPath(path: string): string {
   return path.split("/").pop()?.replace(/\.md$/iu, "") ?? path;
 }
 
-function normalizeNoteBody(body: string): string {
-  return body.replace(/^\s*\n/u, "").replace(/\s+$/u, "");
-}
-
 function normalizeNoteBodyWithStartLine(body: string, bodyStartLine: number): { body: string; bodyStartLine: number } {
   const withoutTrailingWhitespace = body.replace(/\s+$/u, "");
   const leadingBlankLines = withoutTrailingWhitespace.match(/^([ \t]*\r?\n)+/u)?.[0] ?? "";
