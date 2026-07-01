@@ -89,6 +89,10 @@ import type { AppleCalendarInfo, CalendarCreationKind, CalendarCreationTarget, C
 import { TaskHubView } from "./views/TaskHubView";
 import { populateRecurrenceSelect } from "./views/recurrenceControls";
 
+export type CreateTaskOptions = {
+  onTaskCreated?: (task: TaskItem) => void;
+};
+
 function validCalendarEventDuration(value: number | undefined): number {
   if (!Number.isFinite(value) || value === undefined) return 60;
   return Math.max(1, Math.min(365 * 24 * 60, Math.round(value)));
@@ -1468,8 +1472,8 @@ export default class TaskHubPlugin extends Plugin {
     }
   }
 
-  openCreateTaskModal(target: CalendarDropTarget): void {
-    new CreateTaskModal(this, target).open();
+  openCreateTaskModal(target: CalendarDropTarget, options: CreateTaskOptions = {}): void {
+    new CreateTaskModal(this, target, options).open();
   }
 
   async createTaskForDate(
@@ -1480,7 +1484,8 @@ export default class TaskHubPlugin extends Plugin {
     alertMinutesBefore?: number | null,
     recurrence?: string | null,
     recurrenceUntil?: string,
-    recurrenceStart?: string
+    recurrenceStart?: string,
+    options: CreateTaskOptions = {}
   ): Promise<void> {
     const t = createTranslator(this.settings.language);
     const timedTarget = calendarDropTargetParts(calendarTarget);
@@ -1520,6 +1525,8 @@ export default class TaskHubPlugin extends Plugin {
           timedTarget.dateKey
         );
         await this.syncLocalApple({ silent: true });
+        const createdTask = this.localAppleTasks.find((task) => task.externalId === reminderId);
+        if (createdTask) options.onTaskCreated?.(createdTask);
         this.clearLastTaskUndoAction();
         new Notice(`${t("appleReminderCreated")}: ${reminderId}`);
       } catch (error) {
@@ -1549,6 +1556,8 @@ export default class TaskHubPlugin extends Plugin {
           })
         );
         await this.syncDida({ silent: true });
+        const createdTask = this.didaTasks.find((task) => task.externalId === created.id);
+        if (createdTask) options.onTaskCreated?.(createdTask);
         this.clearLastTaskUndoAction();
         new Notice(`${t("didaTaskCreated")}: ${created.id}`);
       } catch (error) {
@@ -1600,8 +1609,15 @@ export default class TaskHubPlugin extends Plugin {
       await this.app.vault.process(file, (content) => appendTaskToContent(content, taskLine));
     }
     await this.reindexVaultFile(file);
+    const createdTask = this.findCreatedVaultTask(path, taskLine);
+    if (createdTask) options.onTaskCreated?.(createdTask);
     this.clearLastTaskUndoAction();
     new Notice(t("taskCreated"));
+  }
+
+  private findCreatedVaultTask(path: string, taskLine: string): TaskItem | undefined {
+    const candidates = this.taskIndex.getTasks().filter((task) => task.source === "vault" && task.filePath === path && task.rawLine.trim() === taskLine);
+    return candidates.at(-1);
   }
 
   private defaultCalendarCreationTarget(): CalendarCreationTarget {
@@ -2937,7 +2953,8 @@ class CreateTaskModal extends Modal {
 
   constructor(
     private readonly plugin: TaskHubPlugin,
-    calendarTarget: CalendarDropTarget
+    calendarTarget: CalendarDropTarget,
+    private readonly options: CreateTaskOptions = {}
   ) {
     super(plugin.app);
     this.calendarTarget = calendarTarget;
@@ -2974,7 +2991,8 @@ class CreateTaskModal extends Modal {
             : undefined,
           this.recurrence,
           this.creationKind === "event" ? this.eventRecurrenceUntil : undefined,
-          this.creationKind === "event" ? this.eventRecurrenceStart : undefined
+          this.creationKind === "event" ? this.eventRecurrenceStart : undefined,
+          this.options
         );
         this.close();
       } catch (error) {

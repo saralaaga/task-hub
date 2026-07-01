@@ -679,6 +679,45 @@ describe("TaskHubView smart list interactions", () => {
     expect(render).toHaveBeenCalledWith({ preserveTaskListScroll: true, preserveContentScroll: true });
   });
 
+  it("adds tasks created from the toolbar to the active smart list", async () => {
+    const list = smartList({
+      taskStableIds: [],
+      taskIds: []
+    });
+    const createdTask = task({ id: "created", stableId: "vault:th_created" });
+    const plugin = {
+      settings: {
+        defaultView: "tasks",
+        language: "en",
+        taskViewFilters: fallbackFilters(),
+        lastSessionState: undefined,
+        smartLists: [list]
+      },
+      openCreateTaskModal: jest.fn(),
+      saveSettings: jest.fn(async () => undefined)
+    };
+    const view = new TaskHubView({} as never, plugin as never);
+    const render = jest.spyOn(view as unknown as { render(options?: unknown): void }, "render").mockImplementation(() => undefined);
+    Object.assign(view, {
+      activeSmartListId: "smart_focus"
+    });
+
+    (view as unknown as { openCreateTaskFromToolbar(): void }).openCreateTaskFromToolbar();
+    const createOptions = plugin.openCreateTaskModal.mock.calls[0]?.[1];
+    expect(createOptions?.onTaskCreated).toBeDefined();
+
+    createOptions.onTaskCreated(createdTask);
+    await Promise.resolve();
+
+    expect(plugin.settings.smartLists[0]).toMatchObject({
+      id: "smart_focus",
+      taskStableIds: ["vault:th_created"],
+      taskIds: []
+    });
+    expect(plugin.saveSettings).toHaveBeenCalled();
+    expect(render).toHaveBeenCalledWith({ preserveTaskListScroll: true, preserveContentScroll: true });
+  });
+
   it("removes dropped tasks from the active smart list using exclusion references", async () => {
     const list = smartList({ taskStableIds: ["vault:th_existing", "vault:th_remove"], taskIds: ["runtime-only"] });
     const plugin = {

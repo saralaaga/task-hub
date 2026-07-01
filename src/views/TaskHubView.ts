@@ -150,7 +150,7 @@ export class TaskHubView extends ItemView {
           this.render();
         },
         onRescan: () => void this.refreshData(),
-        onCreateTask: () => this.plugin.openCreateTaskModal(toLocalDateKey(new Date())),
+        onCreateTask: () => this.openCreateTaskFromToolbar(),
         onUnscheduledToggle: () => {
           if (this.view !== "calendar") {
             this.openUnscheduledPanel();
@@ -558,6 +558,17 @@ export class TaskHubView extends ItemView {
       this.isRefreshing = false;
       this.render({ preserveTaskListScroll: true });
     }
+  }
+
+  private openCreateTaskFromToolbar(): void {
+    const activeSmartList = this.activeSmartList();
+    this.plugin.openCreateTaskModal(toLocalDateKey(new Date()), {
+      ...(activeSmartList
+        ? {
+            onTaskCreated: (task) => this.addTasksToSmartList(activeSmartList, [task])
+          }
+        : {})
+    });
   }
 
   private renderNoteMarkdown(container: HTMLElement, body: string, sourcePath: string): void {
