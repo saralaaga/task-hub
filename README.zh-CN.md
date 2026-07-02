@@ -6,6 +6,8 @@ Task Hub 是一个仅支持 Obsidian 桌面端的任务聚合插件。它把 vau
 
 它适合那些把任务写在日记、会议记录、项目笔记和资料笔记里，但仍然希望有一个统一入口来回顾、筛选、改期和安全更新任务的人。
 
+![Task Hub 列表视图](assets/task-hub-list-view.png)
+
 ![Task Hub 日历总览](assets/task-hub-calendar-overview.png)
 
 ## 为什么需要 Task Hub？

@@ -6,6 +6,8 @@ Task Hub es un plugin de Obsidian solo para escritorio. Reúne tareas Markdown d
 
 Está pensado para quienes escriben compromisos en notas diarias, actas de reuniones, notas de proyecto o documentos de referencia, pero quieren un lugar tranquilo para revisar, filtrar, reprogramar y actualizar tareas con seguridad.
 
+![Task Hub list view](assets/task-hub-list-view.png)
+
 ![Task Hub calendar overview](assets/task-hub-calendar-overview.png)
 
 ## ¿Por qué Task Hub?

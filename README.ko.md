@@ -6,6 +6,8 @@ Task Hub는 Obsidian 데스크톱 전용 작업 허브 플러그인입니다. Va
 
 일일 노트, 회의록, 프로젝트 노트, 자료 노트 곳곳에 할 일을 적어 두면서도 한곳에서 검토, 필터링, 일정 변경, 안전한 업데이트를 하고 싶은 사용자에게 맞춰져 있습니다.
 
+![Task Hub list view](assets/task-hub-list-view.png)
+
 ![Task Hub calendar overview](assets/task-hub-calendar-overview.png)
 
 ## 왜 Task Hub인가요?

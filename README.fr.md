@@ -6,6 +6,8 @@ Task Hub est un plugin Obsidian réservé au bureau. Il réunit les tâches Mark
 
 Il s'adresse aux personnes qui écrivent leurs engagements dans des notes quotidiennes, comptes rendus de réunion, notes de projet ou documents de référence, tout en voulant un endroit calme pour les relire, filtrer, replanifier et mettre à jour en sécurité.
 
+![Task Hub list view](assets/task-hub-list-view.png)
+
 ![Task Hub calendar overview](assets/task-hub-calendar-overview.png)
 
 ## Pourquoi Task Hub ?

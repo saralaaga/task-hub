@@ -6,6 +6,8 @@ Task Hub は、Obsidian デスクトップ専用のタスク集約プラグイ�
 
 日次ノート、会議メモ、プロジェクトノート、資料ノートにタスクを書き散らしていても、1 か所で確認、絞り込み、日付変更、安全な更新をしたい人向けです。
 
+![Task Hub list view](assets/task-hub-list-view.png)
+
 ![Task Hub calendar overview](assets/task-hub-calendar-overview.png)
 
 ## Task Hub が必要な理由

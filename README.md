@@ -2,9 +2,11 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md) | [日本語](README.ja.md) | [한국어](README.ko.md) | [Français](README.fr.md) | [Español](README.es.md)
 
-Task Hub is a desktop-only Obsidian plugin that brings Markdown tasks, Apple Reminders, Apple Calendar events, public ICS calendars, and Dida/TickTick tasks into one focused workspace.
+Task Hub is a desktop-only Obsidian plugin that redesigns Obsidian task management around a focused workspace for Markdown tasks, external reminders, calendars, tags, filters, and daily planning.
 
 It is built for people who keep commitments inside daily notes, meeting notes, project notes, and reference files, but still want one calm place to review, filter, reschedule, and safely update them.
+
+![Task Hub list view](assets/task-hub-list-view.png)
 
 ![Task Hub calendar overview](assets/task-hub-calendar-overview.png)
 
