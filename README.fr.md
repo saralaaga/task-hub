@@ -8,7 +8,11 @@ Il s'adresse aux personnes qui écrivent leurs engagements dans des notes quotid
 
 ![Task Hub list view](assets/task-hub-list-view.png)
 
+**Vue liste :** Passez en revue les tâches Markdown et les rappels externes dans une file ciblée. La barre latérale filtre par source, tag et conditions enregistrées ; la barre d'outils garde les tâches terminées, la recherche, les filtres personnalisés et le rescan du vault au plus près de la liste pour accélérer la revue quotidienne.
+
 ![Task Hub calendar overview](assets/task-hub-calendar-overview.png)
+
+**Vue calendrier :** Planifiez les tâches Markdown datées, les événements Apple Calendar, Apple Reminders, les flux ICS publics et les tâches Dida/TickTick dans les vues mois, semaine et jour. Les sources prises en charge peuvent être replanifiées par glisser-déposer, tandis que les calendriers en lecture seule restent visibles sans être modifiés.
 
 ## Pourquoi Task Hub ?
 
@@ -25,7 +29,7 @@ Utilisez-le pour :
 ## Points forts
 
 - Indexe les tâches Markdown écrites avec `- [ ]` et `- [x]`.
-- Détecte les dates `📅 YYYY-MM-DD`, `due:: YYYY-MM-DD` ou `YYYY-MM-DD` seul.
+- Détecte les dates de planification `🛫 YYYY-MM-DD`, `⏳ YYYY-MM-DD`, `📅 YYYY-MM-DD`, `due:: YYYY-MM-DD` ou `YYYY-MM-DD` seul, avec des heures de début optionnelles `⏰ HH:mm`.
 - Filtre par état, source, tag, période, texte et conditions AND/OR personnalisées.
 - Termine les tâches du vault seulement après vérification que la ligne source correspond encore.
 - Crée et modifie des tâches récurrentes courantes : quotidiennes, hebdomadaires, mensuelles et annuelles.
@@ -67,7 +71,7 @@ Pour une installation manuelle depuis une GitHub Release :
 3. Copiez les fichiers téléchargés dans ce dossier.
 4. Redémarrez Obsidian ou rechargez les plugins communautaires, puis activez **Task Hub**.
 
-La prise en charge locale d'Apple Reminders et Apple Calendar dépend du binaire `taskhub-apple-helper` dans le paquet du plugin ou dans le chemin de build source. Les assets standards d'une release de plugin communautaire restent les fichiers pris en charge par Obsidian : `manifest.json`, `main.js` et `styles.css`.
+Les releases publiées intègrent le helper Apple local dans `main.js` et l'installent dans le dossier du plugin sur macOS lorsque c'est nécessaire. Les builds depuis les sources peuvent le créer avec `npm run build:apple-helper`. Les assets standards d'une release de plugin communautaire restent les fichiers pris en charge par Obsidian : `manifest.json`, `main.js` et `styles.css` ; aucun helper séparé n'est à télécharger.
 
 ## Utilisation quotidienne
 
@@ -93,8 +97,8 @@ Obsidian peut afficher des avertissements de capacités. Task Hub les utilise po
 
 - **Énumération du vault :** scanner les fichiers Markdown pour trouver les lignes de tâche et les dates.
 - **Lecture/écriture du vault :** lire les notes pour l'indexation et écrire uniquement lors d'une action de fin, modification, suppression ou replanification prise en charge.
-- **Accès au système de fichiers :** vérifier et utiliser le helper Apple local optionnel dans le chemin du plugin.
-- **Exécution shell :** lancer uniquement `taskhub-apple-helper` fourni ou construit localement pour l'intégration Apple.
+- **Accès au système de fichiers :** installer, vérifier et utiliser le helper Apple local dans le chemin du plugin.
+- **Exécution shell :** lancer uniquement le `taskhub-apple-helper` installé ou construit localement pour l'intégration Apple.
 - **Requêtes réseau :** récupérer les URL ICS configurées et accéder à l'API Dida/TickTick configurée si activée.
 
 Task Hub n'envoie pas les tâches du vault à un service distant sauf si vous créez ou synchronisez explicitement une tâche externe via une intégration configurée.
@@ -105,11 +109,11 @@ Task Hub garde un périmètre volontairement conservateur :
 
 - Obsidian mobile n'est pas pris en charge.
 - La grammaire complète du plugin Obsidian Tasks n'est pas implémentée.
-- La syntaxe de tâche Markdown avec heures de début/fin n'est pas implémentée.
+- Les tâches Markdown avec heure sont limitées aux points de début `⏰ HH:mm` associés à des marqueurs de date pris en charge ; la syntaxe de durée et d'heure de fin n'est pas implémentée.
 - Google Calendar OAuth et Microsoft Calendar OAuth ne sont pas inclus.
 - Les événements ICS publics sont en lecture seule.
 - Les fonctions d'écriture Apple Reminders, Apple Calendar et Dida/TickTick doivent être activées explicitement.
-- Le helper Apple est fourni par le paquet du plugin ou le chemin de build source ; ne supposez pas qu'un asset helper supplémentaire est installé par une release communautaire standard.
+- L'intégration Apple locale utilise le helper intégré dans `main.js` pour les builds de release ou un helper construit localement pour les builds depuis les sources ; les releases communautaires standards ne publient pas d'asset helper séparé.
 
 ## Développement
 
@@ -130,4 +134,4 @@ La racine du dépôt conserve aussi les fichiers attendus par le flux de soumiss
 - `manifest.json`
 - `versions.json`
 
-N'ajoutez pas de fichiers supplémentaires comme `taskhub-apple-helper` aux GitHub Releases du plugin communautaire. Obsidian télécharge uniquement `main.js`, `manifest.json` et `styles.css` depuis les release assets.
+N'ajoutez pas de fichiers supplémentaires comme `taskhub-apple-helper` aux GitHub Releases du plugin communautaire. Les builds de release intègrent le helper dans `main.js` ; Obsidian télécharge uniquement `main.js`, `manifest.json` et `styles.css` depuis les release assets.

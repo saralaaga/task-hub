@@ -8,7 +8,11 @@ Task Hub는 Obsidian 데스크톱 전용 작업 허브 플러그인입니다. Va
 
 ![Task Hub list view](assets/task-hub-list-view.png)
 
+**목록 보기:** Markdown 작업과 외부 미리 알림을 하나의 집중된 목록에서 검토합니다. 사이드바는 소스, 태그, 저장된 조건으로 범위를 좁히고, 도구막대는 완료 작업 표시, 검색, 사용자 지정 필터, Vault 재스캔을 목록 가까이에 두어 매일 정리를 빠르게 합니다.
+
 ![Task Hub calendar overview](assets/task-hub-calendar-overview.png)
+
+**캘린더 보기:** 날짜가 있는 Markdown 작업, Apple Calendar 이벤트, Apple Reminders, 공개 ICS, Dida/TickTick 작업을 월/주/일 타임라인에서 계획합니다. 지원되는 소스는 드래그로 일정을 변경할 수 있고, 읽기 전용 캘린더는 수정하지 않고 표시만 유지합니다.
 
 ## 왜 Task Hub인가요?
 
@@ -25,7 +29,7 @@ Task Hub는 Markdown 작업을 원래 노트에 그대로 두고 전용 작업 �
 ## 주요 기능
 
 - `- [ ]` 및 `- [x]` 형식의 Markdown 작업 인덱싱.
-- `📅 YYYY-MM-DD`, `due:: YYYY-MM-DD`, 단독 `YYYY-MM-DD` 날짜 인식.
+- `🛫 YYYY-MM-DD`, `⏳ YYYY-MM-DD`, `📅 YYYY-MM-DD`, `due:: YYYY-MM-DD` 또는 단독 `YYYY-MM-DD`를 계획 날짜로 인식하고, 선택적 `⏰ HH:mm` 시작 시간도 지원합니다.
 - 완료 상태, 소스, 태그, 날짜 그룹, 텍스트, 사용자 지정 AND/OR 조건으로 필터링.
 - Vault 작업을 완료하기 전에 원본 줄이 여전히 일치하는지 확인.
 - 매일, 매주, 매월, 매년 반복 작업 지원.
@@ -67,7 +71,7 @@ GitHub Release에서 수동 설치하려면:
 3. 다운로드한 파일을 해당 폴더에 복사합니다.
 4. Obsidian을 재시작하거나 커뮤니티 플러그인을 다시 불러온 뒤 **Task Hub**를 활성화합니다.
 
-로컬 Apple Reminders 및 Apple Calendar 지원에는 플러그인 패키지 또는 소스 빌드 경로의 `taskhub-apple-helper` 바이너리가 필요합니다. 표준 커뮤니티 플러그인 Release 자산은 Obsidian이 지원하는 `manifest.json`, `main.js`, `styles.css` 파일로 유지됩니다.
+공개 Release는 로컬 Apple helper를 `main.js`에 포함하고, macOS에서 필요할 때 플러그인 폴더에 설치합니다. 소스 빌드는 `npm run build:apple-helper`로 helper를 만들 수 있습니다. 표준 커뮤니티 플러그인 Release 자산은 Obsidian이 지원하는 `manifest.json`, `main.js`, `styles.css` 파일로 유지되며 별도 helper를 다운로드할 필요가 없습니다.
 
 ## 일상 사용
 
@@ -93,8 +97,8 @@ Obsidian은 기능 권한 경고를 표시할 수 있습니다. Task Hub의 사�
 
 - **Vault 열거:** Markdown 파일에서 작업 줄과 날짜 토큰을 찾습니다.
 - **Vault 읽기/쓰기:** 인덱싱을 위해 노트를 읽고, 지원되는 작업을 완료, 편집, 삭제, 일정 변경할 때만 씁니다.
-- **파일 시스템 접근:** 플러그인 경로 안의 선택적 로컬 Apple helper를 확인하고 사용합니다.
-- **Shell 실행:** Apple 연동을 위해 번들 또는 로컬 빌드된 `taskhub-apple-helper`만 실행합니다.
+- **파일 시스템 접근:** 플러그인 경로 안에 로컬 Apple helper를 설치, 확인, 사용합니다.
+- **Shell 실행:** Apple 연동을 위해 설치되었거나 로컬 빌드된 `taskhub-apple-helper`만 실행합니다.
 - **네트워크 요청:** 설정된 ICS URL과 활성화된 Dida/TickTick API에 접근합니다.
 
 설정된 외부 연동을 통해 명시적으로 외부 작업을 만들거나 동기화하지 않는 한, Task Hub는 Vault 작업을 원격 서비스로 보내지 않습니다.
@@ -105,11 +109,11 @@ Task Hub는 보수적인 범위를 유지합니다.
 
 - Obsidian 모바일은 지원하지 않습니다.
 - Obsidian Tasks 플러그인의 전체 문법은 구현되어 있지 않습니다.
-- Markdown 작업 자체의 시작/종료 시간 문법은 구현되어 있지 않습니다.
+- 시간 있는 Markdown 작업은 지원되는 날짜 토큰에 연결된 `⏰ HH:mm` 시작 시점으로 제한됩니다. 지속 시간과 종료 시간 문법은 구현되어 있지 않습니다.
 - Google Calendar OAuth 및 Microsoft Calendar OAuth는 포함되어 있지 않습니다.
 - 공개 ICS 이벤트는 읽기 전용입니다.
 - Apple Reminders, Apple Calendar, Dida/TickTick 쓰기 기능은 명시적으로 활성화해야 합니다.
-- Apple helper는 플러그인 패키지 또는 소스 빌드 경로로 제공됩니다. 표준 커뮤니티 플러그인 Release가 추가 helper 자산을 자동 설치한다고 가정하지 마세요.
+- 로컬 Apple 연동은 Release 빌드에서 `main.js`에 포함된 helper를 사용하거나 소스 빌드에서 로컬 빌드된 helper를 사용합니다. 표준 커뮤니티 플러그인 Release는 별도의 helper 자산을 게시하지 않습니다.
 
 ## 개발
 
@@ -130,4 +134,4 @@ Obsidian 커뮤니티 플러그인 release에서는 GitHub release tag가 `manif
 - `manifest.json`
 - `versions.json`
 
-`taskhub-apple-helper` 같은 추가 파일을 커뮤니티 플러그인 GitHub Release에 첨부하지 마세요. Obsidian은 release assets에서 `main.js`, `manifest.json`, `styles.css`만 다운로드합니다.
+`taskhub-apple-helper` 같은 추가 파일을 커뮤니티 플러그인 GitHub Release에 첨부하지 마세요. Release 빌드는 helper를 `main.js`에 포함합니다. Obsidian은 release assets에서 `main.js`, `manifest.json`, `styles.css`만 다운로드합니다.

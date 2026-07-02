@@ -8,7 +8,11 @@ It is built for people who keep commitments inside daily notes, meeting notes, p
 
 ![Task Hub list view](assets/task-hub-list-view.png)
 
+**List view:** Review Markdown tasks and external reminders in one focused queue. The sidebar narrows by source, tag, and saved task conditions; the toolbar keeps completed tasks, search, custom filters, and vault rescans close to the list so daily triage stays fast.
+
 ![Task Hub calendar overview](assets/task-hub-calendar-overview.png)
+
+**Calendar view:** Plan dated Markdown tasks, Apple Calendar events, Apple Reminders, public ICS feeds, and Dida/TickTick tasks on month, week, and day timelines. Supported sources can be rescheduled by dragging, while read-only calendars remain visible without being modified.
 
 ## Why Task Hub?
 
@@ -25,7 +29,7 @@ Use it when you want to:
 ## Highlights
 
 - Index Markdown tasks written as `- [ ]` and `- [x]`.
-- Parse dates written as `📅 YYYY-MM-DD`, `due:: YYYY-MM-DD`, or a bare `YYYY-MM-DD`.
+- Parse planning dates written as `🛫 YYYY-MM-DD`, `⏳ YYYY-MM-DD`, `📅 YYYY-MM-DD`, `due:: YYYY-MM-DD`, or a bare `YYYY-MM-DD`, with optional `⏰ HH:mm` start times.
 - Filter by completion state, source, tag, date bucket, text, and custom AND/OR conditions.
 - Safely complete vault tasks after checking that the source line still matches.
 - Create and edit common recurring tasks: daily, weekly, monthly, and yearly.
@@ -67,7 +71,7 @@ For manual installation from a GitHub release:
 3. Copy the downloaded files into that folder.
 4. Restart Obsidian or reload community plugins, then enable **Task Hub**.
 
-Local Apple Reminders and Apple Calendar support depends on the `taskhub-apple-helper` binary in the plugin package or source build path. Standard community-plugin release assets remain the Obsidian-supported files: `manifest.json`, `main.js`, and `styles.css`.
+Published releases embed the local Apple helper in `main.js` and install it into the plugin folder on macOS when needed. Source builds can create the helper with `npm run build:apple-helper`. Standard community-plugin release assets remain the Obsidian-supported files: `manifest.json`, `main.js`, and `styles.css`; there is no separate helper asset to download.
 
 ## Everyday Use
 
@@ -93,8 +97,8 @@ Obsidian may show capability warnings. Task Hub uses them for narrow purposes:
 
 - **Vault enumeration:** scan Markdown files for task lines and date tokens.
 - **Vault read/write:** read notes for indexing and write only when you complete, edit, delete, or reschedule a supported task.
-- **Filesystem access:** check and use the optional local Apple helper inside the plugin path.
-- **Shell execution:** launch only the bundled/local `taskhub-apple-helper` for Apple integration.
+- **Filesystem access:** install, check, and use the local Apple helper inside the plugin path.
+- **Shell execution:** launch only the installed or locally built `taskhub-apple-helper` for Apple integration.
 - **Network requests:** fetch configured ICS URLs and the configured Dida/TickTick API when enabled.
 
 Task Hub does not send vault tasks to a remote service unless you explicitly create or sync an external task through a configured integration.
@@ -105,11 +109,11 @@ Task Hub keeps its scope conservative:
 
 - Obsidian mobile is not supported.
 - Full Obsidian Tasks plugin grammar is not implemented.
-- Timed Markdown task syntax is not implemented.
+- Timed Markdown tasks are limited to `⏰ HH:mm` start points anchored to supported date tokens; duration and end-time syntax is not implemented.
 - Google Calendar OAuth and Microsoft Calendar OAuth are not included.
 - Public ICS events are read-only.
 - Apple Reminders, Apple Calendar, and Dida/TickTick writeback features must be enabled explicitly.
-- Apple helper distribution follows the plugin package or source build path; do not assume an extra helper asset is installed from a standard community-plugin release.
+- Local Apple integration uses the helper embedded in `main.js` for release builds or a locally built helper for source builds; standard community-plugin releases do not ship a separate helper asset.
 
 ## Development
 
@@ -151,4 +155,4 @@ The repository root also keeps the files expected by the Obsidian submission flo
 - `manifest.json`
 - `versions.json`
 
-Do not attach extra files such as `taskhub-apple-helper` to community-plugin GitHub releases. Obsidian only downloads `main.js`, `manifest.json`, and `styles.css` from release assets.
+Do not attach extra files such as `taskhub-apple-helper` to community-plugin GitHub releases. Release builds embed the helper into `main.js`; Obsidian downloads only `main.js`, `manifest.json`, and `styles.css` from release assets.

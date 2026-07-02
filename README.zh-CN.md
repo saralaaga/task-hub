@@ -8,7 +8,11 @@ Task Hub 是一个仅支持 Obsidian 桌面端的任务聚合插件。它把 vau
 
 ![Task Hub 列表视图](assets/task-hub-list-view.png)
 
+**列表视图：** 把 Markdown 任务和外部提醒事项集中到一个专注列表里。侧边栏可按来源、标签和保存的任务条件收窄范围；顶部工具栏把已完成任务开关、搜索、自定义筛选和重新扫描放在列表旁边，方便快速完成每日整理。
+
 ![Task Hub 日历总览](assets/task-hub-calendar-overview.png)
+
+**日历视图：** 在月、周、日时间线上规划有日期的 Markdown 任务、Apple Calendar 事件、Apple Reminders、公共 ICS 日历和滴答清单 / TickTick 任务。支持写回的来源可以拖动改期；只读日历会保持可见但不会被修改。
 
 ## 为什么需要 Task Hub？
 
@@ -25,7 +29,7 @@ Task Hub 让任务继续留在原来的 Markdown 笔记里，同时提供一个�
 ## 功能亮点
 
 - 扫描 Markdown 任务：`- [ ]` 和 `- [x]`。
-- 识别日期：`📅 YYYY-MM-DD`、`due:: YYYY-MM-DD` 或裸写的 `YYYY-MM-DD`。
+- 识别规划日期：`🛫 YYYY-MM-DD`、`⏳ YYYY-MM-DD`、`📅 YYYY-MM-DD`、`due:: YYYY-MM-DD` 或裸写的 `YYYY-MM-DD`，并支持可选的 `⏰ HH:mm` 开始时间。
 - 按完成状态、来源、标签、日期分组、文本和自定义且/或条件筛选。
 - 写回完成状态前确认源行仍匹配，避免改错行。
 - 支持常见循环任务：每天、每周、每月、每年。
@@ -67,7 +71,7 @@ Task Hub 让任务继续留在原来的 Markdown 笔记里，同时提供一个�
 3. 把下载的文件复制到该目录。
 4. 重启 Obsidian 或重新加载第三方插件，然后启用 **Task Hub**。
 
-本地 Apple Reminders 和 Apple Calendar 支持依赖插件包或源码构建路径中的 `taskhub-apple-helper` 二进制文件。标准社区插件 release 附件仍然保持为 Obsidian 支持的 `manifest.json`、`main.js` 和 `styles.css`。
+正式 release 会把本地 Apple helper 嵌入 `main.js`，并在 macOS 上需要时安装到插件目录中。源码构建可以通过 `npm run build:apple-helper` 生成 helper。标准社区插件 release 附件仍然保持为 Obsidian 支持的 `manifest.json`、`main.js` 和 `styles.css`；不需要单独下载 helper 附件。
 
 ## 日常使用
 
@@ -93,8 +97,8 @@ Obsidian 可能显示能力警告。Task Hub 使用这些能力的范围如下�
 
 - **枚举 vault 文件：** 扫描 Markdown 文件中的任务行和日期标记。
 - **读取/写入 vault：** 读取笔记用于索引；只有在你完成、编辑、删除或改期支持的任务时才写回。
-- **文件系统访问：** 检查和使用插件路径中的可选本地 Apple helper。
-- **执行 shell 命令：** 只用于启动随插件提供或本地构建的 `taskhub-apple-helper`。
+- **文件系统访问：** 在插件路径中安装、检查和使用本地 Apple helper。
+- **执行 shell 命令：** 只用于启动已安装或本地构建的 `taskhub-apple-helper`。
 - **网络请求：** 只用于获取你配置的 ICS 地址，以及启用后访问配置的滴答清单 / TickTick API。
 
 除非你通过已配置的外部集成显式创建或同步外部任务，否则 Task Hub 不会把 vault 任务发送到远程服务。
@@ -105,11 +109,11 @@ Task Hub 仍然保持保守范围：
 
 - 暂不支持 Obsidian 移动端。
 - 暂不支持 Obsidian Tasks 插件完整语法。
-- 暂不支持 Markdown 任务自身的具体开始/结束时间语法。
+- Markdown 定时任务目前仅支持绑定到日期标记的 `⏰ HH:mm` 开始时间；暂不支持持续时长和结束时间语法。
 - 暂不支持 Google Calendar OAuth 和 Microsoft Calendar OAuth。
 - 公共 ICS 事件只读。
 - Apple Reminders、Apple Calendar 和滴答清单 / TickTick 写回功能都需要显式开启。
-- Apple helper 通过插件包或源码构建路径提供；不要假设标准社区插件 release 会额外安装 helper 附件。
+- 本地 Apple 集成在正式 release 中使用嵌入 `main.js` 的 helper，源码构建使用本地构建的 helper；标准社区插件 release 不会提供单独的 helper 附件。
 
 ## 开发
 
@@ -130,4 +134,4 @@ Obsidian 社区插件 release 的 GitHub tag 必须和 `manifest.json` 中的 `v
 - `manifest.json`
 - `versions.json`
 
-不要把 `taskhub-apple-helper` 等额外文件作为社区插件 GitHub Release 附件上传。Obsidian 只会从 release assets 下载 `main.js`、`manifest.json` 和 `styles.css`。
+不要把 `taskhub-apple-helper` 等额外文件作为社区插件 GitHub Release 附件上传。Release 构建会把 helper 嵌入 `main.js`；Obsidian 只会从 release assets 下载 `main.js`、`manifest.json` 和 `styles.css`。
