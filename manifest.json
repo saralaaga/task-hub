@@ -1,9 +1,9 @@
 {
   "id": "task-hub",
   "name": "Task Hub",
-  "version": "0.3.66",
+  "version": "0.3.67",
   "minAppVersion": "1.7.2",
-  "description": "Redesign Obsidian task management around a focused workspace for Markdown tasks, external reminders, calendars, tags, filters, and daily planning.",
+  "description": "Redesign task management around a focused workspace for Markdown tasks, external reminders, calendars, tags, filters, and daily planning.",
   "author": "Carlos",
   "isDesktopOnly": true
 }
