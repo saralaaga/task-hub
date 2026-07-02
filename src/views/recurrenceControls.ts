@@ -11,7 +11,7 @@ export function createRecurrenceSelect(
   row.createDiv({ cls: "task-hub-detail-icon-cell" });
   row.createSpan({ cls: "task-hub-detail-label", text: label });
   const control = row.createDiv({ cls: "task-hub-detail-control" });
-  const select = control.createEl("select", { cls: "task-hub-recurrence-select" }) as HTMLSelectElement;
+  const select = control.createEl("select", { cls: "task-hub-recurrence-select" });
   populateRecurrenceSelect(select, value, t);
   return select;
 }

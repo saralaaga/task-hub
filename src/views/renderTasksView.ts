@@ -505,7 +505,7 @@ function renderSmartListRenameInput(item: HTMLElement, smartList: TaskHubSmartLi
     attr: { "aria-label": t("renameSmartList") },
     type: "text",
     value: smartList.name
-  }) as HTMLInputElement;
+  });
   let committed = false;
   const restore = () => renderSmartListItemContent(item, smartList, options);
   const commit = () => {
@@ -819,7 +819,7 @@ function renderTaskRow(
         "aria-label": expanded ? "Collapse subtasks" : "Expand subtasks",
         "aria-expanded": String(expanded)
       }
-    }) as HTMLButtonElement;
+    });
     setIcon(subtaskToggle, "chevron-right");
   }
 
@@ -1306,7 +1306,7 @@ export function renderTaskDetails(
       : undefined;
     if (canEditTask) {
       const toggleRow = detailRow(editor, t("editDetails"), (icon) => {
-        detailsToggle = icon.createEl("input", { cls: "task-hub-detail-extra-toggle", type: "checkbox" }) as HTMLInputElement;
+        detailsToggle = icon.createEl("input", { cls: "task-hub-detail-extra-toggle", type: "checkbox" });
       });
       toggleRow.row.addClass("task-hub-detail-toggle-row");
       const extra = editor.createDiv({ cls: "task-hub-detail-extra is-hidden" });
@@ -1492,7 +1492,7 @@ function renderTaskDetailCompleteCheckbox(
   handlers: Pick<TaskRowHandlers, "onComplete">,
   t: Translator
 ): HTMLInputElement {
-  const checkbox = container.createEl("input", { cls: "task-hub-detail-complete-checkbox", type: "checkbox" }) as HTMLInputElement;
+  const checkbox = container.createEl("input", { cls: "task-hub-detail-complete-checkbox", type: "checkbox" });
   checkbox.checked = task.completed;
   checkbox.disabled = !canToggle;
   checkbox.setAttr("aria-label", task.completed ? t("markOpen") : t("markComplete"));
@@ -1535,7 +1535,7 @@ function renderTaskSendTargetPicker(
   let currentValue = selectedValue;
   const current = options.find((option) => option.value === currentValue) ?? options[0];
   currentValue = current.value;
-  const select = container.createEl("select", { cls: "task-hub-send-target-select" }) as HTMLSelectElement;
+  const select = container.createEl("select", { cls: "task-hub-send-target-select" });
   select.setAttr("aria-label", t("sendToTarget"));
   for (const option of options) {
     select.createEl("option", {
@@ -1668,17 +1668,17 @@ function renderTaskNotes(
             .onClick(() => handlers.onOpenTaskNoteInThino?.(note.path));
         });
       }
-      menu.showAtMouseEvent(event as MouseEvent);
+      menu.showAtMouseEvent(event);
     };
     card.addEventListener("contextmenu", (event) => {
       event.preventDefault();
       event.stopPropagation();
-      openTaskNoteMenu(event as MouseEvent);
+      openTaskNoteMenu(event);
     });
     menuButton.addEventListener("click", (event) => {
       event.preventDefault();
       event.stopPropagation();
-      openTaskNoteMenu(event as MouseEvent);
+      openTaskNoteMenu(event);
     });
     card.createDiv({ cls: "task-hub-task-note-title", text: taskNotePreviewTitle(note.path) });
     renderTaskNoteBody(card.createDiv({ cls: "task-hub-task-note-body" }), text, note.path, options.renderNoteMarkdown);
@@ -1755,7 +1755,7 @@ function detailInput(
 
 function detailTextarea(container: HTMLElement, label: string, value: string): HTMLTextAreaElement {
   const row = detailRow(container, label);
-  const textarea = row.control.createEl("textarea") as HTMLTextAreaElement;
+  const textarea = row.control.createEl("textarea");
   textarea.value = value;
   return textarea;
 }
@@ -1769,7 +1769,7 @@ function detailAutoGrowTextarea(
   const row = detailRow(container, label);
   const textarea = row.control.createEl("textarea", {
     cls: ["task-hub-auto-grow-textarea", textareaClass ?? ""].filter(Boolean).join(" ")
-  }) as HTMLTextAreaElement;
+  });
   textarea.value = value;
   textarea.setAttr("rows", "1");
   resizeAutoGrowTextarea(textarea);
@@ -1793,9 +1793,9 @@ function detailSelect(
   selectClass?: string
 ): HTMLSelectElement {
   const row = detailRow(container, label);
-  const select = row.control.createEl("select", { cls: selectClass }) as HTMLSelectElement;
+  const select = row.control.createEl("select", { cls: selectClass });
   for (const option of options) {
-    const optionEl = select.createEl("option", { text: option.label }) as HTMLOptionElement;
+    const optionEl = select.createEl("option", { text: option.label });
     optionEl.value = option.value;
     optionEl.setAttr("value", option.value);
   }

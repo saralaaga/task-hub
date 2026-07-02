@@ -28,7 +28,7 @@ export function createTagChipEditor(
     cls: "task-hub-tag-editor-input",
     type: "text",
     value: ""
-  }) as HTMLInputElement;
+  });
   input.setAttr("aria-label", options.label);
   editor.addEventListener("click", (event) => {
     const target = event.target as { classList?: { contains(cls: string): boolean } } | null;
@@ -135,7 +135,7 @@ export function createTagChipEditor(
   }, { capture: true });
   input.addEventListener("blur", commit);
   input.addEventListener("input", (event) => {
-    if ((event as InputEvent).isComposing || composing) return;
+    if ((event as { isComposing?: boolean }).isComposing || composing) return;
     selectedIndex = -1;
     if (/\s$/u.test(input.value)) commit();
   });

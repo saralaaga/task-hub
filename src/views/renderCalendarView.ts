@@ -1645,7 +1645,7 @@ function renderTaskDetailsPopover(
   const alertEditor = task.source === "apple-reminders" ? reminderAlertEditor(form, time, task.alertMinutesBefore, state.t) : undefined;
   let tags: HTMLInputElement | undefined;
   if (task.source === "vault") {
-    tags = detailInput(form, state.t("tags"), task.tags.join(" ")) as HTMLInputElement;
+    tags = detailInput(form, state.t("tags"), task.tags.join(" "));
     state.bindTagInputSuggest?.(tags);
   }
   const detailExtra = renderCalendarDetailExtraToggle(form, state);
@@ -1729,7 +1729,7 @@ function renderCalendarTaskCompleteCheckbox(
   handlers: Pick<CalendarViewHandlers, "onTaskComplete">,
   state: CalendarViewState
 ): HTMLInputElement {
-  const checkbox = container.createEl("input", { cls: "task-hub-detail-complete-checkbox", type: "checkbox" }) as HTMLInputElement;
+  const checkbox = container.createEl("input", { cls: "task-hub-detail-complete-checkbox", type: "checkbox" });
   checkbox.checked = task.completed;
   checkbox.disabled = !canToggle;
   checkbox.setAttr("aria-label", task.completed ? state.t("markOpen") : state.t("markComplete"));
@@ -1771,7 +1771,7 @@ function renderCalendarTaskSendTargetPicker(
   let currentValue = selectedValue;
   const current = options.find((option) => option.value === currentValue) ?? options[0];
   currentValue = current.value;
-  const select = container.createEl("select", { cls: "task-hub-send-target-select" }) as HTMLSelectElement;
+  const select = container.createEl("select", { cls: "task-hub-send-target-select" });
   select.setAttr("aria-label", state.t("sendToTarget"));
   for (const option of options) {
     select.createEl("option", {
@@ -1908,7 +1908,7 @@ function renderEventDetailsPopover(
 function renderCalendarDetailExtraToggle(container: HTMLElement, state: CalendarViewState): { toggle: HTMLInputElement; extra: HTMLElement } {
   let toggle: HTMLInputElement | undefined;
   const toggleRow = detailRow(container, state.t("editDetails"), (icon) => {
-    toggle = icon.createEl("input", { cls: "task-hub-detail-extra-toggle", type: "checkbox" }) as HTMLInputElement;
+    toggle = icon.createEl("input", { cls: "task-hub-detail-extra-toggle", type: "checkbox" });
   });
   toggleRow.row.addClass("task-hub-detail-toggle-row");
   toggleRow.row.addClass("task-hub-calendar-detail-toggle");
@@ -1994,7 +1994,7 @@ function toggleDetailExtra(extra: HTMLElement, expanded: boolean): void {
 
 function renderRecurrenceScopeSelect(container: HTMLElement, state: CalendarViewState): HTMLSelectElement {
   const row = detailRow(container, state.t("recurrenceApplyTo"));
-  const select = row.control.createEl("select") as HTMLSelectElement;
+  const select = row.control.createEl("select");
   select.createEl("option", { value: "this", text: state.t("recurrenceThis") });
   select.createEl("option", { value: "future", text: state.t("recurrenceFuture") });
   select.value = "this";
@@ -2059,17 +2059,17 @@ function renderCalendarNotes(
             .onClick(() => handlers.onOpenTaskNoteInThino?.(note.path));
         });
       }
-      menu.showAtMouseEvent(event as MouseEvent);
+      menu.showAtMouseEvent(event);
     };
     card.addEventListener("contextmenu", (event) => {
       event.preventDefault();
       event.stopPropagation();
-      openTaskNoteMenu(event as MouseEvent);
+      openTaskNoteMenu(event);
     });
     menuButton.addEventListener("click", (event) => {
       event.preventDefault();
       event.stopPropagation();
-      openTaskNoteMenu(event as MouseEvent);
+      openTaskNoteMenu(event);
     });
     card.createDiv({ cls: "task-hub-task-note-title", text: taskNotePreviewTitle(note.path) });
     renderTaskNoteBody(card.createDiv({ cls: "task-hub-task-note-body" }), taskNotePreviewBody(note.body), note.path, state.renderNoteMarkdown);
@@ -2111,7 +2111,7 @@ function detailInputField(
   renderIcon?: (icon: HTMLElement) => void
 ): { field: HTMLElement; input: HTMLInputElement } {
   const row = detailRow(container, label, renderIcon);
-  const input = row.control.createEl("input", { type }) as HTMLInputElement;
+  const input = row.control.createEl("input", { type });
   input.value = value ?? "";
   if (type === "date") {
     input.addEventListener("click", () => openNativeDatePicker(input));
@@ -2123,7 +2123,7 @@ function detailInputField(
 function detailCheckbox(container: HTMLElement, label: string): HTMLInputElement {
   let checkbox: HTMLInputElement | undefined;
   detailRow(container, label, (icon) => {
-    checkbox = icon.createEl("input", { cls: "task-hub-calendar-detail-check", type: "checkbox" }) as HTMLInputElement;
+    checkbox = icon.createEl("input", { cls: "task-hub-calendar-detail-check", type: "checkbox" });
   });
   if (!checkbox) throw new Error("Detail checkbox failed to render.");
   return checkbox;
@@ -2135,7 +2135,7 @@ function openNativeDatePicker(input: HTMLInputElement): void {
 
 function detailTextarea(container: HTMLElement, label: string, value: string | undefined): HTMLTextAreaElement {
   const row = detailRow(container, label);
-  const textarea = row.control.createEl("textarea") as HTMLTextAreaElement;
+  const textarea = row.control.createEl("textarea");
   textarea.value = value ?? "";
   return textarea;
 }
@@ -2150,7 +2150,7 @@ function detailAutoGrowTextarea(
   const row = detailRow(container, label, renderIcon);
   const textarea = row.control.createEl("textarea", {
     cls: ["task-hub-auto-grow-textarea", textareaClass ?? ""].filter(Boolean).join(" ")
-  }) as HTMLTextAreaElement;
+  });
   textarea.value = value ?? "";
   textarea.setAttr("rows", "1");
   resizeAutoGrowTextarea(textarea);
@@ -2175,7 +2175,7 @@ function detailSelect(
 ): HTMLSelectElement {
   const row = detailRow(container, label);
   if (inline) row.row.addClass("task-hub-calendar-detail-inline-row");
-  const select = row.control.createEl("select") as HTMLSelectElement;
+  const select = row.control.createEl("select");
   for (const option of options) {
     select.createEl("option", { value: option.id, text: option.name });
   }
@@ -2196,7 +2196,7 @@ function reminderAlertEditor(
 ): ReminderAlertEditor {
   const row = detailRow(container, t("reminderAlert"));
   row.row.addClass("task-hub-reminder-alert-row");
-  const select = row.control.createEl("select", { cls: "task-hub-reminder-alert-select" }) as HTMLSelectElement;
+  const select = row.control.createEl("select", { cls: "task-hub-reminder-alert-select" });
   populateReminderAlertSelect(select, t, { includeNone: true });
   const initial = normalizeReminderAlertMinutes(initialAlertMinutesBefore);
   select.value = initial === undefined ? "" : String(initial);

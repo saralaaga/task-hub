@@ -136,7 +136,7 @@ function renderTagTask(
     event.stopPropagation();
     const menu = new Menu();
     addTagTaskMenuItems(menu, [task], handlers, options, t);
-    menu.showAtMouseEvent(event as MouseEvent);
+    menu.showAtMouseEvent(event);
   });
 }
 

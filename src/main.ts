@@ -3176,7 +3176,7 @@ class CreateTaskModal extends Modal {
       cls: "task-hub-create-date-input",
       type: "date",
       value: calendarDropTargetParts(this.calendarTarget).dateKey
-    }) as HTMLInputElement;
+    });
     dateInput.setAttr("aria-label", t("date"));
     dateInput.addEventListener("change", () => {
       if (!dateInput.value) return;
@@ -3197,7 +3197,7 @@ class CreateTaskModal extends Modal {
       cls: "task-hub-create-time-input",
       type: "time",
       value: timeInputValue(calendarDropTargetParts(this.calendarTarget).startMinutes)
-    }) as HTMLInputElement;
+    });
     timeInput.step = "300";
     timeInput.addEventListener("click", () => {
       try {
@@ -3220,8 +3220,8 @@ class CreateTaskModal extends Modal {
     const alertSetting = new Setting(this.contentEl).setName(t("reminderAlert"));
     alertSetting.settingEl.addClass("task-hub-create-alert-setting");
     const alertLabel = alertSetting.controlEl.createEl("label", { cls: "task-hub-reminder-alert-switch task-hub-create-alert-switch" });
-    const alertToggle = alertLabel.createEl("input", { cls: "task-hub-reminder-alert-toggle", type: "checkbox" }) as HTMLInputElement;
-    const alertSelect = alertSetting.controlEl.createEl("select", { cls: "task-hub-reminder-alert-select" }) as HTMLSelectElement;
+    const alertToggle = alertLabel.createEl("input", { cls: "task-hub-reminder-alert-toggle", type: "checkbox" });
+    const alertSelect = alertSetting.controlEl.createEl("select", { cls: "task-hub-reminder-alert-select" });
     populateReminderAlertSelect(alertSelect, t);
     alertSelect.value = String(this.alertMinutesBefore);
     alertToggle.checked = this.alertEnabled;

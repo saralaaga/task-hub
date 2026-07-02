@@ -1665,7 +1665,7 @@ export class TaskHubSettingTab extends PluginSettingTab {
       .setDesc(description)
       .addExtraButton((button) => {
         const icon = button.extraSettingsEl;
-        const picker = icon.createEl("input", { cls: "task-hub-color-picker", type: "color" }) as HTMLInputElement;
+        const picker = icon.createEl("input", { cls: "task-hub-color-picker", type: "color" });
         const setPreview = (color: string) => {
           setCssProps(icon, { "--task-hub-color-preview": color });
           icon.setAttribute("aria-label", `${name}: ${color}`);

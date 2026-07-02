@@ -189,5 +189,5 @@ function textareaCaretViewportRect(textarea: HTMLTextAreaElement, originalRect: 
     width: 1,
     height: lineHeight,
     toJSON: () => ({})
-  } as DOMRect;
+  };
 }

@@ -14,7 +14,7 @@ export class ScanScheduler {
   private readonly now: () => number;
 
   constructor(private readonly options: ScanSchedulerOptions) {
-    this.scheduleNext = options.scheduleNext ?? ((callback) => setTimeout(callback, 0));
+    this.scheduleNext = options.scheduleNext ?? ((callback) => window.setTimeout(callback, 0));
     this.now = options.now ?? (() => performance.now());
   }
 
