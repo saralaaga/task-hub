@@ -304,6 +304,7 @@ function bindConditionMenuOutsideClick(menu: HTMLElement): void {
 }
 
 function renderSearch(container: HTMLElement, state: TaskFilterControlState, handlers: Pick<ShellHandlers, "onTextQueryChange">): void {
+  const searchActive = state.filters.textQuery.trim().length > 0;
   const search = container.createDiv({ cls: "task-hub-search-group" });
   const text = search.createEl("input", {
     cls: "task-hub-search-control",
@@ -319,7 +320,7 @@ function renderSearch(container: HTMLElement, state: TaskFilterControlState, han
     apply();
   });
 
-  const button = search.createEl("button", { cls: "task-hub-search-button" });
+  const button = search.createEl("button", { cls: `task-hub-search-button ${searchActive ? "is-active" : ""}` });
   button.setAttr("aria-label", state.t("search"));
   button.setAttr("title", state.t("search"));
   setIcon(button.createSpan({ cls: "task-hub-search-button-icon" }), "search");

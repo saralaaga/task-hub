@@ -541,6 +541,25 @@
   min-height: 32px;
 }
 
+.task-hub-search-button.is-active {
+  background: var(--interactive-accent);
+  border-color: var(--interactive-accent);
+  color: var(--text-on-accent);
+}
+
+.task-hub-search-button.is-active:hover,
+.task-hub-search-button.is-active:focus-visible {
+  background: var(--interactive-accent-hover);
+  border-color: var(--interactive-accent-hover);
+  color: var(--text-on-accent);
+}
+
+.task-hub-search-button.is-active .task-hub-search-button-icon,
+.task-hub-search-button.is-active .task-hub-search-button-icon svg {
+  color: var(--text-on-accent);
+  stroke: currentColor;
+}
+
 .task-hub-filter-control {
   flex: 1 1 130px;
   min-width: 116px;

@@ -266,6 +266,21 @@ describe("renderShell", () => {
     expect(handlers.onTextQueryChange).toHaveBeenLastCalledWith("review");
   });
 
+  it("highlights the search button only when a search query is already active", () => {
+    const idle = renderTaskFilterPanelForTest();
+    const idleButton = collect(idle.container).find((element) => element.attrs.get("aria-label") === "search");
+    const idleInput = collect(idle.container).find((element) => element.attrs.get("placeholder") === "searchTasks");
+    expect(idleButton?.classes.has("is-active")).toBe(false);
+
+    idleInput!.value = "draft";
+    idleInput!.trigger("input");
+    expect(idleButton?.classes.has("is-active")).toBe(false);
+
+    const active = renderTaskFilterPanelForTest({ textQuery: "draft" });
+    const activeButton = collect(active.container).find((element) => element.attrs.get("aria-label") === "search");
+    expect(activeButton?.classes.has("is-active")).toBe(true);
+  });
+
   it("applies condition filters only from the panel action", () => {
     const { container, handlers, bindTagInputSuggest } = renderTaskFilterPanelForTest();
     const tagEditor = collect(container).find((element) => element.classes.has("task-hub-tag-editor"));
