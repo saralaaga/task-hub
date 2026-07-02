@@ -43,8 +43,8 @@ Task Hub mantiene tus tareas Markdown dentro de sus notas originales y les añad
 | --- | --- | --- | --- |
 | Tareas Markdown del vault | Sí | Completar, editar, eliminar, recurrencia y reprogramación por arrastre para líneas compatibles | Se comprueba la línea fuente antes de escribir en Markdown. |
 | Calendarios ICS públicos | Sí | No | Los eventos ICS son de solo lectura. |
-| Apple Reminders | Solo macOS | Completar, reabrir, editar, crear desde Markdown y reprogramar cuando esté activado | Usa el helper local de Apple y permisos de macOS. |
-| Apple Calendar | Solo macOS | Crear, editar y reprogramar eventos cuando esté activado | Se respetan los calendarios editables; los de solo lectura siguen siendo solo lectura. |
+| Apple Reminders | macOS 14 Sonoma o posterior | Completar, reabrir, editar, crear desde Markdown y reprogramar cuando esté activado | Usa el helper local de Apple y permisos de macOS. |
+| Apple Calendar | macOS 14 Sonoma o posterior | Crear, editar y reprogramar eventos cuando esté activado | Se respetan los calendarios editables; los de solo lectura siguen siendo solo lectura. |
 | Dida / TickTick | Sí, mediante Open API | Crear, editar, completar, eliminar, sincronizar etiquetas y reprogramar cuando esté activado | Requiere tu token API y ajustes configurados. |
 
 Las funciones de escritura se separan en los ajustes. Que una fuente pueda leerse no significa que Task Hub vaya a modificarla automáticamente.
@@ -53,7 +53,7 @@ Las funciones de escritura se separan en los ajustes. Que una fuente pueda leers
 
 - **Obsidian:** `manifest.json` declara actualmente `minAppVersion` `1.7.2`. Usa Obsidian desktop 1.7.2 o posterior.
 - **Móvil:** Obsidian mobile no está soportado.
-- **Integración Apple en macOS:** Apple Reminders y Apple Calendar solo están disponibles en macOS. La matriz probada actualmente es macOS 14 Sonoma o posterior.
+- **Integración Apple en macOS:** Apple Reminders y Apple Calendar solo están disponibles en macOS. El rango probado y compatible es macOS 14 Sonoma o posterior; macOS 13 o anterior queda fuera de la matriz de compatibilidad actual.
 - **Otros sistemas de escritorio:** Las funciones principales de tareas del vault, etiquetas, calendario, ICS público y Dida/TickTick están diseñadas para Obsidian desktop. Apple Reminders y Apple Calendar no están disponibles fuera de macOS.
 
 ## Instalación

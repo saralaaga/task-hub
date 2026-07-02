@@ -2504,10 +2504,12 @@ input.task-hub-tag-editor-input:focus {
 
 .task-hub-send-control button {
   border-radius: 8px;
+  flex: 0 0 auto;
   height: 38px;
   line-height: 1.2;
-  min-width: 0;
+  min-width: max-content;
   padding-inline: 18px;
+  white-space: nowrap;
   width: auto;
 }
 

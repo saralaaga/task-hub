@@ -37,7 +37,7 @@ export function sourceIndicatorLabelForEvent(event: CalendarEvent, t: Translator
 export function deleteLabelForTask(task: TaskItem, t: Translator): string {
   if (task.source === "dida") return t("deleteFromDida");
   if (task.source === "apple-reminders") return t("deleteFromAppleReminders");
-  return t("deleteCalendarItem");
+  return t("delete");
 }
 
 export function deleteLabelForEvent(event: CalendarEvent, t: Translator): string {
@@ -47,8 +47,8 @@ export function deleteLabelForEvent(event: CalendarEvent, t: Translator): string
 
 export function deleteLabelForTaskBulkAction(action: TaskBulkActionId, tasks: TaskItem[], t: Translator): string {
   if (action !== "delete") return "";
-  if (tasks.length === 0) return t("deleteCalendarItem");
+  if (tasks.length === 0) return t("delete");
   const firstSource = tasks[0].source;
-  if (!tasks.every((task) => task.source === firstSource)) return t("deleteCalendarItem");
+  if (!tasks.every((task) => task.source === firstSource)) return t("delete");
   return deleteLabelForTask(tasks[0], t);
 }

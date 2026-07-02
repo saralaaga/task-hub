@@ -460,7 +460,7 @@ describe("renderTagsView", () => {
     const taskRow = collect(container).find((element) => element.classes.has("task-hub-tag-task"));
     taskRow?.dispatch("contextmenu");
 
-    expect(mockMenus.at(-1)?.items.map((item) => item.title)).toEqual(["sourceVaultTask", "markComplete", "openSource", "deleteCalendarItem", "sendToDida"]);
+    expect(mockMenus.at(-1)?.items.map((item) => item.title)).toEqual(["sourceVaultTask", "markComplete", "openSource", "delete", "sendToDida"]);
     expect(mockMenus.at(-1)?.items[0].disabled).toBe(true);
     mockMenus.at(-1)?.items[4].click?.();
     expect(onSendToDida).toHaveBeenCalledWith(vaultTask);

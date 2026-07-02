@@ -1746,9 +1746,12 @@ function renderCalendarTaskSendControl(
   closePopover: () => void
 ): void {
   const control = actions.createDiv({ cls: "task-hub-send-control" });
+  control.createDiv({ cls: "task-hub-detail-icon-cell" });
+  const labelCell = control.createDiv({ cls: "task-hub-detail-label task-hub-send-label-cell" });
+  const pickerCell = control.createDiv({ cls: "task-hub-detail-control task-hub-send-picker-cell" });
   const selected = preferredTaskSendTarget(options, state.taskSendDefaultTarget) ?? options[0];
-  const send = control.createEl("button", { cls: "mod-cta", text: state.t("sendTo") });
-  const picker = renderCalendarTaskSendTargetPicker(control, options, selected.value, state);
+  const send = labelCell.createEl("button", { cls: "mod-cta", text: state.t("sendTo") });
+  const picker = renderCalendarTaskSendTargetPicker(pickerCell, options, selected.value, state);
   send.addEventListener("click", () => {
     const target = parseTaskSendTarget(picker.getValue());
     if (handlers.onTaskSendToTarget) {
@@ -2480,7 +2483,7 @@ function addCalendarItemBulkMenuItems(
   if (!items.every((item) => canDeleteCalendarItem(item, state))) return;
   menu.addItem((menuItem) => {
     menuItem
-      .setTitle(state.t("deleteCalendarItem"))
+      .setTitle(state.t("delete"))
       .setIcon("trash")
       .onClick(() => {
         for (const item of items) {

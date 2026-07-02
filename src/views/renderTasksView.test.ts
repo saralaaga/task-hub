@@ -1705,7 +1705,7 @@ describe("renderTasksView", () => {
       additive: true,
       selectedTaskIds: ["vault-1", "apple-1"]
     });
-    expect(mockMenus.at(-1)?.items.map((item) => item.title)).toEqual(["createTaskNote", "markComplete", "deleteCalendarItem"]);
+    expect(mockMenus.at(-1)?.items.map((item) => item.title)).toEqual(["createTaskNote", "markComplete", "delete"]);
 
     mockMenus.at(-1)?.items[1].click?.();
     expect(viewHandlers.onComplete).toHaveBeenCalledWith(vaultTask);

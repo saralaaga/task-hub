@@ -43,8 +43,8 @@ Task Hub 让任务继续留在原来的 Markdown 笔记里，同时提供一个�
 | --- | --- | --- | --- |
 | vault Markdown 任务 | 支持 | 对支持的任务行完成、编辑、删除、循环和拖动改期 | Markdown 写回前会检查源行。 |
 | 公共 ICS 日历 | 支持 | 不支持 | ICS 事件只读。 |
-| Apple Reminders | 仅 macOS | 开启后支持完成、重新打开、编辑、从 Markdown 创建和改期 | 通过本地 Apple helper 和 macOS 权限运行。 |
-| Apple Calendar | 仅 macOS | 开启后支持创建、编辑和拖动改期 | 尊重可写日历；只读日历保持只读。 |
+| Apple Reminders | macOS 14 Sonoma 或更新版本 | 开启后支持完成、重新打开、编辑、从 Markdown 创建和改期 | 通过本地 Apple helper 和 macOS 权限运行。 |
+| Apple Calendar | macOS 14 Sonoma 或更新版本 | 开启后支持创建、编辑和拖动改期 | 尊重可写日历；只读日历保持只读。 |
 | 滴答清单 / TickTick | 通过 Open API 支持 | 开启后支持创建、编辑、完成、删除、标签同步和拖动改期 | 需要配置 API 口令和相关设置。 |
 
 写回能力在设置中分开控制。能读取某个来源，不代表 Task Hub 会自动修改它。
@@ -53,7 +53,7 @@ Task Hub 让任务继续留在原来的 Markdown 笔记里，同时提供一个�
 
 - **Obsidian：** `manifest.json` 当前声明的 `minAppVersion` 是 `1.7.2`。请使用 Obsidian 桌面端 1.7.2 或更新版本。
 - **移动端：** 暂不支持 Obsidian 移动端。
-- **macOS Apple 集成：** Apple Reminders 和 Apple Calendar 集成仅支持 macOS。目前测试支持矩阵是 macOS 14 Sonoma 或更新版本。
+- **macOS Apple 集成：** Apple Reminders 和 Apple Calendar 集成仅支持 macOS。当前已测试并支持的版本范围是 macOS 14 Sonoma 或更新版本；macOS 13 或更早版本不在当前支持矩阵内。
 - **其他桌面系统：** vault 任务、标签、日历、公共 ICS 和滴答清单 / TickTick 核心功能面向 Obsidian 桌面端；Apple Reminders 和 Apple Calendar 在非 macOS 系统上不可用。
 
 ## 安装

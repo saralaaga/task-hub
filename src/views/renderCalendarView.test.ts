@@ -4061,7 +4061,7 @@ describe("renderCalendarView", () => {
     const row = collect(container).find((element) => element.classes.has("task-hub-unscheduled-task"));
     row!.dispatch("contextmenu");
 
-    expect(mockMenus.at(-1)?.items.map((item) => item.title)).toEqual(["sourceVaultTask", "openSource", "deleteCalendarItem", "sendToDida"]);
+    expect(mockMenus.at(-1)?.items.map((item) => item.title)).toEqual(["sourceVaultTask", "openSource", "delete", "sendToDida"]);
     expect(mockMenus.at(-1)?.items[0].disabled).toBe(true);
     mockMenus.at(-1)?.items[1].click?.();
     mockMenus.at(-1)?.items[2].click?.();
@@ -4118,7 +4118,7 @@ describe("renderCalendarView", () => {
     rows[1].dispatch("contextmenu");
 
     expect(new Set(onTaskSelectionChange.mock.calls.at(-1)?.[1])).toEqual(new Set([firstTask.id, secondTask.id]));
-    expect(mockMenus.at(-1)?.items.map((item) => item.title)).toEqual(["markComplete", "deleteCalendarItem", "sendToDida"]);
+    expect(mockMenus.at(-1)?.items.map((item) => item.title)).toEqual(["markComplete", "delete", "sendToDida"]);
     mockMenus.at(-1)?.items[2].click?.();
     expect(onTaskSendToDida).toHaveBeenCalledWith(firstTask);
     expect(onTaskSendToDida).toHaveBeenCalledWith(secondTask);
@@ -5377,7 +5377,7 @@ describe("renderCalendarView", () => {
 
     expect(taskItem?.classes.has("is-multi-selected")).toBe(true);
     expect(eventItem?.classes.has("is-multi-selected")).toBe(true);
-    expect(mockMenus.at(-1)?.items.map((item) => item.title)).toEqual(["deleteCalendarItem"]);
+    expect(mockMenus.at(-1)?.items.map((item) => item.title)).toEqual(["delete"]);
     mockMenus.at(-1)?.items[0].click?.();
     expect(onTaskDelete).toHaveBeenCalledWith(selectedTask);
     expect(onEventDelete).toHaveBeenCalledWith(selectedEvent);
@@ -6446,7 +6446,7 @@ describe("renderCalendarView", () => {
     expect(mockMenus[0].items[0].disabled).toBe(true);
     expect(mockMenus[0].items[1].title).toBe("openSource");
     expect(mockMenus[0].items[1].icon).toBe("external-link");
-    expect(mockMenus[0].items[2].title).toBe("deleteCalendarItem");
+    expect(mockMenus[0].items[2].title).toBe("delete");
     expect(mockMenus[0].items[2].icon).toBe("trash");
     expect(mockMenus[0].items[3].title).toBe("sendToAppleReminders");
     expect(mockMenus[0].items[3].icon).toBe("bell-plus");
@@ -6497,7 +6497,7 @@ describe("renderCalendarView", () => {
     expect(mockMenus[0].items.map((item) => item.title)).toEqual([
       "sourceVaultTask",
       "openSource",
-      "deleteCalendarItem",
+      "delete",
       "sendToAppleReminders",
       "sendToDida"
     ]);
@@ -6543,13 +6543,16 @@ describe("renderCalendarView", () => {
 
     collect(container).find((element) => element.classes.has("task-hub-calendar-item"))?.click();
     const popover = collect(fakeDocument.body).find((element) => element.classes.has("task-hub-calendar-detail-popover"));
+    const sendButton = findText(popover as FakeElement, "sendTo");
     const sendPicker = collect(popover as FakeElement).find((element) => element.classes.has("task-hub-send-target-select"));
 
-    expect(findText(popover as FakeElement, "sendTo")).toBeDefined();
+    expect(sendButton).toBeDefined();
+    expect(sendButton?.parent?.classes.has("task-hub-send-label-cell")).toBe(true);
     expect(sendPicker).toBeDefined();
+    expect(sendPicker?.parent?.classes.has("task-hub-send-picker-cell")).toBe(true);
     expect(sendPicker?.value).toBe("dida:dida-project");
 
-    findText(popover as FakeElement, "sendTo")?.click();
+    sendButton?.click();
 
     expect(onTaskSendToTarget).toHaveBeenCalledWith(task, { type: "dida", projectId: "dida-project" });
   });
@@ -6611,7 +6614,7 @@ describe("renderCalendarView", () => {
     expect(items[0].classes.has("is-multi-selected")).toBe(true);
     expect(items[1].classes.has("is-multi-selected")).toBe(true);
     expect(new Set(onTaskSelectionChange.mock.calls.at(-1)?.[1])).toEqual(new Set(["task-1", "apple-task"]));
-    expect(mockMenus.at(-1)?.items.map((item) => item.title)).toEqual(["createTaskNote", "markComplete", "deleteCalendarItem"]);
+    expect(mockMenus.at(-1)?.items.map((item) => item.title)).toEqual(["createTaskNote", "markComplete", "delete"]);
 
     mockMenus.at(-1)?.items[0].click?.();
     mockMenus.at(-1)?.items[1].click?.();
@@ -6754,7 +6757,7 @@ describe("renderCalendarView", () => {
     );
     collect(remindersOnlyContainer).find((element) => element.classes.has("task-hub-calendar-item"))?.dispatch("contextmenu");
 
-    expect(mockMenus[0].items.map((item) => item.title)).toEqual(["sourceVaultTask", "openSource", "deleteCalendarItem", "sendToAppleReminders"]);
+    expect(mockMenus[0].items.map((item) => item.title)).toEqual(["sourceVaultTask", "openSource", "delete", "sendToAppleReminders"]);
   });
 
   it("keeps read-only Apple Calendar events display-only in the context menu", () => {
@@ -6847,7 +6850,7 @@ describe("renderCalendarView", () => {
     expect(mockMenus.at(-1)?.items[0].title).toBe("sourceVaultTask");
     expect(mockMenus.at(-1)?.items[0].disabled).toBe(true);
     expect(mockMenus.at(-1)?.items[1].title).toBe("openSource");
-    expect(mockMenus.at(-1)?.items[2].title).toBe("deleteCalendarItem");
+    expect(mockMenus.at(-1)?.items[2].title).toBe("delete");
 
     const remindersContainer = new FakeElement();
     renderCalendarView(

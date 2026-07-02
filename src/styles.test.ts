@@ -766,6 +766,8 @@ describe("Task Hub styles", () => {
     expect(actionRule).toContain("grid-template-columns: minmax(0, 1fr)");
     expect(sendButtonRule).toContain("border-radius: 8px");
     expect(sendButtonRule).toContain("height: 38px");
+    expect(sendButtonRule).toContain("min-width: max-content");
+    expect(sendButtonRule).toContain("white-space: nowrap");
     expect(sendTargetRule).toContain("appearance: auto");
     expect(sendTargetRule).toContain("height: 38px");
     expect(sendTargetRule).toContain("min-height: 38px");

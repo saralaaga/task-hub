@@ -43,8 +43,8 @@ Task Hub는 Markdown 작업을 원래 노트에 그대로 두고 전용 작업 �
 | --- | --- | --- | --- |
 | Vault Markdown 작업 | 지원 | 지원되는 작업 줄의 완료, 편집, 삭제, 반복, 드래그 일정 변경 | Markdown에 쓰기 전 원본 줄을 확인합니다. |
 | 공개 ICS 캘린더 | 지원 | 미지원 | ICS 이벤트는 읽기 전용입니다. |
-| Apple Reminders | macOS 전용 | 활성화 시 완료, 다시 열기, 편집, Markdown에서 생성, 일정 변경 | 로컬 Apple helper와 macOS 권한을 사용합니다. |
-| Apple Calendar | macOS 전용 | 활성화 시 이벤트 생성, 편집, 드래그 일정 변경 | 쓰기 가능한 캘린더만 수정하고 읽기 전용 캘린더는 유지합니다. |
+| Apple Reminders | macOS 14 Sonoma 이상 | 활성화 시 완료, 다시 열기, 편집, Markdown에서 생성, 일정 변경 | 로컬 Apple helper와 macOS 권한을 사용합니다. |
+| Apple Calendar | macOS 14 Sonoma 이상 | 활성화 시 이벤트 생성, 편집, 드래그 일정 변경 | 쓰기 가능한 캘린더만 수정하고 읽기 전용 캘린더는 유지합니다. |
 | Dida / TickTick | Open API로 지원 | 활성화 시 생성, 편집, 완료, 삭제, 태그 동기화, 드래그 일정 변경 | API 토큰과 설정이 필요합니다. |
 
 쓰기 기능은 설정에서 개별적으로 제어됩니다. 어떤 소스를 읽을 수 있다고 해서 Task Hub가 자동으로 수정하지는 않습니다.
@@ -53,7 +53,7 @@ Task Hub는 Markdown 작업을 원래 노트에 그대로 두고 전용 작업 �
 
 - **Obsidian:** `manifest.json`의 현재 `minAppVersion`은 `1.7.2`입니다. Obsidian 데스크톱 1.7.2 이상을 사용하세요.
 - **모바일:** Obsidian 모바일은 지원하지 않습니다.
-- **macOS Apple 연동:** Apple Reminders와 Apple Calendar 연동은 macOS 전용입니다. 현재 테스트 지원 범위는 macOS 14 Sonoma 이상입니다.
+- **macOS Apple 연동:** Apple Reminders와 Apple Calendar 연동은 macOS 전용입니다. 현재 테스트 및 지원 범위는 macOS 14 Sonoma 이상이며, macOS 13 이하 버전은 현재 지원 범위에 포함되지 않습니다.
 - **기타 데스크톱 시스템:** Vault 작업, 태그, 캘린더, 공개 ICS, Dida/TickTick 핵심 기능은 Obsidian 데스크톱용입니다. Apple Reminders와 Apple Calendar 기능은 macOS 외 환경에서 사용할 수 없습니다.
 
 ## 설치

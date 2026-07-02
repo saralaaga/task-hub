@@ -43,8 +43,8 @@ Use it when you want to:
 | --- | --- | --- | --- |
 | Vault Markdown tasks | Yes | Complete, edit, delete, recurrence, and drag-reschedule for supported task lines | Source-line checks are used before Markdown writeback. |
 | Public ICS calendars | Yes | No | ICS events are read-only. |
-| Apple Reminders | macOS only | Complete, reopen, edit, create from Markdown, and reschedule when enabled | Uses the local Apple helper and macOS permissions. |
-| Apple Calendar | macOS only | Create and edit events, including drag-reschedule, when enabled | Writable calendars are respected; read-only calendars remain read-only. |
+| Apple Reminders | macOS 14 Sonoma or later | Complete, reopen, edit, create from Markdown, and reschedule when enabled | Uses the local Apple helper and macOS permissions. |
+| Apple Calendar | macOS 14 Sonoma or later | Create and edit events, including drag-reschedule, when enabled | Writable calendars are respected; read-only calendars remain read-only. |
 | Dida / TickTick | Yes, through Open API | Create, edit, complete, delete, tag sync, and drag-reschedule when enabled | Requires your configured API token and settings. |
 
 Writeback features are intentionally separated into settings. Reading a source does not automatically mean Task Hub can modify it.
@@ -53,7 +53,7 @@ Writeback features are intentionally separated into settings. Reading a source d
 
 - **Obsidian:** Task Hub declares `minAppVersion` `1.7.2` in `manifest.json`. Use Obsidian desktop 1.7.2 or later.
 - **Mobile:** Obsidian mobile is not supported.
-- **macOS Apple integration:** Apple Reminders and Apple Calendar integration is macOS-only. The current tested support matrix is macOS 14 Sonoma or later.
+- **macOS Apple integration:** Apple Reminders and Apple Calendar integration is macOS-only. The tested and supported version range is macOS 14 Sonoma or later; macOS 13 or earlier is outside the current support matrix.
 - **Other desktop systems:** Core vault task, tag, calendar, public ICS, and Dida/TickTick features are designed for Obsidian desktop. Apple Reminders and Apple Calendar features are unavailable outside macOS.
 
 ## Installation
