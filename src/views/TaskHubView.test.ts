@@ -679,6 +679,45 @@ describe("TaskHubView smart list interactions", () => {
     expect(render).toHaveBeenCalledWith({ preserveTaskListScroll: true, preserveContentScroll: true });
   });
 
+  it("adds descendant tasks when a parent task is added to a smart list", async () => {
+    const list = smartList({
+      taskStableIds: [],
+      taskIds: [],
+      excludedTaskStableIds: ["vault:th_child"],
+      excludedTaskIds: ["runtime-grandchild"]
+    });
+    const parent = task({ id: "parent", stableId: "vault:th_parent", text: "Plan launch" });
+    const child = task({ id: "child", stableId: "vault:th_child", parentId: "parent", indent: 1, text: "Draft announcement" });
+    const grandchild = task({ id: "runtime-grandchild", parentId: "child", indent: 2, text: "Collect screenshots" });
+    const unrelated = task({ id: "unrelated", stableId: "vault:th_unrelated", text: "Refill coffee" });
+    const plugin = {
+      settings: {
+        defaultView: "tasks",
+        language: "en",
+        taskViewFilters: fallbackFilters(),
+        lastSessionState: undefined,
+        smartLists: [list]
+      },
+      getTasks: jest.fn(() => [parent, child, grandchild, unrelated]),
+      saveSettings: jest.fn(async () => undefined)
+    };
+    const view = new TaskHubView({} as never, plugin as never);
+    jest.spyOn(view as unknown as { render(options?: unknown): void }, "render").mockImplementation(() => undefined);
+
+    (view as unknown as { addTasksToSmartList(smartList: typeof list, tasks: TaskItem[]): void }).addTasksToSmartList(list, [parent]);
+    await Promise.resolve();
+
+    expect(plugin.settings.smartLists[0]).toMatchObject({
+      id: "smart_focus",
+      taskStableIds: ["vault:th_parent", "vault:th_child"],
+      taskIds: ["runtime-grandchild"],
+      excludedTaskStableIds: [],
+      excludedTaskIds: []
+    });
+    expect(plugin.settings.smartLists[0].taskStableIds).not.toContain("vault:th_unrelated");
+    expect(plugin.saveSettings).toHaveBeenCalled();
+  });
+
   it("adds tasks created from the toolbar to the active smart list", async () => {
     const list = smartList({
       taskStableIds: [],
@@ -938,6 +977,8 @@ function task(overrides: Partial<TaskItem>): TaskItem {
   return {
     id: overrides.id ?? "task",
     stableId: overrides.stableId,
+    parentId: overrides.parentId,
+    indent: overrides.indent,
     filePath: overrides.filePath ?? "Inbox.md",
     line: overrides.line ?? 0,
     rawLine: overrides.rawLine ?? "- [ ] Task",

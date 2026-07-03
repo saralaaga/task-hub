@@ -18,6 +18,7 @@ type TextControl = {
 };
 
 const toggles: ToggleControl[] = [];
+const compactToggles: Array<{ name: string; toggle: ToggleControl }> = [];
 const swatchClicks: Array<() => void> = [];
 const colorInputs: MockElement[] = [];
 const settings: Array<{ name?: string; desc?: string; toggle?: ToggleControl; text?: TextControl; controlEl?: MockElement }> = [];
@@ -34,11 +35,14 @@ const mockDocument = {
 
 class MockElement {
   children: MockElement[] = [];
+  parent?: MockElement;
   scrollTop = 0;
   className = "";
-  textContent = "";
+  ownText = "";
   type = "";
   value = "";
+  checked = false;
+  disabled = false;
   style = { setProperty: jest.fn() };
   private listeners = new Map<string, Array<() => void>>();
 
@@ -54,18 +58,30 @@ class MockElement {
 
   empty = jest.fn(() => {
     this.children = [];
+    this.ownText = "";
     this.scrollTop = 0;
   });
 
-  createDiv(options: { cls?: string } = {}): MockElement {
+  get textContent(): string {
+    return `${this.ownText}${this.children.map((child) => child.textContent).join("")}`;
+  }
+
+  set textContent(value: string) {
+    this.ownText = value;
+  }
+
+  createDiv(options: { cls?: string; text?: string } = {}): MockElement {
     const child = new MockElement();
+    child.parent = this;
     child.className = options.cls ?? "";
+    child.ownText = options.text ?? "";
     this.children.push(child);
     return child;
   }
 
-  createEl(_tag: string, options: { cls?: string; type?: string } = {}): MockElement {
+  createEl(_tag: string, options: { cls?: string; text?: string; type?: string; attr?: Record<string, string> } = {}): MockElement {
     const child = this.createDiv({ cls: options.cls });
+    child.ownText = options.text ?? "";
     child.type = options.type ?? _tag;
     if (child.type === "color") {
       colorInputs.push(child);
@@ -77,6 +93,28 @@ class MockElement {
     this.listeners.set(name, [...(this.listeners.get(name) ?? []), listener]);
     if (this.className.includes("task-hub-color-swatch") && name === "click") {
       swatchClicks.push(listener);
+    }
+    if (this.className.includes("task-hub-settings-compact-control") && name === "change") {
+      const toggle: ToggleControl = {
+        value: this.checked,
+        setValue: (value: boolean) => {
+          toggle.value = value;
+          this.checked = value;
+          return toggle;
+        },
+        onChange: (handler) => {
+          toggle.onChangeHandler = handler;
+          return toggle;
+        }
+      };
+      toggle.onChangeHandler = async (value: boolean) => {
+        toggle.value = value;
+        this.checked = value;
+        listener();
+        await Promise.resolve();
+        await Promise.resolve();
+      };
+      compactToggles.push({ name: this.parent?.textContent ?? "", toggle });
     }
   }
 
@@ -199,6 +237,7 @@ jest.mock(
 describe("TaskHubSettingTab risky Apple Reminders setting", () => {
   beforeEach(() => {
     toggles.length = 0;
+    compactToggles.length = 0;
     swatchClicks.length = 0;
     colorInputs.length = 0;
     settings.length = 0;
@@ -210,9 +249,9 @@ describe("TaskHubSettingTab risky Apple Reminders setting", () => {
     const tab = new TaskHubSettingTab({} as never, plugin as never);
 
     plugin.confirmRiskySourceDeletionSetting = jest.fn(async () => false);
+    openSettingsPage(tab, "integrations", "reminders");
     tab.display();
-    const settingIndex = settings.findIndex((setting) => setting.name === "Create Apple Reminders from vault tasks");
-    const toggle = settings[settingIndex].toggle!;
+    const toggle = findToggle("Create Apple Reminders from vault tasks")!;
 
     await toggle.onChangeHandler?.(true);
 
@@ -233,9 +272,9 @@ describe("TaskHubSettingTab risky Apple Reminders setting", () => {
     const tab = new TaskHubSettingTab({} as never, plugin as never);
 
     plugin.confirmRiskySourceDeletionSetting = jest.fn(async () => false);
+    openSettingsPage(tab, "integrations", "calendar");
     tab.display();
-    const settingIndex = settings.findIndex((setting) => setting.name === "Send tasks to Apple Calendar");
-    const toggle = settings[settingIndex].toggle!;
+    const toggle = findToggle("Send tasks to Apple Calendar")!;
 
     await toggle.onChangeHandler?.(true);
 
@@ -256,6 +295,7 @@ describe("TaskHubSettingTab risky Apple Reminders setting", () => {
     plugin.isLocalAppleSupported = jest.fn(() => false);
     const tab = new TaskHubSettingTab({} as never, plugin as never);
 
+    openSettingsPage(tab, "integrations");
     tab.display();
     await findToggle("Local Apple")?.onChangeHandler?.(true);
 
@@ -266,6 +306,7 @@ describe("TaskHubSettingTab risky Apple Reminders setting", () => {
     plugin.settings.localApple.enabled = true;
     plugin.settings.localApple.remindersEnabled = false;
     settings.length = 0;
+    openSettingsPage(tab, "integrations");
     tab.display();
     await findToggle("Apple Calendar")?.onChangeHandler?.(true);
     await findToggle("Apple Reminders")?.onChangeHandler?.(true);
@@ -283,12 +324,14 @@ describe("TaskHubSettingTab risky Apple Reminders setting", () => {
     plugin.settings.localApple.remindersEnabled = true;
     const tab = new TaskHubSettingTab({} as never, plugin as never);
 
+    openSettingsPage(tab, "integrations", "calendar");
     (tab as unknown as { externalTaskSourceTab: "apple-calendar" }).externalTaskSourceTab = "apple-calendar";
     tab.display();
     const calendarWriteback = findToggle("Reschedule Apple Calendar events");
     expect(calendarWriteback).toBeDefined();
     await calendarWriteback?.onChangeHandler?.(true);
     settings.length = 0;
+    openSettingsPage(tab, "integrations", "calendar");
     tab.display();
     const calendarSend = findToggle("Send tasks to Apple Calendar");
     expect(calendarSend).toBeDefined();
@@ -296,11 +339,13 @@ describe("TaskHubSettingTab risky Apple Reminders setting", () => {
 
     (tab as unknown as { externalTaskSourceTab: "apple-reminders" }).externalTaskSourceTab = "apple-reminders";
     settings.length = 0;
+    openSettingsPage(tab, "integrations", "reminders");
     tab.display();
     const remindersWriteback = findToggle("Write completion status to Apple Reminders");
     expect(remindersWriteback).toBeDefined();
     await remindersWriteback?.onChangeHandler?.(true);
     settings.length = 0;
+    openSettingsPage(tab, "integrations", "reminders");
     tab.display();
     const remindersCreate = findToggle("Create Apple Reminders from vault tasks");
     expect(remindersCreate).toBeDefined();
@@ -320,6 +365,7 @@ describe("TaskHubSettingTab risky Apple Reminders setting", () => {
     plugin.settings.localApple.calendarEnabled = true;
     const tab = new TaskHubSettingTab({} as never, plugin as never);
 
+    openSettingsPage(tab, "integrations", "calendar");
     tab.display();
     const lookahead = settings.find((setting) => setting.name === "Calendar lookahead days")?.text;
     expect(lookahead).toBeDefined();
@@ -335,6 +381,7 @@ describe("TaskHubSettingTab risky Apple Reminders setting", () => {
     const plugin = pluginForSettings();
     const tab = new TaskHubSettingTab({} as never, plugin as never);
 
+    openSettingsPage(tab, "advanced");
     tab.display();
     const lookahead = settings.find((setting) => setting.name === "External task lookahead days")?.text;
     expect(lookahead).toBeDefined();
@@ -353,6 +400,7 @@ describe("TaskHubSettingTab risky Apple Reminders setting", () => {
     const tab = new TaskHubSettingTab({} as never, plugin as never);
     const container = (tab as unknown as { containerEl: MockElement }).containerEl;
 
+    openSettingsPage(tab, "integrations", "calendar");
     tab.display();
     container.scrollTop = 480;
     expect(swatchClicks.length).toBeGreaterThan(0);
@@ -371,6 +419,7 @@ describe("TaskHubSettingTab risky Apple Reminders setting", () => {
     plugin.settings.localApple.calendars = [{ id: "work", name: "Work", color: "#5ECC89", writable: true }];
     const tab = new TaskHubSettingTab({} as never, plugin as never);
 
+    openSettingsPage(tab, "integrations", "calendar");
     tab.display();
     const colorInput = colorInputs[0];
     expect(colorInput).toBeDefined();
@@ -391,6 +440,7 @@ describe("TaskHubSettingTab risky Apple Reminders setting", () => {
     ];
     const tab = new TaskHubSettingTab({} as never, plugin as never);
 
+    openSettingsPage(tab, "integrations", "reminders");
     tab.display();
     const colorInput = colorInputs.at(-1);
     expect(colorInput).toBeDefined();
@@ -405,7 +455,19 @@ describe("TaskHubSettingTab risky Apple Reminders setting", () => {
 });
 
 function findToggle(name: string): ToggleControl | undefined {
-  return settings.find((setting) => setting.name === name && setting.toggle)?.toggle;
+  return settings.find((setting) => setting.name === name && setting.toggle)?.toggle
+    ?? compactToggles.find((entry) => entry.name.includes(name))?.toggle;
+}
+
+function openSettingsPage(
+  tab: TaskHubSettingTab,
+  page: "overview" | "tasks" | "calendar" | "integrations" | "advanced",
+  localAppleTab?: "calendar" | "reminders"
+): void {
+  (tab as unknown as { settingsPage: typeof page }).settingsPage = page;
+  if (localAppleTab) {
+    (tab as unknown as { localAppleTab: typeof localAppleTab }).localAppleTab = localAppleTab;
+  }
 }
 
 function pluginForSettings() {

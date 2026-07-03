@@ -17,6 +17,7 @@ export type ShellState = {
   isRefreshing?: boolean;
   unscheduledPanelOpen?: boolean;
   unscheduledTaskCount?: number;
+  animateViewTransition?: boolean;
   t: Translator;
 };
 
@@ -63,16 +64,19 @@ export function renderShell(container: HTMLElement, state: ShellState, handlers:
   const toolbar = root.createDiv({ cls: "task-hub-toolbar" });
   const viewSwitch = toolbar.createDiv({ cls: "task-hub-view-switch" });
   for (const view of ["tasks", "calendar", "tags"] as DashboardView[]) {
+    const isActive = state.view === view;
     const button = viewSwitch.createEl("button", {
-      cls: state.view === view ? "mod-cta" : "",
+      cls: `task-hub-view-switch-button ${isActive ? "is-active mod-cta" : ""}`,
       text: state.t(view)
     });
+    button.setAttr("aria-pressed", isActive ? "true" : "false");
     button.addEventListener("click", () => handlers.onViewChange(view));
   }
 
   renderFilters(toolbar, state, handlers, options);
 
-  const main = root.createDiv({ cls: "task-hub-main" });
+  const main = root.createDiv({ cls: `task-hub-main ${state.animateViewTransition ? "is-view-transition" : ""}` });
+  main.setAttr("data-task-hub-view", state.view);
   return main;
 }
 

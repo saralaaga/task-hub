@@ -1,5 +1,7 @@
 import {
+  DEFAULT_SETTINGS,
   TASK_HUB_SETTINGS_SCHEMA_VERSION,
+  TaskHubSettingTab,
   normalizeTaskHubSettings,
   openTaskHubFeedback,
   parseEventCreationTarget,
@@ -14,10 +16,500 @@ jest.mock(
   "obsidian",
   () => ({
     PluginSettingTab: class {},
-    Setting: class {}
+    Setting: class {
+      public settingEl: TestElement;
+      public infoEl: TestElement;
+      public controlEl: TestElement;
+
+      constructor(containerEl: TestElement) {
+        this.settingEl = containerEl.createDiv({ cls: "setting-item" });
+        this.infoEl = this.settingEl.createDiv({ cls: "setting-item-info" });
+        this.controlEl = this.settingEl.createDiv({ cls: "setting-item-control" });
+      }
+
+      setName(name: string) {
+        this.infoEl.createDiv({ cls: "setting-item-name", text: name });
+        return this;
+      }
+
+      setDesc(desc: string | TestElement) {
+        const descEl = this.infoEl.createDiv({ cls: "setting-item-description" });
+        if (typeof desc === "string") descEl.setText(desc);
+        else descEl.appendChild(desc);
+        return this;
+      }
+
+      setHeading() {
+        this.settingEl.addClass("setting-item-heading");
+        return this;
+      }
+
+      addButton(callback: (button: MockButtonComponent) => void) {
+        const button = new MockButtonComponent(this.controlEl);
+        callback(button);
+        return this;
+      }
+
+      addDropdown(callback: (dropdown: MockDropdownComponent) => void) {
+        const dropdown = new MockDropdownComponent(this.controlEl);
+        callback(dropdown);
+        return this;
+      }
+
+      addText(callback: (text: MockTextComponent) => void) {
+        const text = new MockTextComponent(this.controlEl, "input");
+        callback(text);
+        return this;
+      }
+
+      addTextArea(callback: (text: MockTextComponent) => void) {
+        const text = new MockTextComponent(this.controlEl, "textarea");
+        callback(text);
+        return this;
+      }
+
+      addToggle(callback: (toggle: MockToggleComponent) => void) {
+        const toggle = new MockToggleComponent(this.controlEl);
+        callback(toggle);
+        return this;
+      }
+
+      addExtraButton(callback: (button: MockExtraButtonComponent) => void) {
+        const button = new MockExtraButtonComponent(this.controlEl);
+        callback(button);
+        return this;
+      }
+
+      then(callback: (setting: this) => void) {
+        callback(this);
+        return this;
+      }
+    }
   }),
   { virtual: true }
 );
+
+class MockButtonComponent {
+  public buttonEl: TestElement;
+
+  constructor(containerEl: TestElement) {
+    this.buttonEl = containerEl.createEl("button");
+  }
+
+  setButtonText(text: string) {
+    this.buttonEl.setText(text);
+    return this;
+  }
+
+  setCta() {
+    this.buttonEl.addClass("mod-cta");
+    return this;
+  }
+
+  setDisabled(disabled: boolean) {
+    this.buttonEl.disabled = disabled;
+    return this;
+  }
+
+  onClick(callback: () => void | Promise<void>) {
+    this.buttonEl.addEventListener("click", () => {
+      void callback();
+    });
+    return this;
+  }
+}
+
+class MockDropdownComponent {
+  public selectEl: TestElement;
+
+  constructor(containerEl: TestElement) {
+    this.selectEl = containerEl.createEl("select");
+  }
+
+  addOption(value: string, text: string) {
+    this.selectEl.createEl("option", { value, text });
+    return this;
+  }
+
+  setValue(value: string) {
+    this.selectEl.value = value;
+    return this;
+  }
+
+  onChange(callback: (value: string) => void | Promise<void>) {
+    this.selectEl.addEventListener("change", () => {
+      void callback(this.selectEl.value);
+    });
+    return this;
+  }
+}
+
+class MockTextComponent {
+  public inputEl: TestElement;
+
+  constructor(containerEl: TestElement, tag: "input" | "textarea") {
+    this.inputEl = containerEl.createEl(tag);
+  }
+
+  setPlaceholder(value: string) {
+    this.inputEl.placeholder = value;
+    return this;
+  }
+
+  setValue(value: string) {
+    this.inputEl.value = value;
+    return this;
+  }
+
+  onChange(callback: (value: string) => void | Promise<void>) {
+    this.inputEl.addEventListener("change", () => {
+      void callback(this.inputEl.value);
+    });
+    this.inputEl.addEventListener("input", () => {
+      void callback(this.inputEl.value);
+    });
+    return this;
+  }
+}
+
+class MockToggleComponent {
+  public toggleEl: TestElement;
+
+  constructor(containerEl: TestElement) {
+    this.toggleEl = containerEl.createEl("input", { type: "checkbox" });
+    this.toggleEl.addClass("checkbox-toggle");
+  }
+
+  setValue(value: boolean) {
+    this.toggleEl.checked = value;
+    return this;
+  }
+
+  onChange(callback: (value: boolean) => void | Promise<void>) {
+    this.toggleEl.addEventListener("change", () => {
+      void callback(this.toggleEl.checked);
+    });
+    return this;
+  }
+}
+
+class MockExtraButtonComponent {
+  public extraSettingsEl: TestElement;
+
+  constructor(containerEl: TestElement) {
+    this.extraSettingsEl = containerEl.createEl("button");
+  }
+
+  setIcon(icon: string) {
+    this.extraSettingsEl.setAttribute("data-icon", icon);
+    return this;
+  }
+
+  setTooltip(tooltip: string) {
+    this.extraSettingsEl.setAttribute("aria-label", tooltip);
+    return this;
+  }
+}
+
+class TestElement {
+  public children: TestElement[] = [];
+  public attributes = new Map<string, string>();
+  public classNames = new Set<string>();
+  public eventListeners = new Map<string, Array<() => void>>();
+  public value = "";
+  public checked = false;
+  public disabled = false;
+  public placeholder = "";
+  public type = "";
+  public parent: TestElement | undefined;
+  private ownText = "";
+
+  public readonly win = { open: jest.fn() };
+  public readonly doc = {
+    createDocumentFragment: () => new TestElement("#fragment"),
+    createElement: (tagName: string) => new TestElement(tagName)
+  };
+
+  constructor(public readonly tagName = "div") {}
+
+  get textContent(): string {
+    return `${this.ownText}${this.children.map((child) => child.textContent).join("")}`;
+  }
+
+  set textContent(value: string) {
+    this.ownText = value;
+    this.children = [];
+  }
+
+  set className(value: string) {
+    this.classNames = new Set(value.split(" ").filter(Boolean));
+  }
+
+  get className(): string {
+    return Array.from(this.classNames).join(" ");
+  }
+
+  setText(text: string) {
+    this.ownText = text;
+  }
+
+  createDiv(options: { cls?: string; text?: string } = {}): TestElement {
+    return this.createEl("div", options);
+  }
+
+  createEl(tagName: string, options: { cls?: string; text?: string; value?: string; type?: string; attr?: Record<string, string> } = {}): TestElement {
+    const child = new TestElement(tagName);
+    child.parent = this;
+    if (options.cls) child.addClass(...options.cls.split(" ").filter(Boolean));
+    if (options.text) child.setText(options.text);
+    if (options.value) child.value = options.value;
+    if (options.type) child.type = options.type;
+    for (const [name, value] of Object.entries(options.attr ?? {})) {
+      child.setAttribute(name, value);
+    }
+    this.children.push(child);
+    return child;
+  }
+
+  appendChild(child: TestElement): TestElement {
+    child.parent = this;
+    this.children.push(child);
+    return child;
+  }
+
+  append(...nodes: Array<string | TestElement>) {
+    for (const node of nodes) {
+      if (typeof node === "string") {
+        const textNode = new TestElement("#text");
+        textNode.setText(node);
+        this.appendChild(textNode);
+      } else {
+        this.appendChild(node);
+      }
+    }
+  }
+
+  empty() {
+    this.children = [];
+    this.ownText = "";
+  }
+
+  addClass(...classes: string[]) {
+    for (const cls of classes) this.classNames.add(cls);
+  }
+
+  removeClass(...classes: string[]) {
+    for (const cls of classes) this.classNames.delete(cls);
+  }
+
+  setAttribute(name: string, value: string) {
+    this.attributes.set(name, value);
+    if (name === "type") this.type = value;
+  }
+
+  setCssProps(props: Record<string, string>) {
+    for (const [name, value] of Object.entries(props)) {
+      this.attributes.set(name, value);
+    }
+  }
+
+  addEventListener(eventName: string, callback: () => void) {
+    const listeners = this.eventListeners.get(eventName) ?? [];
+    listeners.push(callback);
+    this.eventListeners.set(eventName, listeners);
+  }
+
+  click() {
+    for (const callback of this.eventListeners.get("click") ?? []) callback();
+  }
+
+  querySelector(selector: string): TestElement | null {
+    return this.querySelectorAll(selector)[0] ?? null;
+  }
+
+  querySelectorAll(selector: string): TestElement[] {
+    const matches: TestElement[] = [];
+    const className = selector.startsWith(".") ? selector.slice(1) : undefined;
+    const walk = (element: TestElement) => {
+      if (className && element.classNames.has(className)) matches.push(element);
+      for (const child of element.children) walk(child);
+    };
+    walk(this);
+    return matches;
+  }
+}
+
+function createSettingTab(settings = DEFAULT_SETTINGS): TaskHubSettingTab {
+  const app = {} as never;
+  const plugin = {
+    settings: normalizeTaskHubSettings(settings),
+    saveSettings: jest.fn(async () => undefined),
+    syncDida: jest.fn(async () => undefined),
+    syncExternalTasks: jest.fn(async () => undefined),
+    syncLocalApple: jest.fn(async () => undefined),
+    syncCalendarSource: jest.fn(async () => undefined),
+    refreshLocalAppleStatus: jest.fn(async () => undefined),
+    requestLocalApplePermissions: jest.fn(async () => undefined),
+    isLocalAppleSupported: () => true,
+    notifyLocalAppleUnsupported: jest.fn(),
+    localAppleStatus: { state: "never" },
+    localAppleEvents: [],
+    getAppleReminderLists: () => [],
+    getDidaProjects: () => [],
+    canCreateAppleReminders: () => false,
+    canCreateDidaTasks: () => false,
+    canSendTasksToAppleCalendar: () => false,
+    canConvertAppleCalendarAndReminders: () => false,
+    notifyLocalAppleConversionDisabled: jest.fn(),
+    confirmRiskySourceDeletionSetting: jest.fn(async () => true),
+    confirmRiskyAppleConversionSetting: jest.fn(async () => true)
+  };
+  const tab = new TaskHubSettingTab(app, plugin as never);
+  Object.defineProperty(tab, "containerEl", {
+    value: new TestElement(),
+    configurable: true
+  });
+  return tab;
+}
+
+describe("TaskHubSettingTab", () => {
+  it("opens to a focused overview page instead of rendering every integration setting", () => {
+    const tab = createSettingTab({
+      ...DEFAULT_SETTINGS,
+      localApple: { ...DEFAULT_SETTINGS.localApple, enabled: true },
+      dida: { ...DEFAULT_SETTINGS.dida, enabled: true }
+    });
+
+    tab.display();
+
+    expect((tab.containerEl as unknown as TestElement).classNames.has("task-hub-settings-root")).toBe(true);
+    expect(tab.containerEl.querySelector(".task-hub-settings-page-list")).not.toBeNull();
+    expect(tab.containerEl.textContent).toContain("Overview");
+    expect(tab.containerEl.textContent).toContain("Language");
+    expect(tab.containerEl.textContent).not.toContain("Feedback");
+    expect(tab.containerEl.textContent).not.toContain("Local Apple");
+    expect(tab.containerEl.textContent).not.toContain("API token");
+  });
+
+  it("moves feedback into the advanced settings page", () => {
+    const tab = createSettingTab();
+
+    tab.display();
+    const advancedButton = Array.from(tab.containerEl.querySelectorAll<HTMLButtonElement>(".task-hub-settings-page"))
+      .find((button) => button.textContent === "Advanced");
+    advancedButton?.click();
+
+    expect(tab.containerEl.textContent).toContain("Feedback");
+    expect(tab.containerEl.textContent).toContain("Report bug / suggest");
+    expect(tab.containerEl.textContent).toContain("External task sources");
+    expect(tab.containerEl.querySelector(".task-hub-advanced-feedback-grid")).not.toBeNull();
+    expect(tab.containerEl.querySelector(".task-hub-external-task-window-grid")).not.toBeNull();
+    expect(tab.containerEl.querySelector(".task-hub-external-task-window-grid")?.querySelectorAll(".setting-item")).toHaveLength(2);
+  });
+
+  it("switches settings pages and renders integration controls on demand", () => {
+    const tab = createSettingTab();
+
+    tab.display();
+    const integrationsButton = Array.from(tab.containerEl.querySelectorAll<HTMLButtonElement>(".task-hub-settings-page"))
+      .find((button) => button.textContent === "Integrations");
+
+    expect(integrationsButton).toBeDefined();
+    integrationsButton?.click();
+
+    expect(tab.containerEl.textContent).toContain("Local Apple");
+    expect(tab.containerEl.textContent).toContain("Dida integration");
+    expect(tab.containerEl.textContent).not.toContain("Supported task syntax");
+  });
+
+  it("renders enabled provider child toggles in compact rows", () => {
+    const tab = createSettingTab({
+      ...DEFAULT_SETTINGS,
+      dida: {
+        ...DEFAULT_SETTINGS.dida,
+        enabled: true,
+        tasksEnabled: true,
+        apiToken: "token"
+      }
+    });
+
+    tab.display();
+    const integrationsButton = Array.from(tab.containerEl.querySelectorAll<HTMLButtonElement>(".task-hub-settings-page"))
+      .find((button) => button.textContent === "Integrations");
+    integrationsButton?.click();
+
+    expect(tab.containerEl.querySelector(".task-hub-settings-compact-grid")).not.toBeNull();
+    expect(tab.containerEl.querySelector(".task-hub-settings-compact-toggle")).not.toBeNull();
+    expect(tab.containerEl.querySelector(".task-hub-dida-writeback-grid")).not.toBeNull();
+    expect(tab.containerEl.querySelector(".task-hub-dida-writeback-grid")?.querySelectorAll(".task-hub-settings-compact-toggle")).toHaveLength(4);
+    expect(tab.containerEl.textContent).toContain("Edit and complete Dida tasks");
+  });
+
+  it("renders Task Notes as a dedicated linear configuration section", () => {
+    const tab = createSettingTab({
+      ...DEFAULT_SETTINGS,
+      taskNotes: {
+        ...DEFAULT_SETTINGS.taskNotes,
+        enabled: true,
+        thinoIntegrationEnabled: true,
+        defaultMode: "thino-multi-file"
+      }
+    });
+
+    tab.display();
+    const tasksButton = Array.from(tab.containerEl.querySelectorAll<HTMLButtonElement>(".task-hub-settings-page"))
+      .find((button) => button.textContent === "Tasks");
+    tasksButton?.click();
+
+    expect(tab.containerEl.textContent).toContain("Task notes");
+    expect(tab.containerEl.querySelector(".task-hub-task-notes-master")).not.toBeNull();
+    expect(tab.containerEl.querySelector(".task-hub-task-notes-config")).not.toBeNull();
+    expect(tab.containerEl.querySelector(".task-hub-task-notes-primary")).not.toBeNull();
+    expect(tab.containerEl.querySelector(".task-hub-task-notes-section")).not.toBeNull();
+    expect(tab.containerEl.querySelector(".task-hub-task-notes-primary")?.querySelectorAll(".setting-item")).toHaveLength(8);
+    expect(tab.containerEl.querySelector(".task-hub-settings-compact-grid")).toBeNull();
+    expect(tab.containerEl.querySelector(".task-hub-task-ignored-paths-grid")).not.toBeNull();
+    expect(tab.containerEl.textContent).toContain("Task Hub notes folder");
+    expect(tab.containerEl.textContent).toContain("Thino notes folder");
+  });
+
+  it("renders Local Apple menus and child settings in line-based groups", () => {
+    const tab = createSettingTab({
+      ...DEFAULT_SETTINGS,
+      localApple: {
+        ...DEFAULT_SETTINGS.localApple,
+        enabled: true,
+        calendarEnabled: true,
+        remindersEnabled: true,
+        calendars: [{ id: "work", name: "Work", color: "#5ECC89", writable: true }]
+      }
+    });
+
+    tab.display();
+    const integrationsButton = Array.from(tab.containerEl.querySelectorAll<HTMLButtonElement>(".task-hub-settings-page"))
+      .find((button) => button.textContent === "Integrations");
+    integrationsButton?.click();
+
+    expect(tab.containerEl.textContent).toContain("Local Apple");
+    expect(tab.containerEl.textContent).toContain("Apple Calendar");
+    expect(tab.containerEl.textContent).toContain("Apple Reminders");
+    expect(tab.containerEl.querySelector(".task-hub-settings-source-list")).not.toBeNull();
+    expect(tab.containerEl.querySelectorAll(".task-hub-settings-grid--joined").length).toBeGreaterThanOrEqual(1);
+    expect(tab.containerEl.querySelector(".task-hub-settings-tab-panel")).not.toBeNull();
+    expect(tab.containerEl.querySelector(".task-hub-local-apple-color-grid")).not.toBeNull();
+    expect(tab.containerEl.textContent).toContain("Reschedule Apple Calendar events");
+    expect(tab.containerEl.textContent).toContain("Default timed task duration");
+    expect(tab.containerEl.querySelector(".task-hub-settings-compact-toggle")).not.toBeNull();
+
+    const remindersTab = Array.from(tab.containerEl.querySelectorAll<HTMLButtonElement>(".task-hub-settings-tab"))
+      .find((button) => button.textContent === "Apple Reminders");
+    remindersTab?.click();
+
+    expect(tab.containerEl.textContent).toContain("Write completion status to Apple Reminders");
+    expect(tab.containerEl.textContent).toContain("Create Apple Reminders");
+    expect(tab.containerEl.querySelector(".task-hub-settings-compact-grid--joined")).not.toBeNull();
+  });
+});
 
 describe("normalizeTaskHubSettings", () => {
   it("defaults old settings to calendar task creation enabled with a central task file", () => {

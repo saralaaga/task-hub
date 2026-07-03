@@ -37,6 +37,7 @@ export type TaskRowHandlers = {
   onDidaProjectChange?: (task: TaskItem, projectId: string) => void;
   onTaskUpdate?: (task: TaskItem, draft: Extract<CalendarItemEditDraft, { kind: "task" }>) => void;
   onTaskDelete?: (task: TaskItem) => void;
+  onCreateTaskForDate?: (target: CalendarDropTarget) => void;
   onCreateTaskNote?: (task: TaskItem) => void;
   onOpenTaskNote?: (path: string) => void;
   onDeleteTaskNote?: (path: string) => void;
@@ -230,7 +231,8 @@ export function renderTasksView(
 
     const section = list.createDiv({ cls: `task-hub-task-section ${shouldRenderEmptyDropTarget ? "is-empty-drop-zone" : ""}` });
     section.setAttr("data-task-bucket", bucket);
-    section.createEl("h3", { text: `${t(bucket)} (${bucketTasks.length})` });
+    const heading = section.createEl("h3", { text: `${t(bucket)} (${bucketTasks.length})` });
+    bindTaskListBucketCreateTarget(heading, bucket, handlers, now);
     const cards = section.createDiv({ cls: "task-hub-task-list-flow" });
     if (shouldRenderEmptyDropTarget) {
       cards.addClass("is-empty-drop-zone");
@@ -1008,6 +1010,28 @@ function bindTaskListBucketDropTarget(
   });
 }
 
+function bindTaskListBucketCreateTarget(
+  heading: HTMLElement,
+  bucket: DateBucket,
+  handlers: Pick<TaskRowHandlers, "onCreateTaskForDate">,
+  now: Date
+): void {
+  const targetDate = taskListCreateDateForBucket(bucket, now);
+  if (!targetDate || !handlers.onCreateTaskForDate) return;
+
+  heading.addClass("is-clickable-date-bucket");
+  heading.setAttr("role", "button");
+  heading.setAttr("tabindex", "0");
+  heading.addEventListener("click", () => {
+    handlers.onCreateTaskForDate?.(targetDate);
+  });
+  heading.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    handlers.onCreateTaskForDate?.(targetDate);
+  });
+}
+
 function taskListTasksFromDragEvent(
   event: DragEvent,
   tasks: TaskItem[],
@@ -1166,6 +1190,13 @@ function isTaskListRescheduleBucket(bucket: DateBucket): boolean {
 
 function taskListDropDateForBucket(bucket: DateBucket, now: Date): string | undefined {
   if (bucket === "overdue") return toLocalDateKey(addDays(now, -1));
+  if (bucket === "today") return toLocalDateKey(now);
+  if (bucket === "tomorrow") return toLocalDateKey(addDays(now, 1));
+  if (bucket === "thisWeek") return toLocalDateKey(addDays(now, 2));
+  return undefined;
+}
+
+function taskListCreateDateForBucket(bucket: DateBucket, now: Date): string | undefined {
   if (bucket === "today") return toLocalDateKey(now);
   if (bucket === "tomorrow") return toLocalDateKey(addDays(now, 1));
   if (bucket === "thisWeek") return toLocalDateKey(addDays(now, 2));

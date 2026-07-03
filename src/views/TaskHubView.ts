@@ -46,6 +46,7 @@ export class TaskHubView extends ItemView {
   private expandedTaskIds = new Set<string>();
   private expandingTaskIds = new Set<string>();
   private activeSmartListId: string | undefined;
+  private lastRenderedDashboardView: DashboardView | undefined;
   private lastTaskViewTransitionKey: string | undefined;
   private pendingExpandedTaskScrollId: string | undefined;
   private pendingExpandedTaskScrollTimers: number[] = [];
@@ -130,6 +131,8 @@ export class TaskHubView extends ItemView {
       bindTaskHubTagInputSuggest(this.plugin.app, input, () => collectObsidianTags(this.plugin.app, this.plugin.getTasks()));
     };
     const sourceFilters = taskSourceFilterOptions(allTasks, this.filters, new Date(), t);
+    const renderedDashboardView = this.view;
+    const animateViewTransition = this.lastRenderedDashboardView !== undefined && this.lastRenderedDashboardView !== renderedDashboardView;
     const main = renderShell(
       container,
       {
@@ -141,6 +144,7 @@ export class TaskHubView extends ItemView {
         isRefreshing: this.isRefreshing,
         unscheduledPanelOpen: this.view === "calendar" && this.unscheduledPanelOpen,
         unscheduledTaskCount: unscheduledTasks.length,
+        animateViewTransition,
         t
       },
       {
@@ -182,6 +186,7 @@ export class TaskHubView extends ItemView {
       },
       { bindTagInputSuggest }
     );
+    this.lastRenderedDashboardView = renderedDashboardView;
 
     if (this.view === "tasks") {
       const now = new Date();
@@ -235,6 +240,7 @@ export class TaskHubView extends ItemView {
           },
           onTaskUpdate: (task, draft) => void this.plugin.updateCalendarTask(task, draft),
           onTaskDelete: (task) => void this.plugin.deleteCalendarTask(task),
+          onCreateTaskForDate: (target) => this.plugin.openCreateTaskModal(target),
           onSendToTarget: (task, target) => void this.plugin.sendTaskToTarget(task, target),
           onCreateTaskNote: (task) => void this.plugin.createTaskNoteForTask(task),
           onOpenTaskNote: (path) => void this.plugin.openTaskNote(path),
@@ -299,7 +305,7 @@ export class TaskHubView extends ItemView {
           activeSmartListId: this.activeSmartListId,
           onSaveSmartList: (name) => this.saveSmartList(allTasks, name),
           onApplySmartList: (smartList) => this.applySmartList(smartList, allTasks),
-          onAddTasksToSmartList: (smartList, tasks) => this.addTasksToSmartList(smartList, tasks),
+          onAddTasksToSmartList: (smartList, tasks) => this.addTasksToSmartList(smartList, tasks, allTasks),
           onRemoveTasksFromActiveSmartList: (tasks) => this.removeTasksFromActiveSmartList(tasks),
           onDeleteSmartList: (smartList) => this.deleteSmartList(smartList),
           onRenameSmartList: (smartList, name) => this.renameSmartList(smartList, name),
@@ -643,13 +649,15 @@ export class TaskHubView extends ItemView {
     this.render({ preserveTaskListScroll: true, preserveContentScroll: true });
   }
 
-  private addTasksToSmartList(smartList: TaskHubSmartList, tasks: TaskItem[]): void {
+  private addTasksToSmartList(smartList: TaskHubSmartList, tasks: TaskItem[], allTasks?: TaskItem[]): void {
     if (tasks.length === 0) return;
+    const taskTree = allTasks ?? (typeof this.plugin.getTasks === "function" ? this.plugin.getTasks() : tasks);
+    const expandedTasks = tasksWithDescendants(taskTree, tasks);
     const now = new Date().toISOString();
     let changed = false;
     this.plugin.settings.smartLists = this.plugin.settings.smartLists.map((item) => {
       if (item.id !== smartList.id) return item;
-      const references = mergeSmartListTaskReferences(item, tasks);
+      const references = mergeSmartListTaskReferences(item, expandedTasks);
       if (smartListReferencesEqual(item, references)) {
         return item;
       }
@@ -1375,6 +1383,31 @@ function taskIdsReferencedBySmartList(tasks: TaskItem[], smartList: TaskHubSmart
 
 function smartListCountsForTasks(tasks: TaskItem[], smartLists: readonly TaskHubSmartList[], now: Date): ReadonlyMap<string, number> {
   return new Map(smartLists.map((smartList) => [smartList.id, applySmartListToTasks(tasks, smartList, now).length]));
+}
+
+function tasksWithDescendants(allTasks: TaskItem[], rootTasks: TaskItem[]): TaskItem[] {
+  if (rootTasks.length === 0) return [];
+  const childrenByParentId = new Map<string, TaskItem[]>();
+  for (const task of allTasks) {
+    if (!task.parentId) continue;
+    const children = childrenByParentId.get(task.parentId) ?? [];
+    children.push(task);
+    childrenByParentId.set(task.parentId, children);
+  }
+  const result: TaskItem[] = [];
+  const visitedTaskIds = new Set<string>();
+  const visit = (task: TaskItem) => {
+    if (visitedTaskIds.has(task.id)) return;
+    visitedTaskIds.add(task.id);
+    result.push(task);
+    for (const child of childrenByParentId.get(task.id) ?? []) {
+      visit(child);
+    }
+  };
+  for (const task of rootTasks) {
+    visit(task);
+  }
+  return result;
 }
 
 function mergeSmartListTaskReferences(

@@ -463,6 +463,7 @@ describe("renderTasksView", () => {
     onAppleReminderListChange: jest.fn(),
     onTaskUpdate: jest.fn(),
     onTaskDelete: jest.fn(),
+    onCreateTaskForDate: jest.fn(),
     onCreateTaskNote: jest.fn(),
     onOpenTaskNote: jest.fn(),
     onDeleteTaskNote: jest.fn(),
@@ -2905,6 +2906,45 @@ describe("renderTasksView", () => {
       dateKey: "2026-05-08",
       startMinutes: 495
     });
+  });
+
+  it("creates tasks from clickable current date bucket headings", () => {
+    const container = new FakeElement();
+    const viewHandlers = handlers();
+    const overdueTask: TaskItem = {
+      ...baseTask,
+      id: "overdue",
+      source: "vault",
+      externalId: undefined,
+      externalSourceName: undefined,
+      filePath: "Project.md",
+      rawLine: "- [ ] Overdue 📅 2026-05-07",
+      text: "Overdue",
+      dueDate: "2026-05-07"
+    };
+
+    renderTasksView(
+      container as unknown as HTMLElement,
+      [overdueTask],
+      [overdueTask],
+      { status: "open", tags: [], sourceQuery: "", textQuery: "" },
+      viewHandlers,
+      new Date("2026-05-08T12:00:00Z"),
+      (key) => key,
+      { allowAppleReminderWriteback: true }
+    );
+
+    const heading = (title: string) => collect(container).find((element) => element.type === "h3" && element.text === title);
+
+    heading("today (0)")?.click();
+    heading("tomorrow (0)")?.click();
+    heading("thisWeek (0)")?.click();
+    heading("overdue (1)")?.click();
+
+    expect(viewHandlers.onCreateTaskForDate).toHaveBeenCalledTimes(3);
+    expect(viewHandlers.onCreateTaskForDate).toHaveBeenNthCalledWith(1, "2026-05-08");
+    expect(viewHandlers.onCreateTaskForDate).toHaveBeenNthCalledWith(2, "2026-05-09");
+    expect(viewHandlers.onCreateTaskForDate).toHaveBeenNthCalledWith(3, "2026-05-10");
   });
 
   it("hides the overdue section when it has no tasks so today is first", () => {

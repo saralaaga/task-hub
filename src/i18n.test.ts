@@ -38,6 +38,12 @@ describe("i18n language support", () => {
     expect(t.isCjk).toBe(false);
   });
 
+  it("describes default event creation target without assuming Apple Calendar is enabled", () => {
+    expect(createTranslator("en")("eventCreationDefaultTargetDesc")).not.toContain("Apple Calendar");
+    expect(createTranslator("zh")("eventCreationDefaultTargetDesc")).not.toContain("Apple 日历");
+    expect(createTranslator("zh")("eventCreationDefaultTargetDesc")).toContain("默认创建到的位置");
+  });
+
   it("keeps every settings page label and description translated for new interface languages", () => {
     const settingsSource = readFileSync(join(__dirname, "settings.ts"), "utf8");
     const settingsKeys = [...new Set([...settingsSource.matchAll(/t\("([^"]+)"\)/gu)].map((match) => match[1] as TranslationKey))]

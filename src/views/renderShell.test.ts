@@ -452,6 +452,23 @@ describe("renderShell", () => {
     expect(rescanButton!.classes.has("is-refreshing")).toBe(true);
   });
 
+  it("marks active view buttons and animates the workspace only for view transitions", () => {
+    const { container } = renderShellForState({ view: "calendar", animateViewTransition: true });
+    const tasks = collect(container).find((element) => element.type === "button" && element.text === "tasks");
+    const calendar = collect(container).find((element) => element.type === "button" && element.text === "calendar");
+    const tags = collect(container).find((element) => element.type === "button" && element.text === "tags");
+    const main = collect(container).find((element) => element.classes.has("task-hub-main"));
+
+    expect(tasks?.classes.has("task-hub-view-switch-button")).toBe(true);
+    expect(tasks?.classes.has("is-active")).toBe(false);
+    expect(calendar?.classes.has("task-hub-view-switch-button")).toBe(true);
+    expect(calendar?.classes.has("is-active")).toBe(true);
+    expect(tags?.classes.has("task-hub-view-switch-button")).toBe(true);
+    expect(tags?.classes.has("is-active")).toBe(false);
+    expect(main?.attrs.get("data-task-hub-view")).toBe("calendar");
+    expect(main?.classes.has("is-view-transition")).toBe(true);
+  });
+
   it("opens the create task flow from the toolbar", () => {
     const { container, handlers } = renderForTest();
     const createButton = collect(container).find((element) => element.attrs.get("aria-label") === "add");

@@ -555,13 +555,29 @@ function normalizeStoredDateBucket(value: unknown): TaskHubSettings["taskViewFil
 
 const SOFT_LOCAL_APPLE_COLORS = ["#d97757", "#c7925b", "#9aa66f", "#6f9f8f", "#6f94b8", "#8f83b5"];
 export const TASK_HUB_FEEDBACK_URL = "https://github.com/saralaaga/task-hub/issues/new";
+type SettingsPage = "overview" | "tasks" | "calendar" | "integrations" | "advanced";
 type LocalAppleTab = "calendar" | "reminders";
+type CompactToggleItem = {
+  name: string;
+  description?: string;
+  value: boolean;
+  disabled?: boolean;
+  risk?: string;
+  onChange: (value: boolean) => void | Promise<void>;
+};
+type CompactToggleGroupOptions = {
+  className?: string;
+};
+
+const SETTINGS_PAGES: SettingsPage[] = ["overview", "tasks", "calendar", "integrations", "advanced"];
 
 export function openTaskHubFeedback(openUrl: (url: string) => void): void {
   openUrl(TASK_HUB_FEEDBACK_URL);
 }
 
 export class TaskHubSettingTab extends PluginSettingTab {
+  private settingsPage: SettingsPage = "overview";
+
   constructor(app: App, private readonly plugin: TaskHubPlugin) {
     super(app, plugin);
   }
@@ -570,21 +586,49 @@ export class TaskHubSettingTab extends PluginSettingTab {
     const { containerEl } = this;
     const scrollTop = options.preserveScroll ? containerEl.scrollTop : undefined;
     const t = createTranslator(this.plugin.settings.language);
+    containerEl.addClass("task-hub-settings-root");
     containerEl.empty();
 
     new Setting(containerEl).setName(t("settingsTitle")).setHeading();
+    this.displaySettingsPageNav(containerEl, t);
 
-    new Setting(containerEl)
-      .setName(t("feedbackTitle"))
-      .setDesc(t("feedbackDesc"))
-      .addButton((button) => {
-        button
-          .setButtonText(t("feedbackButton"))
-          .setCta()
-          .onClick(() => openTaskHubFeedback((url) => containerEl.win.open(url)));
+    if (this.settingsPage === "overview") this.displayOverviewPage(containerEl, t);
+    else if (this.settingsPage === "tasks") this.displayTasksPage(containerEl, t);
+    else if (this.settingsPage === "calendar") this.displayCalendarPage(containerEl, t);
+    else if (this.settingsPage === "integrations") this.displayIntegrationsPage(containerEl, t);
+    else this.displayAdvancedPage(containerEl, t);
+
+    if (scrollTop !== undefined) {
+      containerEl.scrollTop = scrollTop;
+    }
+  }
+
+  private displaySettingsPageNav(containerEl: HTMLElement, t: Translator): void {
+    const nav = containerEl.createDiv({ cls: "task-hub-settings-page-list" });
+    for (const page of SETTINGS_PAGES) {
+      const button = nav.createEl("button", {
+        cls: `task-hub-settings-page ${page === this.settingsPage ? "is-active" : ""}`,
+        text: this.settingsPageLabel(page, t),
+        attr: { type: "button" }
       });
+      button.addEventListener("click", () => {
+        this.settingsPage = page;
+        this.display({ preserveScroll: false });
+      });
+    }
+  }
 
-    const basicSettingsGrid = containerEl.createDiv({ cls: "task-hub-settings-grid" });
+  private settingsPageLabel(page: SettingsPage, t: Translator): string {
+    if (page === "overview") return t("settingsPageOverview");
+    if (page === "tasks") return t("settingsPageTasks");
+    if (page === "calendar") return t("settingsPageCalendar");
+    if (page === "integrations") return t("settingsPageIntegrations");
+    return t("settingsPageAdvanced");
+  }
+
+  private displayOverviewPage(containerEl: HTMLElement, t: Translator): void {
+    const section = this.displaySettingsSection(containerEl, t("settingsPageOverview"));
+    const basicSettingsGrid = section.createDiv({ cls: "task-hub-settings-grid task-hub-settings-grid--joined" });
 
     new Setting(basicSettingsGrid)
       .setName(t("language"))
@@ -618,51 +662,6 @@ export class TaskHubSettingTab extends PluginSettingTab {
       });
 
     new Setting(basicSettingsGrid)
-      .setName(t("weekStartsOn"))
-      .setDesc(t("weekStartsOnDesc"))
-      .addDropdown((dropdown) => {
-        dropdown
-          .addOption("monday", t("monday"))
-          .addOption("tuesday", t("tuesday"))
-          .addOption("wednesday", t("wednesday"))
-          .addOption("thursday", t("thursday"))
-          .addOption("friday", t("friday"))
-          .addOption("saturday", t("saturday"))
-          .addOption("sunday", t("sunday"))
-          .setValue(this.plugin.settings.weekStart)
-          .onChange(async (value) => {
-            this.plugin.settings.weekStart = value as TaskHubSettings["weekStart"];
-            await this.plugin.saveSettings();
-          });
-      });
-
-    new Setting(basicSettingsGrid)
-      .setName(t("calendarDayStartHour"))
-      .setDesc(t("calendarDayStartHourDesc"))
-      .addDropdown((dropdown) => {
-        populateHourDropdown(dropdown.selectEl, 0, 23);
-        dropdown.setValue(String(this.plugin.settings.calendarDayStartHour)).onChange(async (value) => {
-          this.plugin.settings.calendarDayStartHour = Number(value);
-          this.plugin.settings = normalizeTaskHubSettings(this.plugin.settings);
-          await this.plugin.saveSettings();
-          this.display({ preserveScroll: true });
-        });
-      });
-
-    new Setting(basicSettingsGrid)
-      .setName(t("calendarDayEndHour"))
-      .setDesc(t("calendarDayEndHourDesc"))
-      .addDropdown((dropdown) => {
-        populateHourDropdown(dropdown.selectEl, 1, 24);
-        dropdown.setValue(String(this.plugin.settings.calendarDayEndHour)).onChange(async (value) => {
-          this.plugin.settings.calendarDayEndHour = Number(value);
-          this.plugin.settings = normalizeTaskHubSettings(this.plugin.settings);
-          await this.plugin.saveSettings();
-          this.display({ preserveScroll: true });
-        });
-      });
-
-    new Setting(basicSettingsGrid)
       .setName(t("showCompletedByDefault"))
       .setDesc(t("showCompletedByDefaultDesc"))
       .addToggle((toggle) => {
@@ -678,21 +677,9 @@ export class TaskHubSettingTab extends PluginSettingTab {
       .addToggle((toggle) => {
         toggle.setValue(this.plugin.settings.showSubtaskProgressBars).onChange(async (value) => {
           this.plugin.settings.showSubtaskProgressBars = value;
-          await this.plugin.saveSettings();
-        });
-      });
-
-    if (this.plugin.settings.language === "zh") {
-      new Setting(basicSettingsGrid)
-        .setName(t("showLunarCalendar"))
-        .setDesc(t("showLunarCalendarDesc"))
-        .addToggle((toggle) => {
-          toggle.setValue(this.plugin.settings.showLunarCalendar).onChange(async (value) => {
-            this.plugin.settings.showLunarCalendar = value;
             await this.plugin.saveSettings();
           });
-        });
-    }
+      });
 
     new Setting(basicSettingsGrid)
       .setName(t("indexOnStartup"))
@@ -700,90 +687,17 @@ export class TaskHubSettingTab extends PluginSettingTab {
       .addToggle((toggle) => {
         toggle.setValue(this.plugin.settings.indexOnStartup).onChange(async (value) => {
           this.plugin.settings.indexOnStartup = value;
-          await this.plugin.saveSettings();
-        });
+            await this.plugin.saveSettings();
+          });
       });
 
-    new Setting(basicSettingsGrid)
-      .setName(t("calendarTaskCreation"))
-      .setDesc(t("calendarTaskCreationDesc"))
-      .addToggle((toggle) => {
-        toggle.setValue(this.plugin.settings.calendarTaskCreationEnabled).onChange(async (value) => {
-          this.plugin.settings.calendarTaskCreationEnabled = value;
-          await this.plugin.saveSettings();
-          this.display({ preserveScroll: true });
-        });
-      });
+    new Setting(containerEl).setName(t("supportedTaskSyntax")).setDesc(t("supportedTaskSyntaxDesc")).setHeading();
+  }
 
-    if (this.plugin.settings.calendarTaskCreationEnabled) {
-      new Setting(basicSettingsGrid)
-        .setName(t("calendarCreationDefaultKind"))
-        .setDesc(t("calendarCreationDefaultKindDesc"))
-        .addDropdown((dropdown) => {
-          populateCreationKindDropdown(dropdown.selectEl, t);
-          dropdown.setValue(this.plugin.settings.calendarCreationDefaultKind).onChange(async (value) => {
-            this.plugin.settings.calendarCreationDefaultKind = parseCreationKind(value);
-            await this.plugin.saveSettings();
-          });
-        });
+  private displayTasksPage(containerEl: HTMLElement, t: Translator): void {
+    const taskNotesSection = containerEl.createDiv({ cls: "task-hub-settings-section task-hub-task-notes-section" });
 
-      new Setting(basicSettingsGrid)
-        .setName(t("taskCreationDefaultTarget"))
-        .setDesc(t("taskCreationDefaultTargetDesc"))
-        .addDropdown((dropdown) => {
-          populateTaskCreationTargetDropdown(dropdown.selectEl, this.plugin, t);
-          dropdown.setValue(serializeTaskCreationTarget(this.plugin.settings.calendarTaskCreationDefaultTarget)).onChange(async (value) => {
-            this.plugin.settings.calendarTaskCreationDefaultTarget = parseTaskCreationTarget(value);
-            await this.plugin.saveSettings();
-          });
-        });
-
-      new Setting(basicSettingsGrid)
-        .setName(t("eventCreationDefaultTarget"))
-        .setDesc(t("eventCreationDefaultTargetDesc"))
-        .addDropdown((dropdown) => {
-          populateEventCreationTargetDropdown(dropdown.selectEl, this.plugin, t);
-          dropdown.setValue(serializeEventCreationTarget(this.plugin.settings.calendarEventCreationDefaultTarget)).onChange(async (value) => {
-            this.plugin.settings.calendarEventCreationDefaultTarget = parseEventCreationTarget(value);
-            await this.plugin.saveSettings();
-          });
-        });
-
-      new Setting(basicSettingsGrid)
-        .setName(t("taskCreationFile"))
-        .setDesc(t("taskCreationFileDesc"))
-        .addText((text) => {
-          text.setPlaceholder(DEFAULT_SETTINGS.taskCreationFilePath).setValue(this.plugin.settings.taskCreationFilePath).onChange(async (value) => {
-            this.plugin.settings.taskCreationFilePath = value;
-            await this.plugin.saveSettings();
-          });
-        });
-    }
-
-    const sendTargetOptions = currentTaskSendTargetOptions(this.plugin, t);
-    if (sendTargetOptions.length > 0) {
-      new Setting(basicSettingsGrid)
-        .setName(t("taskSendDefaultTarget"))
-        .setDesc(t("taskSendDefaultTargetDesc"))
-        .addDropdown((dropdown) => {
-          dropdown.selectEl.empty();
-          for (const option of sendTargetOptions) {
-            dropdown.addOption(option.value, option.label);
-          }
-          const currentValue = this.plugin.settings.taskSendDefaultTarget
-            ? serializeTaskSendTarget(this.plugin.settings.taskSendDefaultTarget)
-            : sendTargetOptions[0].value;
-          dropdown.setValue(sendTargetOptions.some((option) => option.value === currentValue) ? currentValue : sendTargetOptions[0].value)
-            .onChange(async (value) => {
-              this.plugin.settings.taskSendDefaultTarget = parseTaskSendTarget(value);
-              await this.plugin.saveSettings();
-            });
-        });
-    }
-
-    new Setting(containerEl).setName(t("taskNotesSection")).setHeading();
-
-    new Setting(containerEl)
+    new Setting(taskNotesSection)
       .setName(t("taskNotesEnable"))
       .setDesc(t("taskNotesEnableDesc"))
       .addToggle((toggle) => {
@@ -792,10 +706,14 @@ export class TaskHubSettingTab extends PluginSettingTab {
           await this.plugin.saveSettings();
           this.display({ preserveScroll: true });
         });
+      })
+      .then((setting) => {
+        setting.settingEl.addClass("task-hub-task-notes-master");
       });
 
     if (this.plugin.settings.taskNotes.enabled) {
-      const taskNotesGrid = containerEl.createDiv({ cls: "task-hub-settings-grid" });
+      const taskNotesConfig = taskNotesSection.createDiv({ cls: "task-hub-task-notes-config" });
+      const taskNotesGrid = taskNotesConfig.createDiv({ cls: "task-hub-settings-grid task-hub-settings-grid--joined task-hub-task-notes-primary" });
       new Setting(taskNotesGrid)
         .setName(t("taskNotesFolder"))
         .setDesc(t("taskNotesFolderDesc"))
@@ -890,10 +808,32 @@ export class TaskHubSettingTab extends PluginSettingTab {
         });
     }
 
-    new Setting(containerEl)
+    const sendTargetOptions = currentTaskSendTargetOptions(this.plugin, t);
+    if (sendTargetOptions.length > 0) {
+      new Setting(containerEl)
+        .setName(t("taskSendDefaultTarget"))
+        .setDesc(t("taskSendDefaultTargetDesc"))
+        .addDropdown((dropdown) => {
+          dropdown.selectEl.empty();
+          for (const option of sendTargetOptions) {
+            dropdown.addOption(option.value, option.label);
+          }
+          const currentValue = this.plugin.settings.taskSendDefaultTarget
+            ? serializeTaskSendTarget(this.plugin.settings.taskSendDefaultTarget)
+            : sendTargetOptions[0].value;
+          dropdown.setValue(sendTargetOptions.some((option) => option.value === currentValue) ? currentValue : sendTargetOptions[0].value)
+            .onChange(async (value) => {
+              this.plugin.settings.taskSendDefaultTarget = parseTaskSendTarget(value);
+              await this.plugin.saveSettings();
+            });
+        });
+    }
+
+    const ignoredPathsGrid = containerEl.createDiv({ cls: "task-hub-settings-grid task-hub-task-ignored-paths-grid" });
+    new Setting(ignoredPathsGrid)
       .setName(t("ignoredPaths"))
       .setDesc(t("ignoredPathsDesc"))
-      .addTextArea((text) => {
+      .addText((text) => {
         text.setValue(this.plugin.settings.ignoredPaths.join(", ")).onChange(async (value) => {
           this.plugin.settings.ignoredPaths = value
             .split(",")
@@ -902,13 +842,176 @@ export class TaskHubSettingTab extends PluginSettingTab {
           await this.plugin.saveSettings();
         });
       });
+  }
 
-    new Setting(containerEl).setName(t("supportedTaskSyntax")).setDesc(t("supportedTaskSyntaxDesc")).setHeading();
+  private displayCalendarPage(containerEl: HTMLElement, t: Translator): void {
+    const calendarGrid = containerEl.createDiv({ cls: "task-hub-settings-grid task-hub-settings-grid--joined" });
+
+    new Setting(calendarGrid)
+      .setName(t("weekStartsOn"))
+      .setDesc(t("weekStartsOnDesc"))
+      .addDropdown((dropdown) => {
+        dropdown
+          .addOption("monday", t("monday"))
+          .addOption("tuesday", t("tuesday"))
+          .addOption("wednesday", t("wednesday"))
+          .addOption("thursday", t("thursday"))
+          .addOption("friday", t("friday"))
+          .addOption("saturday", t("saturday"))
+          .addOption("sunday", t("sunday"))
+          .setValue(this.plugin.settings.weekStart)
+          .onChange(async (value) => {
+            this.plugin.settings.weekStart = value as TaskHubSettings["weekStart"];
+            await this.plugin.saveSettings();
+          });
+      });
+
+    new Setting(calendarGrid)
+      .setName(t("calendarDayStartHour"))
+      .setDesc(t("calendarDayStartHourDesc"))
+      .addDropdown((dropdown) => {
+        populateHourDropdown(dropdown.selectEl, 0, 23);
+        dropdown.setValue(String(this.plugin.settings.calendarDayStartHour)).onChange(async (value) => {
+          this.plugin.settings.calendarDayStartHour = Number(value);
+          this.plugin.settings = normalizeTaskHubSettings(this.plugin.settings);
+          await this.plugin.saveSettings();
+          this.display({ preserveScroll: true });
+        });
+      });
+
+    new Setting(calendarGrid)
+      .setName(t("calendarDayEndHour"))
+      .setDesc(t("calendarDayEndHourDesc"))
+      .addDropdown((dropdown) => {
+        populateHourDropdown(dropdown.selectEl, 1, 24);
+        dropdown.setValue(String(this.plugin.settings.calendarDayEndHour)).onChange(async (value) => {
+          this.plugin.settings.calendarDayEndHour = Number(value);
+          this.plugin.settings = normalizeTaskHubSettings(this.plugin.settings);
+          await this.plugin.saveSettings();
+          this.display({ preserveScroll: true });
+        });
+      });
+
+    if (this.plugin.settings.language === "zh") {
+      new Setting(calendarGrid)
+        .setName(t("showLunarCalendar"))
+        .setDesc(t("showLunarCalendarDesc"))
+        .addToggle((toggle) => {
+          toggle.setValue(this.plugin.settings.showLunarCalendar).onChange(async (value) => {
+            this.plugin.settings.showLunarCalendar = value;
+            await this.plugin.saveSettings();
+          });
+        });
+    }
+
+    new Setting(calendarGrid)
+      .setName(t("calendarTaskCreation"))
+      .setDesc(t("calendarTaskCreationDesc"))
+      .addToggle((toggle) => {
+        toggle.setValue(this.plugin.settings.calendarTaskCreationEnabled).onChange(async (value) => {
+          this.plugin.settings.calendarTaskCreationEnabled = value;
+          await this.plugin.saveSettings();
+          this.display({ preserveScroll: true });
+        });
+      });
+
+    if (this.plugin.settings.calendarTaskCreationEnabled) {
+      new Setting(calendarGrid)
+        .setName(t("calendarCreationDefaultKind"))
+        .setDesc(t("calendarCreationDefaultKindDesc"))
+        .addDropdown((dropdown) => {
+          populateCreationKindDropdown(dropdown.selectEl, t);
+          dropdown.setValue(this.plugin.settings.calendarCreationDefaultKind).onChange(async (value) => {
+            this.plugin.settings.calendarCreationDefaultKind = parseCreationKind(value);
+            await this.plugin.saveSettings();
+          });
+        });
+
+      new Setting(calendarGrid)
+        .setName(t("taskCreationDefaultTarget"))
+        .setDesc(t("taskCreationDefaultTargetDesc"))
+        .addDropdown((dropdown) => {
+          populateTaskCreationTargetDropdown(dropdown.selectEl, this.plugin, t);
+          dropdown.setValue(serializeTaskCreationTarget(this.plugin.settings.calendarTaskCreationDefaultTarget)).onChange(async (value) => {
+            this.plugin.settings.calendarTaskCreationDefaultTarget = parseTaskCreationTarget(value);
+            await this.plugin.saveSettings();
+          });
+        });
+
+      new Setting(calendarGrid)
+        .setName(t("eventCreationDefaultTarget"))
+        .setDesc(t("eventCreationDefaultTargetDesc"))
+        .addDropdown((dropdown) => {
+          populateEventCreationTargetDropdown(dropdown.selectEl, this.plugin, t);
+          dropdown.setValue(serializeEventCreationTarget(this.plugin.settings.calendarEventCreationDefaultTarget)).onChange(async (value) => {
+            this.plugin.settings.calendarEventCreationDefaultTarget = parseEventCreationTarget(value);
+            await this.plugin.saveSettings();
+          });
+        });
+
+      new Setting(calendarGrid)
+        .setName(t("taskCreationFile"))
+        .setDesc(t("taskCreationFileDesc"))
+        .addText((text) => {
+          text.setPlaceholder(DEFAULT_SETTINGS.taskCreationFilePath).setValue(this.plugin.settings.taskCreationFilePath).onChange(async (value) => {
+            this.plugin.settings.taskCreationFilePath = value;
+            await this.plugin.saveSettings();
+          });
+        });
+    }
 
     this.displayCalendarSources(containerEl);
-    this.displayExternalTaskSources(containerEl);
-    if (scrollTop !== undefined) {
-      containerEl.scrollTop = scrollTop;
+  }
+
+  private displayIntegrationsPage(containerEl: HTMLElement, t: Translator): void {
+    this.displayLocalApple(containerEl, { heading: true });
+    this.displayDida(containerEl, { heading: true });
+
+    const tabs = this.enabledExternalTaskSourceTabs();
+    if (tabs.length === 0) return;
+    new Setting(containerEl).setName(t("externalTaskSources")).setDesc(t("externalTaskSourcesDesc")).setHeading();
+    this.displayExternalTaskSourceTabs(containerEl, t, tabs);
+  }
+
+  private displayAdvancedPage(containerEl: HTMLElement, t: Translator): void {
+    const feedbackGrid = containerEl.createDiv({ cls: "task-hub-settings-grid task-hub-advanced-feedback-grid" });
+    new Setting(feedbackGrid)
+      .setName(t("feedbackTitle"))
+      .setDesc(t("feedbackDesc"))
+      .addButton((button) => {
+        button
+          .setButtonText(t("feedbackButton"))
+          .onClick(() => openTaskHubFeedback((url) => containerEl.win.open(url)));
+      });
+
+    new Setting(containerEl).setName(t("externalTaskSources")).setDesc(t("externalTaskSourcesDesc")).setHeading();
+    this.displayExternalTaskWindowSettings(containerEl, t);
+  }
+
+  private displaySettingsSection(containerEl: HTMLElement, name: string, description?: string): HTMLElement {
+    const section = containerEl.createDiv({ cls: "task-hub-settings-section" });
+    section.createDiv({ cls: "task-hub-settings-section-title", text: name });
+    if (description) section.createDiv({ cls: "task-hub-settings-section-desc", text: description });
+    return section;
+  }
+
+  private displayCompactToggleGroup(containerEl: HTMLElement, items: CompactToggleItem[], options: CompactToggleGroupOptions = {}): void {
+    const grid = containerEl.createDiv({
+      cls: ["task-hub-settings-compact-grid", "task-hub-settings-compact-grid--joined", options.className].filter(Boolean).join(" ")
+    });
+    for (const item of items) {
+      const row = grid.createDiv({ cls: "task-hub-settings-compact-toggle" });
+      const copy = row.createDiv({ cls: "task-hub-settings-compact-copy" });
+      const nameRow = copy.createDiv({ cls: "task-hub-settings-compact-name-row" });
+      nameRow.createEl("span", { cls: "task-hub-settings-compact-name", text: item.name });
+      if (item.risk) nameRow.createEl("span", { cls: "task-hub-setting-risk", text: item.risk });
+      if (item.description) copy.createDiv({ cls: "task-hub-settings-compact-desc", text: item.description });
+      const checkbox = row.createEl("input", { cls: "checkbox-toggle task-hub-settings-compact-control", type: "checkbox" }) as HTMLInputElement;
+      checkbox.checked = item.value;
+      checkbox.disabled = Boolean(item.disabled);
+      checkbox.addEventListener("change", () => {
+        void item.onChange(checkbox.checked);
+      });
     }
   }
 
@@ -948,7 +1051,7 @@ export class TaskHubSettingTab extends PluginSettingTab {
 
     if (!this.plugin.settings.dida.enabled) return;
 
-    const grid = containerEl.createDiv({ cls: "task-hub-settings-grid" });
+    const grid = containerEl.createDiv({ cls: "task-hub-settings-grid task-hub-settings-grid--joined" });
     new Setting(grid)
       .setName(t("didaApiBase"))
       .setDesc(t("didaApiBaseDesc"))
@@ -994,34 +1097,36 @@ export class TaskHubSettingTab extends PluginSettingTab {
   }
 
   private displayDidaWritebackSettings(containerEl: HTMLElement, t: Translator): void {
-    new Setting(containerEl)
-      .setName(t("didaWriteback"))
-      .setDesc(t("didaWritebackDesc"))
-      .addToggle((toggle) => {
-        toggle.setValue(this.plugin.settings.dida.tasksWritebackEnabled).onChange(async (value) => {
+    this.displayCompactToggleGroup(containerEl, [
+      {
+        name: t("didaWriteback"),
+        description: t("didaWritebackDesc"),
+        value: this.plugin.settings.dida.tasksWritebackEnabled,
+        risk: "Writeback",
+        onChange: async (value) => {
           this.plugin.settings.dida.tasksWritebackEnabled = value;
           if (!value) this.plugin.settings.dida.tasksDragRescheduleEnabled = false;
           await this.plugin.saveSettings();
           this.display({ preserveScroll: true });
-        });
-      });
-
-    new Setting(containerEl)
-      .setName(t("didaDragReschedule"))
-      .setDesc(t("didaDragRescheduleDesc"))
-      .addToggle((toggle) => {
-        toggle.setValue(this.plugin.settings.dida.tasksDragRescheduleEnabled).onChange(async (value) => {
+        }
+      },
+      {
+        name: t("didaDragReschedule"),
+        description: t("didaDragRescheduleDesc"),
+        value: this.plugin.settings.dida.tasksDragRescheduleEnabled,
+        disabled: !this.plugin.settings.dida.tasksWritebackEnabled,
+        onChange: async (value) => {
           this.plugin.settings.dida.tasksDragRescheduleEnabled = value && this.plugin.settings.dida.tasksWritebackEnabled;
           await this.plugin.saveSettings();
           this.display({ preserveScroll: true });
-        });
-      });
-
-    new Setting(containerEl)
-      .setName(t("didaDelete"))
-      .setDesc(t("didaDeleteDesc"))
-      .addToggle((toggle) => {
-        toggle.setValue(this.plugin.settings.dida.tasksDeleteEnabled).onChange(async (value) => {
+        }
+      },
+      {
+        name: t("didaDelete"),
+        description: t("didaDeleteDesc"),
+        value: this.plugin.settings.dida.tasksDeleteEnabled,
+        risk: "Deletes source",
+        onChange: async (value) => {
           if (value && !(await this.plugin.confirmRiskySourceDeletionSetting())) {
             this.display({ preserveScroll: true });
             return;
@@ -1029,14 +1134,14 @@ export class TaskHubSettingTab extends PluginSettingTab {
           this.plugin.settings.dida.tasksDeleteEnabled = value;
           await this.plugin.saveSettings();
           this.display({ preserveScroll: true });
-        });
-      });
-
-    new Setting(containerEl)
-      .setName(t("didaCreate"))
-      .setDesc(t("didaCreateDesc"))
-      .addToggle((toggle) => {
-        toggle.setValue(this.plugin.settings.dida.tasksCreateEnabled).onChange(async (value) => {
+        }
+      },
+      {
+        name: t("didaCreate"),
+        description: t("didaCreateDesc"),
+        value: this.plugin.settings.dida.tasksCreateEnabled,
+        risk: "Creates source",
+        onChange: async (value) => {
           if (value && !(await this.plugin.confirmRiskySourceDeletionSetting())) {
             this.display({ preserveScroll: true });
             return;
@@ -1044,19 +1149,22 @@ export class TaskHubSettingTab extends PluginSettingTab {
           this.plugin.settings.dida.tasksCreateEnabled = value;
           await this.plugin.saveSettings();
           this.display({ preserveScroll: true });
-        });
-      });
+        }
+      }
+    ], { className: "task-hub-settings-compact-grid--two-column task-hub-dida-writeback-grid" });
 
     if (this.plugin.settings.dida.tasksCreateEnabled) {
-      new Setting(containerEl)
-        .setName(t("didaCreateTags"))
-        .setDesc(t("didaCreateTagsDesc"))
-        .addToggle((toggle) => {
-          toggle.setValue(this.plugin.settings.dida.tasksCreateTagsEnabled).onChange(async (value) => {
+      this.displayCompactToggleGroup(containerEl, [
+        {
+          name: t("didaCreateTags"),
+          description: t("didaCreateTagsDesc"),
+          value: this.plugin.settings.dida.tasksCreateTagsEnabled,
+          onChange: async (value) => {
             this.plugin.settings.dida.tasksCreateTagsEnabled = value;
             await this.plugin.saveSettings();
-          });
-        });
+          }
+        }
+      ]);
 
       new Setting(containerEl)
         .setName(t("didaDefaultProject"))
@@ -1113,8 +1221,15 @@ export class TaskHubSettingTab extends PluginSettingTab {
   private displayExternalTaskSources(containerEl: HTMLElement): void {
     const t = createTranslator(this.plugin.settings.language);
     new Setting(containerEl).setName(t("externalTaskSources")).setDesc(t("externalTaskSourcesDesc")).setHeading();
+    this.displayExternalTaskWindowSettings(containerEl, t);
+    this.displayLocalApple(containerEl, { tabs: false });
+    this.displayDida(containerEl);
+    this.displayExternalTaskSourceTabs(containerEl, t, this.enabledExternalTaskSourceTabs());
+  }
 
-    new Setting(containerEl)
+  private displayExternalTaskWindowSettings(containerEl: HTMLElement, t: Translator): void {
+    const grid = containerEl.createDiv({ cls: "task-hub-settings-grid task-hub-settings-grid--joined task-hub-external-task-window-grid" });
+    new Setting(grid)
       .setName(t("externalTaskLookback"))
       .setDesc(t("externalTaskLookbackDesc"))
       .addText((text) => {
@@ -1129,7 +1244,7 @@ export class TaskHubSettingTab extends PluginSettingTab {
         });
       });
 
-    new Setting(containerEl)
+    new Setting(grid)
       .setName(t("externalTaskLookahead"))
       .setDesc(t("externalTaskLookaheadDesc"))
       .addText((text) => {
@@ -1143,11 +1258,9 @@ export class TaskHubSettingTab extends PluginSettingTab {
           }
         });
       });
+  }
 
-    this.displayLocalApple(containerEl, { tabs: false });
-    this.displayDida(containerEl);
-
-    const tabs = this.enabledExternalTaskSourceTabs();
+  private displayExternalTaskSourceTabs(containerEl: HTMLElement, t: Translator, tabs: ExternalTaskSourceTab[]): void {
     if (tabs.length === 0) {
       containerEl.createDiv({ cls: "task-hub-empty", text: t("externalTaskSourcesEmpty") });
       return;
@@ -1246,7 +1359,8 @@ export class TaskHubSettingTab extends PluginSettingTab {
       new Setting(containerEl).setName(t("localApple")).setDesc(t("localAppleDesc")).setHeading();
     }
 
-    new Setting(containerEl)
+    const localAppleGrid = containerEl.createDiv({ cls: "task-hub-settings-grid" });
+    new Setting(localAppleGrid)
       .setName(t("localApple"))
       .setDesc(this.plugin.settings.localApple.enabled ? createLocalAppleStatusFragment(containerEl.doc, undefined, this.plugin.localAppleStatus, t) : t("localAppleDisabledDesc"))
       .addToggle((toggle) => {
@@ -1297,7 +1411,9 @@ export class TaskHubSettingTab extends PluginSettingTab {
       return;
     }
 
-    new Setting(containerEl)
+    const localAppleSourceGrid = containerEl.createDiv({ cls: "task-hub-settings-grid task-hub-settings-source-list" });
+
+    new Setting(localAppleSourceGrid)
       .setName(t("localAppleCalendar"))
       .setDesc(createLocalAppleStatusFragment(containerEl.doc, this.plugin.localAppleStatus.calendar, this.plugin.localAppleStatus, t, t("localAppleCalendarDesc")))
       .addToggle((toggle) => {
@@ -1319,7 +1435,7 @@ export class TaskHubSettingTab extends PluginSettingTab {
         });
       });
 
-    new Setting(containerEl)
+    new Setting(localAppleSourceGrid)
       .setName(t("localAppleReminders"))
       .setDesc(
         this.plugin.settings.localApple.remindersEnabled
@@ -1394,8 +1510,9 @@ export class TaskHubSettingTab extends PluginSettingTab {
     const calendars = mergeAppleCalendarsFromSettings(this.plugin.settings.localApple.calendars, this.plugin.localAppleEvents ?? []);
 
     if (calendars.length === 0) {
+      const colorGrid = panel.createDiv({ cls: "task-hub-settings-grid" });
       this.displayLocalAppleColorSetting(
-        panel,
+        colorGrid,
         t,
         t("localAppleCalendarColor"),
         t("localAppleCalendarColorDesc"),
@@ -1408,11 +1525,13 @@ export class TaskHubSettingTab extends PluginSettingTab {
     }
     this.displayAppleCalendarColorOverrides(panel, t, calendars);
 
-    new Setting(panel)
-      .setName(t("localAppleCalendarWriteback"))
-      .setDesc(t("localAppleCalendarWritebackDesc"))
-      .addToggle((toggle) => {
-        toggle.setValue(this.plugin.settings.localApple.calendarWritebackEnabled).onChange(async (value) => {
+    const calendarCapabilityToggles: CompactToggleItem[] = [
+      {
+        name: t("localAppleCalendarWriteback"),
+        description: t("localAppleCalendarWritebackDesc"),
+        value: this.plugin.settings.localApple.calendarWritebackEnabled,
+        risk: "Writeback",
+        onChange: async (value) => {
           if (value && !this.plugin.isLocalAppleSupported()) {
             this.plugin.notifyLocalAppleUnsupported();
             this.display({ preserveScroll: true });
@@ -1424,14 +1543,14 @@ export class TaskHubSettingTab extends PluginSettingTab {
           }
           await this.plugin.saveSettings();
           this.display({ preserveScroll: true });
-        });
-      });
-
-    new Setting(panel)
-      .setName(t("localAppleCalendarTaskSend"))
-      .setDesc(t("localAppleCalendarTaskSendDesc"))
-      .addToggle((toggle) => {
-        toggle.setValue(this.plugin.settings.localApple.calendarTaskSendEnabled).onChange(async (value) => {
+        }
+      },
+      {
+        name: t("localAppleCalendarTaskSend"),
+        description: t("localAppleCalendarTaskSendDesc"),
+        value: this.plugin.settings.localApple.calendarTaskSendEnabled,
+        risk: "Deletes source",
+        onChange: async (value) => {
           if (value && !this.plugin.isLocalAppleSupported()) {
             this.plugin.notifyLocalAppleUnsupported();
             this.display({ preserveScroll: true });
@@ -1444,32 +1563,38 @@ export class TaskHubSettingTab extends PluginSettingTab {
           this.plugin.settings.localApple.calendarTaskSendEnabled = value;
           await this.plugin.saveSettings();
           this.display({ preserveScroll: true });
-        });
-      });
+        }
+      }
+    ];
 
     if (this.plugin.settings.localApple.remindersEnabled) {
-      new Setting(panel)
-        .setName(t("localAppleCalendarReminderConversion"))
-        .setDesc(t("localAppleCalendarReminderConversionDesc"))
-        .addToggle((toggle) => {
-          toggle.setValue(this.plugin.settings.localApple.calendarReminderConversionEnabled).onChange(async (value) => {
-            if (value && !this.plugin.canConvertAppleCalendarAndReminders()) {
-              this.plugin.notifyLocalAppleConversionDisabled();
-              this.display({ preserveScroll: true });
-              return;
-            }
-            if (value && !(await this.plugin.confirmRiskyAppleConversionSetting())) {
-              this.display({ preserveScroll: true });
-              return;
-            }
-            this.plugin.settings.localApple.calendarReminderConversionEnabled = value;
-            await this.plugin.saveSettings();
+      calendarCapabilityToggles.push({
+        name: t("localAppleCalendarReminderConversion"),
+        description: t("localAppleCalendarReminderConversionDesc"),
+        value: this.plugin.settings.localApple.calendarReminderConversionEnabled,
+        risk: "Converts source",
+        onChange: async (value) => {
+          if (value && !this.plugin.canConvertAppleCalendarAndReminders()) {
+            this.plugin.notifyLocalAppleConversionDisabled();
             this.display({ preserveScroll: true });
-          });
-        });
+            return;
+          }
+          if (value && !(await this.plugin.confirmRiskyAppleConversionSetting())) {
+            this.display({ preserveScroll: true });
+            return;
+          }
+          this.plugin.settings.localApple.calendarReminderConversionEnabled = value;
+          await this.plugin.saveSettings();
+          this.display({ preserveScroll: true });
+        }
+      });
     }
 
-    new Setting(panel)
+    this.displayCompactToggleGroup(panel, calendarCapabilityToggles);
+
+    const calendarRangeGrid = panel.createDiv({ cls: "task-hub-settings-grid task-hub-settings-grid--joined" });
+
+    new Setting(calendarRangeGrid)
       .setName(t("localAppleCalendarDefaultTimedTaskDuration"))
       .setDesc(t("localAppleCalendarDefaultTimedTaskDurationDesc"))
       .addText((text) => {
@@ -1482,7 +1607,7 @@ export class TaskHubSettingTab extends PluginSettingTab {
         });
       });
 
-    new Setting(panel)
+    new Setting(calendarRangeGrid)
       .setName(t("localAppleLookback"))
       .addText((text) => {
         text.setValue(String(this.plugin.settings.localApple.calendarLookbackDays)).onChange(async (value) => {
@@ -1496,7 +1621,7 @@ export class TaskHubSettingTab extends PluginSettingTab {
         });
       });
 
-    new Setting(panel)
+    new Setting(calendarRangeGrid)
       .setName(t("localAppleLookahead"))
       .addText((text) => {
         text.setValue(String(this.plugin.settings.localApple.calendarLookaheadDays)).onChange(async (value) => {
@@ -1518,13 +1643,14 @@ export class TaskHubSettingTab extends PluginSettingTab {
     }
 
     new Setting(containerEl).setName(t("localAppleCalendarColors")).setDesc(t("localAppleCalendarColorsDesc")).setHeading();
+    const colorGrid = containerEl.createDiv({ cls: "task-hub-settings-grid task-hub-settings-grid--joined task-hub-local-apple-color-grid" });
     for (const calendar of calendars) {
       const value =
         this.plugin.settings.localApple.calendarColorOverrides[calendar.id] ??
         calendar.color ??
         this.plugin.settings.localApple.calendarColor;
       this.displayLocalAppleColorSetting(
-        containerEl,
+        colorGrid,
         t,
         calendar.name,
         `${t("localAppleCalendarSystemColor")}: ${calendar.color ?? t("notSynced")}`,
@@ -1543,8 +1669,9 @@ export class TaskHubSettingTab extends PluginSettingTab {
   private displayAppleRemindersTab(containerEl: HTMLElement, t: Translator): void {
     const panel = containerEl.createDiv({ cls: "task-hub-settings-tab-panel" });
 
+    const remindersColorGrid = panel.createDiv({ cls: "task-hub-settings-grid" });
     this.displayLocalAppleColorSetting(
-      panel,
+      remindersColorGrid,
       t,
       t("localAppleRemindersColor"),
       t("localAppleRemindersColorDesc"),
@@ -1556,11 +1683,13 @@ export class TaskHubSettingTab extends PluginSettingTab {
     );
     this.displayAppleReminderColorOverrides(panel, t);
 
-    new Setting(panel)
-      .setName(t("localAppleRemindersWriteback"))
-      .setDesc(t("localAppleRemindersWritebackDesc"))
-      .addToggle((toggle) => {
-        toggle.setValue(this.plugin.settings.localApple.remindersWritebackEnabled).onChange(async (value) => {
+    this.displayCompactToggleGroup(panel, [
+      {
+        name: t("localAppleRemindersWriteback"),
+        description: t("localAppleRemindersWritebackDesc"),
+        value: this.plugin.settings.localApple.remindersWritebackEnabled,
+        risk: "Writeback",
+        onChange: async (value) => {
           if (value && !this.plugin.isLocalAppleSupported()) {
             this.plugin.notifyLocalAppleUnsupported();
             this.display({ preserveScroll: true });
@@ -1572,14 +1701,14 @@ export class TaskHubSettingTab extends PluginSettingTab {
           }
           await this.plugin.saveSettings();
           this.display({ preserveScroll: true });
-        });
-      });
-
-    new Setting(panel)
-      .setName(t("localAppleRemindersCreate"))
-      .setDesc(t("localAppleRemindersCreateDesc"))
-      .addToggle((toggle) => {
-        toggle.setValue(this.plugin.settings.localApple.remindersCreateEnabled).onChange(async (value) => {
+        }
+      },
+      {
+        name: t("localAppleRemindersCreate"),
+        description: t("localAppleRemindersCreateDesc"),
+        value: this.plugin.settings.localApple.remindersCreateEnabled,
+        risk: "Creates source",
+        onChange: async (value) => {
           if (value && !this.plugin.isLocalAppleSupported()) {
             this.plugin.notifyLocalAppleUnsupported();
             this.display({ preserveScroll: true });
@@ -1595,21 +1724,25 @@ export class TaskHubSettingTab extends PluginSettingTab {
           }
           await this.plugin.saveSettings();
           this.display({ preserveScroll: true });
-        });
-      });
+        }
+      }
+    ]);
 
     if (this.plugin.settings.localApple.remindersCreateEnabled) {
-      new Setting(panel)
-        .setName(t("localAppleRemindersCreateTags"))
-        .setDesc(t("localAppleRemindersCreateTagsDesc"))
-        .addToggle((toggle) => {
-          toggle.setValue(this.plugin.settings.localApple.remindersCreateTagsEnabled).onChange(async (value) => {
+      this.displayCompactToggleGroup(panel, [
+        {
+          name: t("localAppleRemindersCreateTags"),
+          description: t("localAppleRemindersCreateTagsDesc"),
+          value: this.plugin.settings.localApple.remindersCreateTagsEnabled,
+          onChange: async (value) => {
             this.plugin.settings.localApple.remindersCreateTagsEnabled = value;
             await this.plugin.saveSettings();
-          });
-        });
+          }
+        }
+      ]);
 
-      new Setting(panel)
+      const remindersCreateGrid = panel.createDiv({ cls: "task-hub-settings-grid" });
+      new Setting(remindersCreateGrid)
         .setName(t("localAppleRemindersDefaultList"))
         .setDesc(t("localAppleRemindersDefaultListDesc"))
         .addDropdown((dropdown) => {
@@ -1630,12 +1763,13 @@ export class TaskHubSettingTab extends PluginSettingTab {
     }
 
     new Setting(containerEl).setName(t("localAppleReminderListColors")).setDesc(t("localAppleReminderListColorsDesc")).setHeading();
+    const colorGrid = containerEl.createDiv({ cls: "task-hub-settings-grid task-hub-settings-grid--joined" });
     for (const list of lists) {
       const value =
         this.plugin.settings.localApple.reminderColorOverrides[list.id] ??
         this.plugin.settings.localApple.remindersColor;
       this.displayLocalAppleColorSetting(
-        containerEl,
+        colorGrid,
         t,
         list.name,
         `${t("appleReminderList")}: ${list.name}`,
