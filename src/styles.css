@@ -232,6 +232,90 @@
   resize: vertical;
 }
 
+.task-hub-create-note-body-field {
+  border-bottom: 1px solid var(--background-modifier-border);
+  display: block;
+  padding: 14px 0;
+}
+
+.task-hub-create-note-body-input {
+  box-sizing: border-box;
+  min-height: 168px;
+  resize: vertical;
+  width: 100%;
+}
+
+.task-hub-note-composer {
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  box-sizing: border-box;
+  min-height: 100px;
+  overflow: hidden;
+  width: 100%;
+}
+
+.task-hub-note-composer .cm-scroller {
+  overflow: hidden;
+}
+
+.task-hub-note-composer .cm-content {
+  caret-color: var(--text-normal);
+  font-family: var(--font-interface);
+  font-size: var(--font-ui-medium);
+  line-height: 1.45;
+  min-height: 100px;
+  padding: 10px 12px;
+}
+
+.task-hub-note-composer .cm-content:focus,
+.task-hub-note-composer .cm-line {
+  outline: none;
+}
+
+.task-hub-note-composer .cm-focused {
+  outline: none;
+}
+
+.task-hub-note-composer.cm-focused {
+  border-color: var(--interactive-accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--interactive-accent) 20%, transparent);
+}
+
+.task-hub-note-composer .cm-placeholder {
+  color: var(--text-faint);
+}
+
+.task-hub-note-composer-checkbox {
+  accent-color: var(--interactive-accent);
+  cursor: pointer;
+  height: 16px;
+  margin: 0 6px 0 0;
+  vertical-align: -2px;
+  width: 16px;
+}
+
+.task-hub-note-composer-tag {
+  cursor: text;
+}
+
+.task-hub-create-modal .setting-item.task-hub-create-action-setting {
+  border-top: 0;
+  justify-items: end;
+  grid-template-columns: 1fr;
+  padding-top: 14px;
+}
+
+.task-hub-create-modal .task-hub-create-action-setting .setting-item-info {
+  display: none;
+}
+
+.task-hub-create-modal .task-hub-create-action-setting .setting-item-control {
+  justify-content: flex-end;
+  justify-self: end;
+  width: auto;
+}
+
 .task-hub-create-schedule-setting .setting-item-control,
 .task-hub-detail-schedule-row {
   align-items: center;
@@ -294,6 +378,7 @@
 }
 
 .task-hub-filter-strip {
+  --task-hub-toolbar-control-height: 34px;
   align-items: center;
   display: flex;
   flex: 0 1 720px;
@@ -512,7 +597,10 @@
 }
 
 .task-hub-search-control {
+  box-sizing: border-box;
   flex: 1 1 auto;
+  height: var(--task-hub-toolbar-control-height);
+  line-height: 1.2;
   min-width: 0;
 }
 
@@ -521,7 +609,8 @@
   display: inline-flex;
   flex: 0 0 auto;
   gap: 5px;
-  min-height: 32px;
+  height: var(--task-hub-toolbar-control-height);
+  min-height: var(--task-hub-toolbar-control-height);
 }
 
 .task-hub-create-task-button-icon {
@@ -569,7 +658,8 @@
   display: inline-flex;
   flex: 0 0 auto;
   gap: 5px;
-  min-height: 32px;
+  height: var(--task-hub-toolbar-control-height);
+  min-height: var(--task-hub-toolbar-control-height);
 }
 
 .task-hub-search-button.is-active {
@@ -2357,6 +2447,7 @@ button.task-hub-task-note-pin.is-active:focus-visible {
 }
 
 .task-hub-note-modal {
+  --task-hub-note-modal-editor-height: 180px;
   width: min(920px, 92vw);
 }
 
@@ -2364,41 +2455,30 @@ button.task-hub-task-note-pin.is-active:focus-visible {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  min-height: min(680px, 78vh);
+  min-height: 0;
 }
 
 .task-hub-note-modal-editor {
-  border: 1px solid var(--background-modifier-border);
-  border-radius: 6px;
+  border: 0;
+  border-radius: 0;
   display: flex;
-  flex: 1 1 auto;
-  min-height: 420px;
+  flex: 0 0 auto;
+  min-height: var(--task-hub-note-modal-editor-height);
   overflow: hidden;
 }
 
-.task-hub-note-modal-editor > .workspace-leaf {
-  height: auto;
-  min-height: 0;
-  width: 100%;
+.task-hub-note-modal-editor .task-hub-note-composer {
+  flex: 1 1 auto;
+  max-height: var(--task-hub-note-modal-editor-height);
+  min-height: var(--task-hub-note-modal-editor-height);
 }
 
-.task-hub-note-modal-editor .workspace-leaf-content,
-.task-hub-note-modal-editor .view-content,
-.task-hub-note-modal-editor .markdown-source-view,
-.task-hub-note-modal-editor .cm-editor {
-  height: 100%;
+.task-hub-note-modal-editor .task-hub-note-composer .cm-scroller {
+  overflow: auto;
 }
 
-.task-hub-note-modal-hide-frontmatter {
-  --metadata-display-editing: none;
-  --metadata-display-reading: none;
-}
-
-.task-hub-note-modal-hide-frontmatter .metadata-container,
-.task-hub-note-modal-hide-frontmatter .metadata-properties,
-.task-hub-note-modal-hide-frontmatter .metadata-add-button,
-.task-hub-note-modal-hide-frontmatter .frontmatter-container {
-  display: none;
+.task-hub-note-modal-editor .task-hub-note-composer .cm-content {
+  min-height: calc(var(--task-hub-note-modal-editor-height) - 20px);
 }
 
 .task-hub-note-modal-actions {
@@ -2636,7 +2716,10 @@ button.task-hub-task-note-pin.is-active:focus-visible {
 }
 
 .task-hub-task-row .task-hub-task-tag,
-.task-hub-tag-editor .task-hub-task-tag {
+.task-hub-tag-editor .task-hub-task-tag,
+.task-hub-dated-note-detail-header .task-hub-task-tag,
+.task-hub-dated-note-body .task-hub-task-tag,
+.task-hub-dated-note-card-tags .task-hub-task-tag {
   max-width: min(18ch, 100%);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2644,12 +2727,15 @@ button.task-hub-task-note-pin.is-active:focus-visible {
 }
 
 .task-hub-task-list-flow .task-hub-task-row .task-hub-task-tag,
-.task-hub-tag-editor .task-hub-task-tag {
+.task-hub-tag-editor .task-hub-task-tag,
+.task-hub-dated-note-detail-header .task-hub-task-tag,
+.task-hub-dated-note-body .task-hub-task-tag,
+.task-hub-dated-note-card-tags .task-hub-task-tag {
   box-shadow:
     0 3px 8px color-mix(in srgb, var(--task-hub-source-color, var(--interactive-accent)) 28%, transparent),
     0 1px 2px rgb(0 0 0 / 16%);
   color: white;
-  font-size: var(--font-ui-medium);
+  font-size: var(--font-ui-small);
   font-weight: 400;
   line-height: 1.15;
   padding: 1px 6px;
@@ -3192,6 +3278,7 @@ input.task-hub-tag-editor-input:focus {
     0 3px 8px color-mix(in srgb, var(--task-hub-source-color) 28%, transparent),
     0 1px 2px rgb(0 0 0 / 16%);
   color: white;
+  font-size: var(--font-ui-small);
   font-weight: 400;
   text-shadow: 0 1px 1px rgb(0 0 0 / 18%);
 }
@@ -5174,6 +5261,194 @@ input.task-hub-tag-editor-input:focus {
   }
 }
 
+.task-hub-dated-notes-view {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(440px, 1fr) minmax(320px, 420px);
+}
+
+.task-hub-dated-note-detail,
+.task-hub-dated-note-list {
+  min-width: 0;
+}
+
+.task-hub-dated-note-detail {
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 190px);
+  overflow: auto;
+  scrollbar-gutter: stable;
+}
+
+.task-hub-dated-note-detail.is-note-transition {
+  animation: task-hub-dated-note-detail-enter 140ms cubic-bezier(0.2, 0, 0, 1) both;
+  will-change: opacity, transform;
+}
+
+@keyframes task-hub-dated-note-detail-enter {
+  from {
+    opacity: 0.78;
+    transform: translateY(4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.task-hub-dated-note-detail-header {
+  border-bottom: 1px solid var(--background-modifier-border);
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+}
+
+.task-hub-dated-note-meta {
+  color: var(--text-muted);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: var(--font-ui-smaller);
+  gap: 8px;
+}
+
+.task-hub-dated-note-body {
+  line-height: 1.42;
+  min-height: 260px;
+  padding: 16px 18px;
+}
+
+.task-hub-dated-note-body > *:first-child {
+  margin-top: 0;
+}
+
+.task-hub-dated-note-body > *:last-child {
+  margin-bottom: 0;
+}
+
+.task-hub-dated-note-body p,
+.task-hub-dated-note-body ul,
+.task-hub-dated-note-body ol {
+  margin-block: 0 8px;
+}
+
+.task-hub-dated-note-body li {
+  margin-block: 0 4px;
+}
+
+.task-hub-dated-note-body .task-list-item {
+  margin-block: 0 6px;
+}
+
+.task-hub-dated-note-body .task-list-item-checkbox {
+  margin-inline-end: 8px;
+}
+
+.task-hub-dated-note-actions {
+  border-top: 1px solid var(--background-modifier-border);
+  display: flex;
+  justify-content: flex-end;
+  padding: 10px 14px;
+}
+
+.task-hub-dated-note-list {
+  border-left: 1px solid var(--background-modifier-border);
+  min-width: 0;
+  padding-left: 16px;
+}
+
+.task-hub-dated-note-day {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.task-hub-dated-note-day-header {
+  align-items: baseline;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.task-hub-dated-note-day-title {
+  font-size: var(--font-ui-small);
+  font-weight: 700;
+}
+
+.task-hub-dated-note-day-count {
+  color: var(--text-faint);
+  font-size: var(--font-ui-smaller);
+}
+
+button.task-hub-dated-note-card {
+  align-items: stretch;
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-left: 3px solid color-mix(in srgb, var(--interactive-accent) 72%, var(--background-modifier-border));
+  border-radius: 8px;
+  box-shadow: none;
+  cursor: pointer;
+  display: grid;
+  gap: 7px;
+  height: auto;
+  justify-items: stretch;
+  line-height: 1.35;
+  margin: 0;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  padding: 10px 12px;
+  text-align: left;
+  white-space: normal;
+  width: 100%;
+}
+
+button.task-hub-dated-note-card.is-active {
+  background: color-mix(in srgb, var(--interactive-accent) 10%, var(--background-primary));
+  border-color: color-mix(in srgb, var(--interactive-accent) 38%, var(--background-modifier-border));
+  box-shadow: 0 8px 18px color-mix(in srgb, var(--interactive-accent) 16%, transparent);
+}
+
+.task-hub-dated-note-time {
+  color: var(--text-muted);
+  flex: 0 0 auto;
+  font-size: var(--font-ui-smaller);
+  font-variant-numeric: tabular-nums;
+  justify-self: end;
+}
+
+.task-hub-dated-note-excerpt {
+  color: var(--text-normal);
+  display: -webkit-box;
+  font-size: var(--font-ui-small);
+  font-weight: 650;
+  line-height: 1.4;
+  margin: 0;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  word-break: break-word;
+}
+
+.task-hub-dated-note-card-footer {
+  align-items: end;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  min-width: 0;
+}
+
+.task-hub-dated-note-card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  min-width: 0;
+}
+
 @media (max-width: 720px) {
   .task-hub-header,
   .task-hub-toolbar,
@@ -5308,6 +5583,15 @@ input.task-hub-tag-editor-input:focus {
     display: grid;
     grid-template-columns: 1fr;
     max-height: none;
+  }
+
+  .task-hub-dated-notes-view {
+    grid-template-columns: 1fr;
+  }
+
+  .task-hub-dated-note-list {
+    border-left: 0;
+    padding-left: 0;
   }
 
   .task-hub-layer-list {

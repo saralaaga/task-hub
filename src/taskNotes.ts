@@ -10,7 +10,6 @@ export type TaskNoteSettings = {
   thinoFolder: string;
   openNoteAfterCreate: boolean;
   showCountsInTaskList: boolean;
-  showFrontmatterInNoteModal: boolean;
   linkedNoteSubtasksEnabled: boolean;
 };
 

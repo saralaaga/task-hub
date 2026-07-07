@@ -1,5 +1,5 @@
 import TaskHubPlugin from "./main";
-import { MarkdownView, WorkspaceLeaf } from "obsidian";
+import { MarkdownView } from "obsidian";
 import { DEFAULT_SETTINGS } from "./settings";
 import { buildTaskNoteKey, createTaskNoteContent, parseTaskNoteFrontmatter } from "./taskNotes";
 import type { TaskItem } from "./types";
@@ -41,8 +41,24 @@ type FakeButton = {
   onClick: jest.Mock;
 };
 
+type MockNoteComposer = {
+  destroy: jest.Mock;
+  focus: jest.Mock;
+  getValue: jest.Mock<string, []>;
+  options: {
+    parent: FakeElement;
+    value?: string;
+    placeholder?: string;
+    onChange?: (value: string) => void;
+    onSubmit?: () => void;
+  };
+  setValue: jest.Mock<void, [string]>;
+  view: unknown;
+};
+
 const buttons: FakeButton[] = [];
 const modals: Array<{ contentEl: FakeElement; titleEl: FakeElement; modalEl: FakeElement }> = [];
+const mockNoteComposers: MockNoteComposer[] = [];
 
 function fakeEl(): FakeElement {
   const element: FakeElement = {
@@ -341,6 +357,25 @@ jest.mock("./localApple", () => ({
   setAppleReminderList: jest.fn()
 }));
 
+jest.mock("./views/noteComposer", () => ({
+  createTaskHubNoteComposer: jest.fn((options: MockNoteComposer["options"]) => {
+    let value = options.value ?? "";
+    const composer: MockNoteComposer = {
+      destroy: jest.fn(),
+      focus: jest.fn(),
+      getValue: jest.fn(() => value),
+      options,
+      setValue: jest.fn((nextValue: string) => {
+        value = nextValue;
+        options.onChange?.(nextValue);
+      }),
+      view: {}
+    };
+    mockNoteComposers.push(composer);
+    return composer;
+  })
+}));
+
 const {
   createAppleCalendarEvent,
   createAppleReminder,
@@ -360,6 +395,7 @@ describe("Apple Reminders migration", () => {
     savedData.length = 0;
     buttons.length = 0;
     modals.length = 0;
+    mockNoteComposers.length = 0;
     listeners.length = 0;
     jest.clearAllMocks();
     jest.spyOn(TaskHubPlugin.prototype, "isLocalAppleSupported").mockReturnValue(true);
@@ -537,12 +573,20 @@ describe("Apple Reminders migration", () => {
     expect(removeFile).toHaveBeenCalledWith(noteFile.path);
   });
 
-  it("opens task notes in a native Markdown modal without creating a new tab", async () => {
+  it("opens task notes in the Task Hub CodeMirror modal without creating a native Markdown view", async () => {
     const noteFile = { path: "Task Hub Notes/edit.md", extension: "md", stat: { ctime: 1, mtime: 2, size: 3 } };
     const plugin = new TaskHubPlugin({} as never, {} as never);
     const getLeaf = jest.fn();
     plugin.app = {
       vault: {
+        cachedRead: jest.fn(async () =>
+          `${createTaskNoteContent({
+            noteId: "thn_1",
+            relatedKey: "task:vault:Inbox.md:0:abc",
+            title: "Edit",
+            createdAt: "2026-05-29T10:30:12"
+          })}Existing body #tag\n- [ ] child`
+        ),
         getFileByPath: jest.fn(() => noteFile),
         on: jest.fn(),
         offref: jest.fn()
@@ -556,38 +600,36 @@ describe("Apple Reminders migration", () => {
 
     await plugin.openTaskNote(noteFile.path);
     await Promise.resolve();
+    await flushAsync();
 
     expect(getLeaf).not.toHaveBeenCalled();
-    const leaf = ((WorkspaceLeaf as unknown as { instances: Array<{ setViewState: jest.Mock; view?: unknown }> }).instances).at(-1);
-    expect(leaf?.setViewState).toHaveBeenCalledWith({
-      type: "markdown",
-      state: {
-        file: noteFile.path,
-        mode: "source",
-        source: false,
-        properties: {
-          visible: false
-        }
-      },
-      active: true
-    });
-    const view = leaf?.view as { setEphemeralState: jest.Mock } | undefined;
-    expect(view?.setEphemeralState).toHaveBeenCalledWith({
-      existing: true,
-      properties: {
-        collapsed: false,
-        visible: false
-      }
-    });
-    expect(modals.at(-1)?.modalEl.toggleClass).toHaveBeenCalledWith("task-hub-note-modal-hide-frontmatter", true);
+    expect(mockNoteComposers).toHaveLength(1);
+    expect(mockNoteComposers[0].options.value).toBe("Existing body #tag\n- [ ] child");
+    expect(mockNoteComposers[0].options.parent.addClass).not.toHaveBeenCalledWith(expect.stringContaining("workspace"));
+    expect(mockNoteComposers[0].focus).toHaveBeenCalled();
+    expect(modals.at(-1)?.modalEl.toggleClass).not.toHaveBeenCalledWith("task-hub-note-modal-hide-frontmatter", expect.any(Boolean));
   });
 
-  it("uses the setting to show task note frontmatter in the native modal", async () => {
+  it("saves task note modal edits through the Task Hub composer", async () => {
     const noteFile = { path: "Task Hub Notes/edit.md", extension: "md", stat: { ctime: 1, mtime: 2, size: 3 } };
     const plugin = new TaskHubPlugin({} as never, {} as never);
+    const initialContent = createTaskNoteContent({
+      noteId: "thn_1",
+      relatedKey: "task:vault:Inbox.md:0:abc",
+      title: "Edit",
+      createdAt: "2026-05-29T10:30:12"
+    });
+    const writes: string[] = [];
+    const process = jest.fn(async (_file, update) => {
+      const next = update(initialContent);
+      writes.push(next);
+      return next;
+    });
     plugin.app = {
       vault: {
+        cachedRead: jest.fn(async () => initialContent),
         getFileByPath: jest.fn(() => noteFile),
+        process,
         on: jest.fn(),
         offref: jest.fn()
       },
@@ -595,34 +637,56 @@ describe("Apple Reminders migration", () => {
         getLeavesOfType: jest.fn(() => [])
       }
     } as never;
-    plugin.settings = {
-      ...DEFAULT_SETTINGS,
-      taskNotes: {
-        ...DEFAULT_SETTINGS.taskNotes,
-        showFrontmatterInNoteModal: true
-      }
-    };
+    plugin.settings = DEFAULT_SETTINGS;
+    plugin.taskNoteIndex = {
+      reindexFile: jest.fn(async () => undefined)
+    } as never;
 
     await plugin.openTaskNote(noteFile.path);
-    await Promise.resolve();
+    await flushAsync();
+    mockNoteComposers[0].setValue("Updated body #tag\n- [x] child");
+    buttons[1].onClickHandler?.();
+    await flushAsync();
 
-    const leaf = ((WorkspaceLeaf as unknown as { instances: Array<{ setViewState: jest.Mock; view?: unknown }> }).instances).at(-1);
-    expect(leaf?.setViewState).toHaveBeenCalledWith(expect.objectContaining({
-      state: expect.objectContaining({
-        properties: {
-          visible: true
-        }
-      })
-    }));
-    const view = leaf?.view as { setEphemeralState: jest.Mock } | undefined;
-    expect(view?.setEphemeralState).toHaveBeenCalledWith({
-      existing: true,
-      properties: {
-        collapsed: false,
-        visible: true
+    expect(process).toHaveBeenCalledWith(noteFile, expect.any(Function));
+    expect(writes[0]).toContain("Updated body #tag\n- [x] child\n");
+    expect(mockNoteComposers[0].destroy).toHaveBeenCalled();
+    expect(notices).toContain("Task note saved.");
+  });
+
+  it("does not save task note edits when the CodeMirror modal is closed without the save action", async () => {
+    const noteFile = { path: "Task Hub Notes/edit.md", extension: "md", stat: { ctime: 1, mtime: 2, size: 3 } };
+    const plugin = new TaskHubPlugin({} as never, {} as never);
+    const existingContent = `${createTaskNoteContent({
+      noteId: "thn_1",
+      relatedKey: "task:vault:Inbox.md:0:abc",
+      title: "Edit",
+      createdAt: "2026-05-29T10:30:12"
+    })}Existing body`;
+    const process = jest.fn();
+    plugin.app = {
+      vault: {
+        cachedRead: jest.fn(async () => existingContent),
+        getFileByPath: jest.fn(() => noteFile),
+        process,
+        on: jest.fn(),
+        offref: jest.fn()
+      },
+      workspace: {
+        getLeavesOfType: jest.fn(() => [])
       }
-    });
-    expect(modals.at(-1)?.modalEl.toggleClass).toHaveBeenCalledWith("task-hub-note-modal-hide-frontmatter", false);
+    } as never;
+    plugin.settings = DEFAULT_SETTINGS;
+
+    await plugin.openTaskNote(noteFile.path);
+    await flushAsync();
+    mockNoteComposers[0].setValue("Unsaved body");
+    (modals.at(-1) as unknown as { close: () => void }).close();
+    await flushAsync();
+
+    expect(process).not.toHaveBeenCalled();
+    expect(mockNoteComposers[0].destroy).toHaveBeenCalled();
+    expect(notices).not.toContain("Task note saved.");
   });
 
   it("deletes a newly created task note when creation is cancelled", async () => {
@@ -634,6 +698,12 @@ describe("Apple Reminders migration", () => {
       vault: {
         createFolder: jest.fn(),
         create,
+        cachedRead: jest.fn(async () => createTaskNoteContent({
+          noteId: "thn_1",
+          relatedKey: "task:vault:Inbox.md:0:abc",
+          title: "Edit",
+          createdAt: "2026-05-29T10:30:12"
+        })),
         getFileByPath: jest.fn(() => null),
         getFolderByPath: jest.fn(() => ({ path: "Thino" })),
         on: jest.fn(),
@@ -676,7 +746,12 @@ describe("Apple Reminders migration", () => {
     const createdFile = { path: "Thino/20260529103012.md", extension: "md", stat: { ctime: 1, mtime: 2, size: 3 } };
     const plugin = new TaskHubPlugin({} as never, {} as never);
     const deleteFile = jest.fn(async () => undefined);
-    const create = jest.fn(async () => createdFile);
+    let createdContent = "";
+    const create = jest.fn(async (_path, content) => {
+      createdContent = content;
+      return createdFile;
+    });
+    const process = jest.fn(async (_file, update) => update(createdContent));
     plugin.app = {
       vault: {
         createFolder: jest.fn(),
@@ -684,6 +759,7 @@ describe("Apple Reminders migration", () => {
         cachedRead: jest.fn(async () => "Body"),
         getFileByPath: jest.fn(() => null),
         getFolderByPath: jest.fn(() => ({ path: "Thino" })),
+        process,
         on: jest.fn(),
         offref: jest.fn()
       },
@@ -710,10 +786,12 @@ describe("Apple Reminders migration", () => {
 
     await plugin.createTaskNoteForTask(task());
     await flushAsync();
+    mockNoteComposers[0].setValue("Body");
     buttons[1].onClickHandler?.();
     await flushAsync();
 
     expect(deleteFile).not.toHaveBeenCalled();
+    expect(process).toHaveBeenCalledWith(createdFile, expect.any(Function));
     const [path, content] = create.mock.calls[0] as unknown as [string, string];
     const id = path.match(/^Thino\/(\d{14})\.md$/u)?.[1];
     expect(id).toBeTruthy();

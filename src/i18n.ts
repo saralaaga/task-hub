@@ -76,6 +76,16 @@ export type TranslationKey =
   | "conditionText"
   | "quickTagFilter"
   | "createTaskNote"
+  | "datedNoteCreated"
+  | "datedNotesDefaultTitleTemplate"
+  | "datedNotesDefaultTitleTemplateDesc"
+  | "datedNotesDisabled"
+  | "datedNotesEnable"
+  | "datedNotesEnableDesc"
+  | "datedNotesFolder"
+  | "datedNotesFolderDesc"
+  | "datedNotesOpenAfterCreate"
+  | "datedNotesOpenAfterCreateDesc"
   | "day"
   | "defaultView"
   | "defaultViewDesc"
@@ -240,6 +250,7 @@ export type TranslationKey =
   | "noSmartLists"
   | "noTags"
   | "noDate"
+  | "noDatedNotes"
   | "noUnscheduledTasks"
   | "notSynced"
   | "open"
@@ -286,6 +297,7 @@ export type TranslationKey =
   | "reminderAlertOneWeekBefore"
   | "reminderAlertTwoDaysBefore"
   | "search"
+  | "searchNotes"
   | "searchTags"
   | "searchTasks"
   | "saveSmartList"
@@ -294,6 +306,7 @@ export type TranslationKey =
   | "settingsPageCalendar"
   | "settingsPageIntegrations"
   | "settingsPageOverview"
+  | "settingsPageNotes"
   | "settingsPageTasks"
   | "friday"
   | "sendCurrentTaskToAppleReminders"
@@ -364,6 +377,8 @@ export type TranslationKey =
   | "taskCreationTarget"
   | "taskDetails"
   | "taskHub"
+  | "noteCreationPlaceholder"
+  | "noteCreationTitle"
   | "undoLastTaskChange"
   | "taskSendDefaultTarget"
   | "taskSendDefaultTargetDesc"
@@ -383,8 +398,6 @@ export type TranslationKey =
   | "taskNotesSection"
   | "taskNotesShowCounts"
   | "taskNotesShowCountsDesc"
-  | "taskNotesShowFrontmatter"
-  | "taskNotesShowFrontmatterDesc"
   | "taskNotesThino"
   | "taskNotesThinoDesc"
   | "taskNotesThinoFolder"
@@ -425,6 +438,14 @@ const JA_SETTINGS_TRANSLATIONS: Partial<Record<TranslationKey, string>> = {
   calendarDayStartHourDesc: "日ビューと週ビューで既定表示する最も早い時刻。さらに早い項目がある場合は範囲が自動で広がります。",
   calendarTaskCreation: "カレンダーから作成",
   calendarTaskCreationDesc: "カレンダーの空き領域をクリックして、タスクまたは Apple カレンダーイベントを作成します。",
+  datedNotesDefaultTitleTemplate: "デフォルトのノートタイトル",
+  datedNotesDefaultTitleTemplateDesc: "日付付きノート作成時に使用します。YYYY-MM-DD、YYYY、MM、DD をサポートします。",
+  datedNotesEnable: "ノート",
+  datedNotesEnableDesc: "YAML の日付を持つ Markdown ノートを Task Hub で作成、閲覧します。",
+  datedNotesFolder: "ノートフォルダー",
+  datedNotesFolderDesc: "新しい日付付きノートの既定フォルダー。既存ノートは YAML メタデータで認識されます。",
+  datedNotesOpenAfterCreate: "作成後にノートを開く",
+  datedNotesOpenAfterCreateDesc: "作成した Markdown ノートを新しいタブで開きます。",
   dida: "Dida",
   didaApiBase: "API サービス",
   didaApiBaseDesc: "中国国内アカウントは Dida、国際アカウントは TickTick を選びます。",
@@ -519,6 +540,7 @@ const JA_SETTINGS_TRANSLATIONS: Partial<Record<TranslationKey, string>> = {
   localAppleRemindersWritebackDesc: "Task Hub の対応コントロールから、ローカル Apple リマインダーの完了、再オープン、日程変更、編集を行えるようにします。",
   localAppleRequestAccess: "アクセスを要求",
   parseError: "解析エラー",
+  settingsPageNotes: "ノート",
   supportedTaskSyntax: "対応タスク構文",
   supportedTaskSyntaxDesc: "バージョン 1 は - [ ]、- [x]、Obsidian タグ、📅 YYYY-MM-DD、due:: YYYY-MM-DD に対応します。",
   taskCreationDefaultTarget: "デフォルトのタスク作成先",
@@ -538,8 +560,6 @@ const JA_SETTINGS_TRANSLATIONS: Partial<Record<TranslationKey, string>> = {
   taskNotesSection: "タスクノート",
   taskNotesShowCounts: "ノート数を表示",
   taskNotesShowCountsDesc: "ノートがある場合、タスクリスト行にノート数を表示します。",
-  taskNotesShowFrontmatter: "エディターにノートメタデータを表示",
-  taskNotesShowFrontmatterDesc: "関連ノートのポップアップを開くときに YAML/frontmatter プロパティを表示します。既定ではオフで、エディターは本文から始まります。",
   taskNotesThino: "Thino multi-file ノートのみ作成",
   taskNotesThinoDesc: "新規ノートに Thino multi-file frontmatter を使います。Thino single-file、Canvas、日記ストレージは生成しません。",
   taskNotesThinoFolder: "Thino ノートフォルダー",
@@ -561,6 +581,14 @@ const FR_SETTINGS_TRANSLATIONS: Partial<Record<TranslationKey, string>> = {
   calendarDayStartHourDesc: "Heure la plus tôt affichée par défaut dans les vues jour et semaine. Les éléments plus tôt étendent automatiquement la plage.",
   calendarTaskCreation: "Créer depuis le calendrier",
   calendarTaskCreationDesc: "Cliquez dans un espace vide du calendrier pour créer une tâche ou un événement Apple Calendar.",
+  datedNotesDefaultTitleTemplate: "Titre de note par défaut",
+  datedNotesDefaultTitleTemplateDesc: "Utilisé lors de la création d'une note datée. Prend en charge YYYY-MM-DD, YYYY, MM et DD.",
+  datedNotesEnable: "Notes",
+  datedNotesEnableDesc: "Créer et consulter dans Task Hub des notes Markdown avec dates YAML.",
+  datedNotesFolder: "Dossier des notes",
+  datedNotesFolderDesc: "Dossier par défaut des nouvelles notes datées. Les notes existantes restent reconnues via les métadonnées YAML.",
+  datedNotesOpenAfterCreate: "Ouvrir la note après création",
+  datedNotesOpenAfterCreateDesc: "Ouvre la note Markdown créée dans un nouvel onglet.",
   dida: "Dida",
   didaApiBase: "Service API",
   didaApiBaseDesc: "Choisissez Dida pour les comptes chinois et TickTick pour les comptes internationaux.",
@@ -655,6 +683,7 @@ const FR_SETTINGS_TRANSLATIONS: Partial<Record<TranslationKey, string>> = {
   localAppleRemindersWritebackDesc: "Autorise les contrôles Task Hub compatibles à terminer, rouvrir, replanifier et modifier les Apple Reminders locaux.",
   localAppleRequestAccess: "Demander l'accès",
   parseError: "Erreur d'analyse",
+  settingsPageNotes: "Notes",
   supportedTaskSyntax: "Syntaxe de tâche prise en charge",
   supportedTaskSyntaxDesc: "La version 1 prend en charge - [ ], - [x], les étiquettes Obsidian, 📅 YYYY-MM-DD et due:: YYYY-MM-DD.",
   taskCreationDefaultTarget: "Destination de tâche par défaut",
@@ -674,8 +703,6 @@ const FR_SETTINGS_TRANSLATIONS: Partial<Record<TranslationKey, string>> = {
   taskNotesSection: "Notes de tâche",
   taskNotesShowCounts: "Afficher le nombre de notes",
   taskNotesShowCountsDesc: "Affiche le nombre de notes sur les lignes de tâches lorsqu'il existe des notes.",
-  taskNotesShowFrontmatter: "Afficher les métadonnées dans l'éditeur",
-  taskNotesShowFrontmatterDesc: "Affiche les propriétés YAML/frontmatter lors de l'ouverture des fenêtres de note liée. Désactivé par défaut pour commencer dans le corps de la note.",
   taskNotesThino: "Créer uniquement des notes Thino multi-fichier",
   taskNotesThinoDesc: "Utilise le frontmatter Thino multi-fichier pour les nouvelles notes. Les stockages Thino single-file, Canvas et journal ne sont pas générés.",
   taskNotesThinoFolder: "Dossier des notes Thino",
@@ -696,6 +723,14 @@ const KO_SETTINGS_TRANSLATIONS: Partial<Record<TranslationKey, string>> = {
   calendarDayStartHourDesc: "일 보기와 주 보기에서 기본으로 표시할 가장 이른 시간입니다. 더 이른 항목이 있으면 범위가 자동으로 확장됩니다.",
   calendarTaskCreation: "캘린더에서 생성",
   calendarTaskCreationDesc: "캘린더의 빈 공간을 클릭해 작업 또는 Apple 캘린더 이벤트를 생성합니다.",
+  datedNotesDefaultTitleTemplate: "기본 노트 제목",
+  datedNotesDefaultTitleTemplateDesc: "날짜 노트를 만들 때 사용합니다. YYYY-MM-DD, YYYY, MM, DD를 지원합니다.",
+  datedNotesEnable: "노트",
+  datedNotesEnableDesc: "YAML 날짜가 있는 Markdown 노트를 Task Hub에서 만들고 볼 수 있게 합니다.",
+  datedNotesFolder: "노트 폴더",
+  datedNotesFolderDesc: "새 날짜 노트의 기본 폴더입니다. 기존 노트는 YAML 메타데이터로 인식됩니다.",
+  datedNotesOpenAfterCreate: "생성 후 노트 열기",
+  datedNotesOpenAfterCreateDesc: "생성한 Markdown 노트를 새 탭에서 엽니다.",
   dida: "Dida",
   didaApiBase: "API 서비스",
   didaApiBaseDesc: "중국 계정은 Dida, 국제 계정은 TickTick을 선택합니다.",
@@ -790,6 +825,7 @@ const KO_SETTINGS_TRANSLATIONS: Partial<Record<TranslationKey, string>> = {
   localAppleRemindersWritebackDesc: "Task Hub의 지원 컨트롤에서 로컬 Apple 미리 알림을 완료, 다시 열기, 일정 변경, 편집할 수 있게 합니다.",
   localAppleRequestAccess: "접근 권한 요청",
   parseError: "구문 분석 오류",
+  settingsPageNotes: "노트",
   supportedTaskSyntax: "지원하는 작업 구문",
   supportedTaskSyntaxDesc: "버전 1은 - [ ], - [x], Obsidian 태그, 📅 YYYY-MM-DD, due:: YYYY-MM-DD를 지원합니다.",
   taskCreationDefaultTarget: "기본 작업 생성 위치",
@@ -809,8 +845,6 @@ const KO_SETTINGS_TRANSLATIONS: Partial<Record<TranslationKey, string>> = {
   taskNotesSection: "작업 노트",
   taskNotesShowCounts: "노트 수 표시",
   taskNotesShowCountsDesc: "노트가 있는 경우 작업 목록 행에 노트 수를 표시합니다.",
-  taskNotesShowFrontmatter: "편집기에 노트 메타데이터 표시",
-  taskNotesShowFrontmatterDesc: "연결된 노트 팝업을 열 때 YAML/frontmatter 속성을 표시합니다. 기본값은 꺼짐이며 편집기는 노트 본문에서 시작합니다.",
   taskNotesThino: "Thino multi-file 노트만 생성",
   taskNotesThinoDesc: "새 노트에 Thino multi-file frontmatter를 사용합니다. Thino single-file, Canvas, diary 저장소는 생성하지 않습니다.",
   taskNotesThinoFolder: "Thino 노트 폴더",
@@ -872,6 +906,16 @@ const TRANSLATIONS: Record<"en" | "zh", Record<TranslationKey, string>> &
     conditionText: "Text",
     quickTagFilter: "Quick tag",
     createTaskNote: "Create linked note",
+    datedNoteCreated: "Note created.",
+    datedNotesDefaultTitleTemplate: "Default note title",
+    datedNotesDefaultTitleTemplateDesc: "Used when creating a dated note. Supports YYYY-MM-DD, YYYY, MM, and DD.",
+    datedNotesDisabled: "Turn on Notes in Task Hub settings first.",
+    datedNotesEnable: "Notes",
+    datedNotesEnableDesc: "Create and review Markdown notes with YAML dates from Task Hub.",
+    datedNotesFolder: "Notes folder",
+    datedNotesFolderDesc: "Default folder for new dated notes. Existing notes are still recognized by YAML metadata.",
+    datedNotesOpenAfterCreate: "Open note after creation",
+    datedNotesOpenAfterCreateDesc: "Open the created Markdown note in a new tab.",
     day: "Day",
     defaultView: "Default view",
     defaultViewDesc: "View shown when Task Hub opens.",
@@ -1049,6 +1093,7 @@ const TRANSLATIONS: Record<"en" | "zh", Record<TranslationKey, string>> &
     noSmartLists: "No smart lists yet.",
     noTags: "No tags found in indexed tasks.",
     noDate: "No date",
+    noDatedNotes: "No notes found.",
     noUnscheduledTasks: "No unscheduled tasks.",
     notSynced: "not synced",
     open: "Open",
@@ -1096,6 +1141,7 @@ const TRANSLATIONS: Record<"en" | "zh", Record<TranslationKey, string>> &
     endTime: "End time",
     save: "Save",
     search: "Search",
+    searchNotes: "Search notes",
     searchTags: "Search tags",
     searchTasks: "Search tasks",
     saveSmartList: "Smart lists turn your current filters into a quick access entry.",
@@ -1104,6 +1150,7 @@ const TRANSLATIONS: Record<"en" | "zh", Record<TranslationKey, string>> &
     settingsPageCalendar: "Calendar",
     settingsPageIntegrations: "Integrations",
     settingsPageOverview: "Overview",
+    settingsPageNotes: "Notes",
     settingsPageTasks: "Tasks",
     friday: "Friday",
     sendCurrentTaskToAppleReminders: "Send current task to Apple Reminders",
@@ -1173,6 +1220,8 @@ const TRANSLATIONS: Record<"en" | "zh", Record<TranslationKey, string>> &
     taskCreationTarget: "Create in",
     taskDetails: "Task details",
     taskHub: "Task Hub",
+    noteCreationPlaceholder: "Note content",
+    noteCreationTitle: "Create note",
     undoLastTaskChange: "Undo last task change",
     taskSendDefaultTarget: "Default send destination",
     taskSendDefaultTargetDesc: "Default destination selected beside the Send to button in task details.",
@@ -1192,8 +1241,6 @@ const TRANSLATIONS: Record<"en" | "zh", Record<TranslationKey, string>> &
     taskNotesSection: "Task notes",
     taskNotesShowCounts: "Show note counts",
     taskNotesShowCountsDesc: "Show note counts on task list rows when notes exist.",
-    taskNotesShowFrontmatter: "Show note metadata in editor",
-    taskNotesShowFrontmatterDesc: "Show YAML/frontmatter properties when opening linked note pop-ups. Off by default so the editor starts at the note body.",
     taskNotesThino: "Create Thino multi-file notes only",
     taskNotesThinoDesc: "Use Thino multi-file frontmatter for newly created notes. Thino single-file, Canvas, and diary storage are not generated.",
     taskNotesThinoFolder: "Thino notes folder",
@@ -1273,6 +1320,16 @@ const TRANSLATIONS: Record<"en" | "zh", Record<TranslationKey, string>> &
     conditionText: "文本",
     quickTagFilter: "快捷标签",
     createTaskNote: "创建关联笔记",
+    datedNoteCreated: "笔记已创建。",
+    datedNotesDefaultTitleTemplate: "默认笔记标题",
+    datedNotesDefaultTitleTemplateDesc: "创建带日期笔记时使用。支持 YYYY-MM-DD、YYYY、MM 和 DD。",
+    datedNotesDisabled: "请先在 Task Hub 设置中开启笔记。",
+    datedNotesEnable: "笔记",
+    datedNotesEnableDesc: "在 Task Hub 中创建和回看带 YAML 日期的 Markdown 笔记。",
+    datedNotesFolder: "笔记目录",
+    datedNotesFolderDesc: "新笔记默认保存到这里；已有笔记仍按 YAML 元数据识别。",
+    datedNotesOpenAfterCreate: "创建后打开笔记",
+    datedNotesOpenAfterCreateDesc: "创建 Markdown 笔记后在新标签页打开。",
     day: "日",
     defaultView: "默认视图",
     defaultViewDesc: "打开 Task Hub 时默认显示的视图。",
@@ -1444,6 +1501,7 @@ const TRANSLATIONS: Record<"en" | "zh", Record<TranslationKey, string>> &
     noSmartLists: "还没有智能列表。",
     noTags: "索引任务中没有标签。",
     noDate: "无日期",
+    noDatedNotes: "还没有找到笔记。",
     noUnscheduledTasks: "没有未排期任务。",
     notSynced: "未同步",
     open: "未完成",
@@ -1491,6 +1549,7 @@ const TRANSLATIONS: Record<"en" | "zh", Record<TranslationKey, string>> &
     endTime: "结束时间",
     save: "保存",
     search: "搜索",
+    searchNotes: "搜索笔记",
     searchTags: "搜索标签",
     searchTasks: "搜索任务",
     saveSmartList: "智能列表功能可以把你当前的筛选内容变成一个可以快速访问的入口",
@@ -1499,6 +1558,7 @@ const TRANSLATIONS: Record<"en" | "zh", Record<TranslationKey, string>> &
     settingsPageCalendar: "日历",
     settingsPageIntegrations: "集成",
     settingsPageOverview: "总览",
+    settingsPageNotes: "笔记",
     settingsPageTasks: "任务",
     friday: "周五",
     sendCurrentTaskToAppleReminders: "将当前任务发送到 Apple 提醒事项",
@@ -1568,6 +1628,8 @@ const TRANSLATIONS: Record<"en" | "zh", Record<TranslationKey, string>> &
     taskCreationTarget: "创建到",
     taskDetails: "任务详情",
     taskHub: "Task Hub",
+    noteCreationPlaceholder: "笔记内容",
+    noteCreationTitle: "创建笔记",
     undoLastTaskChange: "撤销刚才的任务修改",
     taskSendDefaultTarget: "默认发送地址",
     taskSendDefaultTargetDesc: "任务详情中“发送到”按钮右侧默认选中的清单软件或清单。",
@@ -1587,8 +1649,6 @@ const TRANSLATIONS: Record<"en" | "zh", Record<TranslationKey, string>> &
     taskNotesSection: "任务笔记",
     taskNotesShowCounts: "显示笔记数",
     taskNotesShowCountsDesc: "任务有关联笔记时，在任务列表行显示数量。",
-    taskNotesShowFrontmatter: "编辑器中显示笔记元数据",
-    taskNotesShowFrontmatterDesc: "打开关联笔记弹窗时显示 YAML/frontmatter 属性。默认关闭，编辑器会从正文开始。",
     taskNotesThino: "仅创建 Thino multi-file 笔记",
     taskNotesThinoDesc: "为新笔记写入 Thino multi-file frontmatter；不生成 Thino single-file、Canvas 或日记存储内容。",
     taskNotesThinoFolder: "Thino 笔记文件夹",

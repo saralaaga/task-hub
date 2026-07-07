@@ -2,6 +2,7 @@ import { ButtonComponent, Editor, EventRef, MarkdownView, Menu, Modal, Notice, P
 import { PLUGIN_DISPLAY_NAME, TASK_HUB_VIEW_TYPE } from "./constants";
 import { appleCalendarEventToReminderInput, appleReminderToCalendarEventInput } from "./calendar/appleConversion";
 import { calendarDropTargetParts, withCalendarDropTargetDate, type CalendarDropTarget } from "./calendar/calendarDropTarget";
+import { toLocalDateKey } from "./calendar/dateBuckets";
 import { extractAppleReminderTitleTags, normalizeAppleReminderTags } from "./appleReminderTags";
 import { fetchIcsSource } from "./calendar/icsClient";
 import { DidaClient } from "./dida/didaClient";
@@ -38,6 +39,15 @@ import {
   transferTaskNoteRelationship,
   type TaskNote
 } from "./taskNotes";
+import {
+  DatedNoteIndex,
+  applyDatedNoteTitleTemplate,
+  createDatedNoteContent,
+  datedNoteFileName,
+  datedNoteTitleFromBody,
+  normalizeDatedNoteFolder,
+  type DatedNote
+} from "./datedNotes";
 import {
   cleanupTaskNotePinnedEntry,
   cleanupTaskNoteManualOrderEntry,
@@ -87,11 +97,17 @@ import {
 } from "./settings";
 import type { AppleCalendarInfo, CalendarCreationKind, CalendarCreationTarget, CalendarEvent, CalendarItemEditDraft, CalendarSourceStatus, LocalAppleSyncStatus, TaskHubSettings, TaskItem, TaskSendTarget } from "./types";
 import { TaskHubView } from "./views/TaskHubView";
+import { createTaskHubNoteComposer, type TaskHubNoteComposer } from "./views/noteComposer";
 import { populateRecurrenceSelect } from "./views/recurrenceControls";
 
 export type CreateTaskOptions = {
   onTaskCreated?: (task: TaskItem) => void;
+  onDatedNoteCreated?: (note: DatedNote) => void;
+  allowDatedNote?: boolean;
+  initialKind?: CalendarCreationKind | "note";
 };
+
+type CreateItemKind = CalendarCreationKind | "note";
 
 function validCalendarEventDuration(value: number | undefined): number {
   if (!Number.isFinite(value) || value === undefined) return 60;
@@ -151,16 +167,11 @@ function noteBodyFromContent(content: string): string {
   return (content.match(/^---\n[\s\S]*?\n---\n?([\s\S]*)$/u)?.[1] ?? "").replace(/\s+$/u, "");
 }
 
-function noteBodyStartLine(content: string): number {
-  if (!content.startsWith("---")) return 0;
-  const match = content.match(/^---\n[\s\S]*?\n---\n?/u);
-  return match ? match[0].split("\n").length - 1 : 0;
-}
-
 export default class TaskHubPlugin extends Plugin {
   settings: TaskHubSettings = DEFAULT_SETTINGS;
   taskIndex: TaskIndex = this.createTaskIndex();
   taskNoteIndex: TaskNoteIndex = this.createTaskNoteIndex();
+  datedNoteIndex: DatedNoteIndex = this.createDatedNoteIndex();
   localAppleTasks: TaskItem[] = [];
   localAppleEvents: CalendarEvent[] = [];
   localAppleStatus: LocalAppleSyncStatus = { state: "never" };
@@ -314,6 +325,7 @@ export default class TaskHubPlugin extends Plugin {
     this.configureLocalAppleHelper();
     this.taskIndex = this.createTaskIndex();
     this.taskNoteIndex = this.createTaskNoteIndex();
+    this.datedNoteIndex = this.createDatedNoteIndex();
     registerTaskHubIcon();
 
     this.registerView(TASK_HUB_VIEW_TYPE, (leaf: WorkspaceLeaf) => new TaskHubView(leaf, this));
@@ -453,6 +465,7 @@ export default class TaskHubPlugin extends Plugin {
     const files = this.app.vault.getMarkdownFiles().map((file) => this.toIndexableFile(file));
     await this.taskIndex.scanFiles(files);
     await this.taskNoteIndex.scanFiles(files);
+    await this.datedNoteIndex.scanFiles(files);
     await this.syncExternalTasks({ silent: true });
     this.cleanupTaskListManualOrderState();
     await this.persistTaskIndexStateIfNeeded();
@@ -2013,6 +2026,52 @@ export default class TaskHubPlugin extends Plugin {
     void this.app.workspace.revealLeaf(leaf);
   }
 
+  getDatedNotes(): DatedNote[] {
+    return this.settings.datedNotes.enabled ? this.datedNoteIndex.getNotes() : [];
+  }
+
+  async openDatedNoteSource(path: string): Promise<void> {
+    const file = this.app.vault.getFileByPath(path);
+    const t = createTranslator(this.settings.language);
+    if (!file) {
+      new Notice(`${t("fileNotFound")}: ${path}`);
+      return;
+    }
+    const leaf = this.app.workspace.getLeaf("tab");
+    await leaf.openFile(file, { active: true });
+    void this.app.workspace.revealLeaf(leaf);
+  }
+
+  async createDatedNote(dateKey: string, body?: string): Promise<DatedNote | undefined> {
+    const t = createTranslator(this.settings.language);
+    if (!this.settings.datedNotes.enabled) {
+      new Notice(t("datedNotesDisabled"));
+      return undefined;
+    }
+    const now = new Date();
+    const noteBody = (body ?? "").trim();
+    const noteTitle = datedNoteTitleFromBody(noteBody) ?? applyDatedNoteTitleTemplate(this.settings.datedNotes.defaultTitleTemplate, dateKey);
+    const folder = normalizeDatedNoteFolder(this.settings.datedNotes.folder, DEFAULT_SETTINGS.datedNotes.folder);
+    const path = await this.uniqueTaskNotePath(`${folder}/${datedNoteFileName(noteTitle, dateKey, now)}`);
+    await this.ensureParentFolders(path);
+    const noteId = `note_${now.toISOString().replace(/[-:TZ.]/g, "").slice(0, 14)}_${Math.random().toString(36).slice(2, 6)}`;
+    const file = await this.app.vault.create(
+      path,
+      createDatedNoteContent({
+        noteId,
+        date: dateKey,
+        title: noteTitle,
+        createdAt: now.toISOString(),
+        body: noteBody
+      })
+    );
+    await this.datedNoteIndex.reindexFile(this.toIndexableFile(file));
+    const createdNote = this.datedNoteIndex.getNotes().find((note) => note.path === file.path);
+    this.refreshOpenViews();
+    new Notice(t("datedNoteCreated"));
+    return createdNote;
+  }
+
   async deleteTaskNote(path: string): Promise<void> {
     const file = this.app.vault.getFileByPath(path);
     const t = createTranslator(this.settings.language);
@@ -2579,6 +2638,17 @@ export default class TaskHubPlugin extends Plugin {
     });
   }
 
+  private createDatedNoteIndex(): DatedNoteIndex {
+    return new DatedNoteIndex({
+      ignoredPaths: this.settings.ignoredPaths,
+      readFile: (file) => {
+        const vaultFile = this.app.vault.getFileByPath(file.path);
+        if (!vaultFile) throw new Error(`File not found: ${file.path}`);
+        return this.app.vault.cachedRead(vaultFile);
+      }
+    });
+  }
+
   private async transferTaskNotesToAppleReminder(
     task: TaskItem,
     reminderId: string
@@ -2717,6 +2787,7 @@ export default class TaskHubPlugin extends Plugin {
       this.app.vault.on("delete", (file) => {
         this.taskIndex.removeFile(file.path);
         this.taskNoteIndex.removeFile(file.path);
+        this.datedNoteIndex.removeFile(file.path);
         this.cleanupTaskListManualOrderState();
         void this.persistTaskIndexStateIfNeeded().then(() => this.refreshOpenViews());
       })
@@ -2726,6 +2797,7 @@ export default class TaskHubPlugin extends Plugin {
       this.app.vault.on("rename", (file, oldPath) => {
         this.taskIndex.removeFile(oldPath);
         this.taskNoteIndex.removeFile(oldPath);
+        this.datedNoteIndex.removeFile(oldPath);
         this.cleanupTaskListManualOrderState();
         if (file instanceof TFile) void this.reindexVaultFile(file);
         else void this.persistTaskIndexStateIfNeeded().then(() => this.refreshOpenViews());
@@ -2737,6 +2809,7 @@ export default class TaskHubPlugin extends Plugin {
     const indexableFile = this.toIndexableFile(file);
     await this.taskIndex.reindexFile(indexableFile);
     await this.taskNoteIndex.reindexFile(indexableFile);
+    await this.datedNoteIndex.reindexFile(indexableFile);
     this.cleanupTaskListManualOrderState();
     await this.persistTaskIndexStateIfNeeded();
     this.refreshOpenViews();
@@ -2754,7 +2827,7 @@ export default class TaskHubPlugin extends Plugin {
     };
   }
 
-  private refreshOpenViews(): void {
+  refreshOpenViews(): void {
     for (const leaf of this.app.workspace.getLeavesOfType(TASK_HUB_VIEW_TYPE)) {
       const view = leaf.view;
       if (view instanceof TaskHubView) {
@@ -2782,12 +2855,13 @@ export default class TaskHubPlugin extends Plugin {
 }
 
 class TaskNoteModal extends Modal {
-  private leaf?: WorkspaceLeaf;
   private fileChangeRef?: EventRef;
   private isClosed = false;
   private saved = false;
   private cancelled = false;
   private busy = false;
+  private noteComposer: TaskHubNoteComposer | undefined;
+  private noteBody = "";
 
   constructor(
     private readonly plugin: TaskHubPlugin,
@@ -2798,37 +2872,28 @@ class TaskNoteModal extends Modal {
   }
 
   async onOpen(): Promise<void> {
-    const showFrontmatter = this.plugin.settings.taskNotes.showFrontmatterInNoteModal;
     this.modalEl.addClass("task-hub-note-modal");
-    this.modalEl.toggleClass("task-hub-note-modal-hide-frontmatter", !showFrontmatter);
     this.titleEl.setText(createTranslator(this.plugin.settings.language)("notes"));
     this.contentEl.empty();
 
     const editorHost = this.contentEl.createDiv({ cls: "task-hub-note-modal-editor" });
-    const leaf = createDetachedWorkspaceLeaf(this.app);
-    this.leaf = leaf;
-    editorHost.appendChild(getWorkspaceLeafContainer(leaf));
-
     this.fileChangeRef = this.app.vault.on("modify", (changed) => {
       if (changed === this.file) void this.plugin.reindexTaskNoteFile(this.file);
     });
-
-    await leaf.setViewState({
-      type: "markdown",
-      state: {
-        file: this.file.path,
-        mode: "source",
-        source: false,
-        properties: {
-          visible: showFrontmatter
-        }
+    this.noteBody = noteBodyFromContent(await this.app.vault.cachedRead(this.file));
+    this.noteComposer = createTaskHubNoteComposer({
+      parent: editorHost,
+      value: this.noteBody,
+      placeholder: createTranslator(this.plugin.settings.language)("notes"),
+      onChange: (value) => {
+        this.noteBody = value;
       },
-      active: true
+      onSubmit: () => {
+        void this.saveAndClose();
+      }
     });
-
-    this.syncFrontmatterVisibility(showFrontmatter);
     this.renderActions();
-    this.focusBodyStart();
+    editorHost.win.setTimeout(() => this.noteComposer?.focus(), 0);
   }
 
   onClose(): void {
@@ -2836,17 +2901,15 @@ class TaskNoteModal extends Modal {
   }
 
   private async closeNoteModal(): Promise<void> {
+    if (this.isClosed) return;
     this.isClosed = true;
-    const leaf = this.leaf;
-    this.leaf = undefined;
+    const noteComposer = this.noteComposer;
+    this.noteComposer = undefined;
     if (this.fileChangeRef) {
       this.app.vault.offref(this.fileChangeRef);
       this.fileChangeRef = undefined;
     }
-    if (leaf?.view instanceof MarkdownView && !this.cancelled) {
-      await leaf.view.save();
-    }
-    leaf?.detach();
+    noteComposer?.destroy();
     if (this.cancelled && this.mode === "create") {
       await this.plugin.deleteTaskNoteFile(this.file);
     } else if (this.saved || this.mode === "edit") {
@@ -2880,60 +2943,26 @@ class TaskNoteModal extends Modal {
     if (this.busy) return;
     this.busy = true;
     try {
-      if (this.leaf?.view instanceof MarkdownView) {
-        await this.leaf.view.save();
+      const result = await this.plugin.saveTaskNoteBody(this.file, this.noteComposer?.getValue() ?? this.noteBody);
+      if (!result.ok) {
+        this.busy = false;
+        new Notice(result.message);
+        return;
       }
       this.saved = true;
-      await this.plugin.reindexTaskNoteFile(this.file);
-      new Notice(createTranslator(this.plugin.settings.language)(this.mode === "create" ? "taskNoteCreated" : "taskNoteSaved"));
+      if (!result.deleted) {
+        new Notice(createTranslator(this.plugin.settings.language)(this.mode === "create" ? "taskNoteCreated" : "taskNoteSaved"));
+      }
       this.close();
     } catch (error) {
       this.busy = false;
       new Notice(error instanceof Error ? error.message : String(error));
     }
   }
-
-  private focusBodyStart(): void {
-    const view = this.leaf?.view;
-    if (!(view instanceof MarkdownView) || this.isClosed) return;
-    const bodyLine = noteBodyStartLine(view.getViewData());
-    view.editor.setCursor({ line: bodyLine, ch: 0 });
-    view.editor.focus();
-    view.editor.scrollIntoView(
-      {
-        from: { line: bodyLine, ch: 0 },
-        to: { line: bodyLine, ch: 0 }
-      },
-      true
-    );
-  }
-
-  private syncFrontmatterVisibility(visible: boolean): void {
-    const view = this.leaf?.view;
-    if (!(view instanceof MarkdownView)) return;
-    const currentEphemeralState =
-      typeof view.getEphemeralState === "function" ? view.getEphemeralState() : {};
-    view.setEphemeralState({
-      ...currentEphemeralState,
-      properties: {
-        ...((currentEphemeralState.properties as Record<string, unknown> | undefined) ?? {}),
-        visible
-      }
-    });
-  }
 }
 
 function isImeComposingEnterEvent(event: KeyboardEvent): boolean {
   return event.isComposing;
-}
-
-function createDetachedWorkspaceLeaf(app: TaskHubPlugin["app"]): WorkspaceLeaf {
-  type DetachedWorkspaceLeafConstructor = new (app: TaskHubPlugin["app"]) => WorkspaceLeaf;
-  return new (WorkspaceLeaf as unknown as DetachedWorkspaceLeafConstructor)(app);
-}
-
-function getWorkspaceLeafContainer(leaf: WorkspaceLeaf): HTMLElement {
-  return (leaf as WorkspaceLeaf & { containerEl: HTMLElement }).containerEl;
 }
 
 class CreateTaskModal extends Modal {
@@ -2947,9 +2976,10 @@ class CreateTaskModal extends Modal {
   private eventRecurrenceStartTouched = false;
   private detailsExpanded = false;
   private calendarTarget: CalendarDropTarget;
-  private creationKind: CalendarCreationKind;
+  private creationKind: CreateItemKind;
   private target: CalendarCreationTarget;
   private eventDurationMinutes: number;
+  private noteComposer: TaskHubNoteComposer | undefined;
 
   constructor(
     private readonly plugin: TaskHubPlugin,
@@ -2958,8 +2988,8 @@ class CreateTaskModal extends Modal {
   ) {
     super(plugin.app);
     this.calendarTarget = calendarTarget;
-    this.creationKind = plugin.settings.calendarCreationDefaultKind;
-    this.target = this.defaultTargetForKind(this.creationKind);
+    this.creationKind = this.initialCreationKind();
+    this.target = this.defaultTargetForKind(this.creationKind === "note" ? "task" : this.creationKind);
     const targetParts = calendarDropTargetParts(calendarTarget);
     this.eventDurationMinutes = validCalendarEventDuration(targetParts.durationMinutes ?? 60);
     this.eventRecurrenceStart = targetParts.dateKey;
@@ -2973,6 +3003,8 @@ class CreateTaskModal extends Modal {
     const t = createTranslator(this.plugin.settings.language);
     this.renderTitle(t);
     this.modalEl.addClass("task-hub-create-modal");
+    this.noteComposer?.destroy();
+    this.noteComposer = undefined;
     this.contentEl.empty();
 
     let submitButton: ButtonComponent | undefined;
@@ -2981,6 +3013,12 @@ class CreateTaskModal extends Modal {
       if (!text) return;
       submitButton?.setDisabled(true);
       try {
+        if (this.creationKind === "note") {
+          const note = await this.plugin.createDatedNote(toLocalDateKey(new Date()), text);
+          if (note) this.options.onDatedNoteCreated?.(note);
+          this.close();
+          return;
+        }
         await this.plugin.createTaskForDate(
           this.calendarTarget,
           text,
@@ -3005,16 +3043,33 @@ class CreateTaskModal extends Modal {
       .setName(t("calendarCreationKind"))
       .addDropdown((dropdown) => {
         populateCreationKindDropdown(dropdown.selectEl, t);
+        if (this.canCreateDatedNote()) dropdown.addOption("note", t("notes"));
         dropdown.setValue(this.creationKind).onChange((value) => {
-          this.creationKind = parseCreationKind(value);
-          this.target = this.defaultTargetForKind(this.creationKind);
+          this.creationKind = this.parseCreateItemKind(value);
+          if (this.creationKind !== "note") {
+            this.target = this.defaultTargetForKind(this.creationKind);
+          }
           this.render();
         });
       });
 
-    new Setting(this.contentEl)
-      .setName(t("taskCreationBody"))
-      .addText((text) => {
+    if (this.creationKind === "note") {
+      const bodyField = this.contentEl.createDiv({ cls: "task-hub-create-note-body-field" });
+      this.noteComposer = createTaskHubNoteComposer({
+        parent: bodyField,
+        value: this.taskText,
+        placeholder: t("noteCreationPlaceholder"),
+        onChange: (value) => {
+          this.taskText = value;
+        },
+        onSubmit: () => {
+          void submit();
+        }
+      });
+      bodyField.win.setTimeout(() => this.noteComposer?.focus(), 0);
+    } else {
+      const bodySetting = new Setting(this.contentEl).setName(t("taskCreationBody"));
+      bodySetting.addText((text) => {
         text.setPlaceholder(this.creationKind === "event" ? t("eventCreationPlaceholder") : t("taskCreationPlaceholder")).setValue(this.taskText).onChange((value) => {
           this.taskText = value;
         });
@@ -3028,6 +3083,7 @@ class CreateTaskModal extends Modal {
         });
         text.inputEl.win.setTimeout(() => text.inputEl.focus(), 0);
       });
+    }
 
     if (this.creationKind === "event") {
       const parts = durationInputParts(this.eventDurationMinutes);
@@ -3075,33 +3131,37 @@ class CreateTaskModal extends Modal {
       durationSetting.controlEl.createSpan({ cls: "task-hub-duration-unit", text: t("eventCreationDurationMinutes") });
     }
 
-    const timeInput = this.renderScheduleControls(t);
+    const timeInput = this.creationKind === "note" ? undefined : this.renderScheduleControls(t);
 
-    new Setting(this.contentEl)
-      .setName(t("taskCreationTarget"))
-      .setDesc(`${this.creationKind === "event" ? t("eventCreationDefaultTarget") : t("taskCreationDefaultTarget")}: ${creationTargetLabel(this.defaultTargetForKind(this.creationKind), this.plugin, t)}`)
-      .addDropdown((dropdown) => {
-        if (this.creationKind === "event") {
-          populateEventCreationTargetDropdown(dropdown.selectEl, this.plugin, t);
-        } else {
-          populateTaskCreationTargetDropdown(dropdown.selectEl, this.plugin, t);
-        }
-        dropdown.setValue(serializeCreationTarget(this.target)).onChange((value) => {
-          this.target = parseCreationTarget(value, this.creationKind);
-          this.render();
+    if (this.creationKind !== "note") {
+      new Setting(this.contentEl)
+        .setName(t("taskCreationTarget"))
+        .setDesc(`${this.creationKind === "event" ? t("eventCreationDefaultTarget") : t("taskCreationDefaultTarget")}: ${creationTargetLabel(this.defaultTargetForKind(this.creationKind), this.plugin, t)}`)
+        .addDropdown((dropdown) => {
+          if (this.creationKind === "event") {
+            populateEventCreationTargetDropdown(dropdown.selectEl, this.plugin, t);
+          } else {
+            populateTaskCreationTargetDropdown(dropdown.selectEl, this.plugin, t);
+          }
+          dropdown.setValue(serializeCreationTarget(this.target)).onChange((value) => {
+            this.target = parseCreationTarget(value, this.creationKind as CalendarCreationKind);
+            this.render();
+          });
         });
-      });
+    }
 
-    new Setting(this.contentEl)
-      .setName(t("editDetails"))
-      .addToggle((toggle) => {
-        toggle.setValue(this.detailsExpanded).onChange((value) => {
-          this.detailsExpanded = value;
-          this.render();
+    if (this.creationKind !== "note") {
+      new Setting(this.contentEl)
+        .setName(t("editDetails"))
+        .addToggle((toggle) => {
+          toggle.setValue(this.detailsExpanded).onChange((value) => {
+            this.detailsExpanded = value;
+            this.render();
+          });
         });
-      });
+    }
 
-    if (this.detailsExpanded) {
+    if (this.detailsExpanded && this.creationKind !== "note") {
       new Setting(this.contentEl)
         .setName(t("recurrence"))
         .addDropdown((dropdown) => {
@@ -3132,7 +3192,7 @@ class CreateTaskModal extends Modal {
           });
       }
 
-      this.renderAlertControls(t, timeInput);
+      if (timeInput) this.renderAlertControls(t, timeInput);
     }
 
     if (this.detailsExpanded && (this.target.type === "apple-reminders" || this.target.type === "apple-calendar" || this.target.type === "dida")) {
@@ -3146,29 +3206,38 @@ class CreateTaskModal extends Modal {
       notesSetting.settingEl.addClass("task-hub-create-textarea-setting");
     }
 
-    new Setting(this.contentEl)
+    const actionSetting = new Setting(this.contentEl)
       .addButton((button) => {
         submitButton = button;
-        button.setButtonText(t("add")).setCta().onClick(() => {
+        button.setButtonText(this.creationKind === "note" ? t("save") : t("add")).setCta().onClick(() => {
           void submit();
         });
       })
       .addButton((button) => {
         button.setButtonText(t("cancel")).onClick(() => this.close());
       });
+    actionSetting.settingEl.addClass("task-hub-create-action-setting");
   }
 
   onClose(): void {
+    this.noteComposer?.destroy();
+    this.noteComposer = undefined;
     this.contentEl.empty();
   }
 
   private renderTitle(t: ReturnType<typeof createTranslator>): void {
     this.titleEl.empty();
     this.titleEl.addClass("task-hub-create-modal-title");
-    this.titleEl.createSpan({ text: this.creationKind === "event" ? t("eventCreationTitle") : t("taskCreationTitle") });
+    this.titleEl.createSpan({
+      text: this.creationKind === "event"
+        ? t("eventCreationTitle")
+        : this.creationKind === "note"
+          ? t("noteCreationTitle")
+          : t("taskCreationTitle")
+    });
   }
 
-  private renderScheduleControls(t: ReturnType<typeof createTranslator>): HTMLInputElement {
+  private renderScheduleControls(t: ReturnType<typeof createTranslator>): HTMLInputElement | undefined {
     const schedule = new Setting(this.contentEl).setName(t("taskCreationTime"));
     schedule.settingEl.addClass("task-hub-create-schedule-setting");
     const datePicker = schedule.controlEl.createDiv({ cls: "task-hub-create-picker task-hub-create-date-picker" });
@@ -3272,6 +3341,22 @@ class CreateTaskModal extends Modal {
     return kind === "event"
       ? this.plugin.settings.calendarEventCreationDefaultTarget
       : this.plugin.settings.calendarTaskCreationDefaultTarget;
+  }
+
+  private canCreateDatedNote(): boolean {
+    return this.options.allowDatedNote === true && this.plugin.settings.datedNotes.enabled;
+  }
+
+  private initialCreationKind(): CreateItemKind {
+    if (this.options.initialKind === "note") {
+      return this.canCreateDatedNote() ? "note" : this.plugin.settings.calendarCreationDefaultKind;
+    }
+    return this.options.initialKind ?? this.plugin.settings.calendarCreationDefaultKind;
+  }
+
+  private parseCreateItemKind(value: string): CreateItemKind {
+    if (value === "note" && this.canCreateDatedNote()) return "note";
+    return parseCreationKind(value);
   }
 
   private updateEventDurationTarget(): void {

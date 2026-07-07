@@ -4,6 +4,7 @@ const os = require("os");
 const path = require("path");
 
 const originalLoad = Module._load;
+const projectRoot = path.join(__dirname, "..");
 const layoutReadyCallbacks = [];
 let expectedHelperPath = "";
 
@@ -290,6 +291,9 @@ const childProcess = {
 Module._load = function load(request, parent, isMain) {
   if (request === "obsidian") return obsidian;
   if (request === "child_process") return childProcess;
+  if (request.startsWith("@codemirror/") || request.startsWith("@lezer/")) {
+    return originalLoad.call(this, require.resolve(request, { paths: [projectRoot] }), parent, isMain);
+  }
   return originalLoad.call(this, request, parent, isMain);
 };
 

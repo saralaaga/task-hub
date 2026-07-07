@@ -28,6 +28,12 @@ export const DEFAULT_SETTINGS: TaskHubSettings = {
   calendarDayStartHour: 6,
   calendarDayEndHour: 22,
   taskCreationFilePath: "Task Hub.md",
+  datedNotes: {
+    enabled: false,
+    folder: "TaskHub/Notes",
+    defaultTitleTemplate: "YYYY-MM-DD Note",
+    openAfterCreate: false
+  },
   taskNotes: {
     enabled: false,
     notesFolder: "Task Hub Notes",
@@ -36,7 +42,6 @@ export const DEFAULT_SETTINGS: TaskHubSettings = {
     thinoFolder: "Thino",
     openNoteAfterCreate: true,
     showCountsInTaskList: true,
-    showFrontmatterInNoteModal: false,
     linkedNoteSubtasksEnabled: false
   },
   taskViewFilters: {
@@ -104,6 +109,7 @@ export const DEFAULT_SETTINGS: TaskHubSettings = {
 export function normalizeTaskHubSettings(loaded: Partial<TaskHubSettings> | null): TaskHubSettings {
   const loadedLocalApple = loaded?.localApple as Partial<TaskHubSettings["localApple"]> | undefined;
   const loadedDida = loaded?.dida as Partial<TaskHubSettings["dida"]> | undefined;
+  const datedNotes = normalizeDatedNotesSettings(loaded?.datedNotes);
   const loadedSchemaVersion = loaded?.settingsSchemaVersion ?? 1;
   const localAppleEnabled =
     loadedLocalApple?.enabled ??
@@ -117,7 +123,7 @@ export function normalizeTaskHubSettings(loaded: Partial<TaskHubSettings> | null
     ...(loaded ?? {}),
     settingsSchemaVersion: TASK_HUB_SETTINGS_SCHEMA_VERSION,
     language: isLanguage(loaded?.language) ? loaded.language : DEFAULT_SETTINGS.language,
-    defaultView: normalizeDefaultView(loaded?.defaultView),
+    defaultView: datedNotes.enabled || loaded?.defaultView !== "notes" ? normalizeDefaultView(loaded?.defaultView) : DEFAULT_SETTINGS.defaultView,
     lastSessionState: normalizeTaskHubLastSessionState(loaded?.lastSessionState, loaded?.defaultView, loaded?.taskViewFilters, loaded?.showCompletedByDefault),
     calendarTaskCreationEnabled: loaded?.calendarTaskCreationEnabled ?? DEFAULT_SETTINGS.calendarTaskCreationEnabled,
     calendarCreationDefaultKind: loaded?.calendarCreationDefaultKind ?? DEFAULT_SETTINGS.calendarCreationDefaultKind,
@@ -145,6 +151,7 @@ export function normalizeTaskHubSettings(loaded: Partial<TaskHubSettings> | null
       }
     }),
     taskCreationFilePath: loaded?.taskCreationFilePath ?? DEFAULT_SETTINGS.taskCreationFilePath,
+    datedNotes,
     taskNotes: normalizeTaskNotesSettings(loaded?.taskNotes),
     taskViewFilters: normalizeTaskViewFilters(loaded?.taskViewFilters, loaded?.showCompletedByDefault),
     taskListManualOrder: normalizeTaskListManualOrder(loaded?.taskListManualOrder),
@@ -438,14 +445,25 @@ function populateHourDropdown(selectEl: HTMLSelectElement, startHour: number, en
 }
 
 function normalizeTaskNotesSettings(loaded: Partial<TaskHubSettings["taskNotes"]> | undefined): TaskHubSettings["taskNotes"] {
+  const { showFrontmatterInNoteModal: _legacyShowFrontmatterInNoteModal, ...rest } =
+    (loaded ?? {}) as Partial<TaskHubSettings["taskNotes"]> & { showFrontmatterInNoteModal?: boolean };
   return {
     ...DEFAULT_SETTINGS.taskNotes,
-    ...(loaded ?? {}),
+    ...rest,
     defaultMode: loaded?.defaultMode === "thino-multi-file" ? "thino-multi-file" : DEFAULT_SETTINGS.taskNotes.defaultMode,
     notesFolder: loaded?.notesFolder ?? DEFAULT_SETTINGS.taskNotes.notesFolder,
     thinoFolder: loaded?.thinoFolder ?? DEFAULT_SETTINGS.taskNotes.thinoFolder,
-    showFrontmatterInNoteModal: loaded?.showFrontmatterInNoteModal ?? DEFAULT_SETTINGS.taskNotes.showFrontmatterInNoteModal,
     linkedNoteSubtasksEnabled: loaded?.linkedNoteSubtasksEnabled ?? DEFAULT_SETTINGS.taskNotes.linkedNoteSubtasksEnabled
+  };
+}
+
+function normalizeDatedNotesSettings(loaded: Partial<TaskHubSettings["datedNotes"]> | undefined): TaskHubSettings["datedNotes"] {
+  return {
+    ...DEFAULT_SETTINGS.datedNotes,
+    ...(loaded ?? {}),
+    folder: loaded?.folder ?? DEFAULT_SETTINGS.datedNotes.folder,
+    defaultTitleTemplate: loaded?.defaultTitleTemplate ?? DEFAULT_SETTINGS.datedNotes.defaultTitleTemplate,
+    openAfterCreate: loaded?.openAfterCreate ?? DEFAULT_SETTINGS.datedNotes.openAfterCreate
   };
 }
 
@@ -470,7 +488,7 @@ function normalizeTaskHubLastSessionState(
 ): TaskHubSettings["lastSessionState"] {
   if (!loaded || typeof loaded !== "object") return undefined;
   const candidate = loaded as Partial<TaskHubLastSessionState>;
-  const view = candidate.view === "tasks" || candidate.view === "calendar" || candidate.view === "tags"
+  const view = candidate.view === "tasks" || candidate.view === "calendar" || candidate.view === "tags" || candidate.view === "notes"
     ? candidate.view
     : normalizeDefaultView(defaultView);
   const calendarMode =
@@ -489,7 +507,7 @@ function normalizeTaskHubLastSessionState(
 }
 
 function normalizeDefaultView(value: unknown): TaskHubSettings["defaultView"] {
-  return value === "calendar" || value === "tags" || value === "tasks" ? value : DEFAULT_SETTINGS.defaultView;
+  return value === "calendar" || value === "tags" || value === "tasks" || value === "notes" ? value : DEFAULT_SETTINGS.defaultView;
 }
 
 function normalizePersistedDate(value: unknown): string | undefined {
@@ -555,7 +573,7 @@ function normalizeStoredDateBucket(value: unknown): TaskHubSettings["taskViewFil
 
 const SOFT_LOCAL_APPLE_COLORS = ["#d97757", "#c7925b", "#9aa66f", "#6f9f8f", "#6f94b8", "#8f83b5"];
 export const TASK_HUB_FEEDBACK_URL = "https://github.com/saralaaga/task-hub/issues/new";
-type SettingsPage = "overview" | "tasks" | "calendar" | "integrations" | "advanced";
+type SettingsPage = "overview" | "tasks" | "calendar" | "notes" | "integrations" | "advanced";
 type LocalAppleTab = "calendar" | "reminders";
 type CompactToggleItem = {
   name: string;
@@ -569,7 +587,7 @@ type CompactToggleGroupOptions = {
   className?: string;
 };
 
-const SETTINGS_PAGES: SettingsPage[] = ["overview", "tasks", "calendar", "integrations", "advanced"];
+const SETTINGS_PAGES: SettingsPage[] = ["overview", "tasks", "calendar", "notes", "integrations", "advanced"];
 
 export function openTaskHubFeedback(openUrl: (url: string) => void): void {
   openUrl(TASK_HUB_FEEDBACK_URL);
@@ -595,6 +613,7 @@ export class TaskHubSettingTab extends PluginSettingTab {
     if (this.settingsPage === "overview") this.displayOverviewPage(containerEl, t);
     else if (this.settingsPage === "tasks") this.displayTasksPage(containerEl, t);
     else if (this.settingsPage === "calendar") this.displayCalendarPage(containerEl, t);
+    else if (this.settingsPage === "notes") this.displayNotesPage(containerEl, t);
     else if (this.settingsPage === "integrations") this.displayIntegrationsPage(containerEl, t);
     else this.displayAdvancedPage(containerEl, t);
 
@@ -622,6 +641,7 @@ export class TaskHubSettingTab extends PluginSettingTab {
     if (page === "overview") return t("settingsPageOverview");
     if (page === "tasks") return t("settingsPageTasks");
     if (page === "calendar") return t("settingsPageCalendar");
+    if (page === "notes") return t("settingsPageNotes");
     if (page === "integrations") return t("settingsPageIntegrations");
     return t("settingsPageAdvanced");
   }
@@ -653,13 +673,19 @@ export class TaskHubSettingTab extends PluginSettingTab {
         dropdown
           .addOption("tasks", t("tasks"))
           .addOption("calendar", t("calendar"))
-          .addOption("tags", t("tags"))
-          .setValue(this.plugin.settings.defaultView)
+          .addOption("tags", t("tags"));
+        if (this.plugin.settings.datedNotes.enabled) {
+          dropdown.addOption("notes", t("notes"));
+        }
+        dropdown
+          .setValue(this.plugin.settings.defaultView === "notes" && !this.plugin.settings.datedNotes.enabled ? "tasks" : this.plugin.settings.defaultView)
           .onChange(async (value) => {
             this.plugin.settings.defaultView = value as TaskHubSettings["defaultView"];
             await this.plugin.saveSettings();
           });
       });
+
+    this.displayDatedNotesEnableToggle(basicSettingsGrid, t);
 
     new Setting(basicSettingsGrid)
       .setName(t("showCompletedByDefault"))
@@ -797,15 +823,6 @@ export class TaskHubSettingTab extends PluginSettingTab {
           });
         });
 
-      new Setting(taskNotesGrid)
-        .setName(t("taskNotesShowFrontmatter"))
-        .setDesc(t("taskNotesShowFrontmatterDesc"))
-        .addToggle((toggle) => {
-          toggle.setValue(this.plugin.settings.taskNotes.showFrontmatterInNoteModal).onChange(async (value) => {
-            this.plugin.settings.taskNotes.showFrontmatterInNoteModal = value;
-            await this.plugin.saveSettings();
-          });
-        });
     }
 
     const sendTargetOptions = currentTaskSendTargetOptions(this.plugin, t);
@@ -840,6 +857,53 @@ export class TaskHubSettingTab extends PluginSettingTab {
             .map((entry) => entry.trim())
             .filter(Boolean);
           await this.plugin.saveSettings();
+        });
+      });
+  }
+
+  private displayNotesPage(containerEl: HTMLElement, t: Translator): void {
+    const section = containerEl.createDiv({ cls: "task-hub-settings-section task-hub-dated-notes-section" });
+
+    this.displayDatedNotesEnableToggle(section, t);
+
+    if (!this.plugin.settings.datedNotes.enabled) return;
+
+    const grid = section.createDiv({ cls: "task-hub-settings-grid task-hub-settings-grid--joined" });
+    new Setting(grid)
+      .setName(t("datedNotesFolder"))
+      .setDesc(t("datedNotesFolderDesc"))
+      .addText((text) => {
+        text.setPlaceholder(DEFAULT_SETTINGS.datedNotes.folder).setValue(this.plugin.settings.datedNotes.folder).onChange(async (value) => {
+          this.plugin.settings.datedNotes.folder = value;
+          await this.plugin.saveSettings();
+        });
+      });
+
+    new Setting(grid)
+      .setName(t("datedNotesDefaultTitleTemplate"))
+      .setDesc(t("datedNotesDefaultTitleTemplateDesc"))
+      .addText((text) => {
+        text.setPlaceholder(DEFAULT_SETTINGS.datedNotes.defaultTitleTemplate).setValue(this.plugin.settings.datedNotes.defaultTitleTemplate).onChange(async (value) => {
+          this.plugin.settings.datedNotes.defaultTitleTemplate = value;
+          await this.plugin.saveSettings();
+        });
+      });
+
+  }
+
+  private displayDatedNotesEnableToggle(containerEl: HTMLElement, t: Translator): void {
+    new Setting(containerEl)
+      .setName(t("datedNotesEnable"))
+      .setDesc(t("datedNotesEnableDesc"))
+      .addToggle((toggle) => {
+        toggle.setValue(this.plugin.settings.datedNotes.enabled).onChange(async (value) => {
+          this.plugin.settings.datedNotes.enabled = value;
+          if (!value && this.plugin.settings.defaultView === "notes") {
+            this.plugin.settings.defaultView = "tasks";
+          }
+          await this.plugin.saveSettings();
+          this.display({ preserveScroll: true });
+          this.plugin.refreshOpenViews();
         });
       });
   }

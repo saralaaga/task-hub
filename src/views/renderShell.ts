@@ -6,7 +6,7 @@ import type { TaskIndexStats } from "../indexing/taskIndex";
 import { createTagChipEditor } from "./tagChipEditor";
 import type { TaskHubTagInputElement } from "./tagInputSuggest";
 
-export type DashboardView = "tasks" | "calendar" | "tags";
+export type DashboardView = "tasks" | "calendar" | "tags" | "notes";
 
 export type ShellState = {
   view: DashboardView;
@@ -18,6 +18,7 @@ export type ShellState = {
   unscheduledPanelOpen?: boolean;
   unscheduledTaskCount?: number;
   animateViewTransition?: boolean;
+  datedNotesEnabled?: boolean;
   t: Translator;
 };
 
@@ -63,7 +64,8 @@ export function renderShell(container: HTMLElement, state: ShellState, handlers:
 
   const toolbar = root.createDiv({ cls: "task-hub-toolbar" });
   const viewSwitch = toolbar.createDiv({ cls: "task-hub-view-switch" });
-  for (const view of ["tasks", "calendar", "tags"] as DashboardView[]) {
+  const views: DashboardView[] = state.datedNotesEnabled ? ["tasks", "calendar", "tags", "notes"] : ["tasks", "calendar", "tags"];
+  for (const view of views) {
     const isActive = state.view === view;
     const button = viewSwitch.createEl("button", {
       cls: `task-hub-view-switch-button ${isActive ? "is-active mod-cta" : ""}`,
@@ -81,18 +83,23 @@ export function renderShell(container: HTMLElement, state: ShellState, handlers:
 }
 
 function renderFilters(container: HTMLElement, state: ShellState, handlers: ShellHandlers, options: ShellRenderOptions): void {
-  const showCompleted = container.createEl("label", { cls: "task-hub-completed-toggle" });
-  const showCompletedCheckbox = showCompleted.createEl("input", { type: "checkbox" });
-  showCompletedCheckbox.checked = state.filters.status !== "open";
-  showCompletedCheckbox.addEventListener("change", () => {
-    handlers.onStatusChange(showCompletedCheckbox.checked ? "all" : "open");
-  });
-  showCompleted.createSpan({ text: state.t("showCompletedInView") });
+  if (state.view !== "notes") {
+    const showCompleted = container.createEl("label", { cls: "task-hub-completed-toggle" });
+    const showCompletedCheckbox = showCompleted.createEl("input", { type: "checkbox" });
+    showCompletedCheckbox.checked = state.filters.status !== "open";
+    showCompletedCheckbox.addEventListener("change", () => {
+      handlers.onStatusChange(showCompletedCheckbox.checked ? "all" : "open");
+    });
+    showCompleted.createSpan({ text: state.t("showCompletedInView") });
+  }
 
   const filters = container.createDiv({ cls: `task-hub-filter-strip ${state.view === "tasks" ? "task-hub-action-strip" : ""}` });
-  if (state.view !== "tasks") {
+  if (state.view !== "tasks" && state.view !== "notes") {
     renderConditionMenu(filters, state, handlers, options);
     renderSearch(filters, state, handlers);
+  }
+  if (state.view === "notes") {
+    renderSearch(filters, state, handlers, state.t("searchNotes"));
   }
 
   const createTask = filters.createEl("button", { cls: "task-hub-create-task-button" });
@@ -104,18 +111,20 @@ function renderFilters(container: HTMLElement, state: ShellState, handlers: Shel
     handlers.onCreateTask();
   });
 
-  const unscheduled = filters.createEl("button", {
-    cls: `task-hub-unscheduled-toggle ${state.unscheduledPanelOpen ? "is-active" : ""}`,
-    text: state.t("unscheduled")
-  });
-  unscheduled.setAttr("aria-label", state.t("unscheduledTasks"));
-  unscheduled.setAttr("title", state.t("unscheduledTasks"));
-  if ((state.unscheduledTaskCount ?? 0) > 0) {
-    unscheduled.createSpan({ cls: "task-hub-unscheduled-toggle-count", text: String(state.unscheduledTaskCount) });
+  if (state.view !== "notes") {
+    const unscheduled = filters.createEl("button", {
+      cls: `task-hub-unscheduled-toggle ${state.unscheduledPanelOpen ? "is-active" : ""}`,
+      text: state.t("unscheduled")
+    });
+    unscheduled.setAttr("aria-label", state.t("unscheduledTasks"));
+    unscheduled.setAttr("title", state.t("unscheduledTasks"));
+    if ((state.unscheduledTaskCount ?? 0) > 0) {
+      unscheduled.createSpan({ cls: "task-hub-unscheduled-toggle-count", text: String(state.unscheduledTaskCount) });
+    }
+    unscheduled.addEventListener("click", () => {
+      handlers.onUnscheduledToggle();
+    });
   }
-  unscheduled.addEventListener("click", () => {
-    handlers.onUnscheduledToggle();
-  });
 
   const rescanLabel = state.isRefreshing ? state.t("rescanning") : state.t("rescan");
   const rescan = filters.createEl("button", { cls: `task-hub-icon-button task-hub-rescan-button ${state.isRefreshing ? "is-refreshing" : ""}` });
@@ -307,12 +316,12 @@ function bindConditionMenuOutsideClick(menu: HTMLElement): void {
   menu.addEventListener("toggle", syncListener);
 }
 
-function renderSearch(container: HTMLElement, state: TaskFilterControlState, handlers: Pick<ShellHandlers, "onTextQueryChange">): void {
+function renderSearch(container: HTMLElement, state: TaskFilterControlState, handlers: Pick<ShellHandlers, "onTextQueryChange">, placeholder?: string): void {
   const searchActive = state.filters.textQuery.trim().length > 0;
   const search = container.createDiv({ cls: "task-hub-search-group" });
   const text = search.createEl("input", {
     cls: "task-hub-search-control",
-    attr: { placeholder: state.t("searchTasks") },
+    attr: { placeholder: placeholder ?? state.t("searchTasks") },
     type: "search",
     value: state.filters.textQuery
   });

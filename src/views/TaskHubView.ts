@@ -14,6 +14,7 @@ import { renderShell, type DashboardView } from "./renderShell";
 import { syncVisibleSources } from "./sourceVisibility";
 import { renderTagsView } from "./renderTagsView";
 import { renderTasksView } from "./renderTasksView";
+import { renderDatedNotesView } from "./renderDatedNotesView";
 import { decorateRenderedTaskNoteTags, renderPlainTaskNoteBody } from "./renderTaskNoteBody";
 import { bindTaskHubTagInputSuggest, collectObsidianTags, type TaskHubTagInputElement } from "./tagInputSuggest";
 
@@ -46,6 +47,10 @@ export class TaskHubView extends ItemView {
   private expandedTaskIds = new Set<string>();
   private expandingTaskIds = new Set<string>();
   private activeSmartListId: string | undefined;
+  private selectedDatedNotePath: string | undefined;
+  private datedNoteQuery = "";
+  private pendingDatedNoteDetailScroll = false;
+  private pendingDatedNoteDetailTransition = false;
   private lastRenderedDashboardView: DashboardView | undefined;
   private lastTaskViewTransitionKey: string | undefined;
   private pendingExpandedTaskScrollId: string | undefined;
@@ -106,6 +111,9 @@ export class TaskHubView extends ItemView {
     const baseTasks = this.plugin.getTasks();
     const allTasks = this.withLinkedNoteSubtasks(baseTasks);
     const now = new Date();
+    if (this.view === "notes" && !this.plugin.settings.datedNotes.enabled) {
+      this.view = "tasks";
+    }
     const unscheduledTasks = collectUnscheduledTasks(allTasks, this.filters, now, (task) => this.canScheduleTask(task));
     const calendarUnscheduledTasks = collectCalendarUnscheduledTasks(
       allTasks,
@@ -133,11 +141,12 @@ export class TaskHubView extends ItemView {
     const sourceFilters = taskSourceFilterOptions(allTasks, this.filters, new Date(), t);
     const renderedDashboardView = this.view;
     const animateViewTransition = this.lastRenderedDashboardView !== undefined && this.lastRenderedDashboardView !== renderedDashboardView;
+    const shellFilters = this.view === "notes" ? { ...this.filters, textQuery: this.datedNoteQuery } : this.filters;
     const main = renderShell(
       container,
       {
         view: this.view,
-        filters: this.filters,
+        filters: shellFilters,
         availableTags: collectTags(allTasks),
         sourceFilters,
         stats: this.plugin.taskIndex.getStats(),
@@ -145,6 +154,7 @@ export class TaskHubView extends ItemView {
         unscheduledPanelOpen: this.view === "calendar" && this.unscheduledPanelOpen,
         unscheduledTaskCount: unscheduledTasks.length,
         animateViewTransition,
+        datedNotesEnabled: this.plugin.settings.datedNotes.enabled,
         t
       },
       {
@@ -181,12 +191,50 @@ export class TaskHubView extends ItemView {
           this.updateFilters({ ...this.filters, sourceQuery: source === "all" ? "" : source });
         },
         onTextQueryChange: (textQuery) => {
+          if (this.view === "notes") {
+            this.datedNoteQuery = textQuery;
+            this.render({ preserveContentScroll: true });
+            return;
+          }
           this.updateFilters({ ...this.filters, textQuery });
         }
       },
       { bindTagInputSuggest }
     );
     this.lastRenderedDashboardView = renderedDashboardView;
+
+    if (this.view === "notes") {
+      renderDatedNotesView(
+        main,
+        this.plugin.getDatedNotes(),
+        {
+          selectedPath: this.selectedDatedNotePath,
+          query: this.datedNoteQuery,
+          t,
+          animateDetailTransition: this.pendingDatedNoteDetailTransition
+        },
+        {
+          onSelectNote: (note) => {
+            if (this.selectedDatedNotePath === note.path) return;
+            this.selectedDatedNotePath = note.path;
+            this.pendingDatedNoteDetailScroll = true;
+            this.pendingDatedNoteDetailTransition = true;
+            this.render({ preserveTaskListScroll: true, preserveContentScroll: true });
+          },
+          onOpenNoteSource: (path) => void this.plugin.openDatedNoteSource(path)
+        },
+        {
+          renderNoteMarkdown: (noteContainer, body, sourcePath) => this.renderNoteMarkdown(noteContainer, body, sourcePath)
+        }
+      );
+      this.restoreContentScroll(options);
+      if (this.pendingDatedNoteDetailScroll) {
+        scrollDatedNoteDetailToTop(main);
+        this.pendingDatedNoteDetailScroll = false;
+      }
+      this.pendingDatedNoteDetailTransition = false;
+      return;
+    }
 
     if (this.view === "tasks") {
       const now = new Date();
@@ -569,6 +617,15 @@ export class TaskHubView extends ItemView {
   private openCreateTaskFromToolbar(): void {
     const activeSmartList = this.activeSmartList();
     this.plugin.openCreateTaskModal(toLocalDateKey(new Date()), {
+      allowDatedNote: this.plugin.settings.datedNotes?.enabled === true,
+      initialKind: this.view === "notes" && this.plugin.settings.datedNotes?.enabled === true ? "note" : undefined,
+      onDatedNoteCreated: (note) => {
+        this.view = "notes";
+        this.selectedDatedNotePath = note.path;
+        this.datedNoteQuery = "";
+        this.persistSessionState();
+        this.render({ preserveContentScroll: true });
+      },
       ...(activeSmartList
         ? {
             onTaskCreated: (task) => this.addTasksToSmartList(activeSmartList, [task])
@@ -1016,6 +1073,12 @@ export function restoreContentScrollAfterRender(
 ): void {
   if (!options.preserveScroll || !container) return;
   container.scrollTop = options.scrollTop;
+}
+
+export function scrollDatedNoteDetailToTop(container: HTMLElement | undefined): void {
+  const detail = container?.querySelector<HTMLElement>(".task-hub-dated-note-detail");
+  if (!detail) return;
+  detail.scrollTop = 0;
 }
 
 export function scrollExpandedTaskIntoView(

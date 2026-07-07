@@ -362,7 +362,8 @@ function createSettingTab(settings = DEFAULT_SETTINGS): TaskHubSettingTab {
     canConvertAppleCalendarAndReminders: () => false,
     notifyLocalAppleConversionDisabled: jest.fn(),
     confirmRiskySourceDeletionSetting: jest.fn(async () => true),
-    confirmRiskyAppleConversionSetting: jest.fn(async () => true)
+    confirmRiskyAppleConversionSetting: jest.fn(async () => true),
+    refreshOpenViews: jest.fn()
   };
   const tab = new TaskHubSettingTab(app, plugin as never);
   Object.defineProperty(tab, "containerEl", {
@@ -389,6 +390,17 @@ describe("TaskHubSettingTab", () => {
     expect(tab.containerEl.textContent).not.toContain("Feedback");
     expect(tab.containerEl.textContent).not.toContain("Local Apple");
     expect(tab.containerEl.textContent).not.toContain("API token");
+  });
+
+  it("shows the dated notes enable toggle on the overview page", () => {
+    const tab = createSettingTab();
+
+    tab.display();
+
+    const notesSetting = Array.from(tab.containerEl.querySelectorAll(".setting-item"))
+      .find((setting) => setting.textContent.includes("Notes") && setting.textContent.includes("YAML dates"));
+    expect(notesSetting).toBeDefined();
+    expect(notesSetting?.querySelector(".checkbox-toggle")).not.toBeNull();
   });
 
   it("moves feedback into the advanced settings page", () => {
@@ -466,11 +478,12 @@ describe("TaskHubSettingTab", () => {
     expect(tab.containerEl.querySelector(".task-hub-task-notes-config")).not.toBeNull();
     expect(tab.containerEl.querySelector(".task-hub-task-notes-primary")).not.toBeNull();
     expect(tab.containerEl.querySelector(".task-hub-task-notes-section")).not.toBeNull();
-    expect(tab.containerEl.querySelector(".task-hub-task-notes-primary")?.querySelectorAll(".setting-item")).toHaveLength(8);
+    expect(tab.containerEl.querySelector(".task-hub-task-notes-primary")?.querySelectorAll(".setting-item")).toHaveLength(7);
     expect(tab.containerEl.querySelector(".task-hub-settings-compact-grid")).toBeNull();
     expect(tab.containerEl.querySelector(".task-hub-task-ignored-paths-grid")).not.toBeNull();
     expect(tab.containerEl.textContent).toContain("Task Hub notes folder");
     expect(tab.containerEl.textContent).toContain("Thino notes folder");
+    expect(tab.containerEl.textContent).not.toContain("Show note metadata in editor");
   });
 
   it("renders Local Apple menus and child settings in line-based groups", () => {
@@ -556,7 +569,6 @@ describe("normalizeTaskHubSettings", () => {
       thinoFolder: "Thino",
       openNoteAfterCreate: true,
       showCountsInTaskList: true,
-      showFrontmatterInNoteModal: false,
       linkedNoteSubtasksEnabled: false
     });
     expect(settings.taskViewFilters).toEqual({

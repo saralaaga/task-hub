@@ -1,10 +1,11 @@
 import type { Language } from "./i18n";
 import type { DateBucket } from "./calendar/dateBuckets";
 import type { TaskNoteSettings } from "./taskNotes";
+import type { DatedNoteSettings } from "./datedNotes";
 import type { RecurrenceEditScope } from "./recurrence";
 
 export type TaskStatusFilter = "open" | "completed" | "all";
-export type DefaultView = "tasks" | "calendar" | "tags";
+export type DefaultView = "tasks" | "calendar" | "tags" | "notes";
 export type WeekStart = "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday" | "sunday";
 export type TaskSource = "vault" | "apple-reminders" | "dida";
 export type CalendarTimeScale = "fit" | "hour" | "half" | "quarter";
@@ -276,6 +277,7 @@ export type TaskHubSettings = {
   calendarDayStartHour: number;
   calendarDayEndHour: number;
   taskCreationFilePath: string;
+  datedNotes: DatedNoteSettings;
   taskNotes: TaskNoteSettings;
   taskViewFilters: TaskViewFilterSettings;
   taskListManualOrder: TaskListManualOrder;

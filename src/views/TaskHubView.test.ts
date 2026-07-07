@@ -9,6 +9,7 @@ import {
   reconcileVisibleTaskSelection,
   restoreContentScrollAfterRender,
   restoreTaskHubSessionState,
+  scrollDatedNoteDetailToTop,
   scrollExpandedTaskIntoView,
   shouldHandleTaskHubUndoShortcut
 } from "./TaskHubView";
@@ -264,6 +265,22 @@ describe("restoreContentScrollAfterRender", () => {
     restoreContentScrollAfterRender(container, { scrollTop: 280 });
 
     expect(container.scrollTop).toBe(12);
+  });
+});
+
+describe("scrollDatedNoteDetailToTop", () => {
+  it("resets only the dated note detail pane after switching notes", () => {
+    const detail = { scrollTop: 180 };
+    const container = {
+      scrollTop: 64,
+      querySelector: jest.fn(() => detail)
+    };
+
+    scrollDatedNoteDetailToTop(container as unknown as HTMLElement);
+
+    expect(detail.scrollTop).toBe(0);
+    expect(container.scrollTop).toBe(64);
+    expect(container.querySelector).toHaveBeenCalledWith(".task-hub-dated-note-detail");
   });
 });
 
@@ -755,6 +772,40 @@ describe("TaskHubView smart list interactions", () => {
     });
     expect(plugin.saveSettings).toHaveBeenCalled();
     expect(render).toHaveBeenCalledWith({ preserveTaskListScroll: true, preserveContentScroll: true });
+  });
+
+  it("selects the created dated note in the notes view without opening a source tab", () => {
+    const plugin = {
+      settings: {
+        defaultView: "tasks",
+        language: "en",
+        taskViewFilters: fallbackFilters(),
+        lastSessionState: undefined,
+        smartLists: [],
+        datedNotes: { enabled: true }
+      },
+      openCreateTaskModal: jest.fn(),
+      saveSettings: jest.fn(async () => undefined)
+    };
+    const view = new TaskHubView({} as never, plugin as never);
+    const render = jest.spyOn(view as unknown as { render(options?: unknown): void }, "render").mockImplementation(() => undefined);
+    Object.assign(view, { view: "notes" });
+
+    (view as unknown as { openCreateTaskFromToolbar(): void }).openCreateTaskFromToolbar();
+    const createOptions = plugin.openCreateTaskModal.mock.calls[0]?.[1];
+    expect(createOptions.initialKind).toBe("note");
+    createOptions.onDatedNoteCreated({
+      path: "TaskHub/Notes/today.md",
+      date: "2026-07-07",
+      title: "Today",
+      body: "Today",
+      bodyStartLine: 10,
+      tags: [],
+      createdAt: "2026-07-07T10:00:00.000Z"
+    });
+
+    expect((plugin.settings.lastSessionState as { view?: string } | undefined)?.view).toBe("notes");
+    expect(render).toHaveBeenLastCalledWith({ preserveContentScroll: true });
   });
 
   it("removes dropped tasks from the active smart list using exclusion references", async () => {
