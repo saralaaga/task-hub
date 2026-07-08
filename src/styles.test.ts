@@ -467,13 +467,10 @@ describe("Task Hub styles", () => {
     const timeRule = styles.match(/\.task-hub-calendar-detail-time-row\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const alertRule = styles.match(/\.task-hub-reminder-alert-row,\s*\.task-hub-create-alert-row\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const headerWithSelectRule = styles.match(/\.task-hub-calendar-detail-header\.has-calendar-select\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
-    const titleWithCheckboxRule = styles.match(/\.task-hub-calendar-detail-title\.has-complete-checkbox\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const eventTitleRule = styles.match(/(?:^|\n)\.task-hub-calendar-detail-title\.is-event\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const eventTitleBeforeRule = styles.match(/\.task-hub-calendar-detail-title\.is-event::before\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const eventTitleTextRule = styles.match(/\.task-hub-calendar-detail-title\.is-event\s+\.task-hub-calendar-detail-title-text\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const eventTitleLogoRule = styles.match(/\.task-hub-calendar-detail-title\.is-event\s+\.task-hub-calendar-detail-logo\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
-    const titleCheckboxCellRule = styles.match(/\.task-hub-calendar-detail-title-check-cell\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
-    const titleCheckboxRule = styles.match(/\.task-hub-calendar-detail-title-check-cell\s+\.task-hub-detail-complete-checkbox\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const titleTextRule = styles.match(/(?:^|\n)\.task-hub-calendar-detail-title-text\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const headerControlsRule = styles.match(/\.task-hub-calendar-detail-header-controls\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const headerSelectRule = styles.match(/\.task-hub-calendar-detail-header-select\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
@@ -481,6 +478,7 @@ describe("Task Hub styles", () => {
     const popoverRule = styles.match(/\.task-hub-calendar-detail-popover\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const popoverKeyframes = styles.match(/@keyframes task-hub-calendar-detail-popover-enter\s*\{(?<body>[\s\S]+?)\n\}/)?.groups?.body ?? "";
     const detailRowRule = styles.match(/\.task-hub-detail-row\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const detailIconRowRule = styles.match(/\.task-hub-detail-row\.has-icon\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const detailControlCheckboxRule = styles.match(/\.task-hub-calendar-detail-row\s+\.task-hub-detail-control\s+input\[type="checkbox"\]\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const reducedMotionRule = styles.match(/@media \(prefers-reduced-motion: reduce\)\s*\{(?<body>[\s\S]+?)\n\}/)?.groups?.body ?? "";
 
@@ -488,7 +486,8 @@ describe("Task Hub styles", () => {
     expect(popoverRule).toContain("transform-origin: 32px 32px");
     expect(popoverKeyframes).toContain("transform: translateY(10px) scale(0.96)");
     expect(reducedMotionRule).toContain(".task-hub-calendar-detail-popover");
-    expect(detailRowRule).toContain("grid-template-columns: 36px minmax(0, 1fr) minmax(0, 3fr)");
+    expect(detailRowRule).toContain("grid-template-columns: minmax(0, 1fr) minmax(0, 3fr)");
+    expect(detailIconRowRule).toContain("grid-template-columns: 36px minmax(0, 1fr) minmax(0, 3fr)");
     expect(detailControlCheckboxRule).toContain("height: 18px");
     expect(detailControlCheckboxRule).toContain("min-height: 18px");
     expect(detailControlCheckboxRule).toContain("width: 18px");
@@ -497,20 +496,11 @@ describe("Task Hub styles", () => {
     expect(timeRule).toContain("grid-template-columns: minmax(0, 1fr) minmax(0, 1fr)");
     expect(alertRule).toContain("grid-template-columns: minmax(0, 1fr) minmax(0, 1fr)");
     expect(headerWithSelectRule).toContain("grid-template-columns: minmax(0, 1fr) minmax(96px, 148px) 32px");
-    expect(titleWithCheckboxRule).toContain("gap: 10px");
     expect(eventTitleRule).toContain("display: grid");
     expect(eventTitleRule).toContain("grid-template-columns: 36px minmax(0, max-content) 28px minmax(0, 1fr)");
     expect(eventTitleBeforeRule).toContain('content: ""');
     expect(eventTitleTextRule).toContain("grid-column: 2");
     expect(eventTitleLogoRule).toContain("grid-column: 3");
-    expect(titleCheckboxCellRule).toContain("flex: 0 0 36px");
-    expect(titleCheckboxCellRule).toContain("justify-content: center");
-    expect(titleCheckboxRule).toContain("accent-color: var(--task-hub-item-color");
-    expect(titleCheckboxRule).toContain("height: 18px");
-    expect(titleCheckboxRule).toContain("min-height: 18px");
-    expect(titleCheckboxRule).toContain("width: 18px");
-    expect(titleCheckboxRule).toContain("padding: 0");
-    expect(titleCheckboxRule).toContain("margin: 0");
     expect(titleTextRule).toContain("text-overflow: ellipsis");
     expect(headerControlsRule).toContain("grid-column: 2");
     expect(headerControlsRule).toContain("grid-row: 1");
@@ -747,22 +737,24 @@ describe("Task Hub styles", () => {
   it("keeps task detail reminder controls aligned with the shared input column", () => {
     const styles = readFileSync(path.join(__dirname, "styles.css"), "utf8");
     const detailRowRule = styles.match(/\.task-hub-detail-row\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const detailIconRowRule = styles.match(/\.task-hub-detail-row\.has-icon\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const detailHeaderRule = styles.match(/\.task-hub-detail-header\.task-hub-detail-title-header\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const detailHeaderLogoRule = styles.match(/\.task-hub-detail-header-logo-cell\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
-    const detailHeaderSpacerRule = styles.match(/\.task-hub-detail-header-spacer\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const reminderDetailOverride = styles.match(/\.task-hub-reminder-alert-row\.task-hub-detail-row\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const detailEditorRule = styles.match(/\.task-hub-detail-editor\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const detailExtraRule = styles.match(/\.task-hub-detail-extra\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const detailExtraExpandingRule = styles.match(/\.task-hub-detail-extra\.is-expanding\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const detailExtraHiddenRule = styles.match(/\.task-hub-detail-extra\.is-hidden,\s*\.task-hub-detail-extra\.is-opening,\s*\.task-hub-detail-extra\.is-closing\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const autoGrowRule = styles.match(/\.task-hub-detail-control textarea\.task-hub-auto-grow-textarea\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const toggleControlRule = styles.match(/\.task-hub-detail-toggle-row\s+\.task-hub-detail-control\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const toggleRule = styles.match(/\.task-hub-detail-control\s+input\.task-hub-detail-extra-toggle\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const reducedMotionRule = styles.match(/@media \(prefers-reduced-motion: reduce\)\s*\{(?<body>[\s\S]+?)\n\}/)?.groups?.body ?? "";
 
-    expect(detailRowRule).toContain("grid-template-columns: 36px minmax(0, 1fr) minmax(0, 3fr)");
-    expect(detailHeaderRule).toContain("grid-template-columns: 36px max-content 28px minmax(0, 1fr)");
+    expect(detailRowRule).toContain("grid-template-columns: minmax(0, 1fr) minmax(0, 3fr)");
+    expect(detailIconRowRule).toContain("grid-template-columns: 36px minmax(0, 1fr) minmax(0, 3fr)");
+    expect(detailHeaderRule).toContain("grid-template-columns: minmax(0, 1fr) minmax(0, 3fr)");
     expect(detailHeaderLogoRule).toContain("justify-content: flex-start");
     expect(detailHeaderLogoRule).toContain("min-height: 32px");
-    expect(detailHeaderSpacerRule).toContain("min-width: 0");
     expect(reminderDetailOverride).not.toContain("grid-template-columns");
     expect(detailEditorRule).toContain("gap: 8px");
     expect(detailExtraRule).toContain("display: grid");
@@ -774,6 +766,12 @@ describe("Task Hub styles", () => {
     expect(autoGrowRule).toContain("min-height: 34px");
     expect(autoGrowRule).toContain("overflow-y: auto");
     expect(autoGrowRule).toContain("resize: none");
+    expect(toggleControlRule).toContain("display: flex");
+    expect(toggleRule).toContain("appearance: none");
+    expect(toggleRule).toContain("-webkit-appearance: none");
+    expect(toggleRule).toContain("background-image: none");
+    expect(toggleRule).toContain("border-radius: 999px");
+    expect(toggleRule).toContain("width: 40px");
     expect(reducedMotionRule).toContain(".task-hub-detail-extra.is-expanding");
   });
 
@@ -825,9 +823,11 @@ describe("Task Hub styles", () => {
     const dayUnscheduledRule = styles.match(/\.task-hub-calendar-day-unscheduled\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const taskDetailRule = styles.match(/\.task-hub-calendar-day-task-detail\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const taskDetailRowRule = styles.match(/\.task-hub-calendar-day-task-detail \.task-hub-detail-row\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const taskDetailIconRowRule = styles.match(/\.task-hub-calendar-day-task-detail \.task-hub-detail-row\.has-icon\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const taskSendControlRule = styles.match(/\.task-hub-calendar-day-task-detail \.task-hub-send-control\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const eventDetailRule = styles.match(/\.task-hub-calendar-day-event-detail\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const eventDetailRowRule = styles.match(/\.task-hub-calendar-day-event-detail \.task-hub-calendar-detail-row\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const eventDetailIconRowRule = styles.match(/\.task-hub-calendar-day-event-detail \.task-hub-calendar-detail-row\.has-icon\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const eventTitleRule = styles.match(/\.task-hub-calendar-day-event-detail \.task-hub-calendar-detail-title\.is-event\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const weekdayRule = styles.match(/\.task-hub-calendar-mini-month-weekdays > span\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const miniGridRule = styles.match(/\.task-hub-calendar-mini-month-weekdays,\s*\.task-hub-calendar-mini-month-grid\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
@@ -856,11 +856,13 @@ describe("Task Hub styles", () => {
     expect(dayUnscheduledRule).toContain("overflow: hidden");
     expect(taskDetailRule).toContain("--task-hub-detail-label-width: 60px");
     expect(taskDetailRule).toContain("grid-template-columns: minmax(0, 1fr)");
-    expect(taskDetailRowRule).toContain("grid-template-columns: 28px minmax(0, var(--task-hub-detail-label-width, 60px)) minmax(0, 1fr)");
-    expect(taskSendControlRule).toContain("grid-template-columns: 28px max-content minmax(0, 1fr)");
+    expect(taskDetailRowRule).toContain("grid-template-columns: minmax(0, var(--task-hub-detail-label-width, 60px)) minmax(0, 1fr)");
+    expect(taskDetailIconRowRule).toContain("grid-template-columns: 28px minmax(0, var(--task-hub-detail-label-width, 60px)) minmax(0, 1fr)");
+    expect(taskSendControlRule).toContain("grid-template-columns: max-content minmax(0, 1fr)");
     expect(eventDetailRule).toContain("--task-hub-detail-label-width: 60px");
     expect(eventDetailRule).toContain("grid-template-columns: minmax(0, 1fr)");
-    expect(eventDetailRowRule).toContain("grid-template-columns: 28px minmax(0, var(--task-hub-detail-label-width, 60px)) minmax(0, 1fr)");
+    expect(eventDetailRowRule).toContain("grid-template-columns: minmax(0, var(--task-hub-detail-label-width, 60px)) minmax(0, 1fr)");
+    expect(eventDetailIconRowRule).toContain("grid-template-columns: 28px minmax(0, var(--task-hub-detail-label-width, 60px)) minmax(0, 1fr)");
     expect(eventTitleRule).toContain("grid-template-columns: 28px minmax(0, max-content) 28px minmax(0, 1fr)");
     expect(weekdayRule).toContain("white-space: nowrap");
     expect(miniMonthTitleRule).toContain("font-weight: 500");

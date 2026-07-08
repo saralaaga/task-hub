@@ -1237,15 +1237,9 @@ export function renderTaskDetails(
     if (color) setCssProps(details, { "--task-hub-source-color": color });
   }
   const header = details.createDiv({ cls: "task-hub-detail-header task-hub-detail-row task-hub-detail-title-header" });
-  const headerIcon = header.createDiv({ cls: "task-hub-detail-icon-cell" });
-  if (task) {
-    const canHeaderToggle = task.source === "vault" || (task.source === "apple-reminders" && options.allowAppleReminderWriteback) || (task.source === "dida" && Boolean(options.allowDidaWriteback));
-    renderTaskDetailCompleteCheckbox(headerIcon, task, canHeaderToggle, handlers, t);
-  }
   header.createEl("h3", { cls: "task-hub-detail-label", text: t("taskDetails") });
   const headerLogo = header.createDiv({ cls: "task-hub-detail-header-logo-cell" });
   renderTaskDetailSourceLogo(headerLogo, task);
-  header.createDiv({ cls: "task-hub-detail-control task-hub-detail-header-spacer" });
   if (!task) {
     details.createDiv({ cls: "task-hub-empty", text: t("noMatchingTasks") });
     return;
@@ -1336,9 +1330,9 @@ export function renderTaskDetails(
       ? tagChipEditor(editor, t("tags"), t("tagPlaceholder"), task.tags, options.bindTagInputSuggest, markDirty)
       : undefined;
     if (canEditTask) {
-      const toggleRow = detailRow(editor, t("editDetails"), (icon) => {
-        detailsToggle = icon.createEl("input", { cls: "task-hub-detail-extra-toggle", type: "checkbox" });
-      });
+      const toggleRow = detailRow(editor, t("editDetails"));
+      detailsToggle = toggleRow.control.createEl("input", { cls: "task-hub-detail-extra-toggle", type: "checkbox" });
+      detailsToggle.setAttr("role", "switch");
       toggleRow.row.addClass("task-hub-detail-toggle-row");
       const extra = editor.createDiv({ cls: "task-hub-detail-extra is-hidden" });
       const toggle = detailsToggle;
@@ -1516,21 +1510,6 @@ function toggleDetailExtra(extra: HTMLElement, expanded: boolean): void {
   extra.win.setTimeout(() => finish(), 280);
 }
 
-function renderTaskDetailCompleteCheckbox(
-  container: HTMLElement,
-  task: TaskItem,
-  canToggle: boolean,
-  handlers: Pick<TaskRowHandlers, "onComplete">,
-  t: Translator
-): HTMLInputElement {
-  const checkbox = container.createEl("input", { cls: "task-hub-detail-complete-checkbox", type: "checkbox" });
-  checkbox.checked = task.completed;
-  checkbox.disabled = !canToggle;
-  checkbox.setAttr("aria-label", task.completed ? t("markOpen") : t("markComplete"));
-  checkbox.addEventListener("change", () => handlers.onComplete(task));
-  return checkbox;
-}
-
 function renderTaskSendControl(
   actions: HTMLElement,
   task: TaskItem,
@@ -1540,7 +1519,6 @@ function renderTaskSendControl(
   t: Translator
 ): void {
   const control = actions.createDiv({ cls: "task-hub-send-control task-hub-detail-row" });
-  control.createDiv({ cls: "task-hub-detail-icon-cell" });
   const labelCell = control.createDiv({ cls: "task-hub-detail-label task-hub-send-label-cell" });
   const pickerCell = control.createDiv({ cls: "task-hub-detail-control task-hub-send-picker-cell" });
   const selected = preferredTaskSendTarget(options, defaultTarget) ?? options[0];
@@ -1755,11 +1733,15 @@ type DetailRow = {
 
 function detailRow(container: HTMLElement, label: string, renderIcon?: (icon: HTMLElement) => void): DetailRow {
   const row = container.createDiv({ cls: "task-hub-detail-row" });
-  const icon = row.createDiv({ cls: "task-hub-detail-icon-cell" });
-  renderIcon?.(icon);
+  let icon: HTMLElement | undefined;
+  if (renderIcon) {
+    icon = row.createDiv({ cls: "task-hub-detail-icon-cell" });
+    row.addClass("has-icon");
+    renderIcon(icon);
+  }
   const labelEl = row.createSpan({ cls: "task-hub-detail-label", text: label });
   const control = row.createDiv({ cls: "task-hub-detail-control" });
-  return { row, icon, label: labelEl, control };
+  return { row, icon: icon ?? row, label: labelEl, control };
 }
 
 function renderReadonlyDetailValue(container: HTMLElement, label: string, value: string, valueClass = "task-hub-detail-readonly-value"): void {

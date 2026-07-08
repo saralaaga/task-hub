@@ -2210,7 +2210,6 @@ describe("renderTasksView", () => {
     const extra = collect(container).find((element) => element.classes.has("task-hub-detail-extra"));
     const toggle = collect(container).find((element) => element.classes.has("task-hub-detail-extra-toggle"));
     const header = collect(container).find((element) => element.classes.has("task-hub-detail-title-header"));
-    const headerCheckbox = collect(header!).find((element) => element.classes.has("task-hub-detail-complete-checkbox"));
     const headerTitle = collect(header!).find((element) => element.text === "taskDetails");
     const headerLogo = collect(header!).find((element) => element.classes.has("task-hub-detail-source-logo"));
     const bodyLabel = collect(container).find((element) => element.classes.has("task-hub-detail-label") && element.text === "taskCreationBody");
@@ -2220,12 +2219,13 @@ describe("renderTasksView", () => {
     const recurrence = collect(extra!).find((element) => element.classes.has("task-hub-recurrence-select"));
     const notes = collect(extra!).find((element) => element.type === "textarea");
 
-    expect(header?.children.map((child) => child.classes.has("task-hub-detail-icon-cell") ? "check-cell" : child.text || (child.classes.has("task-hub-detail-header-logo-cell") ? "logo-cell" : ""))).toEqual(["check-cell", "taskDetails", "logo-cell", ""]);
-    expect(headerCheckbox?.parent?.classes.has("task-hub-detail-icon-cell")).toBe(true);
+    expect(header?.children.map((child) => child.text || (child.classes.has("task-hub-detail-header-logo-cell") ? "logo-cell" : ""))).toEqual(["taskDetails", "logo-cell"]);
+    expect(collect(header!).some((element) => element.classes.has("task-hub-detail-complete-checkbox"))).toBe(false);
     expect(headerTitle).toBeDefined();
     expect(headerLogo?.parent?.classes.has("task-hub-detail-header-logo-cell")).toBe(true);
     expect(collect(bodyRow!).some((element) => element.classes.has("task-hub-detail-complete-checkbox"))).toBe(false);
-    expect(toggle?.parent?.classes.has("task-hub-detail-icon-cell")).toBe(true);
+    expect(toggle?.parent?.classes.has("task-hub-detail-control")).toBe(true);
+    expect(toggle?.attrs.get("role")).toBe("switch");
     expect(editDetailsRow?.classes.has("task-hub-detail-toggle-row")).toBe(true);
     expect(extra?.classes.has("is-hidden")).toBe(true);
     expect(textValues(container)).not.toContain("Original notes");
@@ -2506,7 +2506,7 @@ describe("renderTasksView", () => {
     expect(date?.showPicker).toHaveBeenCalled();
   });
 
-  it("keeps external task completion in the title row and removes the save action", () => {
+  it("keeps external task details free of detail checkboxes and removes the save action", () => {
     const container = new FakeElement();
 
     renderTasksView(
@@ -2527,7 +2527,7 @@ describe("renderTasksView", () => {
     expect(actions).toBeUndefined();
     expect(actionTexts).toEqual([]);
     expect(findElementByText(container, "save")).toBeUndefined();
-    expect(checkbox?.type).toBe("checkbox");
+    expect(checkbox).toBeUndefined();
   });
 
   it("preserves an Apple Reminder start time when saving task detail edits", () => {
@@ -3326,7 +3326,7 @@ describe("renderTasksView", () => {
     expect(collect(container).some((element) => element.classes.has("task-hub-detail-title-input") && element.value === "Open second")).toBe(true);
   });
 
-  it("toggles the selected vault task from the detail title checkbox", () => {
+  it("does not render a detail title checkbox for the selected vault task", () => {
     const container = new FakeElement();
     const task = { ...baseTask, id: "vault-detail", source: "vault" as const, filePath: "Project.md", externalSourceName: undefined };
     const testHandlers = handlers();
@@ -3343,13 +3343,13 @@ describe("renderTasksView", () => {
     );
 
     const checkbox = collect(container).find((element) => element.classes.has("task-hub-detail-complete-checkbox"));
-    checkbox?.change();
 
-    expect(testHandlers.onComplete).toHaveBeenCalledWith(task);
+    expect(checkbox).toBeUndefined();
+    expect(testHandlers.onComplete).not.toHaveBeenCalled();
     expect(findElementByText(container, "openSource")).toBeUndefined();
   });
 
-  it("disables the detail title checkbox for read-only Apple Reminders tasks", () => {
+  it("does not render a disabled detail title checkbox for read-only Apple Reminders tasks", () => {
     const container = new FakeElement();
     const testHandlers = handlers();
 
@@ -3365,7 +3365,7 @@ describe("renderTasksView", () => {
     );
 
     const checkbox = collect(container).find((element) => element.classes.has("task-hub-detail-complete-checkbox"));
-    expect(checkbox?.disabled).toBe(true);
+    expect(checkbox).toBeUndefined();
     expect(findElementByText(container, "openSource")).toBeUndefined();
 
     expect(testHandlers.onJump).not.toHaveBeenCalled();

@@ -2390,10 +2390,11 @@ describe("renderCalendarView", () => {
 
     expect(header?.classes.has("has-calendar-select")).toBe(false);
     expect(headerTitleText).toBeDefined();
-    expect(headerTitle?.children.map((child) => child.classes.has("task-hub-calendar-detail-title-check-cell") ? "check-cell" : child.text || (child.classes.has("task-hub-calendar-detail-logo") ? "logo" : ""))).toEqual(["check-cell", "taskDetails", "logo"]);
-    expect(headerComplete?.parent?.classes.has("task-hub-calendar-detail-title-check-cell")).toBe(true);
+    expect(headerTitle?.children.map((child) => child.text || (child.classes.has("task-hub-calendar-detail-logo") ? "logo" : ""))).toEqual(["taskDetails", "logo"]);
+    expect(headerComplete).toBeUndefined();
     expect(collect(bodyRow as FakeElement).some((element) => element.classes.has("task-hub-detail-complete-checkbox"))).toBe(false);
-    expect(toggle?.parent?.classes.has("task-hub-detail-icon-cell")).toBe(true);
+    expect(toggle?.parent?.classes.has("task-hub-detail-control")).toBe(true);
+    expect(toggle?.attributes.get("role")).toBe("switch");
     expect(editDetailsRow?.classes.has("task-hub-calendar-detail-toggle")).toBe(true);
     expect(formListRow).toBeUndefined();
     expect(save).toBeUndefined();

@@ -1494,11 +1494,6 @@ function renderCalendarDetailHeader(
   if (!options.dismissible) header.addClass("is-static");
   const title = header.createDiv({ cls: "task-hub-calendar-detail-title" });
   title.addClass(item.task ? "is-task" : "is-event");
-  if (item.task) {
-    title.addClass("has-complete-checkbox");
-    const checkboxCell = title.createSpan({ cls: "task-hub-calendar-detail-title-check-cell" });
-    renderCalendarTaskCompleteCheckbox(checkboxCell, item.task, canToggleCalendarTask(item.task, state), handlers, state);
-  }
   title.createSpan({ cls: "task-hub-calendar-detail-title-text", text: state.t(item.task ? "taskDetails" : "calendarDetails") });
   renderDetailSourceLogo(title, item);
   if (options.dismissible) {
@@ -1722,21 +1717,6 @@ function renderTaskDetailsPopover(
   renderCalendarNotes(popover, state.getTaskNotes?.(task) ?? [], handlers, state);
 }
 
-function renderCalendarTaskCompleteCheckbox(
-  container: HTMLElement,
-  task: TaskItem,
-  canToggle: boolean,
-  handlers: Pick<CalendarViewHandlers, "onTaskComplete">,
-  state: CalendarViewState
-): HTMLInputElement {
-  const checkbox = container.createEl("input", { cls: "task-hub-detail-complete-checkbox", type: "checkbox" });
-  checkbox.checked = task.completed;
-  checkbox.disabled = !canToggle;
-  checkbox.setAttr("aria-label", task.completed ? state.t("markOpen") : state.t("markComplete"));
-  checkbox.addEventListener("change", () => handlers.onTaskComplete(task));
-  return checkbox;
-}
-
 function renderCalendarTaskSendControl(
   actions: HTMLElement,
   task: TaskItem,
@@ -1909,14 +1889,12 @@ function renderEventDetailsPopover(
 }
 
 function renderCalendarDetailExtraToggle(container: HTMLElement, state: CalendarViewState): { toggle: HTMLInputElement; extra: HTMLElement } {
-  let toggle: HTMLInputElement | undefined;
-  const toggleRow = detailRow(container, state.t("editDetails"), (icon) => {
-    toggle = icon.createEl("input", { cls: "task-hub-detail-extra-toggle", type: "checkbox" });
-  });
+  const toggleRow = detailRow(container, state.t("editDetails"));
+  const toggle = toggleRow.control.createEl("input", { cls: "task-hub-detail-extra-toggle", type: "checkbox" });
+  toggle.setAttr("role", "switch");
   toggleRow.row.addClass("task-hub-detail-toggle-row");
   toggleRow.row.addClass("task-hub-calendar-detail-toggle");
   const extra = container.createDiv({ cls: "task-hub-detail-extra task-hub-calendar-detail-extra is-hidden" });
-  if (!toggle) throw new Error("Detail toggle failed to render.");
   const renderedToggle = toggle;
   renderedToggle.addEventListener("change", () => {
     toggleDetailExtra(extra, renderedToggle.checked);
@@ -2089,11 +2067,15 @@ type DetailRow = {
 
 function detailRow(container: HTMLElement, label: string, renderIcon?: (icon: HTMLElement) => void): DetailRow {
   const row = container.createDiv({ cls: "task-hub-detail-row task-hub-calendar-detail-row" });
-  const icon = row.createDiv({ cls: "task-hub-detail-icon-cell" });
-  renderIcon?.(icon);
+  let icon: HTMLElement | undefined;
+  if (renderIcon) {
+    icon = row.createDiv({ cls: "task-hub-detail-icon-cell" });
+    row.addClass("has-icon");
+    renderIcon(icon);
+  }
   const labelEl = row.createSpan({ cls: "task-hub-detail-label", text: label });
   const control = row.createDiv({ cls: "task-hub-detail-control" });
-  return { row, icon, label: labelEl, control };
+  return { row, icon: icon ?? row, label: labelEl, control };
 }
 
 function detailInput(

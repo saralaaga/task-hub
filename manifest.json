@@ -1,7 +1,7 @@
 {
   "id": "task-hub",
   "name": "Task Hub",
-  "version": "0.3.70",
+  "version": "0.3.71",
   "minAppVersion": "1.7.2",
   "description": "Redesign task management around a focused workspace for Markdown tasks, external reminders, calendars, tags, filters, and daily planning.",
   "author": "Carlos",

@@ -8,7 +8,6 @@ export function createRecurrenceSelect(
   t: Translator
 ): HTMLSelectElement {
   const row = container.createDiv({ cls: "task-hub-detail-row task-hub-calendar-detail-row" });
-  row.createDiv({ cls: "task-hub-detail-icon-cell" });
   row.createSpan({ cls: "task-hub-detail-label", text: label });
   const control = row.createDiv({ cls: "task-hub-detail-control" });
   const select = control.createEl("select", { cls: "task-hub-recurrence-select" });
