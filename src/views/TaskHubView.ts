@@ -1,5 +1,6 @@
 import { ItemView, MarkdownRenderer, Notice, WorkspaceLeaf } from "obsidian";
 import { TASK_HUB_VIEW_TYPE } from "../constants";
+import type { CalendarDropTarget } from "../calendar/calendarDropTarget";
 import { toLocalDateKey } from "../calendar/dateBuckets";
 import { filterTasks, type TaskFilterState } from "../filtering/filters";
 import { applySmartListToTasks, smartListTaskReferences } from "../filtering/smartLists";
@@ -288,7 +289,7 @@ export class TaskHubView extends ItemView {
           },
           onTaskUpdate: (task, draft) => void this.plugin.updateCalendarTask(task, draft),
           onTaskDelete: (task) => void this.plugin.deleteCalendarTask(task),
-          onCreateTaskForDate: (target) => this.plugin.openCreateTaskModal(target),
+          onCreateTaskForDate: (target) => this.openCreateTaskForDate(target),
           onSendToTarget: (task, target) => void this.plugin.sendTaskToTarget(task, target),
           onCreateTaskNote: (task) => void this.plugin.createTaskNoteForTask(task),
           onOpenTaskNote: (path) => void this.plugin.openTaskNote(path),
@@ -349,7 +350,7 @@ export class TaskHubView extends ItemView {
             }
           },
           smartLists: this.plugin.settings.smartLists,
-          smartListCounts: smartListCountsForTasks(allTasks, this.plugin.settings.smartLists, now),
+          smartListCounts: smartListCountsForTasks(allTasks, this.plugin.settings.smartLists, now, this.filters.status),
           activeSmartListId: this.activeSmartListId,
           onSaveSmartList: (name) => this.saveSmartList(allTasks, name),
           onApplySmartList: (smartList) => this.applySmartList(smartList, allTasks),
@@ -516,7 +517,7 @@ export class TaskHubView extends ItemView {
             this.persistSessionState();
             this.render();
           },
-          onDateCreateTask: (dateKey) => this.plugin.openCreateTaskModal(dateKey),
+          onDateCreateTask: (target) => this.openCreateTaskForDate(target),
           onTaskComplete: (task) => void this.completeTaskFromView(task),
           onTaskJump: (task) => void this.plugin.jumpToTask(task),
           onTaskSelect: (task) => {
@@ -634,6 +635,17 @@ export class TaskHubView extends ItemView {
     });
   }
 
+  private openCreateTaskForDate(target: CalendarDropTarget): void {
+    const activeSmartList = this.activeSmartList();
+    this.plugin.openCreateTaskModal(target, {
+      ...(activeSmartList
+        ? {
+            onTaskCreated: (task) => this.addTasksToSmartList(activeSmartList, [task])
+          }
+        : {})
+    });
+  }
+
   private renderNoteMarkdown(container: HTMLElement, body: string, sourcePath: string): void {
     container.empty();
     void MarkdownRenderer.render(this.app, body, container, sourcePath, this)
@@ -654,10 +666,9 @@ export class TaskHubView extends ItemView {
   private taskViewVisibleTasks(allTasks: TaskItem[], now: Date): TaskItem[] {
     const activeSmartList = this.activeSmartList();
     const visibleTasks = activeSmartList
-      ? applySmartListToTasks(allTasks, activeSmartList, now)
+      ? filterTasksByStatus(applySmartListToTasks(allTasks, activeSmartList, now), this.filters.status)
       : filterTasks(allTasks, this.filters, now);
-    const exitFilters = activeSmartList?.filters ?? this.filters;
-    if (exitFilters.status !== "open" || this.completingTaskIds.size === 0) {
+    if (this.filters.status !== "open" || this.completingTaskIds.size === 0) {
       return visibleTasks;
     }
 
@@ -906,7 +917,7 @@ export class TaskHubView extends ItemView {
   }
 
   private exitingTaskIds(allTasks: TaskItem[]): ReadonlySet<string> {
-    if ((this.activeSmartList()?.filters.status ?? this.filters.status) !== "open" || this.completingTaskIds.size === 0) {
+    if (this.filters.status !== "open" || this.completingTaskIds.size === 0) {
       return new Set();
     }
     const completedIds = new Set(allTasks.filter((task) => task.completed).map((task) => task.id));
@@ -921,7 +932,7 @@ export class TaskHubView extends ItemView {
     let keepForExitAnimation = false;
     try {
       const result = await this.plugin.completeTask(task);
-      if (result.status === "updated" && !task.completed && (this.activeSmartList()?.filters.status ?? this.filters.status) === "open") {
+      if (result.status === "updated" && !task.completed && this.filters.status === "open") {
         keepForExitAnimation = true;
         this.containerEl.win.setTimeout(() => {
           this.completingTaskIds.delete(task.id);
@@ -1444,8 +1455,22 @@ function taskIdsReferencedBySmartList(tasks: TaskItem[], smartList: TaskHubSmart
     .map((task) => task.id);
 }
 
-function smartListCountsForTasks(tasks: TaskItem[], smartLists: readonly TaskHubSmartList[], now: Date): ReadonlyMap<string, number> {
-  return new Map(smartLists.map((smartList) => [smartList.id, applySmartListToTasks(tasks, smartList, now).length]));
+export function smartListCountsForTasks(
+  tasks: TaskItem[],
+  smartLists: readonly TaskHubSmartList[],
+  now: Date,
+  status: TaskFilterState["status"] = "all"
+): ReadonlyMap<string, number> {
+  return new Map(smartLists.map((smartList) => [
+    smartList.id,
+    filterTasksByStatus(applySmartListToTasks(tasks, smartList, now), status).length
+  ]));
+}
+
+function filterTasksByStatus(tasks: TaskItem[], status: TaskFilterState["status"]): TaskItem[] {
+  if (status === "open") return tasks.filter((task) => !task.completed);
+  if (status === "completed") return tasks.filter((task) => task.completed);
+  return tasks;
 }
 
 function tasksWithDescendants(allTasks: TaskItem[], rootTasks: TaskItem[]): TaskItem[] {

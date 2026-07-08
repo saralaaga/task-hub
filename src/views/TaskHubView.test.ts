@@ -11,7 +11,8 @@ import {
   restoreTaskHubSessionState,
   scrollDatedNoteDetailToTop,
   scrollExpandedTaskIntoView,
-  shouldHandleTaskHubUndoShortcut
+  shouldHandleTaskHubUndoShortcut,
+  smartListCountsForTasks
 } from "./TaskHubView";
 import type { TaskFilterState } from "../filtering/filters";
 import type { TaskHubSmartList, TaskViewFilterSettings } from "../types";
@@ -597,6 +598,69 @@ describe("TaskHubView smart list interactions", () => {
     expect(render).toHaveBeenCalledWith({ preserveTaskListScroll: true, preserveContentScroll: true });
   });
 
+  it("hides completed smart list tasks when the current view does not show completed tasks", () => {
+    const currentFilters: TaskViewFilterSettings = {
+      status: "open",
+      tags: [],
+      tagQuery: "",
+      sourceQuery: "",
+      textQuery: ""
+    };
+    const list = smartList({
+      filters: {
+        status: "all",
+        tags: [],
+        tagQuery: "#work",
+        sourceQuery: "",
+        textQuery: ""
+      },
+      taskStableIds: ["vault:th_manual_done"],
+      taskIds: []
+    });
+    const plugin = {
+      settings: {
+        defaultView: "tasks",
+        language: "en",
+        taskViewFilters: currentFilters,
+        lastSessionState: undefined,
+        smartLists: [list],
+        taskNotes: { enabled: false, linkedNoteSubtasksEnabled: false }
+      }
+    };
+    const view = new TaskHubView({} as never, plugin as never);
+    Object.assign(view, { activeSmartListId: "smart_focus" });
+
+    const visibleTasks = (view as unknown as { taskViewVisibleTasks(tasks: TaskItem[], now: Date): TaskItem[] }).taskViewVisibleTasks([
+      task({ id: "open-dynamic", stableId: "vault:th_open", tags: ["#work"], completed: false }),
+      task({ id: "done-dynamic", stableId: "vault:th_done", tags: ["#work"], completed: true }),
+      task({ id: "done-manual", stableId: "vault:th_manual_done", tags: ["#home"], completed: true })
+    ], NOW);
+
+    expect(visibleTasks.map((item) => item.id)).toEqual(["open-dynamic"]);
+  });
+
+  it("counts only open smart list tasks when the current view hides completed tasks", () => {
+    const list = smartList({
+      filters: {
+        status: "all",
+        tags: [],
+        tagQuery: "#work",
+        sourceQuery: "",
+        textQuery: ""
+      },
+      taskStableIds: ["vault:th_manual_done"],
+      taskIds: []
+    });
+    const tasks = [
+      task({ id: "open-dynamic", stableId: "vault:th_open", tags: ["#work"], completed: false }),
+      task({ id: "done-dynamic", stableId: "vault:th_done", tags: ["#work"], completed: true }),
+      task({ id: "done-manual", stableId: "vault:th_manual_done", tags: ["#home"], completed: true })
+    ];
+
+    expect(smartListCountsForTasks(tasks, [list], NOW, "open").get("smart_focus")).toBe(1);
+    expect(smartListCountsForTasks(tasks, [list], NOW, "all").get("smart_focus")).toBe(3);
+  });
+
   it("deletes a smart list without leaving active selection references behind", async () => {
     const list = smartList();
     const other = smartList({ id: "smart_other", name: "Other", taskStableIds: [] });
@@ -772,6 +836,82 @@ describe("TaskHubView smart list interactions", () => {
     });
     expect(plugin.saveSettings).toHaveBeenCalled();
     expect(render).toHaveBeenCalledWith({ preserveTaskListScroll: true, preserveContentScroll: true });
+  });
+
+  it("adds tasks created from a date entry to the active smart list", async () => {
+    const list = smartList({
+      taskStableIds: [],
+      taskIds: []
+    });
+    const createdTask = task({ id: "created-tomorrow", stableId: "vault:th_created_tomorrow" });
+    const plugin = {
+      settings: {
+        defaultView: "tasks",
+        language: "en",
+        taskViewFilters: fallbackFilters(),
+        lastSessionState: undefined,
+        smartLists: [list]
+      },
+      openCreateTaskModal: jest.fn(),
+      saveSettings: jest.fn(async () => undefined)
+    };
+    const view = new TaskHubView({} as never, plugin as never);
+    const render = jest.spyOn(view as unknown as { render(options?: unknown): void }, "render").mockImplementation(() => undefined);
+    Object.assign(view, {
+      activeSmartListId: "smart_focus"
+    });
+
+    (view as unknown as { openCreateTaskForDate(target: string): void }).openCreateTaskForDate("2026-07-09");
+    expect(plugin.openCreateTaskModal).toHaveBeenCalledWith("2026-07-09", expect.objectContaining({
+      onTaskCreated: expect.any(Function)
+    }));
+
+    const createOptions = plugin.openCreateTaskModal.mock.calls[0]?.[1];
+    createOptions.onTaskCreated(createdTask);
+    await Promise.resolve();
+
+    expect(plugin.settings.smartLists[0]).toMatchObject({
+      id: "smart_focus",
+      taskStableIds: ["vault:th_created_tomorrow"],
+      taskIds: []
+    });
+    expect(plugin.saveSettings).toHaveBeenCalled();
+    expect(render).toHaveBeenCalledWith({ preserveTaskListScroll: true, preserveContentScroll: true });
+  });
+
+  it("keeps timed date creation targets when binding the active smart list callback", () => {
+    const list = smartList({
+      taskStableIds: [],
+      taskIds: []
+    });
+    const plugin = {
+      settings: {
+        defaultView: "tasks",
+        language: "en",
+        taskViewFilters: fallbackFilters(),
+        lastSessionState: undefined,
+        smartLists: [list]
+      },
+      openCreateTaskModal: jest.fn(),
+      saveSettings: jest.fn(async () => undefined)
+    };
+    const view = new TaskHubView({} as never, plugin as never);
+    jest.spyOn(view as unknown as { render(options?: unknown): void }, "render").mockImplementation(() => undefined);
+    Object.assign(view, {
+      activeSmartListId: "smart_focus"
+    });
+    type TimedCreateTarget = { dateKey: string; startMinutes: number; durationMinutes: number };
+    const target: TimedCreateTarget = {
+      dateKey: "2026-07-09",
+      startMinutes: 9 * 60,
+      durationMinutes: 30
+    };
+
+    (view as unknown as { openCreateTaskForDate(createTarget: TimedCreateTarget): void }).openCreateTaskForDate(target);
+
+    expect(plugin.openCreateTaskModal).toHaveBeenCalledWith(target, expect.objectContaining({
+      onTaskCreated: expect.any(Function)
+    }));
   });
 
   it("selects the created dated note in the notes view without opening a source tab", () => {
