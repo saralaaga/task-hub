@@ -488,7 +488,7 @@ describe("Task Hub styles", () => {
     expect(popoverRule).toContain("transform-origin: 32px 32px");
     expect(popoverKeyframes).toContain("transform: translateY(10px) scale(0.96)");
     expect(reducedMotionRule).toContain(".task-hub-calendar-detail-popover");
-    expect(detailRowRule).toContain("grid-template-columns: 36px var(--task-hub-detail-label-width, 128px) minmax(0, 1fr)");
+    expect(detailRowRule).toContain("grid-template-columns: 36px minmax(0, 1fr) minmax(0, 3fr)");
     expect(detailControlCheckboxRule).toContain("height: 18px");
     expect(detailControlCheckboxRule).toContain("min-height: 18px");
     expect(detailControlCheckboxRule).toContain("width: 18px");
@@ -655,6 +655,7 @@ describe("Task Hub styles", () => {
     const detailRule = styles.match(/\.task-hub-dated-note-detail\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const transitionRule = styles.match(/\.task-hub-dated-note-detail\.is-note-transition\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const cardRule = styles.match(/button\.task-hub-dated-note-card\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const excerptRule = styles.match(/\.task-hub-dated-note-excerpt\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const footerRule = styles.match(/\.task-hub-dated-note-card-footer\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const timeRule = styles.match(/\.task-hub-dated-note-time\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const tagsRule = styles.match(/\.task-hub-dated-note-card-tags\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
@@ -669,6 +670,7 @@ describe("Task Hub styles", () => {
     expect(cardRule).toContain("min-height: 0");
     expect(cardRule).toContain("white-space: normal");
     expect(cardRule).toContain("align-items: stretch");
+    expect(excerptRule).toContain("font-weight: 400");
     expect(footerRule).toContain("align-items: end");
     expect(footerRule).toContain("grid-template-columns: minmax(0, 1fr) auto");
     expect(timeRule).toContain("justify-self: end");
@@ -756,7 +758,7 @@ describe("Task Hub styles", () => {
     const autoGrowRule = styles.match(/\.task-hub-detail-control textarea\.task-hub-auto-grow-textarea\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const reducedMotionRule = styles.match(/@media \(prefers-reduced-motion: reduce\)\s*\{(?<body>[\s\S]+?)\n\}/)?.groups?.body ?? "";
 
-    expect(detailRowRule).toContain("grid-template-columns: 36px var(--task-hub-detail-label-width, 128px) minmax(0, 1fr)");
+    expect(detailRowRule).toContain("grid-template-columns: 36px minmax(0, 1fr) minmax(0, 3fr)");
     expect(detailHeaderRule).toContain("grid-template-columns: 36px max-content 28px minmax(0, 1fr)");
     expect(detailHeaderLogoRule).toContain("justify-content: flex-start");
     expect(detailHeaderLogoRule).toContain("min-height: 32px");
@@ -1008,7 +1010,6 @@ describe("Task Hub styles", () => {
     const styles = readFileSync(path.join(__dirname, "styles.css"), "utf8");
     const detailsRules = Array.from(styles.matchAll(/\.task-hub-task-details\s*\{(?<body>[^}]+)\}/g)).map((match) => match.groups?.body ?? "");
     const sizingRule = detailsRules.find((body) => body.includes("max-height")) ?? "";
-    const shellRule = detailsRules.find((body) => body.includes("--task-hub-detail-label-width")) ?? "";
     const actionRule = styles.match(/\.task-hub-detail-actions\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const sendButtonRule = styles.match(/\.task-hub-send-control button\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const sendTargetRule = styles.match(/\.task-hub-send-target-select\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
@@ -1017,7 +1018,7 @@ describe("Task Hub styles", () => {
     expect(sizingRule).toContain("overflow-y: auto");
     expect(sizingRule).toContain("resize: none");
     expect(sizingRule).toContain("width: clamp(420px, 34vw, 620px)");
-    expect(shellRule).toContain("--task-hub-detail-label-width: 92px");
+    expect(styles).not.toContain("--task-hub-detail-label-width: 92px");
     expect(actionRule).toContain("grid-template-columns: minmax(0, 1fr)");
     expect(sendButtonRule).toContain("border-radius: 8px");
     expect(sendButtonRule).toContain("height: 38px");

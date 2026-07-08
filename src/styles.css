@@ -1121,7 +1121,6 @@ body .task-hub-view .task-hub-sidebar .task-hub-smart-list-item button.task-hub-
   min-width: 0;
   padding: 12px;
   position: relative;
-  --task-hub-detail-label-width: 92px;
 }
 
 .task-hub-task-details {
@@ -1200,7 +1199,7 @@ body .task-hub-view .task-hub-sidebar .task-hub-smart-list-item button.task-hub-
   align-items: center;
   display: grid;
   gap: 10px;
-  grid-template-columns: 36px var(--task-hub-detail-label-width, 128px) minmax(0, 1fr);
+  grid-template-columns: 36px minmax(0, 1fr) minmax(0, 3fr);
   min-width: 0;
 }
 
@@ -4966,7 +4965,6 @@ input.task-hub-tag-editor-input:focus {
   display: grid;
   gap: 8px;
   min-width: 0;
-  --task-hub-detail-label-width: 92px;
 }
 
 .task-hub-calendar-detail-row {
@@ -5425,7 +5423,7 @@ button.task-hub-dated-note-card.is-active {
   color: var(--text-normal);
   display: -webkit-box;
   font-size: var(--font-ui-small);
-  font-weight: 650;
+  font-weight: 400;
   line-height: 1.4;
   margin: 0;
   overflow: hidden;
