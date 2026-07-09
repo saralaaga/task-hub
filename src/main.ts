@@ -1,4 +1,6 @@
 import { ButtonComponent, Editor, EventRef, MarkdownView, Menu, Modal, Notice, Platform, Plugin, requestUrl, Setting, TFile, WorkspaceLeaf } from "obsidian";
+import { type Extension, Transaction } from "@codemirror/state";
+import { EditorView, type ViewUpdate } from "@codemirror/view";
 import { PLUGIN_DISPLAY_NAME, TASK_HUB_VIEW_TYPE } from "./constants";
 import { appleCalendarEventToReminderInput, appleReminderToCalendarEventInput } from "./calendar/appleConversion";
 import { calendarDropTargetParts, isUnscheduledCalendarDropTarget, withCalendarDropTargetDate, type CalendarDropTarget } from "./calendar/calendarDropTarget";
@@ -17,7 +19,7 @@ import {
   canDeleteAppleReminderCapability
 } from "./integrationCapabilities";
 import { parseTaskAtLine } from "./indexing/editorTask";
-import { completeTaskInContent, deleteTaskInContent, rescheduleTaskInContent, unscheduleTaskInContent, updateTaskLineInContent, type CompletionResult } from "./indexing/taskActions";
+import { completeTaskInContent, deleteTaskInContent, rescheduleTaskInContent, unscheduleTaskInContent, updateTaskLineInContent, type CompletionResult, type RescheduleMessages } from "./indexing/taskActions";
 import { TaskIndex } from "./indexing/taskIndex";
 import { openExternalTaskSource } from "./externalSources";
 import { appendTaskToContent, createTaskLine, normalizeTaskCreationFilePath } from "./taskCreation";
@@ -46,6 +48,7 @@ import {
   datedNoteFileName,
   datedNoteTitleFromBody,
   normalizeDatedNoteFolder,
+  replaceDatedNoteBody,
   type DatedNote
 } from "./datedNotes";
 import {
@@ -132,6 +135,66 @@ function parseTimeInputValue(value: string): number | undefined {
 function startMinutesFromTask(task: TaskItem): number | undefined {
   const time = task.scheduledDate?.match(/T(\d{2}):(\d{2})/);
   return time ? parseTimeInputValue(`${time[1]}:${time[2]}`) : undefined;
+}
+
+function vaultTaskWithDescendants(allTasks: TaskItem[], rootTask: TaskItem): TaskItem[] {
+  const childrenByParentId = new Map<string, TaskItem[]>();
+  for (const task of allTasks) {
+    if (task.source !== "vault" || task.filePath !== rootTask.filePath || !task.parentId) continue;
+    const children = childrenByParentId.get(task.parentId) ?? [];
+    children.push(task);
+    childrenByParentId.set(task.parentId, children);
+  }
+
+  for (const children of childrenByParentId.values()) {
+    children.sort((left, right) => left.line - right.line);
+  }
+
+  const result: TaskItem[] = [];
+  const visitedTaskIds = new Set<string>();
+  const visit = (task: TaskItem) => {
+    if (visitedTaskIds.has(task.id)) return;
+    visitedTaskIds.add(task.id);
+    result.push(task);
+    for (const child of childrenByParentId.get(task.id) ?? []) {
+      visit(child);
+    }
+  };
+  visit(rootTask);
+  return result;
+}
+
+function rescheduleVaultTaskTreeInContent(
+  content: string,
+  tasks: TaskItem[],
+  targetDate: string,
+  messages: RescheduleMessages,
+  rootStartMinutes?: number
+): { result: CompletionResult; updatedTasks: Array<{ task: TaskItem; result: CompletionResult }> } {
+  let nextContent = content;
+  const updatedTasks: Array<{ task: TaskItem; result: CompletionResult }> = [];
+
+  for (const [index, task] of tasks.entries()) {
+    const startMinutes = index === 0 ? rootStartMinutes : startMinutesFromTask(task);
+    const result = rescheduleTaskInContent(nextContent, task, targetDate, messages, startMinutes);
+    if (result.status === "conflict") {
+      return { result, updatedTasks: [] };
+    }
+    if (result.status === "updated") {
+      nextContent = result.content;
+      updatedTasks.push({ task, result });
+    }
+  }
+
+  if (updatedTasks.length === 0) {
+    return { result: { status: "already_in_state" }, updatedTasks };
+  }
+
+  const firstUpdate = updatedTasks[0].result;
+  return {
+    result: firstUpdate.status === "updated" ? { ...firstUpdate, content: nextContent } : firstUpdate,
+    updatedTasks
+  };
 }
 
 function eventDurationFromDraft(draft: Extract<CalendarItemEditDraft, { kind: "event" }>): number | undefined {
@@ -689,24 +752,37 @@ export default class TaskHubPlugin extends Plugin {
       } as CompletionResult
     };
 
+    const indexedTasks =
+      this.taskIndex && typeof (this.taskIndex as unknown as { getTasks?: () => TaskItem[] }).getTasks === "function"
+        ? this.getTasks()
+        : [task];
+    const tasksToReschedule = vaultTaskWithDescendants(indexedTasks, task);
+    const rescheduledVaultTasks: Array<{ task: TaskItem; result: CompletionResult }> = [];
+
     await this.app.vault.process(file, (content) => {
-      update.result = rescheduleTaskInContent(content, task, timedTarget.dateKey, {
+      const reschedule = rescheduleVaultTaskTreeInContent(content, tasksToReschedule, timedTarget.dateKey, {
         lineChangedConflict: t("lineChangedConflict"),
         lineMismatchConflict: t("lineMismatchConflict"),
         lineNoLongerOpen: t("lineNoLongerOpen"),
         lineOutsideFile: t("lineOutsideFile"),
         dateTokenMissing: t("taskDateTokenMissing")
       }, timedTarget.startMinutes);
+      update.result = reschedule.result;
+      rescheduledVaultTasks.splice(0, rescheduledVaultTasks.length, ...reschedule.updatedTasks);
       return update.result.status === "updated" ? update.result.content : content;
     });
 
     const updateResult = update.result;
     if (updateResult.status === "updated") {
-      this.rememberReindexedVaultTaskStableId(task, updateResult);
+      for (const item of rescheduledVaultTasks) {
+        this.rememberReindexedVaultTaskStableId(item.task, item.result);
+      }
       await this.reindexVaultFile(file);
-      const updatedTask = this.resolveUndoTask(task, updateResult);
-      const noteMigration = updatedTask ? await this.transferTaskNotesToUpdatedTask(task, updatedTask) : { ok: true as const };
-      if (!noteMigration.ok) new Notice(noteMigration.message);
+      for (const item of rescheduledVaultTasks) {
+        const updatedTask = this.resolveUndoTask(item.task, item.result);
+        const noteMigration = updatedTask ? await this.transferTaskNotesToUpdatedTask(item.task, updatedTask) : { ok: true as const };
+        if (!noteMigration.ok) new Notice(noteMigration.message);
+      }
       this.rememberTaskDraftUndo(task, this.resolveUndoTask(task, updateResult));
       new Notice(t("taskDateUpdated"));
     } else if (updateResult.status === "already_in_state") {
@@ -2181,6 +2257,17 @@ export default class TaskHubPlugin extends Plugin {
     void this.app.workspace.revealLeaf(leaf);
   }
 
+  async openDatedNoteEditor(path: string): Promise<void> {
+    const file = this.app.vault.getFileByPath(path);
+    const t = createTranslator(this.settings.language);
+    if (!file) {
+      new Notice(`${t("fileNotFound")}: ${path}`);
+      return;
+    }
+    const note = this.datedNoteIndex.getNotes().find((candidate) => candidate.path === path);
+    new DatedNoteEditModal(this, file, note?.body ?? "").open();
+  }
+
   async createDatedNote(dateKey: string, body?: string): Promise<DatedNote | undefined> {
     const t = createTranslator(this.settings.language);
     if (!this.settings.datedNotes.enabled) {
@@ -2209,6 +2296,36 @@ export default class TaskHubPlugin extends Plugin {
     this.refreshOpenViews();
     new Notice(t("datedNoteCreated"));
     return createdNote;
+  }
+
+  async saveDatedNoteBody(file: TFile, body: string): Promise<{ ok: true } | { ok: false; message: string }> {
+    const t = createTranslator(this.settings.language);
+    const update = {
+      result: { status: "conflict", message: t("taskUpdateFailed") } as ReturnType<typeof replaceDatedNoteBody>
+    };
+    await this.app.vault.process(file, (content) => {
+      update.result = replaceDatedNoteBody(content, body, new Date().toISOString());
+      return update.result.status === "updated" ? update.result.content : content;
+    });
+    if (update.result.status !== "updated") {
+      return { ok: false, message: update.result.message };
+    }
+    await this.datedNoteIndex.reindexFile(this.toIndexableFile(file));
+    this.refreshOpenViews();
+    return { ok: true };
+  }
+
+  async deleteDatedNote(path: string): Promise<void> {
+    const file = this.app.vault.getFileByPath(path);
+    const t = createTranslator(this.settings.language);
+    if (!file) {
+      new Notice(`${t("fileNotFound")}: ${path}`);
+      return;
+    }
+    await this.app.fileManager.trashFile(file);
+    this.datedNoteIndex.removeFile(path);
+    this.refreshOpenViews();
+    new Notice(t("datedNoteDeleted"));
   }
 
   async deleteTaskNote(path: string): Promise<void> {
@@ -3116,8 +3233,225 @@ class TaskNoteModal extends Modal {
   }
 }
 
+class DatedNoteEditModal extends Modal {
+  private noteComposer: TaskHubNoteComposer | undefined;
+  private body: string;
+  private busy = false;
+
+  constructor(
+    private readonly plugin: TaskHubPlugin,
+    private readonly file: TFile,
+    initialBody: string
+  ) {
+    super(plugin.app);
+    this.body = initialBody;
+  }
+
+  onOpen(): void {
+    const t = createTranslator(this.plugin.settings.language);
+    this.modalEl.addClass("task-hub-note-modal");
+    this.titleEl.setText(t("edit"));
+    this.contentEl.empty();
+
+    const editorHost = this.contentEl.createDiv({ cls: "task-hub-note-modal-editor" });
+    this.noteComposer = createTaskHubNoteComposer({
+      parent: editorHost,
+      value: this.body,
+      placeholder: t("noteCreationPlaceholder"),
+      extensions: createDatedNoteComposerExtensions(this.plugin.app),
+      onChange: (value) => {
+        this.body = value;
+      },
+      onSubmit: () => {
+        void this.saveAndClose();
+      }
+    });
+
+    const actions = this.contentEl.createDiv({ cls: "task-hub-note-modal-actions" });
+    new ButtonComponent(actions)
+      .setButtonText(t("cancel"))
+      .onClick(() => {
+        if (this.busy) return;
+        this.close();
+      });
+    new ButtonComponent(actions)
+      .setButtonText(t("save"))
+      .setCta()
+      .onClick(() => {
+        void this.saveAndClose();
+      });
+
+    editorHost.win.setTimeout(() => this.noteComposer?.focus(), 0);
+  }
+
+  onClose(): void {
+    this.noteComposer?.destroy();
+    this.noteComposer = undefined;
+    this.contentEl.empty();
+  }
+
+  private async saveAndClose(): Promise<void> {
+    if (this.busy) return;
+    this.busy = true;
+    try {
+      const result = await this.plugin.saveDatedNoteBody(this.file, this.noteComposer?.getValue() ?? this.body);
+      this.busy = false;
+      if (!result.ok) {
+        new Notice(result.message);
+        return;
+      }
+      new Notice(createTranslator(this.plugin.settings.language)("datedNoteSaved"));
+      this.close();
+    } catch (error) {
+      this.busy = false;
+      new Notice(error instanceof Error ? error.message : String(error));
+    }
+  }
+}
+
 function isImeComposingEnterEvent(event: KeyboardEvent): boolean {
   return event.isComposing;
+}
+
+const CHECKBOX_LINE_PREFIX = /^(\s*)([-*]\s+\[[ xX]\]\s*)/u;
+
+type EasyTypingRuleResult = {
+  matchRange?: { from: number; to: number };
+  newText?: string;
+  cursor?: number;
+};
+
+type EasyTypingPluginLike = {
+  ruleEngine?: {
+    process?: (context: Record<string, unknown>) => EasyTypingRuleResult | null | undefined;
+  };
+  settings?: {
+    debug?: boolean;
+  };
+};
+
+function createDatedNoteComposerExtensions(app: unknown): Extension[] {
+  return [
+    createEasyTypingComposerExtension(app),
+    EditorView.domEventHandlers({
+      keydown: (event, view) => {
+        if (event.isComposing) return false;
+        if (event.key === "Enter") return continueCheckboxLine(view, event);
+        if (event.key === "Tab") return indentComposerLine(view, event.shiftKey, event);
+        return false;
+      }
+    })
+  ];
+}
+
+function easyTypingPluginFromApp(app: unknown): EasyTypingPluginLike | undefined {
+  const plugins = (app as { plugins?: { getPlugin?: (id: string) => unknown; plugins?: Record<string, unknown> } } | undefined)?.plugins;
+  const plugin = plugins?.getPlugin?.("easy-typing-obsidian") ?? plugins?.plugins?.["easy-typing-obsidian"];
+  if (!plugin || typeof plugin !== "object") return undefined;
+  return plugin as EasyTypingPluginLike;
+}
+
+function createEasyTypingComposerExtension(app: unknown): Extension {
+  return EditorView.updateListener.of((update) => {
+    applyEasyTypingComposerRule(app, update);
+  });
+}
+
+function applyEasyTypingComposerRule(app: unknown, update: ViewUpdate): boolean {
+  if (!update.docChanged || update.view.composing) return false;
+  if (update.transactions.some((transaction) =>
+    transaction.isUserEvent("EasyTyping.change") ||
+    transaction.isUserEvent("undo") ||
+    transaction.isUserEvent("redo")
+  )) {
+    return false;
+  }
+
+  const easyTyping = easyTypingPluginFromApp(app);
+  const ruleEngine = easyTyping?.ruleEngine;
+  const process = ruleEngine?.process;
+  if (typeof process !== "function") return false;
+  const debug = easyTyping?.settings?.debug;
+
+  const value = update.state.doc.toString();
+  const selection = update.state.selection.main;
+  if (selection.from !== selection.to) return false;
+  const changeType = update.transactions.find((transaction) => transaction.annotation(Transaction.userEvent))?.annotation(Transaction.userEvent) ?? "input.type";
+  const result = process.call(ruleEngine, {
+    kind: "input",
+    docText: value,
+    selection: { from: selection.from, to: selection.to },
+    inserted: "",
+    changeType,
+    scopeHint: "all",
+    scopeLanguage: undefined,
+    debug
+  });
+  if (!isEasyTypingRuleResult(result, value.length)) return false;
+
+  const nextLength = value.length - (result.matchRange.to - result.matchRange.from) + result.newText.length;
+  const cursor = clampNumber(result.cursor ?? result.matchRange.from + result.newText.length, 0, nextLength);
+  update.view.dispatch({
+    changes: { from: result.matchRange.from, to: result.matchRange.to, insert: result.newText },
+    selection: { anchor: cursor },
+    userEvent: "EasyTyping.change"
+  });
+  return true;
+}
+
+function isEasyTypingRuleResult(result: EasyTypingRuleResult | null | undefined, docLength: number): result is Required<Pick<EasyTypingRuleResult, "matchRange" | "newText">> & EasyTypingRuleResult {
+  if (!result || typeof result.newText !== "string" || !result.matchRange) return false;
+  const { from, to } = result.matchRange;
+  return Number.isInteger(from) && Number.isInteger(to) && from >= 0 && to >= from && to <= docLength;
+}
+
+function clampNumber(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
+function continueCheckboxLine(view: EditorView, event: KeyboardEvent): boolean {
+  const selection = view.state.selection.main;
+  if (selection.from !== selection.to) return false;
+  const line = view.state.doc.lineAt(selection.from);
+  const match = line.text.match(CHECKBOX_LINE_PREFIX);
+  if (!match) return false;
+
+  event.preventDefault();
+  const continuation = `\n${match[1]}${match[2].replace(/\[[ xX]\]/u, "[ ]")}`;
+  const position = selection.from + continuation.length;
+  view.dispatch({
+    changes: { from: selection.from, insert: continuation },
+    selection: { anchor: position },
+    userEvent: "input.type"
+  });
+  return true;
+}
+
+function indentComposerLine(view: EditorView, outdent: boolean, event: KeyboardEvent): boolean {
+  event.preventDefault();
+  const selection = view.state.selection.main;
+  const line = view.state.doc.lineAt(selection.from);
+  if (!outdent) {
+    view.dispatch({
+      changes: { from: line.from, insert: "  " },
+      selection: { anchor: selection.anchor + 2, head: selection.head + 2 },
+      userEvent: "input.indent"
+    });
+    return true;
+  }
+
+  const linePrefix = view.state.sliceDoc(line.from, Math.min(line.from + 2, line.to));
+  const removable = linePrefix.startsWith("  ") ? 2 : linePrefix.startsWith("\t") ? 1 : 0;
+  if (removable === 0) return true;
+  view.dispatch({
+    changes: { from: line.from, to: line.from + removable, insert: "" },
+    selection: {
+      anchor: Math.max(line.from, selection.anchor - removable),
+      head: Math.max(line.from, selection.head - removable)
+    },
+    userEvent: "delete.dedent"
+  });
+  return true;
 }
 
 class CreateTaskModal extends Modal {
@@ -3214,6 +3548,8 @@ class CreateTaskModal extends Modal {
         parent: bodyField,
         value: this.taskText,
         placeholder: t("noteCreationPlaceholder"),
+        className: "task-hub-create-note-body-input",
+        extensions: createDatedNoteComposerExtensions(this.plugin.app),
         onChange: (value) => {
           this.taskText = value;
         },

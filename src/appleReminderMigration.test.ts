@@ -1,6 +1,7 @@
 import TaskHubPlugin from "./main";
 import { MarkdownView } from "obsidian";
 import { DEFAULT_SETTINGS } from "./settings";
+import { createDatedNoteContent } from "./datedNotes";
 import { buildTaskNoteKey, createTaskNoteContent, parseTaskNoteFrontmatter } from "./taskNotes";
 import type { TaskItem } from "./types";
 
@@ -18,8 +19,11 @@ type FakeElement = {
   focus: jest.Mock;
   setText: jest.Mock;
   setAttr: jest.Mock;
+  setSelectionRange: jest.Mock;
   toggleClass: jest.Mock;
   value?: string;
+  selectionStart?: number;
+  selectionEnd?: number;
   checked?: boolean;
   disabled?: boolean;
   type?: string;
@@ -29,6 +33,9 @@ type FakeElement = {
 
 type FakeDomEvent = {
   key?: string;
+  ctrlKey?: boolean;
+  metaKey?: boolean;
+  shiftKey?: boolean;
   isComposing?: boolean;
   preventDefault?: jest.Mock;
   stopPropagation?: jest.Mock;
@@ -49,6 +56,8 @@ type MockNoteComposer = {
     parent: FakeElement;
     value?: string;
     placeholder?: string;
+    className?: string;
+    extensions?: unknown[];
     onChange?: (value: string) => void;
     onSubmit?: () => void;
   };
@@ -92,6 +101,10 @@ function fakeEl(): FakeElement {
     }),
     focus: jest.fn(),
     setAttr: jest.fn(),
+    setSelectionRange: jest.fn((start: number, end: number) => {
+      element.selectionStart = start;
+      element.selectionEnd = end;
+    }),
     setText: jest.fn(),
     toggleClass: jest.fn(),
     win: { setTimeout }
@@ -105,7 +118,7 @@ function collectElements(element: FakeElement): FakeElement[] {
   return [element, ...element.children.flatMap(collectElements)];
 }
 
-function dispatchFake(element: FakeElement, name: string, event: FakeDomEvent = {}): void {
+function dispatchFake(element: FakeElement, name: string, event: FakeDomEvent = {}): FakeDomEvent {
   const nextEvent = {
     preventDefault: jest.fn(),
     stopPropagation: jest.fn(),
@@ -114,6 +127,7 @@ function dispatchFake(element: FakeElement, name: string, event: FakeDomEvent = 
   for (const listener of listeners.filter((candidate) => candidate.element === element && candidate.name === name)) {
     listener.handler(nextEvent);
   }
+  return nextEvent;
 }
 
 function flushAsync(): Promise<void> {
@@ -212,12 +226,15 @@ jest.mock(
         return this;
       }
 
-      addDropdown(build?: (dropdown: { selectEl: FakeElement; setValue(value: string): { onChange(handler: (value: string) => void): unknown } }) => void) {
+      addDropdown(build?: (dropdown: { selectEl: FakeElement; addOption(value: string, display: string): unknown; setValue(value: string): { onChange(handler: (value: string) => void): unknown } }) => void) {
         const selectEl = fakeEl();
         selectEl.type = "select";
         this.controlEl.children.push(selectEl);
         build?.({
           selectEl,
+          addOption() {
+            return this;
+          },
           setValue(value: string) {
             selectEl.value = value;
             return {
@@ -1006,6 +1023,71 @@ describe("Apple Reminders migration", () => {
     expect(notices).not.toContain("Task is already on this date.");
   });
 
+  it("reschedules child Markdown tasks with their parent task", async () => {
+    const file = { path: "Inbox.md", extension: "md", stat: { ctime: 1, mtime: 2, size: 3 } };
+    const content = [
+      "- [ ] Parent 📅 2026-05-20",
+      "  - [ ] Child 📅 2026-05-20",
+      "    - [ ] Grandchild 📅 2026-05-20",
+      "- [ ] Sibling 📅 2026-05-20"
+    ].join("\n");
+    const parent = task({
+      id: "parent",
+      line: 0,
+      rawLine: "- [ ] Parent 📅 2026-05-20",
+      text: "Parent"
+    });
+    const child = task({
+      id: "child",
+      parentId: "parent",
+      indent: 1,
+      line: 1,
+      rawLine: "  - [ ] Child 📅 2026-05-20",
+      text: "Child"
+    });
+    const grandchild = task({
+      id: "grandchild",
+      parentId: "child",
+      indent: 2,
+      line: 2,
+      rawLine: "    - [ ] Grandchild 📅 2026-05-20",
+      text: "Grandchild"
+    });
+    const sibling = task({
+      id: "sibling",
+      line: 3,
+      rawLine: "- [ ] Sibling 📅 2026-05-20",
+      text: "Sibling"
+    });
+    const plugin = new TaskHubPlugin({} as never, {} as never);
+    const process = jest.fn(async (_file, update) => update(content));
+    plugin.app = {
+      vault: {
+        adapter: {},
+        getFileByPath: jest.fn(() => file),
+        process
+      },
+      workspace: {
+        getLeavesOfType: jest.fn(() => [])
+      }
+    } as never;
+    plugin.settings = DEFAULT_SETTINGS;
+    plugin.taskIndex = {
+      getTasks: jest.fn(() => [parent, child, grandchild, sibling]),
+      reindexFile: jest.fn(async () => undefined)
+    } as never;
+
+    await plugin.rescheduleTask(parent, "2026-05-22");
+
+    await expect(process.mock.results[0].value).resolves.toBe([
+      "- [ ] Parent 🛫 2026-05-20 ⏳ 2026-05-22",
+      "  - [ ] Child 🛫 2026-05-20 ⏳ 2026-05-22",
+      "    - [ ] Grandchild 🛫 2026-05-20 ⏳ 2026-05-22",
+      "- [ ] Sibling 📅 2026-05-20"
+    ].join("\n"));
+    expect(notices).toContain("Task date updated.");
+  });
+
   it("updates an Apple Reminder time when dragged within the same day", async () => {
     const plugin = new TaskHubPlugin({} as never, {} as never);
     plugin.app = {
@@ -1496,6 +1578,201 @@ describe("Apple Reminders migration", () => {
     await flushAsync();
 
     expect(createAppleReminder).not.toHaveBeenCalled();
+  });
+
+  it("uses the Task Hub CodeMirror composer for dated note creation", async () => {
+    const plugin = new TaskHubPlugin({} as never, {} as never);
+    const createdNote = {
+      path: "TaskHub/Notes/2026-05-20.md",
+      date: "2026-05-20",
+      title: "2026-05-20",
+      body: "Today",
+      bodyStartLine: 4,
+      tags: [],
+      createdAt: "2026-05-20T09:00:00.000Z"
+    };
+    plugin.app = {
+      workspace: {
+        getLeavesOfType: jest.fn(() => [])
+      }
+    } as never;
+    plugin.settings = {
+      ...DEFAULT_SETTINGS,
+      datedNotes: {
+        ...DEFAULT_SETTINGS.datedNotes,
+        enabled: true
+      }
+    };
+    plugin.createDatedNote = jest.fn(async () => createdNote) as never;
+    const onDatedNoteCreated = jest.fn();
+    (globalThis as unknown as { window: { setTimeout: typeof setTimeout } }).window = { setTimeout };
+
+    plugin.openCreateTaskModal("2026-05-20", {
+      allowDatedNote: true,
+      initialKind: "note",
+      onDatedNoteCreated
+    });
+
+    const modal = modals.at(-1);
+    const saveButton = buttons.find((button) => button.setButtonText.mock.calls.some((call) => call[0] === "Save"));
+
+    expect(modal).toBeDefined();
+    expect(mockNoteComposers).toHaveLength(1);
+    expect(mockNoteComposers[0].options.className).toBe("task-hub-create-note-body-input");
+    expect(mockNoteComposers[0].options.extensions?.length).toBeGreaterThan(0);
+
+    mockNoteComposers[0].setValue("今天完成了一些工作");
+    saveButton?.onClickHandler?.();
+    await flushAsync();
+
+    expect(plugin.createDatedNote).toHaveBeenCalledWith(expect.any(String), "今天完成了一些工作");
+    expect(onDatedNoteCreated).toHaveBeenCalledWith(createdNote);
+  });
+
+  it("wires composer extensions for loaded Easy Typing rules in dated note creation", () => {
+    const easyTypingProcess = jest.fn(() => ({
+      matchRange: { from: 0, to: 3 },
+      newText: "- [ ] ",
+      cursor: 6
+    }));
+    const plugin = new TaskHubPlugin({} as never, {} as never);
+    plugin.app = {
+      plugins: {
+        getPlugin: jest.fn((id: string) => id === "easy-typing-obsidian" ? { ruleEngine: { process: easyTypingProcess } } : undefined)
+      },
+      workspace: {
+        getLeavesOfType: jest.fn(() => [])
+      }
+    } as never;
+    plugin.settings = {
+      ...DEFAULT_SETTINGS,
+      datedNotes: {
+        ...DEFAULT_SETTINGS.datedNotes,
+        enabled: true
+      }
+    };
+    plugin.createDatedNote = jest.fn() as never;
+    (globalThis as unknown as { window: { setTimeout: typeof setTimeout } }).window = { setTimeout };
+
+    plugin.openCreateTaskModal("2026-05-20", {
+      allowDatedNote: true,
+      initialKind: "note"
+    });
+
+    expect(mockNoteComposers).toHaveLength(1);
+    expect(mockNoteComposers[0].options.extensions?.length).toBeGreaterThanOrEqual(2);
+    expect(easyTypingProcess).not.toHaveBeenCalled();
+  });
+
+  it("keeps checkbox continuation and indentation extensions in dated note creation", () => {
+    const plugin = new TaskHubPlugin({} as never, {} as never);
+    plugin.app = {
+      workspace: {
+        getLeavesOfType: jest.fn(() => [])
+      }
+    } as never;
+    plugin.settings = {
+      ...DEFAULT_SETTINGS,
+      datedNotes: {
+        ...DEFAULT_SETTINGS.datedNotes,
+        enabled: true
+      }
+    };
+    plugin.createDatedNote = jest.fn() as never;
+    (globalThis as unknown as { window: { setTimeout: typeof setTimeout } }).window = { setTimeout };
+
+    plugin.openCreateTaskModal("2026-05-20", {
+      allowDatedNote: true,
+      initialKind: "note"
+    });
+
+    expect(mockNoteComposers).toHaveLength(1);
+    expect(mockNoteComposers[0].options.extensions?.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("edits a dated note with the Task Hub CodeMirror composer and preserves metadata", async () => {
+    const file = { path: "TaskHub/Notes/2026-07-09 2213 - Tasks.md", extension: "md", stat: { ctime: 1, mtime: 2, size: 3 } };
+    const original = createDatedNoteContent({
+      noteId: "note_202607092213_abcd",
+      date: "2026-07-09",
+      title: "测试输入任务",
+      createdAt: "2026-07-09T22:13:00.000Z",
+      body: "测试输入任务\n- [ ] 测试"
+    });
+    const writes: string[] = [];
+    const process = jest.fn(async (_file, update) => {
+      const next = update(original);
+      writes.push(next);
+      return next;
+    });
+    const plugin = new TaskHubPlugin({} as never, {} as never);
+    plugin.app = {
+      vault: {
+        getFileByPath: jest.fn(() => file),
+        process
+      },
+      workspace: {
+        getLeavesOfType: jest.fn(() => [])
+      }
+    } as never;
+    plugin.settings = DEFAULT_SETTINGS;
+    plugin.datedNoteIndex = {
+      getNotes: jest.fn(() => [{
+        path: file.path,
+        date: "2026-07-09",
+        title: "测试输入任务",
+        body: "测试输入任务\n- [ ] 测试",
+        bodyStartLine: 7,
+        tags: [],
+        createdAt: "2026-07-09T22:13:00.000Z"
+      }]),
+      reindexFile: jest.fn(async () => undefined),
+      removeFile: jest.fn()
+    } as never;
+
+    await plugin.openDatedNoteEditor(file.path);
+    expect(mockNoteComposers).toHaveLength(1);
+    expect(mockNoteComposers[0].options.value).toBe("测试输入任务\n- [ ] 测试");
+
+    mockNoteComposers[0].setValue("更新后的笔记\n- [ ] 新任务");
+    buttons.find((button) => button.setButtonText.mock.calls.some((call) => call[0] === "Save"))?.onClickHandler?.();
+    await flushAsync();
+
+    expect(process).toHaveBeenCalledWith(file, expect.any(Function));
+    expect(writes[0]).toContain('taskhub-note-id: "note_202607092213_abcd"');
+    expect(writes[0]).toContain("taskhub-date: 2026-07-09");
+    expect(writes[0]).toContain("更新后的笔记\n- [ ] 新任务");
+    expect(notices).toContain("Note saved.");
+  });
+
+  it("deletes a dated note through Obsidian trash and removes it from the index", async () => {
+    const file = { path: "TaskHub/Notes/delete.md", extension: "md", stat: { ctime: 1, mtime: 2, size: 3 } };
+    const trashFile = jest.fn(async () => undefined);
+    const removeFile = jest.fn();
+    const plugin = new TaskHubPlugin({} as never, {} as never);
+    plugin.app = {
+      fileManager: {
+        trashFile
+      },
+      vault: {
+        getFileByPath: jest.fn(() => file)
+      },
+      workspace: {
+        getLeavesOfType: jest.fn(() => [])
+      }
+    } as never;
+    plugin.settings = DEFAULT_SETTINGS;
+    plugin.datedNoteIndex = {
+      getNotes: jest.fn(() => []),
+      reindexFile: jest.fn(async () => undefined),
+      removeFile
+    } as never;
+
+    await plugin.deleteDatedNote(file.path);
+
+    expect(trashFile).toHaveBeenCalledWith(file);
+    expect(removeFile).toHaveBeenCalledWith(file.path);
+    expect(notices).toContain("Note deleted.");
   });
 
   it("shows recurrence start and end dates for recurring event creation details", () => {

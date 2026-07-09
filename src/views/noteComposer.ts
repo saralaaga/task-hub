@@ -1,4 +1,4 @@
-import { EditorState, RangeSetBuilder } from "@codemirror/state";
+import { EditorState, RangeSetBuilder, type Extension } from "@codemirror/state";
 import {
   Decoration,
   type DecorationSet,
@@ -25,6 +25,8 @@ export type TaskHubNoteComposerOptions = {
   parent: HTMLElement;
   value?: string;
   placeholder?: string;
+  className?: string;
+  extensions?: Extension[];
   onChange?: (value: string) => void;
   onSubmit?: () => void;
 };
@@ -122,6 +124,7 @@ export function createTaskHubNoteComposer(options: TaskHubNoteComposerOptions): 
       doc: options.value ?? "",
       extensions: [
         noteComposerDecorations(),
+        ...(options.extensions ?? []),
         updateListener,
         submitKeyHandler,
         placeholder(options.placeholder ?? ""),
@@ -132,6 +135,7 @@ export function createTaskHubNoteComposer(options: TaskHubNoteComposerOptions): 
     parent: options.parent
   });
   view.dom.addClass("task-hub-note-composer");
+  if (options.className) view.dom.addClass(options.className);
   return {
     view,
     destroy: () => view.destroy(),

@@ -3,7 +3,8 @@ import {
   createDatedNoteContent,
   DatedNoteIndex,
   datedNoteTitleFromBody,
-  parseDatedNoteFrontmatter
+  parseDatedNoteFrontmatter,
+  replaceDatedNoteBody
 } from "./datedNotes";
 
 describe("dated notes", () => {
@@ -73,6 +74,30 @@ createdAt: 2026-07-08T09:00:00.000Z
       date: "2026-07-08",
       title: "Compatible",
       createdAt: "2026-07-08T09:00:00.000Z"
+    });
+  });
+
+  it("replaces a dated note body while preserving and refreshing frontmatter", () => {
+    const content = createDatedNoteContent({
+      noteId: "note_202607071031_abcd",
+      date: "2026-07-07",
+      title: "Old title",
+      createdAt: "2026-07-07T10:31:00.000Z",
+      body: "Old body"
+    });
+
+    const result = replaceDatedNoteBody(content, "新标题\n- [ ] 新任务", "2026-07-07T11:00:00.000Z");
+
+    expect(result.status).toBe("updated");
+    if (result.status !== "updated") throw new Error("Expected update");
+    expect(result.content).toContain('taskhub-note-id: "note_202607071031_abcd"');
+    expect(result.content).toContain("taskhub-date: 2026-07-07");
+    expect(result.content).toContain('title: "新标题"');
+    expect(result.content).toContain("taskhub-updated: 2026-07-07T11:00:00.000Z");
+    expect(parseDatedNoteFrontmatter(result.content)).toMatchObject({
+      title: "新标题",
+      body: "新标题\n- [ ] 新任务",
+      updatedAt: "2026-07-07T11:00:00.000Z"
     });
   });
 

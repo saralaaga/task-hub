@@ -4,7 +4,13 @@ import type { DatedNote } from "../datedNotes";
 class FakeElement {
   children: FakeElement[] = [];
   classes = new Set<string>();
-  listeners = new Map<string, Array<() => void>>();
+  listeners = new Map<string, Array<(event?: any) => void>>();
+  style = {
+    values: new Map<string, string>(),
+    setProperty: jest.fn((name: string, value: string) => {
+      this.style.values.set(name, value);
+    })
+  };
   text = "";
   type = "";
 
@@ -26,14 +32,16 @@ class FakeElement {
     return this.append(options);
   }
 
-  addEventListener(name: string, listener: () => void): void {
+  addEventListener(name: string, listener: (event?: any) => void): void {
     this.listeners.set(name, [...(this.listeners.get(name) ?? []), listener]);
   }
 
-  click(): void {
+  click(): { preventDefault: jest.Mock; stopPropagation: jest.Mock } {
+    const event = { preventDefault: jest.fn(), stopPropagation: jest.fn() };
     for (const listener of this.listeners.get("click") ?? []) {
-      listener();
+      listener(event);
     }
+    return event;
   }
 
   private append(options: { cls?: string; text?: string } = {}): FakeElement {
@@ -57,6 +65,15 @@ function childWithClass(element: FakeElement, cls: string): FakeElement {
   return match;
 }
 
+function datedNoteHandlers(overrides: Partial<Parameters<typeof renderDatedNotesView>[3]> = {}): Parameters<typeof renderDatedNotesView>[3] {
+  return {
+    onSelectNote: jest.fn(),
+    onOpenNoteSource: jest.fn(),
+    onOpenNoteActions: jest.fn(),
+    ...overrides
+  };
+}
+
 describe("renderDatedNotesView", () => {
   it("keeps the note detail header focused on metadata and tags", () => {
     const container = new FakeElement();
@@ -74,7 +91,7 @@ describe("renderDatedNotesView", () => {
       container as unknown as HTMLElement,
       [note],
       { query: "", selectedPath: note.path, t: (key) => key },
-      { onSelectNote: jest.fn(), onOpenNoteSource: jest.fn() }
+      datedNoteHandlers()
     );
 
     const detailHeader = childWithClass(container, "task-hub-dated-note-detail-header");
@@ -106,7 +123,7 @@ describe("renderDatedNotesView", () => {
       container as unknown as HTMLElement,
       [note],
       { query: "", selectedPath: note.path, t: (key) => key },
-      { onSelectNote: jest.fn(), onOpenNoteSource: jest.fn() }
+      datedNoteHandlers()
     );
 
     const card = childWithClass(container, "task-hub-dated-note-card");
@@ -114,9 +131,119 @@ describe("renderDatedNotesView", () => {
 
     expect(cardChildren.some((child) => child.classes.has("task-hub-dated-note-title"))).toBe(false);
     expect(cardChildren.map((child) => child.text)).not.toContain(note.title);
-    expect(childWithClass(card, "task-hub-dated-note-excerpt").text).toBe("Body preview content #work");
+    expect(childWithClass(card, "task-hub-dated-note-preview-text").text).toBe("Body preview content #work");
     expect(childWithClass(card, "task-hub-dated-note-card-footer").classes.has("task-hub-dated-note-card-footer")).toBe(true);
     expect(childWithClass(card, "task-hub-dated-note-time").text).toBe("09:30");
+  });
+
+  it("renders task list note cards as structured checkbox previews", () => {
+    const container = new FakeElement();
+    const note: DatedNote = {
+      path: "Notes/2026-07-09 2213 - Tasks.md",
+      date: "2026-07-09",
+      title: "测试输入任务",
+      body: "测试输入任务\n- [ ] 测试\n  - [ ] 测试换行\n  - [x] 测试子任务\n  - [ ]",
+      bodyStartLine: 7,
+      tags: [],
+      createdAt: "2026-07-09T22:13:00"
+    };
+
+    renderDatedNotesView(
+      container as unknown as HTMLElement,
+      [note],
+      { query: "", selectedPath: note.path, t: (key) => key },
+      datedNoteHandlers()
+    );
+
+    const card = childWithClass(container, "task-hub-dated-note-card");
+    const excerpt = childWithClass(card, "task-hub-dated-note-excerpt");
+    const cardChildren = collect(card);
+    const taskRows = cardChildren.filter((child) => child.classes.has("task-hub-dated-note-preview-task"));
+
+    expect(excerpt.classes.has("has-task-lines")).toBe(true);
+    expect(childWithClass(card, "task-hub-dated-note-preview-text").text).toBe("测试输入任务");
+    expect(taskRows).toHaveLength(3);
+    expect(cardChildren.filter((child) => child.classes.has("task-hub-dated-note-preview-task-text")).map((child) => child.text)).toEqual([
+      "测试",
+      "测试换行",
+      "测试子任务"
+    ]);
+    expect(cardChildren.some((child) => child.text.includes("- [ ]"))).toBe(false);
+    expect(taskRows[1].style.values.get("--task-hub-dated-note-preview-indent")).toBe("1");
+  });
+
+  it("shows all notes from the selected day in the detail pane", () => {
+    const container = new FakeElement();
+    const selected: DatedNote = {
+      path: "Notes/selected.md",
+      date: "2026-07-09",
+      title: "Selected",
+      body: "Selected body",
+      bodyStartLine: 7,
+      tags: [],
+      createdAt: "2026-07-09T22:13:00"
+    };
+    const sameDay: DatedNote = {
+      path: "Notes/same-day.md",
+      date: "2026-07-09",
+      title: "Same day",
+      body: "Same day body",
+      bodyStartLine: 7,
+      tags: [],
+      createdAt: "2026-07-09T21:54:00"
+    };
+    const otherDay: DatedNote = {
+      path: "Notes/other-day.md",
+      date: "2026-07-07",
+      title: "Other day",
+      body: "Other day body",
+      bodyStartLine: 7,
+      tags: [],
+      createdAt: "2026-07-07T21:54:00"
+    };
+
+    renderDatedNotesView(
+      container as unknown as HTMLElement,
+      [selected, sameDay, otherDay],
+      { query: "", selectedPath: selected.path, t: (key) => key },
+      datedNoteHandlers()
+    );
+
+    const detail = childWithClass(container, "task-hub-dated-note-detail");
+    const detailChildren = collect(detail);
+    const detailCards = detailChildren.filter((child) => child.classes.has("task-hub-dated-note-detail-card"));
+    expect(detailCards).toHaveLength(2);
+    expect(detailChildren.map((child) => child.text)).toEqual(expect.arrayContaining(["Selected body", "Same day body"]));
+    expect(detailChildren.map((child) => child.text)).not.toContain("Other day body");
+  });
+
+  it("opens note actions from the detail card menu button", () => {
+    const container = new FakeElement();
+    const note: DatedNote = {
+      path: "Notes/2026-07-09 2213 - Tasks.md",
+      date: "2026-07-09",
+      title: "测试输入任务",
+      body: "测试输入任务",
+      bodyStartLine: 7,
+      tags: [],
+      createdAt: "2026-07-09T22:13:00"
+    };
+    const onOpenNoteActions = jest.fn();
+
+    renderDatedNotesView(
+      container as unknown as HTMLElement,
+      [note],
+      { query: "", selectedPath: note.path, t: (key) => key },
+      datedNoteHandlers({ onOpenNoteActions })
+    );
+
+    const menuButton = childWithClass(container, "task-hub-dated-note-menu-button");
+    const event = menuButton.click();
+
+    expect(event.preventDefault).toHaveBeenCalled();
+    expect(event.stopPropagation).toHaveBeenCalled();
+    expect(onOpenNoteActions).toHaveBeenCalledWith(note, event);
+    expect(collect(container).some((child) => child.text === "openSource")).toBe(false);
   });
 
   it("marks the detail pane for a lightweight transition when requested", () => {
@@ -135,7 +262,7 @@ describe("renderDatedNotesView", () => {
       container as unknown as HTMLElement,
       [note],
       { query: "", selectedPath: note.path, t: (key) => key, animateDetailTransition: true },
-      { onSelectNote: jest.fn(), onOpenNoteSource: jest.fn() }
+      datedNoteHandlers()
     );
 
     expect(childWithClass(container, "task-hub-dated-note-detail").classes.has("is-note-transition")).toBe(true);

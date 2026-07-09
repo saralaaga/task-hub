@@ -77,6 +77,8 @@ export type TranslationKey =
   | "quickTagFilter"
   | "createTaskNote"
   | "datedNoteCreated"
+  | "datedNoteDeleted"
+  | "datedNoteSaved"
   | "datedNotesDefaultTitleTemplate"
   | "datedNotesDefaultTitleTemplateDesc"
   | "datedNotesDisabled"
@@ -907,6 +909,8 @@ const TRANSLATIONS: Record<"en" | "zh", Record<TranslationKey, string>> &
     quickTagFilter: "Quick tag",
     createTaskNote: "Create linked note",
     datedNoteCreated: "Note created.",
+    datedNoteDeleted: "Note deleted.",
+    datedNoteSaved: "Note saved.",
     datedNotesDefaultTitleTemplate: "Default note title",
     datedNotesDefaultTitleTemplateDesc: "Used when creating a dated note. Supports YYYY-MM-DD, YYYY, MM, and DD.",
     datedNotesDisabled: "Turn on Notes in Task Hub settings first.",
@@ -1321,6 +1325,8 @@ const TRANSLATIONS: Record<"en" | "zh", Record<TranslationKey, string>> &
     quickTagFilter: "快捷标签",
     createTaskNote: "创建关联笔记",
     datedNoteCreated: "笔记已创建。",
+    datedNoteDeleted: "笔记已删除。",
+    datedNoteSaved: "笔记已保存。",
     datedNotesDefaultTitleTemplate: "默认笔记标题",
     datedNotesDefaultTitleTemplateDesc: "创建带日期笔记时使用。支持 YYYY-MM-DD、YYYY、MM 和 DD。",
     datedNotesDisabled: "请先在 Task Hub 设置中开启笔记。",

@@ -17,6 +17,10 @@ export type DatedNote = {
   updatedAt?: string;
 };
 
+export type DatedNoteUpdateResult =
+  | { status: "updated"; content: string }
+  | { status: "conflict"; message: string };
+
 export type DatedNoteIndexableFile = {
   path: string;
   extension: string;
@@ -109,6 +113,24 @@ export function datedNoteTitleFromBody(body: string): string | undefined {
     .map((line) => line.replace(/^#+\s*/u, "").trim())
     .find(Boolean)
     ?.slice(0, 120);
+}
+
+export function replaceDatedNoteBody(content: string, body: string, updatedAt: string): DatedNoteUpdateResult {
+  const frontmatter = extractFrontmatter(content);
+  if (frontmatter.status === "malformed") {
+    return { status: "conflict", message: "Malformed YAML frontmatter." };
+  }
+  if (frontmatter.status !== "found") {
+    return { status: "conflict", message: "Dated note frontmatter is missing." };
+  }
+
+  const nextBody = body.replace(/\s+$/u, "");
+  const nextTitle = datedNoteTitleFromBody(nextBody) ?? "Untitled note";
+  const nextBlock = updateScalarValues(frontmatter.block, {
+    title: `"${escapeYamlString(nextTitle)}"`,
+    "taskhub-updated": updatedAt
+  });
+  return { status: "updated", content: `---\n${nextBlock}\n---\n${nextBody ? `${nextBody}\n` : ""}` };
 }
 
 export class DatedNoteIndex {
@@ -214,6 +236,20 @@ function parseScalarValues(block: string): Record<string, string> {
     }
   }
   return values;
+}
+
+function updateScalarValues(block: string, values: Record<string, string>): string {
+  const remaining = new Set(Object.keys(values));
+  const lines = block.split(/\r?\n/u).map((line) => {
+    const match = line.match(/^([A-Za-z0-9_-]+):\s*(.*)$/u);
+    if (!match || !remaining.has(match[1])) return line;
+    remaining.delete(match[1]);
+    return `${match[1]}: ${values[match[1]]}`;
+  });
+  for (const key of remaining) {
+    lines.push(`${key}: ${values[key]}`);
+  }
+  return lines.join("\n");
 }
 
 function parseYamlArray(block: string, key: string): string[] {

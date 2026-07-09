@@ -241,8 +241,11 @@
 .task-hub-create-note-body-input {
   box-sizing: border-box;
   min-height: 168px;
-  resize: vertical;
   width: 100%;
+}
+
+.task-hub-create-note-body-input .cm-content {
+  min-height: 168px;
 }
 
 .task-hub-note-composer {
@@ -5324,6 +5327,7 @@ input.task-hub-tag-editor-input:focus {
 }
 
 .task-hub-dated-notes-view {
+  align-items: start;
   display: grid;
   gap: 16px;
   grid-template-columns: minmax(440px, 1fr) minmax(320px, 420px);
@@ -5331,17 +5335,17 @@ input.task-hub-tag-editor-input:focus {
 
 .task-hub-dated-note-detail,
 .task-hub-dated-note-list {
+  align-self: start;
   min-width: 0;
 }
 
 .task-hub-dated-note-detail {
-  background: var(--background-primary);
-  border: 1px solid var(--background-modifier-border);
-  border-radius: 8px;
-  display: flex;
-  flex-direction: column;
+  align-content: start;
+  display: grid;
+  gap: 12px;
   max-height: calc(100vh - 190px);
   overflow: auto;
+  padding-right: 2px;
   scrollbar-gutter: stable;
 }
 
@@ -5362,10 +5366,24 @@ input.task-hub-tag-editor-input:focus {
   }
 }
 
+.task-hub-dated-note-detail-card {
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.task-hub-dated-note-detail-card.is-active {
+  border-color: color-mix(in srgb, var(--interactive-accent) 34%, var(--background-modifier-border));
+}
+
 .task-hub-dated-note-detail-header {
   border-bottom: 1px solid var(--background-modifier-border);
   display: grid;
   gap: 8px;
+  grid-template-columns: minmax(0, 1fr) auto;
   padding: 14px;
 }
 
@@ -5377,9 +5395,36 @@ input.task-hub-tag-editor-input:focus {
   gap: 8px;
 }
 
+.task-hub-dated-note-detail-header .task-hub-tag-row {
+  grid-column: 1 / -1;
+}
+
+.task-hub-dated-note-menu-button {
+  align-items: center;
+  align-self: start;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  box-shadow: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: var(--font-ui-medium);
+  height: 28px;
+  justify-content: center;
+  margin: -4px -4px 0 0;
+  padding: 0;
+  width: 28px;
+}
+
+.task-hub-dated-note-menu-button:hover,
+.task-hub-dated-note-menu-button:focus-visible {
+  background: var(--background-modifier-hover);
+  color: var(--text-normal);
+}
+
 .task-hub-dated-note-body {
   line-height: 1.42;
-  min-height: 260px;
   padding: 16px 18px;
 }
 
@@ -5407,13 +5452,6 @@ input.task-hub-tag-editor-input:focus {
 
 .task-hub-dated-note-body .task-list-item-checkbox {
   margin-inline-end: 8px;
-}
-
-.task-hub-dated-note-actions {
-  border-top: 1px solid var(--background-modifier-border);
-  display: flex;
-  justify-content: flex-end;
-  padding: 10px 14px;
 }
 
 .task-hub-dated-note-list {
@@ -5457,6 +5495,7 @@ button.task-hub-dated-note-card {
   display: grid;
   gap: 7px;
   height: auto;
+  justify-content: stretch;
   justify-items: stretch;
   line-height: 1.35;
   margin: 0;
@@ -5485,15 +5524,70 @@ button.task-hub-dated-note-card.is-active {
 
 .task-hub-dated-note-excerpt {
   color: var(--text-normal);
-  display: -webkit-box;
+  display: grid;
   font-size: var(--font-ui-small);
   font-weight: 400;
+  gap: 3px;
   line-height: 1.4;
   margin: 0;
   overflow: hidden;
+  justify-items: start;
+  text-align: left;
+  width: 100%;
+  word-break: break-word;
+}
+
+.task-hub-dated-note-excerpt:not(.has-task-lines) {
+  display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
-  word-break: break-word;
+}
+
+.task-hub-dated-note-preview-text {
+  display: -webkit-box;
+  justify-self: stretch;
+  overflow: hidden;
+  text-align: left;
+  width: 100%;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.task-hub-dated-note-excerpt.has-task-lines .task-hub-dated-note-preview-text {
+  font-weight: 600;
+  -webkit-line-clamp: 1;
+}
+
+.task-hub-dated-note-preview-task {
+  align-items: center;
+  display: grid;
+  gap: 6px;
+  grid-template-columns: 14px minmax(0, 1fr);
+  justify-self: stretch;
+  padding-inline-start: calc(var(--task-hub-dated-note-preview-indent, 0) * 16px);
+  text-align: left;
+  width: 100%;
+}
+
+.task-hub-dated-note-preview-checkbox {
+  border: 1px solid var(--checkbox-border-color, var(--background-modifier-border-hover));
+  border-radius: 4px;
+  box-sizing: border-box;
+  height: 13px;
+  width: 13px;
+}
+
+.task-hub-dated-note-preview-checkbox.is-checked {
+  background: var(--interactive-accent);
+  border-color: var(--interactive-accent);
+  box-shadow: inset 0 0 0 2px var(--background-primary);
+}
+
+.task-hub-dated-note-preview-task-text {
+  overflow: hidden;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .task-hub-dated-note-card-footer {
@@ -5501,7 +5595,10 @@ button.task-hub-dated-note-card.is-active {
   display: grid;
   gap: 8px;
   grid-template-columns: minmax(0, 1fr) auto;
+  justify-self: stretch;
   min-width: 0;
+  text-align: left;
+  width: 100%;
 }
 
 .task-hub-dated-note-card-tags {

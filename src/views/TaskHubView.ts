@@ -1,4 +1,4 @@
-import { ItemView, MarkdownRenderer, Notice, WorkspaceLeaf } from "obsidian";
+import { ItemView, MarkdownRenderer, Menu, Notice, WorkspaceLeaf } from "obsidian";
 import { TASK_HUB_VIEW_TYPE } from "../constants";
 import type { CalendarDropTarget } from "../calendar/calendarDropTarget";
 import { toLocalDateKey } from "../calendar/dateBuckets";
@@ -18,6 +18,7 @@ import { renderTasksView } from "./renderTasksView";
 import { renderDatedNotesView } from "./renderDatedNotesView";
 import { decorateRenderedTaskNoteTags, renderPlainTaskNoteBody } from "./renderTaskNoteBody";
 import { bindTaskHubTagInputSuggest, collectObsidianTags, type TaskHubTagInputElement } from "./tagInputSuggest";
+import type { DatedNote } from "../datedNotes";
 
 type TaskHubRenderOptions = {
   preserveTaskListScroll?: boolean;
@@ -229,7 +230,8 @@ export class TaskHubView extends ItemView {
             this.pendingDatedNoteDetailTransition = true;
             this.render({ preserveTaskListScroll: true, preserveContentScroll: true });
           },
-          onOpenNoteSource: (path) => void this.plugin.openDatedNoteSource(path)
+          onOpenNoteSource: (path) => void this.plugin.openDatedNoteSource(path),
+          onOpenNoteActions: (note, event) => this.openDatedNoteActionsMenu(note, event)
         },
         {
           renderNoteMarkdown: (noteContainer, body, sourcePath) => this.renderNoteMarkdown(noteContainer, body, sourcePath)
@@ -644,6 +646,21 @@ export class TaskHubView extends ItemView {
           }
         : {})
     });
+  }
+
+  private openDatedNoteActionsMenu(note: DatedNote, event: MouseEvent): void {
+    const t = createTranslator(this.plugin.settings.language);
+    const menu = new Menu();
+    menu.addItem((item) => {
+      item.setTitle(t("edit")).onClick(() => void this.plugin.openDatedNoteEditor(note.path));
+    });
+    menu.addItem((item) => {
+      item.setTitle(t("openSource")).onClick(() => void this.plugin.openDatedNoteSource(note.path));
+    });
+    menu.addItem((item) => {
+      item.setTitle(t("delete")).onClick(() => void this.plugin.deleteDatedNote(note.path));
+    });
+    menu.showAtMouseEvent(event);
   }
 
   private openCreateTaskForDate(target: CalendarDropTarget): void {
