@@ -184,7 +184,7 @@ export class TaskHubView extends ItemView {
           this.render();
         },
         onStatusChange: (status) => {
-          this.updateFilters({ ...this.filters, status });
+          this.updateFilters({ ...this.filters, status }, {}, { keepActiveSmartList: true });
         },
         onConditionChange: (conditions) => {
           this.updateFilters({ ...this.filters, conditions });
@@ -720,11 +720,9 @@ export class TaskHubView extends ItemView {
       return;
     }
     this.activeSmartListId = smartList.id;
-    const selectedTaskIds = taskIdsReferencedBySmartList(allTasks, smartList);
-    this.selectedTaskIds = new Set(selectedTaskIds);
-    const selectedTask = allTasks.find((task) => selectedTaskIds.includes(task.id));
-    this.selectedTaskId = selectedTask?.id;
-    this.selectedTaskStableId = selectedTask ? selectedTask.stableId ?? selectedTask.id : undefined;
+    this.selectedTaskIds = new Set();
+    this.selectedTaskId = undefined;
+    this.selectedTaskStableId = undefined;
     this.render({ preserveTaskListScroll: true, preserveContentScroll: true });
   }
 
@@ -1536,19 +1534,6 @@ function createSmartListId(existing: readonly TaskHubSmartList[]): string {
     id = `smart_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
   } while (existingIds.has(id));
   return id;
-}
-
-function taskIdsReferencedBySmartList(tasks: TaskItem[], smartList: TaskHubSmartList): string[] {
-  const stableIds = new Set(smartList.taskStableIds);
-  const taskIds = new Set(smartList.taskIds);
-  const excludedStableIds = new Set(smartList.excludedTaskStableIds ?? []);
-  const excludedTaskIds = new Set(smartList.excludedTaskIds ?? []);
-  return tasks
-    .filter((task) => {
-      if ((task.stableId && excludedStableIds.has(task.stableId)) || excludedTaskIds.has(task.id)) return false;
-      return taskIds.has(task.id) || (task.stableId && stableIds.has(task.stableId));
-    })
-    .map((task) => task.id);
 }
 
 export function smartListCountsForTasks(

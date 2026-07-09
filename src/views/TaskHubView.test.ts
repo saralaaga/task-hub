@@ -675,6 +675,60 @@ describe("TaskHubView smart list interactions", () => {
     expect(render).toHaveBeenCalledWith({ preserveTaskListScroll: true, preserveContentScroll: true });
   });
 
+  it("keeps the active smart list when the status filter changes", () => {
+    const list = smartList();
+    const plugin = {
+      settings: {
+        defaultView: "tasks",
+        language: "en",
+        taskViewFilters: fallbackFilters(),
+        lastSessionState: undefined,
+        smartLists: [list]
+      },
+      saveSettings: jest.fn(async () => undefined)
+    };
+    const view = new TaskHubView({} as never, plugin as never);
+    jest.spyOn(view as unknown as { render(options?: unknown): void }, "render").mockImplementation(() => undefined);
+    Object.assign(view, { activeSmartListId: "smart_focus" });
+
+    (view as unknown as {
+      updateFilters(filters: TaskViewFilterSettings, options?: unknown, updateOptions?: { keepActiveSmartList?: boolean }): void;
+    }).updateFilters({ ...fallbackFilters(), status: "all" }, {}, { keepActiveSmartList: true });
+
+    expect((view as unknown as { activeSmartListId?: string }).activeSmartListId).toBe("smart_focus");
+    expect(plugin.settings.taskViewFilters.status).toBe("all");
+    expect(plugin.saveSettings).toHaveBeenCalled();
+  });
+
+  it("does not auto-select smart list member tasks when applying a smart list", () => {
+    const list = smartList({
+      taskStableIds: ["vault:th_focus", "vault:th_other"],
+      taskIds: []
+    });
+    const plugin = {
+      settings: {
+        defaultView: "tasks",
+        language: "en",
+        taskViewFilters: fallbackFilters(),
+        lastSessionState: undefined,
+        smartLists: [list]
+      },
+      saveSettings: jest.fn(async () => undefined)
+    };
+    const view = new TaskHubView({} as never, plugin as never);
+    jest.spyOn(view as unknown as { render(options?: unknown): void }, "render").mockImplementation(() => undefined);
+
+    (view as unknown as { applySmartList(smartList: typeof list, allTasks: TaskItem[]): void }).applySmartList(list, [
+      task({ id: "task-1", stableId: "vault:th_focus" }),
+      task({ id: "task-2", stableId: "vault:th_other" })
+    ]);
+
+    expect((view as unknown as { activeSmartListId?: string }).activeSmartListId).toBe("smart_focus");
+    expect((view as unknown as { selectedTaskId?: string }).selectedTaskId).toBeUndefined();
+    expect((view as unknown as { selectedTaskStableId?: string }).selectedTaskStableId).toBeUndefined();
+    expect([...(view as unknown as { selectedTaskIds: Set<string> }).selectedTaskIds]).toEqual([]);
+  });
+
   it("hides completed smart list tasks when the current view does not show completed tasks", () => {
     const currentFilters: TaskViewFilterSettings = {
       status: "open",
@@ -762,7 +816,11 @@ describe("TaskHubView smart list interactions", () => {
     (view as unknown as { applySmartList(smartList: typeof list, allTasks: TaskItem[]): void }).applySmartList(list, [
       task({ id: "task-1", stableId: "vault:th_focus" })
     ]);
-    expect([...(view as unknown as { selectedTaskIds: Set<string> }).selectedTaskIds]).toEqual(["task-1"]);
+    Object.assign(view, {
+      selectedTaskId: "task-1",
+      selectedTaskStableId: "vault:th_focus",
+      selectedTaskIds: new Set(["task-1"])
+    });
 
     (view as unknown as { deleteSmartList(smartList: typeof list): void }).deleteSmartList(list);
     await Promise.resolve();
