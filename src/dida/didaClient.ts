@@ -27,8 +27,8 @@ export type DidaTaskRecord = {
   status?: number;
   completedTime?: string;
   isAllDay?: boolean;
-  startDate?: string;
-  dueDate?: string;
+  startDate?: string | null;
+  dueDate?: string | null;
   timeZone?: string;
   reminders?: string[];
   repeatFlag?: string;
@@ -48,8 +48,8 @@ export type DidaTaskPayload = {
   content?: string;
   desc?: string;
   isAllDay?: boolean;
-  startDate?: string;
-  dueDate?: string;
+  startDate?: string | null;
+  dueDate?: string | null;
   timeZone?: string;
   reminders?: string[];
   repeatFlag?: string;

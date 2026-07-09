@@ -1,7 +1,7 @@
 import { ButtonComponent, Editor, EventRef, MarkdownView, Menu, Modal, Notice, Platform, Plugin, requestUrl, Setting, TFile, WorkspaceLeaf } from "obsidian";
 import { PLUGIN_DISPLAY_NAME, TASK_HUB_VIEW_TYPE } from "./constants";
 import { appleCalendarEventToReminderInput, appleReminderToCalendarEventInput } from "./calendar/appleConversion";
-import { calendarDropTargetParts, withCalendarDropTargetDate, type CalendarDropTarget } from "./calendar/calendarDropTarget";
+import { calendarDropTargetParts, isUnscheduledCalendarDropTarget, withCalendarDropTargetDate, type CalendarDropTarget } from "./calendar/calendarDropTarget";
 import { toLocalDateKey } from "./calendar/dateBuckets";
 import { extractAppleReminderTitleTags, normalizeAppleReminderTags } from "./appleReminderTags";
 import { fetchIcsSource } from "./calendar/icsClient";
@@ -17,7 +17,7 @@ import {
   canDeleteAppleReminderCapability
 } from "./integrationCapabilities";
 import { parseTaskAtLine } from "./indexing/editorTask";
-import { completeTaskInContent, deleteTaskInContent, rescheduleTaskInContent, updateTaskLineInContent, type CompletionResult } from "./indexing/taskActions";
+import { completeTaskInContent, deleteTaskInContent, rescheduleTaskInContent, unscheduleTaskInContent, updateTaskLineInContent, type CompletionResult } from "./indexing/taskActions";
 import { TaskIndex } from "./indexing/taskIndex";
 import { openExternalTaskSource } from "./externalSources";
 import { appendTaskToContent, createTaskLine, normalizeTaskCreationFilePath } from "./taskCreation";
@@ -582,6 +582,9 @@ export default class TaskHubPlugin extends Plugin {
 
   async rescheduleTask(task: TaskItem, target: CalendarDropTarget): Promise<CompletionResult> {
     const t = createTranslator(this.settings.language);
+    if (isUnscheduledCalendarDropTarget(target)) {
+      return this.unscheduleTask(task);
+    }
     const timedTarget = calendarDropTargetParts(target);
 
     if (task.source === "dida") {
@@ -694,6 +697,142 @@ export default class TaskHubPlugin extends Plugin {
         lineOutsideFile: t("lineOutsideFile"),
         dateTokenMissing: t("taskDateTokenMissing")
       }, timedTarget.startMinutes);
+      return update.result.status === "updated" ? update.result.content : content;
+    });
+
+    const updateResult = update.result;
+    if (updateResult.status === "updated") {
+      this.rememberReindexedVaultTaskStableId(task, updateResult);
+      await this.reindexVaultFile(file);
+      const updatedTask = this.resolveUndoTask(task, updateResult);
+      const noteMigration = updatedTask ? await this.transferTaskNotesToUpdatedTask(task, updatedTask) : { ok: true as const };
+      if (!noteMigration.ok) new Notice(noteMigration.message);
+      this.rememberTaskDraftUndo(task, this.resolveUndoTask(task, updateResult));
+      new Notice(t("taskDateUpdated"));
+    } else if (updateResult.status === "already_in_state") {
+      new Notice(t("taskDateAlreadySet"));
+    } else {
+      new Notice(updateResult.message);
+    }
+
+    this.refreshOpenViews();
+    return updateResult;
+  }
+
+  private async unscheduleTask(task: TaskItem): Promise<CompletionResult> {
+    const t = createTranslator(this.settings.language);
+
+    if (!taskPlannedDateKey(task) && startMinutesFromTask(task) === undefined) {
+      new Notice(t("taskDateAlreadySet"));
+      return { status: "already_in_state" };
+    }
+
+    if (task.source === "dida") {
+      if (
+        !this.settings.dida.tasksWritebackEnabled ||
+        !this.settings.dida.tasksDragRescheduleEnabled ||
+        !task.externalId ||
+        !task.externalListId
+      ) {
+        const result: CompletionResult = { status: "conflict", message: t("externalTaskReadOnly") };
+        new Notice(result.message);
+        return result;
+      }
+      try {
+        await this.createDidaClient().updateTask(
+          task.externalListId,
+          task.externalId,
+          taskItemToDidaPayload({
+            title: task.text,
+            projectId: task.externalListId,
+            notes: task.contextPreview,
+            date: null,
+            startDate: null,
+            tags: this.settings.dida.tasksCreateTagsEnabled ? task.tags : [],
+            reminderOffsetMinutes: this.settings.dida.defaultReminderOffsetMinutes,
+            repeatFlag: task.recurrence
+          })
+        );
+        await this.syncDida({ silent: true });
+        this.rememberTaskDraftUndo(task, this.resolveUndoTask(task, { status: "updated", content: "", line: 0 }));
+        new Notice(t("taskDateUpdated"));
+        this.refreshOpenViews();
+        return { status: "updated", content: "", line: 0 };
+      } catch (error) {
+        const result: CompletionResult = { status: "conflict", message: error instanceof Error ? error.message : String(error) };
+        new Notice(result.message);
+        return result;
+      }
+    }
+
+    if (task.source === "apple-reminders") {
+      if (!this.isLocalAppleSupported()) {
+        const result: CompletionResult = { status: "conflict", message: t("localAppleUnsupportedPlatform") };
+        new Notice(result.message);
+        return result;
+      }
+
+      if (!this.settings.localApple.remindersWritebackEnabled || !task.externalId) {
+        const result: CompletionResult = { status: "conflict", message: t("externalTaskReadOnly") };
+        new Notice(result.message);
+        return result;
+      }
+
+      try {
+        await this.runAppleReminderWrite(() =>
+          setAppleReminderDetails({
+            id: task.externalId as string,
+            title: task.text,
+            dueDate: null,
+            alertMinutesBefore: null,
+            notes: task.contextPreview,
+            tags: task.tags,
+            recurrence: task.recurrence
+          })
+        );
+        this.clearAppleReminderStartDate(task.externalId);
+        await this.syncLocalApple({ silent: true });
+        this.rememberTaskDraftUndo(task, this.resolveUndoTask(task, { status: "updated", content: "", line: 0 }));
+        new Notice(t("taskDateUpdated"));
+        this.refreshOpenViews();
+        return { status: "updated", content: "", line: 0 };
+      } catch (error) {
+        const result: CompletionResult = {
+          status: "conflict",
+          message: error instanceof Error ? error.message : String(error)
+        };
+        new Notice(result.message);
+        return result;
+      }
+    }
+
+    if (task.source !== "vault") {
+      const result: CompletionResult = { status: "conflict", message: t("externalTaskReadOnly") };
+      new Notice(result.message);
+      return result;
+    }
+
+    const file = this.app.vault.getFileByPath(task.filePath);
+    if (!file) {
+      const result: CompletionResult = { status: "conflict", message: `${t("fileNotFound")}: ${task.filePath}` };
+      new Notice(result.message);
+      return result;
+    }
+
+    const update = {
+      result: {
+        status: "conflict",
+        message: t("taskUpdateFailed")
+      } as CompletionResult
+    };
+
+    await this.app.vault.process(file, (content) => {
+      update.result = unscheduleTaskInContent(content, task, {
+        lineChangedConflict: t("lineChangedConflict"),
+        lineMismatchConflict: t("lineMismatchConflict"),
+        lineNoLongerOpen: t("lineNoLongerOpen"),
+        lineOutsideFile: t("lineOutsideFile")
+      });
       return update.result.status === "updated" ? update.result.content : content;
     });
 
@@ -2227,6 +2366,22 @@ export default class TaskHubPlugin extends Plugin {
     const stableId = this.externalTaskMetadataKey("apple-reminders", externalId);
     const startDate = taskStartDateKey(task) ?? taskPlannedDateKey(task) ?? fallbackDate;
     this.touchExternalTaskMetadata(stableId, { startDate, seenAt });
+  }
+
+  private clearAppleReminderStartDate(externalId: string | undefined): void {
+    if (!externalId) return;
+    const stableId = this.externalTaskMetadataKey("apple-reminders", externalId);
+    const current = this.settings.externalTaskMetadata[stableId];
+    if (!current?.startDate) return;
+    const nextMetadata = { ...this.settings.externalTaskMetadata };
+    const nextRecord = { ...current };
+    delete nextRecord.startDate;
+    if (nextRecord.lastSeenAt) {
+      nextMetadata[stableId] = nextRecord;
+    } else {
+      delete nextMetadata[stableId];
+    }
+    this.settings.externalTaskMetadata = nextMetadata;
   }
 
   private pruneExternalTaskMetadata(liveStableIds: Set<string>, now = new Date()): boolean {

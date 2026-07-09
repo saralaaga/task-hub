@@ -60,7 +60,10 @@ export function taskItemToDidaPayload(input: {
     ...(tags.length > 0 ? { tags } : {})
   };
 
-  if (input.date) {
+  if (input.date === null) {
+    payload.isAllDay = true;
+    payload.dueDate = null;
+  } else if (input.date) {
     const hasTime = input.startMinutes !== undefined;
     payload.isAllDay = !hasTime;
     payload.dueDate = hasTime ? localDateTimeWithOffset(input.date, input.startMinutes as number) : `${input.date}T00:00:00+0800`;
@@ -70,7 +73,9 @@ export function taskItemToDidaPayload(input: {
     }
   }
 
-  if (input.startDate) {
+  if (input.startDate === null) {
+    payload.startDate = null;
+  } else if (input.startDate) {
     payload.startDate = `${input.startDate}T00:00:00+0800`;
     payload.timeZone = payload.timeZone ?? "Asia/Shanghai";
   }
@@ -104,7 +109,7 @@ function extractHashtags(title: string): string[] {
   return title.match(/#[\p{L}\p{N}_/-]+/gu) ?? [];
 }
 
-function toLocalDateKey(value: string | undefined): string | undefined {
+function toLocalDateKey(value: string | null | undefined): string | undefined {
   if (!value) return undefined;
   const dateOnly = value.match(/^(\d{4}-\d{2}-\d{2})$/);
   if (dateOnly) return dateOnly[1];
@@ -115,7 +120,7 @@ function toLocalDateKey(value: string | undefined): string | undefined {
   return formatLocalDateKey(date);
 }
 
-function toLocalDateTime(value: string | undefined): string | undefined {
+function toLocalDateTime(value: string | null | undefined): string | undefined {
   if (!value || !/T\d{2}:\d{2}/.test(value)) return undefined;
   const floating = value.match(/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2})(?::\d{2})?/);
   if (floating && !hasExplicitZone(value)) return floating[1];
@@ -124,7 +129,7 @@ function toLocalDateTime(value: string | undefined): string | undefined {
   return `${formatLocalDateKey(date)}T${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
 }
 
-function toScheduledDate(value: string | undefined, isAllDay: boolean | undefined): string | undefined {
+function toScheduledDate(value: string | null | undefined, isAllDay: boolean | undefined): string | undefined {
   if (!value) return undefined;
   return isAllDay ? toLocalDateKey(value) : toLocalDateTime(value) ?? toLocalDateKey(value);
 }

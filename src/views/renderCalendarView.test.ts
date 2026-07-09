@@ -3781,6 +3781,54 @@ describe("renderCalendarView", () => {
     expect(onTaskReschedule).toHaveBeenCalledWith(unscheduledTask, "2026-05-12");
   });
 
+  it("unschedules a dragged scheduled task when dropped on the unscheduled panel", () => {
+    const container = new FakeElement();
+    const onTaskReschedule = jest.fn();
+    const scheduledTask = { ...task, id: "task-scheduled-to-unscheduled", text: "Scheduled task", dueDate: "2026-05-08" };
+    const unscheduledTask = { ...task, id: "task-unscheduled-target", dueDate: undefined, rawLine: "- [ ] Unscheduled", text: "Unscheduled" };
+
+    renderCalendarView(
+      container as unknown as HTMLElement,
+      {
+        mode: "day",
+        focusDate: new Date("2026-05-08T12:00:00Z"),
+        weekStart: "monday",
+        visibleSourceIds: new Set(["vault"]),
+        includeCompletedTasks: false,
+        allowAppleReminderWriteback: false,
+        allowTaskCreation: false,
+        unscheduledPanelOpen: true,
+        unscheduledTasks: [unscheduledTask],
+        sources: [],
+        t: (key) => key
+      },
+      [scheduledTask, unscheduledTask],
+      [],
+      {
+        onLayerToggle: jest.fn(),
+        onModeChange: jest.fn(),
+        onMove: jest.fn(),
+        onDateCreateTask: jest.fn(),
+        onTaskComplete: jest.fn(),
+        onTaskJump: jest.fn(),
+        onTaskSelect: jest.fn(),
+        onTaskReschedule,
+        onToday: jest.fn()
+      }
+    );
+
+    const item = collect(container)
+      .filter((element) => element.classes.has("task-hub-calendar-item"))
+      .find((element) => collect(element).some((child) => child.text === "Scheduled task"));
+    const panel = collect(container).find((element) => element.classes.has("task-hub-calendar-day-unscheduled"));
+    const dataTransfer = new FakeDataTransfer();
+    item?.dispatch("dragstart", { dataTransfer });
+    panel?.dispatch("drop", { dataTransfer });
+
+    expect(item?.draggable).toBe(true);
+    expect(onTaskReschedule).toHaveBeenCalledWith(scheduledTask, { kind: "unscheduled" });
+  });
+
   it("mounts the unscheduled side panel inside the right sidebar host in week view", () => {
     const container = new FakeElement();
     const unscheduledTask = { ...task, id: "task-unscheduled-week", dueDate: undefined, rawLine: "- [ ] Week", text: "Week" };
@@ -6172,6 +6220,52 @@ describe("renderCalendarView", () => {
     const restoredAgenda = collect(container).find((element) => element.classes.has("task-hub-agenda"));
     expect(restoredAgenda?.scrollTop).toBe(360);
     expect(restoredAgenda?.scrollLeft).toBe(24);
+  });
+
+  it("restores the day all-day slot scroll position after a rerender", () => {
+    const container = new FakeElement();
+    const manyTasks = Array.from({ length: 8 }, (_, index) => ({
+      ...task,
+      id: `day-all-day-scroll-${index}`,
+      text: `All-day scroll ${index + 1}`,
+      dueDate: "2026-05-08"
+    }));
+    const render = (tasks: TaskItem[]) => renderCalendarView(
+      container as unknown as HTMLElement,
+      {
+        mode: "day",
+        focusDate: new Date("2026-05-08T12:00:00Z"),
+        weekStart: "monday",
+        visibleSourceIds: new Set(["vault"]),
+        includeCompletedTasks: false,
+        allowAppleReminderWriteback: false,
+        allowTaskCreation: false,
+        sources: [],
+        t: (key) => key
+      },
+      tasks,
+      [],
+      {
+        onLayerToggle: jest.fn(),
+        onModeChange: jest.fn(),
+        onMove: jest.fn(),
+        onDateCreateTask: jest.fn(),
+        onTaskComplete: jest.fn(),
+        onTaskJump: jest.fn(),
+        onTaskSelect: jest.fn(),
+        onTaskReschedule: jest.fn(),
+        onToday: jest.fn()
+      }
+    );
+
+    render(manyTasks);
+    const slot = collect(container).find((element) => element.classes.has("task-hub-agenda-all-day-slot"));
+    slot!.scrollTop = 96;
+
+    render(manyTasks.map((item, index) => index === 0 ? { ...item, text: "All-day scroll updated" } : item));
+
+    const restoredSlot = collect(container).find((element) => element.classes.has("task-hub-agenda-all-day-slot"));
+    expect(restoredSlot?.scrollTop).toBe(96);
   });
 
   it("does not create a timed task from the click synthesized after resizing an event", () => {

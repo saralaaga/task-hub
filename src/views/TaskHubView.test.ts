@@ -269,6 +269,83 @@ describe("restoreContentScrollAfterRender", () => {
   });
 });
 
+describe("TaskHubView viewport restoration", () => {
+  it("reapplies preserved task, content, and agenda scroll after layout settles", () => {
+    const plugin = {
+      settings: {
+        defaultView: "calendar",
+        language: "en",
+        taskViewFilters: fallbackFilters(),
+        lastSessionState: undefined
+      },
+      getCalendarSources: jest.fn(() => [])
+    };
+    const view = new TaskHubView({} as never, plugin as never);
+    const listPane = { scrollTop: 0 };
+    const allDaySlot = {
+      scrollTop: 0,
+      attrs: new Map([["data-task-hub-agenda-day", "2026-05-08"]]),
+      classes: new Set(["task-hub-agenda-all-day-slot"]),
+      children: [],
+      classList: { contains: (className: string) => className === "task-hub-agenda-all-day-slot" },
+      getAttribute(name: string) {
+        return this.attrs.get(name) ?? null;
+      }
+    };
+    const agenda = { scrollTop: 0, scrollLeft: 0, children: [allDaySlot] };
+    const contentContainer = {
+      scrollTop: 0,
+      querySelector: jest.fn((selector: string) => {
+        if (selector === ".task-hub-task-list-pane") return listPane;
+        if (selector === ".task-hub-agenda") return agenda;
+        return undefined;
+      })
+    };
+    const animationFrameCallbacks: Array<() => void> = [];
+    const timeoutCallbacks: Array<() => void> = [];
+    Object.assign(view, {
+      containerEl: {
+        win: {
+          requestAnimationFrame: jest.fn((callback: () => void) => {
+            animationFrameCallbacks.push(callback);
+            return 1;
+          }),
+          cancelAnimationFrame: jest.fn(),
+          setTimeout: jest.fn((callback: () => void) => {
+            timeoutCallbacks.push(callback);
+            return timeoutCallbacks.length;
+          }),
+          clearTimeout: jest.fn()
+        },
+        children: [{}, contentContainer]
+      },
+      taskListScrollTop: 240,
+      contentScrollTop: 180,
+      calendarAgendaScrollPosition: { top: 360, left: 24, allDaySlotTops: { "2026-05-08": 72 } }
+    });
+
+    (view as unknown as { scheduleViewportRestore(options: unknown): void }).scheduleViewportRestore({
+      preserveTaskListScroll: true,
+      preserveContentScroll: true,
+      preserveCalendarAgendaScroll: true
+    });
+    contentContainer.scrollTop = 0;
+    listPane.scrollTop = 0;
+    agenda.scrollTop = 0;
+    agenda.scrollLeft = 0;
+    allDaySlot.scrollTop = 0;
+
+    animationFrameCallbacks.forEach((callback) => callback());
+    timeoutCallbacks.forEach((callback) => callback());
+
+    expect(contentContainer.scrollTop).toBe(180);
+    expect(listPane.scrollTop).toBe(240);
+    expect(agenda.scrollTop).toBe(360);
+    expect(agenda.scrollLeft).toBe(24);
+    expect(allDaySlot.scrollTop).toBe(72);
+  });
+});
+
 describe("scrollDatedNoteDetailToTop", () => {
   it("resets only the dated note detail pane after switching notes", () => {
     const detail = { scrollTop: 180 };

@@ -25,6 +25,11 @@ type TaskHubRenderOptions = {
   preserveCalendarAgendaScroll?: boolean;
 };
 
+type ViewportRestoreHandle = {
+  kind: "animationFrame" | "timeout";
+  id: number;
+};
+
 export class TaskHubView extends ItemView {
   private view: DashboardView;
   private filters: TaskFilterState;
@@ -56,6 +61,7 @@ export class TaskHubView extends ItemView {
   private lastTaskViewTransitionKey: string | undefined;
   private pendingExpandedTaskScrollId: string | undefined;
   private pendingExpandedTaskScrollTimers: number[] = [];
+  private pendingViewportRestoreHandles: ViewportRestoreHandle[] = [];
   private readonly undoShortcutHandler = (event: KeyboardEvent) => {
     if (!shouldHandleTaskHubUndoShortcut(event)) return;
     event.preventDefault();
@@ -98,6 +104,7 @@ export class TaskHubView extends ItemView {
 
   onClose(): Promise<void> {
     this.containerEl.removeEventListener("keydown", this.undoShortcutHandler);
+    this.clearPendingViewportRestores();
     this.syncSessionStateToSettings();
     return this.plugin.saveData(this.plugin.settings);
   }
@@ -234,6 +241,7 @@ export class TaskHubView extends ItemView {
         this.pendingDatedNoteDetailScroll = false;
       }
       this.pendingDatedNoteDetailTransition = false;
+      this.scheduleViewportRestore(options);
       return;
     }
 
@@ -384,6 +392,7 @@ export class TaskHubView extends ItemView {
       if (this.expandingTaskIds.size > 0) {
         this.expandingTaskIds = new Set();
       }
+      this.scheduleViewportRestore(options);
       return;
     }
 
@@ -430,6 +439,7 @@ export class TaskHubView extends ItemView {
         }
       );
       this.restoreContentScroll(options);
+      this.scheduleViewportRestore(options);
       return;
     }
 
@@ -558,6 +568,7 @@ export class TaskHubView extends ItemView {
       this.unscheduledPanelOpening = false;
       this.calendarModeTransition = undefined;
       this.restoreContentScroll(options);
+      this.scheduleViewportRestore(options);
       return;
     }
 
@@ -959,7 +970,8 @@ export class TaskHubView extends ItemView {
     if (!agenda) return;
     this.calendarAgendaScrollPosition = {
       top: agenda.scrollTop,
-      left: agenda.scrollLeft
+      left: agenda.scrollLeft,
+      allDaySlotTops: readCalendarAllDaySlotScrollTops(agenda)
     };
   }
 
@@ -969,6 +981,58 @@ export class TaskHubView extends ItemView {
       preserveScroll: shouldPreserveScroll(options),
       scrollTop: this.contentScrollTop
     });
+  }
+
+  private restoreViewport(options: TaskHubRenderOptions): void {
+    if (!shouldPreserveScroll(options)) return;
+    if (options.preserveContentScroll) {
+      this.restoreContentScroll(options);
+    }
+    if (options.preserveTaskListScroll) {
+      const container = this.containerEl.children[1] as HTMLElement | undefined;
+      const list = container ? findTaskListPane(container) : undefined;
+      if (list) list.scrollTop = this.taskListScrollTop;
+    }
+    if (options.preserveCalendarAgendaScroll) {
+      const container = this.containerEl.children[1] as HTMLElement | undefined;
+      const agenda = container?.querySelector<HTMLElement>(".task-hub-agenda");
+      if (agenda && this.calendarAgendaScrollPosition) {
+        agenda.scrollTop = this.calendarAgendaScrollPosition.top;
+        agenda.scrollLeft = this.calendarAgendaScrollPosition.left;
+        restoreCalendarAllDaySlotScrollTops(agenda, this.calendarAgendaScrollPosition.allDaySlotTops);
+      }
+    }
+  }
+
+  private scheduleViewportRestore(options: TaskHubRenderOptions): void {
+    if (!shouldPreserveScroll(options)) return;
+    this.clearPendingViewportRestores();
+    this.restoreViewport(options);
+    const win = this.containerEl.win;
+    if (typeof win.requestAnimationFrame === "function") {
+      const id = win.requestAnimationFrame(() => this.restoreViewport(options));
+      this.pendingViewportRestoreHandles.push({ kind: "animationFrame", id });
+    }
+    for (const delay of [80, 180]) {
+      const id = win.setTimeout(() => this.restoreViewport(options), delay);
+      this.pendingViewportRestoreHandles.push({ kind: "timeout", id });
+    }
+  }
+
+  private clearPendingViewportRestores(): void {
+    const win = this.containerEl?.win;
+    if (!win) {
+      this.pendingViewportRestoreHandles = [];
+      return;
+    }
+    for (const handle of this.pendingViewportRestoreHandles) {
+      if (handle.kind === "animationFrame" && typeof win.cancelAnimationFrame === "function") {
+        win.cancelAnimationFrame(handle.id);
+      } else if (handle.kind === "timeout") {
+        win.clearTimeout(handle.id);
+      }
+    }
+    this.pendingViewportRestoreHandles = [];
   }
 
   private scheduleExpandedTaskScroll(taskId: string): void {
@@ -1211,6 +1275,38 @@ function compareUnscheduledTasks(left: TaskItem, right: TaskItem): number {
 
 function findTaskListPane(container: HTMLElement): HTMLElement | undefined {
   return container.querySelector<HTMLElement>(".task-hub-task-list-pane") ?? undefined;
+}
+
+function readCalendarAllDaySlotScrollTops(agenda: HTMLElement): Record<string, number> {
+  const result: Record<string, number> = {};
+  for (const slot of findCalendarAllDaySlots(agenda)) {
+    const day = readElementAttr(slot, "data-task-hub-agenda-day");
+    if (!day) continue;
+    result[day] = slot.scrollTop;
+  }
+  return result;
+}
+
+function restoreCalendarAllDaySlotScrollTops(agenda: HTMLElement, positions: Record<string, number> | undefined): void {
+  if (!positions) return;
+  for (const slot of findCalendarAllDaySlots(agenda)) {
+    const day = readElementAttr(slot, "data-task-hub-agenda-day");
+    if (!day || positions[day] === undefined) continue;
+    slot.scrollTop = positions[day];
+  }
+}
+
+function findCalendarAllDaySlots(root: HTMLElement): HTMLElement[] {
+  const matches: HTMLElement[] = [];
+  const hasClass =
+    "classList" in root
+      ? root.classList.contains("task-hub-agenda-all-day-slot")
+      : (root as HTMLElement & { classes?: Set<string> }).classes?.has("task-hub-agenda-all-day-slot");
+  if (hasClass) matches.push(root);
+  for (const child of Array.from(root.children)) {
+    matches.push(...findCalendarAllDaySlots(child as HTMLElement));
+  }
+  return matches;
 }
 
 function findDescendantByAttr(root: HTMLElement, name: string, value: string): HTMLElement | undefined {

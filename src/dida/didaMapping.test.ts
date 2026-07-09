@@ -133,4 +133,17 @@ describe("dida task mapping", () => {
       repeatFlag: ""
     });
   });
+
+  it("builds an update payload that clears task dates", () => {
+    expect(taskItemToDidaPayload({
+      title: "Submit report",
+      date: null,
+      startDate: null
+    })).toEqual({
+      title: "Submit report",
+      isAllDay: true,
+      dueDate: null,
+      startDate: null
+    });
+  });
 });

@@ -108,6 +108,28 @@ export function rescheduleTaskInContent(
   return withContent(tryRescheduleAtLine(lines, nearby, task, targetDate, messages, startMinutes), lines);
 }
 
+export function unscheduleTaskInContent(
+  content: string,
+  task: TaskItem,
+  messages: CompletionMessages = DEFAULT_COMPLETION_MESSAGES
+): CompletionResult {
+  const lines = content.split(/\r?\n/);
+  const direct = tryUnscheduleAtLine(lines, task.line, task, messages);
+  if (direct.status !== "conflict") {
+    return withContent(direct, lines);
+  }
+
+  const nearby = findNearbyLine(lines, task);
+  if (nearby === undefined) {
+    return {
+      status: "conflict",
+      message: messages.lineChangedConflict
+    };
+  }
+
+  return withContent(tryUnscheduleAtLine(lines, nearby, task, messages), lines);
+}
+
 export function deleteTaskInContent(
   content: string,
   task: TaskItem,
@@ -208,6 +230,33 @@ function tryRescheduleAtLine(
   const nextLine = buildRescheduledTaskLine(currentLine, task, targetDate, startMinutes);
   if (!nextLine) {
     return { status: "conflict", message: messages.dateTokenMissing };
+  }
+
+  lines[line] = nextLine;
+  return { status: "updated", content: "", line };
+}
+
+function tryUnscheduleAtLine(
+  lines: string[],
+  line: number,
+  task: TaskItem,
+  messages: CompletionMessages
+): CompletionResult {
+  const currentLine = lines[line];
+  if (currentLine === undefined) {
+    return { status: "conflict", message: messages.lineOutsideFile };
+  }
+
+  if (currentLine !== task.rawLine) {
+    return { status: "conflict", message: messages.lineMismatchConflict };
+  }
+
+  const nextLine = buildUnscheduledTaskLine(currentLine);
+  if (!nextLine) {
+    return { status: "conflict", message: messages.lineNoLongerOpen };
+  }
+  if (nextLine === currentLine) {
+    return { status: "already_in_state" };
   }
 
   lines[line] = nextLine;
@@ -393,6 +442,19 @@ function buildRescheduledTaskLine(line: string, task: TaskItem, targetDate: stri
     scheduledDate: withScheduledTime(targetDate, startMinutes),
     dueDate: taskUsesLegacyDueDatePlan(task) ? undefined : metadata.dueDate,
     dueFormat: taskUsesLegacyDueDatePlan(task) ? undefined : metadata.dueFormat
+  })}`;
+}
+
+function buildUnscheduledTaskLine(line: string): string | undefined {
+  const match = line.match(TASK_PREFIX);
+  if (!match) return undefined;
+  const metadata = parseTaskBody(match[2]);
+  return `${match[1]}${buildTaskBody({
+    ...metadata,
+    startDate: undefined,
+    scheduledDate: undefined,
+    dueDate: undefined,
+    dueFormat: undefined
   })}`;
 }
 

@@ -1,6 +1,6 @@
 import { Menu, setIcon, setTooltip } from "obsidian";
 import { buildCalendarItems, calendarEventLayerId, getCalendarRange, type CalendarItem, type CalendarViewMode } from "../calendar/calendarModel";
-import type { CalendarDropTarget } from "../calendar/calendarDropTarget";
+import { isUnscheduledCalendarDropTarget, type CalendarDropTarget } from "../calendar/calendarDropTarget";
 import { toLocalDateKey } from "../calendar/dateBuckets";
 import { formatLunarDayLabel, formatLunarMonthTitle } from "../calendar/lunarCalendar";
 import type { TranslationKey, Translator } from "../i18n";
@@ -332,6 +332,7 @@ export function renderCalendarView(
 export type AgendaScrollPosition = {
   top: number;
   left: number;
+  allDaySlotTops?: Record<string, number>;
 };
 
 function readAgendaScrollPosition(container: HTMLElement): AgendaScrollPosition | undefined {
@@ -339,7 +340,8 @@ function readAgendaScrollPosition(container: HTMLElement): AgendaScrollPosition 
   if (!agenda) return undefined;
   return {
     top: agenda.scrollTop,
-    left: agenda.scrollLeft
+    left: agenda.scrollLeft,
+    allDaySlotTops: readAllDaySlotScrollTops(agenda)
   };
 }
 
@@ -349,6 +351,7 @@ function restoreAgendaScrollPosition(container: HTMLElement, position: AgendaScr
   if (!agenda) return;
   agenda.scrollTop = position.top;
   agenda.scrollLeft = position.left;
+  restoreAllDaySlotScrollTops(agenda, position.allDaySlotTops);
 }
 
 function renderMonthGrid(
@@ -448,6 +451,7 @@ function renderAgendaGrid(
   for (const day of days) {
     const allDayItems = visibleItems.filter((item) => item.date === day && (item.allDay || item.startMinutes === undefined));
     const slot = agenda.createDiv({ cls: "task-hub-agenda-all-day-slot" });
+    slot.setAttr("data-task-hub-agenda-day", day);
     bindTaskCreation(slot, day, state, handlers);
     bindCalendarDropTarget(slot, day, visibleItems, handlers, state);
     for (const item of allDayItems) {
@@ -479,6 +483,46 @@ function renderAgendaGrid(
       renderTimedCalendarItem(column, item, startHour, metrics.hourHeight, handlers, state, itemLayouts.get(item.id));
     }
   }
+}
+
+function readAllDaySlotScrollTops(agenda: HTMLElement): Record<string, number> {
+  const result: Record<string, number> = {};
+  for (const slot of findAllDaySlots(agenda)) {
+    const day = readElementAttribute(slot, "data-task-hub-agenda-day");
+    if (!day) continue;
+    result[day] = slot.scrollTop;
+  }
+  return result;
+}
+
+function restoreAllDaySlotScrollTops(agenda: HTMLElement, positions: Record<string, number> | undefined): void {
+  if (!positions) return;
+  for (const slot of findAllDaySlots(agenda)) {
+    const day = readElementAttribute(slot, "data-task-hub-agenda-day");
+    if (!day || positions[day] === undefined) continue;
+    slot.scrollTop = positions[day];
+  }
+}
+
+function findAllDaySlots(root: HTMLElement): HTMLElement[] {
+  const matches: HTMLElement[] = [];
+  const hasClass =
+    "classList" in root
+      ? root.classList.contains("task-hub-agenda-all-day-slot")
+      : (root as HTMLElement & { classes?: Set<string> }).classes?.has("task-hub-agenda-all-day-slot");
+  if (hasClass) matches.push(root);
+  for (const child of Array.from(root.children)) {
+    matches.push(...findAllDaySlots(child as HTMLElement));
+  }
+  return matches;
+}
+
+function readElementAttribute(element: HTMLElement, name: string): string | undefined {
+  if (typeof element.getAttribute === "function") {
+    return element.getAttribute(name) ?? undefined;
+  }
+  return (element as HTMLElement & { attributes?: Map<string, string>; attrs?: Map<string, string> }).attributes?.get(name)
+    ?? (element as HTMLElement & { attrs?: Map<string, string> }).attrs?.get(name);
 }
 
 function validCalendarDayStartHour(value: number | undefined): number {
@@ -850,7 +894,7 @@ function updateResizePreview(
   startHour: number,
   hourHeight: number
 ): void {
-  if (!target || typeof target === "string" || target.startMinutes === undefined || item.startMinutes === undefined) return;
+  if (!target || typeof target === "string" || isUnscheduledCalendarDropTarget(target) || target.startMinutes === undefined || item.startMinutes === undefined) return;
   const top = ((target.startMinutes - startHour * 60) / 60) * hourHeight;
   const height = Math.max(30, (validDurationMinutes(target.durationMinutes) / 60) * hourHeight - 4);
   setCssStyles(row, {
@@ -878,7 +922,7 @@ function clearResizeFeedback(feedback: HTMLElement, row: HTMLElement): void {
 }
 
 function resizeDeltaMinutes(item: CalendarItem, target: CalendarDropTarget, edge: "start" | "end"): number {
-  if (typeof target === "string" || item.startMinutes === undefined || target.startMinutes === undefined) return 0;
+  if (typeof target === "string" || isUnscheduledCalendarDropTarget(target) || item.startMinutes === undefined || target.startMinutes === undefined) return 0;
   const currentEnd = Math.max(item.endMinutes ?? item.startMinutes + DEFAULT_TIMED_TASK_DURATION_MINUTES, item.startMinutes + MIN_TIMED_ITEM_DURATION_MINUTES);
   if (edge === "start") return target.startMinutes - item.startMinutes;
   return target.startMinutes + validDurationMinutes(target.durationMinutes) - currentEnd;
@@ -1187,6 +1231,7 @@ function renderCalendarMiniMonth(
 
 function renderUnscheduledPanelBody(container: HTMLElement, state: CalendarViewState, handlers: CalendarViewHandlers): void {
   const tasks = state.unscheduledTasks ?? [];
+  bindUnscheduledDropTarget(container, handlers, state);
   const header = container.createDiv({ cls: "task-hub-unscheduled-header" });
   header.createDiv({ cls: "task-hub-unscheduled-title", text: state.t("unscheduled") });
   header.createDiv({ cls: "task-hub-unscheduled-count", text: String(tasks.length) });
@@ -1200,6 +1245,41 @@ function renderUnscheduledPanelBody(container: HTMLElement, state: CalendarViewS
   for (const task of tasks) {
     renderUnscheduledTaskRow(list, task, state, handlers);
   }
+}
+
+function bindUnscheduledDropTarget(
+  element: HTMLElement,
+  handlers: CalendarViewHandlers,
+  state: CalendarViewState
+): void {
+  element.addEventListener("dragover", (event) => {
+    if (!isTaskHubDrag(event)) return;
+    const item = calendarItemFromDragEvent(event, draggableCalendarItems([], state), state);
+    if (!item?.task) return;
+    event.preventDefault();
+    event.stopPropagation();
+    element.addClass("is-drop-hover");
+    updateCalendarDragStack(event);
+    if (event.dataTransfer) {
+      event.dataTransfer.dropEffect = "move";
+    }
+  });
+  element.addEventListener("dragleave", () => {
+    element.removeClass("is-drop-hover");
+  });
+  element.addEventListener("drop", (event) => {
+    const dragItems = draggableCalendarItems([], state);
+    const item = calendarItemFromDragEvent(event, dragItems, state);
+    if (!item?.task) return;
+    event.preventDefault();
+    event.stopPropagation();
+    element.removeClass("is-drop-hover");
+    const selectedTasks = selectedDraggableCalendarItems(item, dragItems, state).filter((candidate) => candidate.task);
+    playCalendarDropScatter(element, selectedTasks, event);
+    for (const selectedItem of selectedTasks) {
+      if (selectedItem.task) handlers.onTaskReschedule(selectedItem.task, { kind: "unscheduled" });
+    }
+  });
 }
 
 function miniMonthWeekdays(weekStart: WeekStart, t: Translator): string[] {
@@ -2815,7 +2895,7 @@ function selectedCalendarDropTarget(
   target: CalendarDropTarget,
   state: CalendarViewState
 ): CalendarDropTarget {
-  if (typeof target !== "string") {
+  if (typeof target !== "string" && !isUnscheduledCalendarDropTarget(target)) {
     const targetStartMinutes = target.startMinutes;
     const draggedStartMinutes = draggedItem.startMinutes;
     if (targetStartMinutes !== undefined && draggedStartMinutes !== undefined) {
@@ -2830,6 +2910,7 @@ function sharedCalendarDropTarget(
   target: CalendarDropTarget,
   state: CalendarViewState
 ): CalendarDropTarget {
+  if (isUnscheduledCalendarDropTarget(target)) return target;
   if (typeof target === "string") return target;
   if (target.startMinutes === undefined) {
     return item.kind === "event"
@@ -2911,7 +2992,7 @@ function adjustedDraggedStartMinutes(element: HTMLElement, event: DragEvent, ite
 }
 
 function updateDragMoveFeedback(item: CalendarItem, target: CalendarDropTarget, event: DragEvent): void {
-  if (typeof target === "string" || item.startMinutes === undefined || target.startMinutes === undefined || target.dateKey !== item.date) {
+  if (typeof target === "string" || isUnscheduledCalendarDropTarget(target) || item.startMinutes === undefined || target.startMinutes === undefined || target.dateKey !== item.date) {
     clearDragMoveFeedback();
     return;
   }

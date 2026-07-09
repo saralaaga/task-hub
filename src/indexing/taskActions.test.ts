@@ -1,4 +1,4 @@
-import { completeTaskInContent, deleteTaskInContent, rescheduleTaskInContent, updateTaskLineInContent } from "./taskActions";
+import { completeTaskInContent, deleteTaskInContent, rescheduleTaskInContent, unscheduleTaskInContent, updateTaskLineInContent } from "./taskActions";
 import type { TaskItem } from "../types";
 
 describe("completeTaskInContent", () => {
@@ -221,6 +221,42 @@ describe("rescheduleTaskInContent", () => {
       content: "- [ ] Pay invoice 🛫 2026-05-08 ⏳ 2026-05-12",
       line: 0
     });
+  });
+});
+
+describe("unscheduleTaskInContent", () => {
+  it("removes scheduled date, start date, and time tokens while preserving tags", () => {
+    const task = taskItem({
+      line: 0,
+      rawLine: "- [ ] Pay invoice 🛫 2026-05-08 ⏳ 2026-05-12 ⏰ 09:30 #finance",
+      startDate: "2026-05-08",
+      scheduledDate: "2026-05-12T09:30"
+    });
+    const result = unscheduleTaskInContent("- [ ] Pay invoice 🛫 2026-05-08 ⏳ 2026-05-12 ⏰ 09:30 #finance", task);
+
+    expect(result).toEqual({
+      status: "updated",
+      content: "- [ ] Pay invoice #finance",
+      line: 0
+    });
+  });
+
+  it("removes legacy due dates when unscheduling a legacy dated task", () => {
+    const task = taskItem({ line: 0, rawLine: "- [ ] Pay invoice 📅 2026-05-08 ⏰ 08:15 #finance", dueDate: "2026-05-08" });
+    const result = unscheduleTaskInContent("- [ ] Pay invoice 📅 2026-05-08 ⏰ 08:15 #finance", task);
+
+    expect(result).toEqual({
+      status: "updated",
+      content: "- [ ] Pay invoice #finance",
+      line: 0
+    });
+  });
+
+  it("returns already_in_state when the task has no planned date or time", () => {
+    const task = taskItem({ line: 0, rawLine: "- [ ] Pay invoice #finance" });
+    const result = unscheduleTaskInContent("- [ ] Pay invoice #finance", task);
+
+    expect(result).toEqual({ status: "already_in_state" });
   });
 });
 
