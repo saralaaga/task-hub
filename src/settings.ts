@@ -7,7 +7,7 @@ import { validTimedDurationMinutes } from "./timeGranularity";
 import type { AppleCalendarInfo, CalendarCreationKind, CalendarCreationTarget, CalendarEventCreationTarget, CalendarSource, CalendarSourceStatus, CalendarTaskCreationTarget, ExternalTaskShadowMetadata, ExternalTaskSourceTab, LocalAppleSyncStatus, PersistedVaultTaskStableRecord, TaskHubLastSessionState, TaskHubSettings } from "./types";
 import { setCssProps } from "./views/domStyles";
 
-export const TASK_HUB_SETTINGS_SCHEMA_VERSION = 5;
+export const TASK_HUB_SETTINGS_SCHEMA_VERSION = 6;
 
 export const DEFAULT_SETTINGS: TaskHubSettings = {
   settingsSchemaVersion: TASK_HUB_SETTINGS_SCHEMA_VERSION,
@@ -55,6 +55,7 @@ export const DEFAULT_SETTINGS: TaskHubSettings = {
   taskNoteManualOrder: {},
   taskNotePinned: {},
   smartLists: [],
+  hiddenExternalTaskListFilterIds: [],
   vaultTaskStableState: {},
   externalTaskLookbackDays: 100,
   externalTaskLookaheadDays: 100,
@@ -158,6 +159,7 @@ export function normalizeTaskHubSettings(loaded: Partial<TaskHubSettings> | null
     taskNoteManualOrder: normalizeTaskNoteManualOrder(loaded?.taskNoteManualOrder),
     taskNotePinned: normalizeTaskNotePinned(loaded?.taskNotePinned),
     smartLists: normalizeSmartLists(loaded?.smartLists, loaded?.showCompletedByDefault),
+    hiddenExternalTaskListFilterIds: normalizeExternalTaskListFilterIds(loaded?.hiddenExternalTaskListFilterIds),
     vaultTaskStableState: normalizeVaultTaskStableState(loaded?.vaultTaskStableState),
     externalTaskLookbackDays: normalizeWindowDays(loaded?.externalTaskLookbackDays, DEFAULT_SETTINGS.externalTaskLookbackDays),
     externalTaskLookaheadDays: normalizeWindowDays(loaded?.externalTaskLookaheadDays, DEFAULT_SETTINGS.externalTaskLookaheadDays),
@@ -242,6 +244,13 @@ function normalizeTaskNotePinned(value: unknown): TaskHubSettings["taskNotePinne
   return result;
 }
 
+function normalizeExternalTaskListFilterIds(value: unknown): TaskHubSettings["hiddenExternalTaskListFilterIds"] {
+  if (!Array.isArray(value)) return [];
+  return Array.from(
+    new Set(value.filter((item): item is string => typeof item === "string" && item.trim().length > 0).map((item) => item.trim()))
+  );
+}
+
 function normalizeSmartLists(value: unknown, showCompletedByDefault: boolean | undefined): TaskHubSettings["smartLists"] {
   if (!Array.isArray(value)) return [];
   const seenIds = new Set<string>();
@@ -265,18 +274,29 @@ function normalizeSmartList(value: unknown, showCompletedByDefault: boolean | un
   const createdAt = normalizeSmartListTimestamp(candidate.createdAt);
   const updatedAt = normalizeSmartListTimestamp(candidate.updatedAt);
   if (!/^[a-z0-9][a-z0-9_-]{0,63}$/u.test(id) || !name || !createdAt || !updatedAt) return undefined;
+  const filters = normalizeLegacySmartListFilters(candidate.filters, showCompletedByDefault);
+  const excludedTaskStableIds = normalizeSmartListStableIds(candidate.excludedTaskStableIds);
+  const excludedTaskIds = normalizeSmartListTaskIds(candidate.excludedTaskIds);
   return {
     id,
     name,
     ...(color ? { color } : {}),
-    filters: normalizeTaskViewFilters(candidate.filters as Partial<TaskHubSettings["taskViewFilters"]> | undefined, showCompletedByDefault),
+    ...(filters ? { filters } : {}),
     taskStableIds: normalizeSmartListStableIds(candidate.taskStableIds),
     taskIds: normalizeSmartListTaskIds(candidate.taskIds),
-    excludedTaskStableIds: normalizeSmartListStableIds(candidate.excludedTaskStableIds),
-    excludedTaskIds: normalizeSmartListTaskIds(candidate.excludedTaskIds),
+    ...(excludedTaskStableIds.length > 0 ? { excludedTaskStableIds } : {}),
+    ...(excludedTaskIds.length > 0 ? { excludedTaskIds } : {}),
     createdAt,
     updatedAt
   };
+}
+
+function normalizeLegacySmartListFilters(
+  value: unknown,
+  showCompletedByDefault: boolean | undefined
+): TaskHubSettings["smartLists"][number]["filters"] | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  return normalizeTaskViewFilters(value as Partial<TaskHubSettings["taskViewFilters"]>, showCompletedByDefault);
 }
 
 function normalizeSmartListColor(value: unknown): string | undefined {
@@ -499,6 +519,9 @@ function normalizeTaskHubLastSessionState(
   return {
     view,
     taskViewFilters: normalizeTaskViewFilters(candidate.taskViewFilters ?? taskViewFilters, showCompletedByDefault),
+    ...(typeof candidate.selectedExternalListFilterId === "string" && candidate.selectedExternalListFilterId.trim().length > 0
+      ? { selectedExternalListFilterId: candidate.selectedExternalListFilterId.trim() }
+      : {}),
     calendarMode,
     ...(calendarFocusDate ? { calendarFocusDate } : {}),
     visibleSourceIds: normalizeVisibleSourceIds(candidate.visibleSourceIds),

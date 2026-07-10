@@ -15,7 +15,7 @@ import {
   smartListCountsForTasks
 } from "./TaskHubView";
 import type { TaskFilterState } from "../filtering/filters";
-import type { TaskHubSmartList, TaskViewFilterSettings } from "../types";
+import type { ExternalTaskListFilterEntry, TaskHubSmartList, TaskViewFilterSettings } from "../types";
 import type { TaskItem } from "../types";
 
 jest.mock("obsidian", () => ({
@@ -293,11 +293,13 @@ describe("TaskHubView viewport restoration", () => {
       }
     };
     const agenda = { scrollTop: 0, scrollLeft: 0, children: [allDaySlot] };
+    const daySidebar = { scrollTop: 0 };
     const contentContainer = {
       scrollTop: 0,
       querySelector: jest.fn((selector: string) => {
         if (selector === ".task-hub-task-list-pane") return listPane;
         if (selector === ".task-hub-agenda") return agenda;
+        if (selector === ".task-hub-calendar-day-sidebar") return daySidebar;
         return undefined;
       })
     };
@@ -321,7 +323,8 @@ describe("TaskHubView viewport restoration", () => {
       },
       taskListScrollTop: 240,
       contentScrollTop: 180,
-      calendarAgendaScrollPosition: { top: 360, left: 24, allDaySlotTops: { "2026-05-08": 72 } }
+      calendarAgendaScrollPosition: { top: 360, left: 24, allDaySlotTops: { "2026-05-08": 72 } },
+      calendarDaySidebarScrollTop: 128
     });
 
     (view as unknown as { scheduleViewportRestore(options: unknown): void }).scheduleViewportRestore({
@@ -334,6 +337,7 @@ describe("TaskHubView viewport restoration", () => {
     agenda.scrollTop = 0;
     agenda.scrollLeft = 0;
     allDaySlot.scrollTop = 0;
+    daySidebar.scrollTop = 0;
 
     animationFrameCallbacks.forEach((callback) => callback());
     timeoutCallbacks.forEach((callback) => callback());
@@ -343,6 +347,7 @@ describe("TaskHubView viewport restoration", () => {
     expect(agenda.scrollTop).toBe(360);
     expect(agenda.scrollLeft).toBe(24);
     expect(allDaySlot.scrollTop).toBe(72);
+    expect(daySidebar.scrollTop).toBe(128);
   });
 });
 
@@ -395,6 +400,7 @@ describe("Task Hub session state", () => {
             sourceQuery: "apple-reminders",
             textQuery: "invoice"
           },
+          selectedExternalListFilterId: "apple-reminders:list:groceries",
           calendarMode: "week",
           calendarFocusDate: "2026-06-04T08:30:00.000Z",
           visibleSourceIds: ["vault", "apple-reminders"],
@@ -412,6 +418,7 @@ describe("Task Hub session state", () => {
       sourceQuery: "apple-reminders",
       textQuery: "invoice"
     });
+    expect(restored.selectedExternalListFilterId).toBe("apple-reminders:list:groceries");
     expect(restored.calendarMode).toBe("week");
     expect(restored.calendarFocusDate.toISOString()).toBe("2026-06-04T08:30:00.000Z");
     expect([...restored.visibleSourceIds]).toEqual(["vault", "apple-reminders"]);
@@ -429,6 +436,7 @@ describe("Task Hub session state", () => {
 
     expect(restored.view).toBe("tags");
     expect(restored.filters).toEqual(fallbackFilters());
+    expect(restored.selectedExternalListFilterId).toBeUndefined();
     expect(restored.calendarMode).toBe("month");
     expect(restored.calendarFocusDate.toISOString()).toBe("2026-06-01T00:00:00.000Z");
     expect([...restored.visibleSourceIds]).toEqual(["vault"]);
@@ -446,6 +454,7 @@ describe("Task Hub session state", () => {
         textQuery: "follow up",
         conditions: { operator: "or", tag: "#client", dateBucket: "today", text: "ping" }
       },
+      selectedExternalListFilterId: "dida:project:today",
       calendarMode: "day",
       calendarFocusDate: new Date("2026-06-09T09:15:00.000Z"),
       visibleSourceIds: new Set(["vault", "dida"]),
@@ -462,6 +471,7 @@ describe("Task Hub session state", () => {
         textQuery: "follow up",
         conditions: { operator: "or", tag: "#client", dateBucket: "today", text: "ping" }
       },
+      selectedExternalListFilterId: "dida:project:today",
       calendarMode: "day",
       calendarFocusDate: "2026-06-09T09:15:00.000Z",
       visibleSourceIds: ["vault", "dida"],
@@ -485,6 +495,7 @@ describe("Task Hub session state", () => {
         sourceQuery: "",
         textQuery: "follow up"
       },
+      selectedExternalListFilterId: "dida:project:today",
       calendarMode: "week",
       calendarFocusDate: new Date("2026-06-17T09:30:00.000Z"),
       visibleSourceIds: new Set(["vault", "apple-calendar:work"]),
@@ -502,6 +513,7 @@ describe("Task Hub session state", () => {
         sourceQuery: "",
         textQuery: "follow up"
       },
+      selectedExternalListFilterId: "dida:project:today",
       calendarMode: "week",
       calendarFocusDate: "2026-06-17T09:30:00.000Z",
       visibleSourceIds: ["vault", "apple-calendar:work"],
@@ -543,18 +555,11 @@ describe("Task Hub session state", () => {
 });
 
 describe("buildSavedSmartList", () => {
-  it("builds a persisted smart list from the current filters and selected tasks", () => {
+  it("builds a persisted smart list from concrete tasks", () => {
     const result = buildSavedSmartList({
       existingSmartLists: [],
-      filters: {
-        status: "all",
-        tags: ["#work"],
-        tagQuery: "#client",
-        sourceQuery: "apple-reminders",
-        textQuery: "proposal"
-      },
       name: "  Focus  ",
-      selectedTasks: [
+      tasks: [
         task({ id: "task-1", stableId: "vault:th_task1" }),
         task({ id: "task-2" })
       ],
@@ -565,13 +570,6 @@ describe("buildSavedSmartList", () => {
     expect(result).toEqual({
       id: "smart_focus",
       name: "Focus",
-      filters: {
-        status: "all",
-        tags: ["#work"],
-        tagQuery: "#client",
-        sourceQuery: "apple-reminders",
-        textQuery: "proposal"
-      },
       taskStableIds: ["vault:th_task1"],
       taskIds: ["task-2"],
       createdAt: "2026-06-30T12:00:00.000Z",
@@ -582,9 +580,8 @@ describe("buildSavedSmartList", () => {
   it("does not create a smart list without a name", () => {
     expect(buildSavedSmartList({
       existingSmartLists: [],
-      filters: fallbackFilters(),
       name: "   ",
-      selectedTasks: [],
+      tasks: [],
       now: new Date("2026-06-30T12:00:00.000Z"),
       createId: () => "smart_focus"
     })).toBeUndefined();
@@ -596,7 +593,6 @@ describe("TaskHubView smart list interactions", () => {
     return {
       id: "smart_focus",
       name: "Focus",
-      filters: fallbackFilters(),
       taskStableIds: ["vault:th_focus"],
       taskIds: [],
       createdAt: "2026-06-30T12:00:00.000Z",
@@ -642,15 +638,7 @@ describe("TaskHubView smart list interactions", () => {
       sourceQuery: "",
       textQuery: ""
     };
-    const list = smartList({
-      filters: {
-        status: "all",
-        tags: ["#work"],
-        tagQuery: "#client",
-        sourceQuery: "vault",
-        textQuery: "proposal"
-      }
-    });
+    const list = smartList();
     const plugin = {
       settings: {
         defaultView: "tasks",
@@ -737,17 +725,7 @@ describe("TaskHubView smart list interactions", () => {
       sourceQuery: "",
       textQuery: ""
     };
-    const list = smartList({
-      filters: {
-        status: "all",
-        tags: [],
-        tagQuery: "#work",
-        sourceQuery: "",
-        textQuery: ""
-      },
-      taskStableIds: ["vault:th_manual_done"],
-      taskIds: []
-    });
+    const list = smartList({ taskStableIds: ["vault:th_open", "vault:th_manual_done"], taskIds: [] });
     const plugin = {
       settings: {
         defaultView: "tasks",
@@ -771,17 +749,7 @@ describe("TaskHubView smart list interactions", () => {
   });
 
   it("counts only open smart list tasks when the current view hides completed tasks", () => {
-    const list = smartList({
-      filters: {
-        status: "all",
-        tags: [],
-        tagQuery: "#work",
-        sourceQuery: "",
-        textQuery: ""
-      },
-      taskStableIds: ["vault:th_manual_done"],
-      taskIds: []
-    });
+    const list = smartList({ taskStableIds: ["vault:th_open", "vault:th_done", "vault:th_manual_done"], taskIds: [] });
     const tasks = [
       task({ id: "open-dynamic", stableId: "vault:th_open", tags: ["#work"], completed: false }),
       task({ id: "done-dynamic", stableId: "vault:th_done", tags: ["#work"], completed: true }),
@@ -861,9 +829,7 @@ describe("TaskHubView smart list interactions", () => {
   it("adds dropped tasks to a smart list with stable references first", async () => {
     const list = smartList({
       taskStableIds: ["vault:th_existing"],
-      taskIds: ["runtime-old"],
-      excludedTaskStableIds: ["vault:th_new"],
-      excludedTaskIds: ["runtime-only"]
+      taskIds: ["runtime-old"]
     });
     const plugin = {
       settings: {
@@ -887,9 +853,7 @@ describe("TaskHubView smart list interactions", () => {
     expect(plugin.settings.smartLists[0]).toMatchObject({
       id: "smart_focus",
       taskStableIds: ["vault:th_existing", "vault:th_new"],
-      taskIds: ["runtime-old", "runtime-only"],
-      excludedTaskStableIds: [],
-      excludedTaskIds: []
+      taskIds: ["runtime-old", "runtime-only"]
     });
     expect(plugin.saveSettings).toHaveBeenCalled();
     expect(render).toHaveBeenCalledWith({ preserveTaskListScroll: true, preserveContentScroll: true });
@@ -898,9 +862,7 @@ describe("TaskHubView smart list interactions", () => {
   it("adds descendant tasks when a parent task is added to a smart list", async () => {
     const list = smartList({
       taskStableIds: [],
-      taskIds: [],
-      excludedTaskStableIds: ["vault:th_child"],
-      excludedTaskIds: ["runtime-grandchild"]
+      taskIds: []
     });
     const parent = task({ id: "parent", stableId: "vault:th_parent", text: "Plan launch" });
     const child = task({ id: "child", stableId: "vault:th_child", parentId: "parent", indent: 1, text: "Draft announcement" });
@@ -926,9 +888,7 @@ describe("TaskHubView smart list interactions", () => {
     expect(plugin.settings.smartLists[0]).toMatchObject({
       id: "smart_focus",
       taskStableIds: ["vault:th_parent", "vault:th_child"],
-      taskIds: ["runtime-grandchild"],
-      excludedTaskStableIds: [],
-      excludedTaskIds: []
+      taskIds: ["runtime-grandchild"]
     });
     expect(plugin.settings.smartLists[0].taskStableIds).not.toContain("vault:th_unrelated");
     expect(plugin.saveSettings).toHaveBeenCalled();
@@ -1083,7 +1043,7 @@ describe("TaskHubView smart list interactions", () => {
     expect(render).toHaveBeenLastCalledWith({ preserveContentScroll: true });
   });
 
-  it("removes dropped tasks from the active smart list using exclusion references", async () => {
+  it("removes dropped tasks from the active smart list members", async () => {
     const list = smartList({ taskStableIds: ["vault:th_existing", "vault:th_remove"], taskIds: ["runtime-only"] });
     const plugin = {
       settings: {
@@ -1113,9 +1073,7 @@ describe("TaskHubView smart list interactions", () => {
     expect(plugin.settings.smartLists[0]).toMatchObject({
       id: "smart_focus",
       taskStableIds: ["vault:th_existing"],
-      taskIds: [],
-      excludedTaskStableIds: ["vault:th_remove"],
-      excludedTaskIds: ["runtime-only"]
+      taskIds: []
     });
     expect([...(view as unknown as { selectedTaskIds: Set<string> }).selectedTaskIds]).toEqual([]);
     expect((view as unknown as { selectedTaskId?: string }).selectedTaskId).toBeUndefined();
@@ -1150,6 +1108,263 @@ describe("TaskHubView smart list interactions", () => {
   });
 });
 
+describe("TaskHubView external list filters", () => {
+  function externalListEntry(overrides: Partial<ExternalTaskListFilterEntry> = {}): ExternalTaskListFilterEntry {
+    return {
+      id: "apple-reminders:list:groceries",
+      externalListId: "groceries",
+      source: "apple-reminders",
+      name: "Groceries",
+      color: "#f59e0b",
+      itemCount: 1,
+      ...overrides
+    };
+  }
+
+  it("filters the visible task list by the selected external list entry", () => {
+    const plugin = {
+      settings: {
+        defaultView: "tasks",
+        language: "en",
+        taskViewFilters: fallbackFilters(),
+        lastSessionState: undefined,
+        smartLists: [],
+        taskNotes: { enabled: false, linkedNoteSubtasksEnabled: false }
+      }
+    };
+    const view = new TaskHubView({} as never, plugin as never);
+    Object.assign(view, {
+      selectedExternalListFilterId: "apple-reminders:list:groceries"
+    });
+
+    const visibleTasks = (view as unknown as {
+      taskViewVisibleTasks(tasks: TaskItem[], now: Date, entries: ExternalTaskListFilterEntry[]): TaskItem[];
+    }).taskViewVisibleTasks([
+      task({
+        id: "apple-match",
+        source: "apple-reminders",
+        externalListId: "groceries",
+        text: "Buy fruit"
+      }),
+      task({
+        id: "apple-other",
+        source: "apple-reminders",
+        externalListId: "errands",
+        text: "Mail letter"
+      }),
+      task({
+        id: "dida-other",
+        source: "dida",
+        externalListId: "groceries",
+        text: "Plan sprint"
+      })
+    ], NOW, [externalListEntry()]);
+
+    expect(visibleTasks.map((item) => item.id)).toEqual(["apple-match"]);
+  });
+
+  it("counts only open external tasks when the task view hides completed items", () => {
+    const plugin = {
+      settings: {
+        defaultView: "tasks",
+        language: "en",
+        taskViewFilters: fallbackFilters(),
+        lastSessionState: undefined,
+        smartLists: [],
+        localApple: {
+          enabled: true,
+          remindersEnabled: true,
+          remindersColor: "#f59e0b"
+        },
+        dida: {
+          enabled: true,
+          tasksEnabled: true,
+          tasksColor: "#3b82f6"
+        }
+      },
+      getAppleReminderListColors: jest.fn(() => ({ groceries: "#f59e0b" })),
+      getAppleReminderLists: jest.fn(() => [{ id: "groceries", name: "Groceries" }]),
+      getDidaProjectColors: jest.fn(() => ({ work: "#3b82f6" })),
+      getDidaProjects: jest.fn(() => [{ id: "work", name: "Work" }]),
+      getTasks: jest.fn(() => [])
+    };
+    const view = new TaskHubView({} as never, plugin as never);
+
+    const entries = (view as unknown as {
+      externalTaskListEntries(tasks: readonly TaskItem[], includeCompleted: boolean): ExternalTaskListFilterEntry[];
+    }).externalTaskListEntries([
+      task({ id: "apple-1", source: "apple-reminders", externalListId: "groceries" }),
+      task({ id: "apple-2", source: "apple-reminders", externalListId: "groceries", completed: true }),
+      task({ id: "apple-3", source: "apple-reminders", externalListId: "other" }),
+      task({ id: "dida-1", source: "dida", externalListId: "work" })
+    ], false);
+
+    expect(entries).toEqual([
+      {
+        id: "apple-reminders:list:groceries",
+        externalListId: "groceries",
+        source: "apple-reminders",
+        name: "Groceries",
+        color: "#f59e0b",
+        itemCount: 1
+      },
+      {
+        id: "dida:project:work",
+        externalListId: "work",
+        source: "dida",
+        name: "Work",
+        color: "#3b82f6",
+        itemCount: 1
+      }
+    ]);
+  });
+
+  it("counts all external tasks when the task view includes completed items", () => {
+    const plugin = {
+      settings: {
+        defaultView: "tasks",
+        language: "en",
+        taskViewFilters: fallbackFilters(),
+        lastSessionState: undefined,
+        smartLists: [],
+        localApple: {
+          enabled: true,
+          remindersEnabled: true,
+          remindersColor: "#f59e0b"
+        },
+        dida: {
+          enabled: false,
+          tasksEnabled: false,
+          tasksColor: "#3b82f6"
+        }
+      },
+      getAppleReminderListColors: jest.fn(() => ({ groceries: "#f59e0b" })),
+      getAppleReminderLists: jest.fn(() => [{ id: "groceries", name: "Groceries" }]),
+      getDidaProjectColors: jest.fn(() => ({})),
+      getDidaProjects: jest.fn(() => []),
+      getTasks: jest.fn(() => [])
+    };
+    const view = new TaskHubView({} as never, plugin as never);
+
+    const entries = (view as unknown as {
+      externalTaskListEntries(tasks: readonly TaskItem[], includeCompleted: boolean): ExternalTaskListFilterEntry[];
+    }).externalTaskListEntries([
+      task({ id: "apple-1", source: "apple-reminders", externalListId: "groceries" }),
+      task({ id: "apple-2", source: "apple-reminders", externalListId: "groceries", completed: true })
+    ], true);
+
+    expect(entries).toEqual([
+      {
+        id: "apple-reminders:list:groceries",
+        externalListId: "groceries",
+        source: "apple-reminders",
+        name: "Groceries",
+        color: "#f59e0b",
+        itemCount: 2
+      }
+    ]);
+  });
+
+  it("clears a persisted external list filter when the current external lists no longer contain it", () => {
+    const plugin = {
+      settings: {
+        defaultView: "tasks",
+        language: "en",
+        taskViewFilters: fallbackFilters(),
+        lastSessionState: {
+          view: "tasks",
+          taskViewFilters: fallbackFilters(),
+          selectedExternalListFilterId: "apple-reminders:list:missing",
+          calendarMode: "month",
+          visibleSourceIds: ["vault"],
+          unscheduledPanelOpen: false
+        }
+      }
+    };
+    const view = new TaskHubView({} as never, plugin as never);
+
+    (view as unknown as {
+      reconcileExternalListFilterSelection(entries: readonly ExternalTaskListFilterEntry[]): void;
+    }).reconcileExternalListFilterSelection([externalListEntry()]);
+
+    expect((view as unknown as { selectedExternalListFilterId?: string }).selectedExternalListFilterId).toBeUndefined();
+    expect(plugin.settings.lastSessionState?.selectedExternalListFilterId).toBeUndefined();
+  });
+
+  it("filters hidden external list entries from the sidebar", () => {
+    const plugin = {
+      settings: {
+        defaultView: "tasks",
+        language: "en",
+        taskViewFilters: fallbackFilters(),
+        lastSessionState: undefined,
+        hiddenExternalTaskListFilterIds: ["dida:project:work"]
+      }
+    };
+    const view = new TaskHubView({} as never, plugin as never);
+    const visibleEntries = (view as unknown as {
+      visibleExternalTaskListEntries(entries: readonly ExternalTaskListFilterEntry[]): ExternalTaskListFilterEntry[];
+    }).visibleExternalTaskListEntries([
+      externalListEntry(),
+      externalListEntry({
+        id: "dida:project:work",
+        externalListId: "work",
+        source: "dida",
+        name: "Work",
+        color: "#3b82f6"
+      })
+    ]);
+
+    expect(visibleEntries).toEqual([externalListEntry()]);
+  });
+
+  it("resets hidden external list preferences when saved ids no longer exist", () => {
+    const plugin = {
+      settings: {
+        defaultView: "tasks",
+        language: "en",
+        taskViewFilters: fallbackFilters(),
+        lastSessionState: undefined,
+        hiddenExternalTaskListFilterIds: ["apple-reminders:list:missing"]
+      }
+    };
+    const view = new TaskHubView({} as never, plugin as never);
+    const hiddenIds = (view as unknown as {
+      hiddenExternalTaskListFilterIds(entries: readonly ExternalTaskListFilterEntry[]): string[];
+    }).hiddenExternalTaskListFilterIds([externalListEntry()]);
+
+    expect(hiddenIds).toEqual([]);
+    expect(plugin.settings.hiddenExternalTaskListFilterIds).toEqual([]);
+  });
+
+  it("toggles the selected external list filter and persists the lightweight preference", () => {
+    const settings: {
+      defaultView: "tasks";
+      language: "en";
+      taskViewFilters: TaskViewFilterSettings;
+      lastSessionState?: { selectedExternalListFilterId?: string };
+      hiddenExternalTaskListFilterIds?: string[];
+    } = {
+      defaultView: "tasks",
+      language: "en",
+      taskViewFilters: fallbackFilters(),
+      lastSessionState: undefined,
+      hiddenExternalTaskListFilterIds: []
+    };
+    const saveData = jest.fn(async () => undefined);
+    const view = new TaskHubView({} as never, { settings, saveData } as never);
+    const render = jest.spyOn(view as unknown as { render(options?: unknown): void }, "render").mockImplementation(() => undefined);
+    const entry = externalListEntry();
+
+    (view as unknown as { toggleExternalListFilter(entry: ExternalTaskListFilterEntry): void }).toggleExternalListFilter(entry);
+
+    expect((view as unknown as { selectedExternalListFilterId?: string }).selectedExternalListFilterId).toBe(entry.id);
+    expect((settings as { lastSessionState?: { selectedExternalListFilterId?: string } }).lastSessionState?.selectedExternalListFilterId).toBe(entry.id);
+    expect(saveData).toHaveBeenCalledWith(settings);
+    expect(render).toHaveBeenCalledWith({ preserveTaskListScroll: true, preserveContentScroll: true });
+  });
+});
+
 describe("buildTaskViewTransitionKey", () => {
   it("changes only when task filtering or the active smart list changes", () => {
     const base = baseFilters();
@@ -1159,6 +1374,7 @@ describe("buildTaskViewTransitionKey", () => {
     expect(sameTagsDifferentOrder).toBe(normalizedTags);
     expect(buildTaskViewTransitionKey({ ...base, textQuery: "call" }, "smart_focus")).not.toBe(normalizedTags);
     expect(buildTaskViewTransitionKey({ ...base, tags: ["#a", "#b"] }, undefined)).not.toBe(normalizedTags);
+    expect(buildTaskViewTransitionKey({ ...base, tags: ["#a", "#b"] }, "smart_focus", "dida:project:today")).not.toBe(normalizedTags);
   });
 });
 
@@ -1312,7 +1528,9 @@ function task(overrides: Partial<TaskItem>): TaskItem {
     completed: overrides.completed ?? false,
     tags: overrides.tags ?? [],
     dueDate: overrides.dueDate,
-    source: overrides.source ?? "vault"
+    source: overrides.source ?? "vault",
+    externalId: overrides.externalId,
+    externalListId: overrides.externalListId
   };
 }
 

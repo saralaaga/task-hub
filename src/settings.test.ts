@@ -584,6 +584,7 @@ describe("normalizeTaskHubSettings", () => {
     expect(settings.taskNoteManualOrder).toEqual({});
     expect(settings.taskNotePinned).toEqual({});
     expect(settings.smartLists).toEqual([]);
+    expect(settings.hiddenExternalTaskListFilterIds).toEqual([]);
     expect(settings.vaultTaskStableState).toEqual({});
     expect(settings.externalTaskLookbackDays).toBe(100);
     expect(settings.externalTaskLookaheadDays).toBe(100);
@@ -684,6 +685,17 @@ describe("normalizeTaskHubSettings", () => {
     });
 
     expect(settings.externalTaskSourceOrder).toEqual(["dida", "apple-reminders", "apple-calendar"]);
+  });
+
+  it("normalizes hidden external list preferences to unique non-empty ids", () => {
+    const settings = normalizeTaskHubSettings({
+      hiddenExternalTaskListFilterIds: ["apple-reminders:list:groceries", "", "apple-reminders:list:groceries", "dida:project:work"]
+    });
+
+    expect(settings.hiddenExternalTaskListFilterIds).toEqual([
+      "apple-reminders:list:groceries",
+      "dida:project:work"
+    ]);
   });
 
   it("keeps the default timed task duration within the five-minute minimum", () => {
@@ -789,6 +801,7 @@ describe("normalizeTaskHubSettings", () => {
           sourceQuery: "apple-reminders",
           textQuery: "invoice"
         },
+        selectedExternalListFilterId: "apple-reminders:list:groceries",
         calendarMode: "week",
         calendarFocusDate: "2026-06-26T10:00:00.000Z",
         visibleSourceIds: ["vault", "apple-reminders"],
@@ -807,6 +820,7 @@ describe("normalizeTaskHubSettings", () => {
         sourceQuery: "apple-reminders",
         textQuery: "invoice"
       },
+      selectedExternalListFilterId: "apple-reminders:list:groceries",
       calendarMode: "week",
       calendarFocusDate: "2026-06-26T10:00:00.000Z",
       visibleSourceIds: ["vault", "apple-reminders"],
@@ -832,6 +846,7 @@ describe("normalizeTaskHubSettings", () => {
           sourceQuery: 42 as never,
           textQuery: undefined as never
         },
+        selectedExternalListFilterId: 42 as never,
         calendarMode: "year" as never,
         calendarFocusDate: "not-a-date",
         visibleSourceIds: [],

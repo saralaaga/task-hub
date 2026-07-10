@@ -1,18 +1,19 @@
-import { ItemView, MarkdownRenderer, Menu, Notice, WorkspaceLeaf } from "obsidian";
+import { type App, ItemView, MarkdownRenderer, Menu, Modal, Notice, WorkspaceLeaf } from "obsidian";
 import { TASK_HUB_VIEW_TYPE } from "../constants";
 import type { CalendarDropTarget } from "../calendar/calendarDropTarget";
 import { toLocalDateKey } from "../calendar/dateBuckets";
 import { filterTasks, type TaskFilterState } from "../filtering/filters";
-import { applySmartListToTasks, smartListTaskReferences } from "../filtering/smartLists";
+import { applySmartListToTasks, materializeLegacySmartLists, smartListTaskReferences } from "../filtering/smartLists";
 import { createTranslator } from "../i18n";
 import type TaskHubPlugin from "../main";
-import type { TaskHubLastSessionState, TaskHubSettings, TaskHubSmartList, TaskItem } from "../types";
+import type { ExternalTaskListFilterEntry, TaskHubLastSessionState, TaskHubSettings, TaskHubSmartList, TaskItem } from "../types";
 import { parseTasksFromMarkdown } from "../parsing/taskParser";
 import { type CalendarViewMode } from "../calendar/calendarModel";
 import { taskPlannedDateKey } from "../taskDates";
 import { renderCalendarView, type AgendaScrollPosition, type CalendarModeTransitionDirection } from "./renderCalendarView";
 import { renderShell, type DashboardView } from "./renderShell";
 import { syncVisibleSources } from "./sourceVisibility";
+import { renderSourceLogo } from "./sourceLogos";
 import { renderTagsView } from "./renderTagsView";
 import { renderTasksView } from "./renderTasksView";
 import { renderDatedNotesView } from "./renderDatedNotesView";
@@ -43,8 +44,11 @@ export class TaskHubView extends ItemView {
   private selectedTaskId: string | undefined;
   private selectedTaskStableId: string | undefined;
   private taskListScrollTop = 0;
+  private smartListScrollTop = 0;
+  private externalListScrollTop = 0;
   private contentScrollTop = 0;
   private calendarAgendaScrollPosition: AgendaScrollPosition | undefined;
+  private calendarDaySidebarScrollTop = 0;
   private completingTaskIds = new Set<string>();
   private selectedTaskIds = new Set<string>();
   private unscheduledPanelOpen: boolean;
@@ -54,6 +58,7 @@ export class TaskHubView extends ItemView {
   private expandedTaskIds = new Set<string>();
   private expandingTaskIds = new Set<string>();
   private activeSmartListId: string | undefined;
+  private selectedExternalListFilterId: string | undefined;
   private selectedDatedNotePath: string | undefined;
   private datedNoteQuery = "";
   private pendingDatedNoteDetailScroll = false;
@@ -82,6 +87,7 @@ export class TaskHubView extends ItemView {
     this.calendarFocusDate = restoredState.calendarFocusDate;
     this.visibleSourceIds = restoredState.visibleSourceIds;
     this.unscheduledPanelOpen = restoredState.unscheduledPanelOpen;
+    this.selectedExternalListFilterId = restoredState.selectedExternalListFilterId;
     const currentSourceIds =
       typeof this.plugin.getCalendarSources === "function"
         ? this.plugin.getCalendarSources().map((source) => source.id)
@@ -113,8 +119,10 @@ export class TaskHubView extends ItemView {
   render(options: TaskHubRenderOptions = {}): void {
     if (shouldPreserveScroll(options)) {
       this.captureTaskListScroll();
+      this.captureTaskSidebarScrolls();
       this.captureContentScroll();
       this.captureCalendarAgendaScroll();
+      this.captureCalendarDaySidebarScroll();
     }
     const container = this.containerEl.children[1] as HTMLElement;
     const baseTasks = this.plugin.getTasks();
@@ -144,6 +152,9 @@ export class TaskHubView extends ItemView {
       ...this.plugin.getAppleReminderListColors(),
       ...this.plugin.getDidaProjectColors()
     };
+    const allExternalTaskListEntries = this.externalTaskListEntries(allTasks, this.filters.status !== "open");
+    const externalTaskListEntries = this.visibleExternalTaskListEntries(allExternalTaskListEntries);
+    this.reconcileExternalListFilterSelection(externalTaskListEntries);
     const bindTagInputSuggest = (input: TaskHubTagInputElement) => {
       bindTaskHubTagInputSuggest(this.plugin.app, input, () => collectObsidianTags(this.plugin.app, this.plugin.getTasks()));
     };
@@ -191,6 +202,7 @@ export class TaskHubView extends ItemView {
           this.updateFilters({ ...this.filters, conditions });
         },
         onClearFilters: () => {
+          this.selectedExternalListFilterId = undefined;
           this.updateFilters(clearTaskViewFilters(this.filters), { preserveTaskListScroll: true });
         },
         onTagQueryChange: (tagQuery) => {
@@ -249,12 +261,18 @@ export class TaskHubView extends ItemView {
 
     if (this.view === "tasks") {
       const now = new Date();
-      const taskViewTransitionKey = buildTaskViewTransitionKey(this.filters, this.activeSmartListId);
+      this.migrateLegacySmartLists(allTasks, now);
+      const smartLists = this.plugin.settings.smartLists;
+      const taskViewTransitionKey = buildTaskViewTransitionKey(
+        this.filters,
+        this.activeSmartListId,
+        this.selectedExternalListFilterId
+      );
       const shouldAnimateTaskList =
         this.lastTaskViewTransitionKey !== undefined &&
         this.lastTaskViewTransitionKey !== taskViewTransitionKey;
       this.lastTaskViewTransitionKey = taskViewTransitionKey;
-      const visibleTasks = this.taskViewVisibleTasks(allTasks, now);
+      const visibleTasks = this.taskViewVisibleTasks(allTasks, now, externalTaskListEntries);
       const selection = reconcileVisibleTaskSelection(
         visibleTasks,
         this.selectedTaskId,
@@ -338,6 +356,8 @@ export class TaskHubView extends ItemView {
           taskColors,
           bindTagInputSuggest,
           taskListScrollTop: this.taskListScrollTop,
+          smartListScrollTop: this.smartListScrollTop,
+          externalListScrollTop: this.externalListScrollTop,
           taskListManualOrder: this.plugin.settings.taskListManualOrder,
           animateTaskListTransition: shouldAnimateTaskList,
           availableTags: collectTags(allTasks),
@@ -347,6 +367,7 @@ export class TaskHubView extends ItemView {
               this.updateFilters({ ...this.filters, conditions });
             },
             onClearFilters: () => {
+              this.selectedExternalListFilterId = undefined;
               this.updateFilters(clearTaskViewFilters(this.filters), { preserveTaskListScroll: true });
             },
             onTagQueryChange: (tagQuery) => {
@@ -359,11 +380,16 @@ export class TaskHubView extends ItemView {
               this.updateFilters({ ...this.filters, textQuery });
             }
           },
-          smartLists: this.plugin.settings.smartLists,
-          smartListCounts: smartListCountsForTasks(allTasks, this.plugin.settings.smartLists, now, this.filters.status),
+          smartLists,
+          smartListCounts: smartListCountsForTasks(allTasks, smartLists, now, this.filters.status),
           activeSmartListId: this.activeSmartListId,
-          onSaveSmartList: (name) => this.saveSmartList(allTasks, name),
+          externalListEntries: externalTaskListEntries,
+          showExternalListCard: allExternalTaskListEntries.length > 0,
+          activeExternalListFilterId: this.selectedExternalListFilterId,
+          onSaveSmartList: (name) => this.saveSmartList(visibleTasks, name),
           onApplySmartList: (smartList) => this.applySmartList(smartList, allTasks),
+          onToggleExternalListFilter: (entry) => this.toggleExternalListFilter(entry),
+          onConfigureExternalLists: () => this.openExternalListVisibilityModal(allExternalTaskListEntries),
           onAddTasksToSmartList: (smartList, tasks) => this.addTasksToSmartList(smartList, tasks, allTasks),
           onRemoveTasksFromActiveSmartList: (tasks) => this.removeTasksFromActiveSmartList(tasks),
           onDeleteSmartList: (smartList) => this.deleteSmartList(smartList),
@@ -691,34 +717,48 @@ export class TaskHubView extends ItemView {
     this.taskListScrollTop = list?.scrollTop ?? this.taskListScrollTop;
   }
 
-  private taskViewVisibleTasks(allTasks: TaskItem[], now: Date): TaskItem[] {
+  private captureTaskSidebarScrolls(): void {
+    if (this.view !== "tasks") return;
+    const container = this.containerEl.children[1] as HTMLElement | undefined;
+    const smartList = container?.querySelector<HTMLElement>(".task-hub-smart-list-items");
+    const externalList = container?.querySelector<HTMLElement>(".task-hub-external-list-items");
+    this.smartListScrollTop = smartList?.scrollTop ?? this.smartListScrollTop;
+    this.externalListScrollTop = externalList?.scrollTop ?? this.externalListScrollTop;
+  }
+
+  private taskViewVisibleTasks(
+    allTasks: TaskItem[],
+    now: Date,
+    externalTaskListEntries: ExternalTaskListFilterEntry[] = this.externalTaskListEntries()
+  ): TaskItem[] {
     const activeSmartList = this.activeSmartList();
-    const visibleTasks = activeSmartList
-      ? filterTasksByStatus(applySmartListToTasks(allTasks, activeSmartList, now), this.filters.status)
-      : filterTasks(allTasks, this.filters, now);
+    const visibleTasks = this.applyExternalListFilter(
+      activeSmartList
+        ? filterTasksByStatus(applySmartListToTasks(allTasks, activeSmartList, now), this.filters.status)
+        : filterTasks(allTasks, this.filters, now),
+      externalTaskListEntries
+    );
     if (this.filters.status !== "open" || this.completingTaskIds.size === 0) {
       return visibleTasks;
     }
 
+    const activeExternalListFilter = this.activeExternalListFilterEntry(externalTaskListEntries);
     const visibleIds = new Set(visibleTasks.map((task) => task.id));
     const exitingTasks = allTasks.filter((task) => {
       if (!this.completingTaskIds.has(task.id) || visibleIds.has(task.id) || !task.completed) return false;
+      if (!this.taskMatchesExternalListFilter(task, activeExternalListFilter)) return false;
       if (!activeSmartList) return filterTasks([task], { ...this.filters, status: "all" }, now).length > 0;
-      return applySmartListToTasks([task], {
-        ...activeSmartList,
-        filters: { ...activeSmartList.filters, status: "all" }
-      }, now).length > 0;
+      return applySmartListToTasks([task], activeSmartList, now).length > 0;
     });
     return [...visibleTasks, ...exitingTasks];
   }
 
-  private saveSmartList(allTasks: TaskItem[], name: string): void {
+  private saveSmartList(tasks: TaskItem[], name: string): void {
     const t = createTranslator(this.plugin.settings.language);
     const smartList = buildSavedSmartList({
       existingSmartLists: this.plugin.settings.smartLists,
-      filters: this.filters,
       name,
-      selectedTasks: allTasks.filter((task) => this.selectedTaskIds.has(task.id)),
+      tasks,
       now: new Date()
     });
     if (!smartList) return;
@@ -845,6 +885,142 @@ export class TaskHubView extends ItemView {
 
   private activeSmartList(): TaskHubSmartList | undefined {
     return (this.plugin.settings.smartLists ?? []).find((smartList) => smartList.id === this.activeSmartListId);
+  }
+
+  private migrateLegacySmartLists(allTasks: TaskItem[], now: Date): void {
+    const migrated = materializeLegacySmartLists(allTasks, this.plugin.settings.smartLists, now);
+    if (!migrated.changed) return;
+    this.plugin.settings.smartLists = migrated.smartLists;
+    void this.plugin.saveSettings();
+  }
+
+  private externalTaskListEntries(
+    tasks: readonly TaskItem[] = typeof this.plugin.getTasks === "function" ? this.plugin.getTasks() : [],
+    includeCompleted = this.filters.status !== "open"
+  ): ExternalTaskListFilterEntry[] {
+    const entries: ExternalTaskListFilterEntry[] = [];
+    const seenIds = new Set<string>();
+    const localAppleSettings = this.plugin.settings.localApple;
+    const didaSettings = this.plugin.settings.dida;
+
+    if (localAppleSettings?.enabled && localAppleSettings.remindersEnabled) {
+      const listColors = this.plugin.getAppleReminderListColors();
+      for (const list of this.plugin.getAppleReminderLists()) {
+        const externalListId = list.id?.trim();
+        const name = list.name?.trim();
+        if (!externalListId || !name) continue;
+        const id = externalTaskListFilterEntryId("apple-reminders", externalListId);
+        if (seenIds.has(id)) continue;
+        seenIds.add(id);
+        entries.push({
+          id,
+          externalListId,
+          source: "apple-reminders",
+          name,
+          color: listColors[externalListId] ?? localAppleSettings.remindersColor,
+          itemCount: countExternalListTasks(tasks, "apple-reminders", externalListId, includeCompleted)
+        });
+      }
+    }
+
+    if (didaSettings?.enabled && didaSettings.tasksEnabled) {
+      const projectColors = this.plugin.getDidaProjectColors();
+      for (const project of this.plugin.getDidaProjects()) {
+        const externalListId = project.id?.trim();
+        const name = project.name?.trim();
+        if (!externalListId || !name) continue;
+        const id = externalTaskListFilterEntryId("dida", externalListId);
+        if (seenIds.has(id)) continue;
+        seenIds.add(id);
+        entries.push({
+          id,
+          externalListId,
+          source: "dida",
+          name,
+          color: projectColors[externalListId] ?? didaSettings.tasksColor,
+          itemCount: countExternalListTasks(tasks, "dida", externalListId, includeCompleted)
+        });
+      }
+    }
+
+    return entries;
+  }
+
+  private reconcileExternalListFilterSelection(entries: readonly ExternalTaskListFilterEntry[]): void {
+    if (!this.selectedExternalListFilterId) return;
+    if (entries.some((entry) => entry.id === this.selectedExternalListFilterId)) return;
+    this.selectedExternalListFilterId = undefined;
+    this.syncSessionStateToSettings();
+  }
+
+  private visibleExternalTaskListEntries(entries: readonly ExternalTaskListFilterEntry[]): ExternalTaskListFilterEntry[] {
+    const hiddenIds = this.hiddenExternalTaskListFilterIds(entries);
+    if (hiddenIds.length === 0) return [...entries];
+    const hiddenIdSet = new Set(hiddenIds);
+    return entries.filter((entry) => !hiddenIdSet.has(entry.id));
+  }
+
+  private hiddenExternalTaskListFilterIds(entries: readonly ExternalTaskListFilterEntry[]): string[] {
+    const hiddenIds = this.plugin.settings.hiddenExternalTaskListFilterIds ?? [];
+    if (hiddenIds.length === 0) return [];
+    const entryIds = new Set(entries.map((entry) => entry.id));
+    if (hiddenIds.some((id) => !entryIds.has(id))) {
+      this.plugin.settings.hiddenExternalTaskListFilterIds = [];
+      return [];
+    }
+    return hiddenIds;
+  }
+
+  private activeExternalListFilterEntry(
+    entries: readonly ExternalTaskListFilterEntry[] = this.externalTaskListEntries()
+  ): ExternalTaskListFilterEntry | undefined {
+    if (!this.selectedExternalListFilterId) return undefined;
+    return entries.find((entry) => entry.id === this.selectedExternalListFilterId);
+  }
+
+  private applyExternalListFilter(
+    tasks: TaskItem[],
+    entries: readonly ExternalTaskListFilterEntry[] = this.externalTaskListEntries()
+  ): TaskItem[] {
+    const activeExternalListFilter = this.activeExternalListFilterEntry(entries);
+    if (!activeExternalListFilter) return tasks;
+    return tasks.filter((task) => this.taskMatchesExternalListFilter(task, activeExternalListFilter));
+  }
+
+  private taskMatchesExternalListFilter(task: TaskItem, entry: ExternalTaskListFilterEntry | undefined): boolean {
+    if (!entry) return true;
+    return task.source === entry.source && task.externalListId === entry.externalListId;
+  }
+
+  private toggleExternalListFilter(entry: ExternalTaskListFilterEntry): void {
+    this.selectedExternalListFilterId = this.selectedExternalListFilterId === entry.id ? undefined : entry.id;
+    this.selectedTaskId = undefined;
+    this.selectedTaskStableId = undefined;
+    this.selectedTaskIds = new Set();
+    this.persistSessionState();
+    this.render({ preserveTaskListScroll: true, preserveContentScroll: true });
+  }
+
+  private openExternalListVisibilityModal(entries: readonly ExternalTaskListFilterEntry[]): void {
+    const t = createTranslator(this.plugin.settings.language);
+    new ExternalListVisibilityModal(
+      this.app,
+      entries,
+      new Set(this.hiddenExternalTaskListFilterIds(entries)),
+      async (hiddenIds) => {
+        this.plugin.settings.hiddenExternalTaskListFilterIds = hiddenIds;
+        if (this.selectedExternalListFilterId && hiddenIds.includes(this.selectedExternalListFilterId)) {
+          this.selectedExternalListFilterId = undefined;
+          this.selectedTaskId = undefined;
+          this.selectedTaskStableId = undefined;
+          this.selectedTaskIds = new Set();
+          this.syncSessionStateToSettings();
+        }
+        await this.plugin.saveSettings();
+        this.render({ preserveTaskListScroll: true, preserveContentScroll: true });
+      },
+      t
+    ).open();
   }
 
   private clearActiveSmartListState(): void {
@@ -990,6 +1166,14 @@ export class TaskHubView extends ItemView {
     };
   }
 
+  private captureCalendarDaySidebarScroll(): void {
+    if (this.view !== "calendar" || this.calendarMode !== "day") return;
+    const container = this.containerEl.children[1] as HTMLElement | undefined;
+    const sidebar = container?.querySelector<HTMLElement>(".task-hub-calendar-day-sidebar");
+    if (!sidebar) return;
+    this.calendarDaySidebarScrollTop = sidebar.scrollTop;
+  }
+
   private restoreContentScroll(options: TaskHubRenderOptions): void {
     const container = this.containerEl.children[1] as HTMLElement | undefined;
     restoreContentScrollAfterRender(container, {
@@ -1007,6 +1191,10 @@ export class TaskHubView extends ItemView {
       const container = this.containerEl.children[1] as HTMLElement | undefined;
       const list = container ? findTaskListPane(container) : undefined;
       if (list) list.scrollTop = this.taskListScrollTop;
+      const smartList = container?.querySelector<HTMLElement>(".task-hub-smart-list-items");
+      const externalList = container?.querySelector<HTMLElement>(".task-hub-external-list-items");
+      if (smartList) smartList.scrollTop = this.smartListScrollTop;
+      if (externalList) externalList.scrollTop = this.externalListScrollTop;
     }
     if (options.preserveCalendarAgendaScroll) {
       const container = this.containerEl.children[1] as HTMLElement | undefined;
@@ -1016,6 +1204,8 @@ export class TaskHubView extends ItemView {
         agenda.scrollLeft = this.calendarAgendaScrollPosition.left;
         restoreCalendarAllDaySlotScrollTops(agenda, this.calendarAgendaScrollPosition.allDaySlotTops);
       }
+      const sidebar = container?.querySelector<HTMLElement>(".task-hub-calendar-day-sidebar");
+      if (sidebar) sidebar.scrollTop = this.calendarDaySidebarScrollTop;
     }
   }
 
@@ -1095,6 +1285,7 @@ export class TaskHubView extends ItemView {
     this.plugin.settings.lastSessionState = createTaskHubSessionSnapshot({
       view: this.view,
       filters: this.filters,
+      selectedExternalListFilterId: this.selectedExternalListFilterId,
       calendarMode: this.calendarMode,
       calendarFocusDate: this.calendarFocusDate,
       visibleSourceIds: this.visibleSourceIds,
@@ -1116,6 +1307,86 @@ export class TaskHubView extends ItemView {
     this.render();
   }
 
+}
+
+class ExternalListVisibilityModal extends Modal {
+  constructor(
+    app: App,
+    private readonly entries: readonly ExternalTaskListFilterEntry[],
+    hiddenIds: ReadonlySet<string>,
+    private readonly onSave: (hiddenIds: string[]) => Promise<void>,
+    private readonly t: ReturnType<typeof createTranslator>
+  ) {
+    super(app);
+    this.hiddenIds = new Set(hiddenIds);
+  }
+
+  private readonly hiddenIds: Set<string>;
+
+  onOpen(): void {
+    const { contentEl, titleEl } = this;
+    contentEl.empty();
+    titleEl.setText(this.t("externalListVisibilityTitle"));
+    contentEl.addClass("task-hub-external-list-visibility-modal");
+    contentEl.createEl("p", {
+      cls: "task-hub-external-list-visibility-desc",
+      text: this.t("externalListVisibilityDesc")
+    });
+
+    if (this.entries.length === 0) {
+      contentEl.createDiv({
+        cls: "task-hub-external-list-visibility-empty",
+        text: this.t("externalListVisibilityEmpty")
+      });
+      return;
+    }
+
+    const list = contentEl.createDiv({ cls: "task-hub-external-list-visibility-list" });
+    for (const entry of this.entries) {
+      const row = list.createEl("label", { cls: "task-hub-external-list-visibility-row" });
+      const checkbox = row.createEl("input", {
+        cls: "task-hub-external-list-visibility-checkbox",
+        attr: { type: "checkbox" }
+      });
+      checkbox.checked = !this.hiddenIds.has(entry.id);
+      checkbox.addEventListener("change", () => {
+        if (checkbox.checked) {
+          this.hiddenIds.delete(entry.id);
+        } else {
+          this.hiddenIds.add(entry.id);
+        }
+      });
+      const name = row.createSpan({ cls: "task-hub-external-list-visibility-name", text: entry.name });
+      name.setAttr("title", entry.name);
+      row.createSpan({ cls: "task-hub-external-list-visibility-meta", text: String(entry.itemCount) });
+      renderSourceLogo(
+        row,
+        "task-hub-external-list-visibility-source",
+        entry.source === "apple-reminders" ? "apple" : "dida"
+      );
+    }
+
+    const actions = contentEl.createDiv({ cls: "task-hub-external-list-visibility-actions" });
+    const cancel = actions.createEl("button", {
+      cls: "task-hub-external-list-visibility-action",
+      text: this.t("cancel"),
+      attr: { type: "button" }
+    });
+    cancel.addEventListener("click", () => this.close());
+    const save = actions.createEl("button", {
+      cls: "task-hub-external-list-visibility-action mod-cta",
+      text: this.t("save"),
+      attr: { type: "button" }
+    });
+    save.addEventListener("click", async () => {
+      await this.onSave([...this.hiddenIds]);
+      this.close();
+    });
+  }
+
+  onClose(): void {
+    this.contentEl.empty();
+  }
 }
 
 export function reconcileVisibleTaskSelection(
@@ -1211,9 +1482,14 @@ function shouldPreserveScroll(options: TaskHubRenderOptions): boolean {
   return Boolean(options.preserveTaskListScroll || options.preserveContentScroll || options.preserveCalendarAgendaScroll);
 }
 
-export function buildTaskViewTransitionKey(filters: TaskFilterState, activeSmartListId: string | undefined): string {
+export function buildTaskViewTransitionKey(
+  filters: TaskFilterState,
+  activeSmartListId: string | undefined,
+  selectedExternalListFilterId: string | undefined = undefined
+): string {
   return JSON.stringify({
     activeSmartListId: activeSmartListId ?? "",
+    selectedExternalListFilterId: selectedExternalListFilterId ?? "",
     status: filters.status,
     dateBucket: filters.dateBucket ?? "",
     tags: [...filters.tags].sort(),
@@ -1525,9 +1801,8 @@ export function clearTaskViewFilters(filters: TaskFilterState): TaskFilterState 
 
 export function buildSavedSmartList(input: {
   existingSmartLists: readonly TaskHubSmartList[];
-  filters: TaskFilterState;
   name: string;
-  selectedTasks: TaskItem[];
+  tasks: TaskItem[];
   now: Date;
   createId?: (existing: readonly TaskHubSmartList[]) => string;
 }): TaskHubSmartList | undefined {
@@ -1537,8 +1812,7 @@ export function buildSavedSmartList(input: {
   return {
     id: (input.createId ?? createSmartListId)(input.existingSmartLists),
     name,
-    filters: cloneTaskFilters(input.filters),
-    ...smartListTaskReferences(input.selectedTasks),
+    ...smartListTaskReferences(input.tasks),
     createdAt: timestamp,
     updatedAt: timestamp
   };
@@ -1599,42 +1873,34 @@ function tasksWithDescendants(allTasks: TaskItem[], rootTasks: TaskItem[]): Task
 function mergeSmartListTaskReferences(
   smartList: TaskHubSmartList,
   tasks: TaskItem[]
-): Pick<TaskHubSmartList, "taskStableIds" | "taskIds" | "excludedTaskStableIds" | "excludedTaskIds"> {
+): Pick<TaskHubSmartList, "taskStableIds" | "taskIds"> {
   const references = smartListTaskReferences(tasks);
   const stableBackedTaskIds = new Set(tasks.filter((task) => task.stableId).map((task) => task.id));
-  const stableIds = new Set(references.taskStableIds);
-  const taskIds = new Set(tasks.map((task) => task.id));
   return {
     taskStableIds: uniqueStrings([...smartList.taskStableIds, ...references.taskStableIds]).slice(0, 500),
-    taskIds: uniqueStrings([...smartList.taskIds.filter((taskId) => !stableBackedTaskIds.has(taskId)), ...references.taskIds]).slice(0, 500),
-    excludedTaskStableIds: uniqueStrings((smartList.excludedTaskStableIds ?? []).filter((stableId) => !stableIds.has(stableId))).slice(0, 500),
-    excludedTaskIds: uniqueStrings((smartList.excludedTaskIds ?? []).filter((taskId) => !taskIds.has(taskId))).slice(0, 500)
+    taskIds: uniqueStrings([...smartList.taskIds.filter((taskId) => !stableBackedTaskIds.has(taskId)), ...references.taskIds]).slice(0, 500)
   };
 }
 
 function removeSmartListTaskReferences(
   smartList: TaskHubSmartList,
   tasks: TaskItem[]
-): Pick<TaskHubSmartList, "taskStableIds" | "taskIds" | "excludedTaskStableIds" | "excludedTaskIds"> {
+): Pick<TaskHubSmartList, "taskStableIds" | "taskIds"> {
   const references = smartListTaskReferences(tasks);
   const stableIds = new Set(references.taskStableIds);
   const taskIds = new Set(tasks.map((task) => task.id));
   return {
     taskStableIds: uniqueStrings(smartList.taskStableIds.filter((stableId) => !stableIds.has(stableId))).slice(0, 500),
-    taskIds: uniqueStrings(smartList.taskIds.filter((taskId) => !taskIds.has(taskId))).slice(0, 500),
-    excludedTaskStableIds: uniqueStrings([...(smartList.excludedTaskStableIds ?? []), ...references.taskStableIds]).slice(0, 500),
-    excludedTaskIds: uniqueStrings([...(smartList.excludedTaskIds ?? []).filter((taskId) => !taskIds.has(taskId)), ...references.taskIds]).slice(0, 500)
+    taskIds: uniqueStrings(smartList.taskIds.filter((taskId) => !taskIds.has(taskId))).slice(0, 500)
   };
 }
 
 function smartListReferencesEqual(
   smartList: TaskHubSmartList,
-  references: Pick<TaskHubSmartList, "taskStableIds" | "taskIds" | "excludedTaskStableIds" | "excludedTaskIds">
+  references: Pick<TaskHubSmartList, "taskStableIds" | "taskIds">
 ): boolean {
   return arraysEqual(smartList.taskStableIds, references.taskStableIds) &&
-    arraysEqual(smartList.taskIds, references.taskIds) &&
-    arraysEqual(smartList.excludedTaskStableIds ?? [], references.excludedTaskStableIds ?? []) &&
-    arraysEqual(smartList.excludedTaskIds ?? [], references.excludedTaskIds ?? []);
+    arraysEqual(smartList.taskIds, references.taskIds);
 }
 
 function uniqueStrings(values: readonly string[]): string[] {
@@ -1648,6 +1914,7 @@ function arraysEqual<T>(left: readonly T[], right: readonly T[]): boolean {
 type RestoredTaskHubSessionState = {
   view: DashboardView;
   filters: TaskFilterState;
+  selectedExternalListFilterId: string | undefined;
   calendarMode: CalendarViewMode;
   calendarFocusDate: Date;
   visibleSourceIds: Set<string>;
@@ -1661,6 +1928,7 @@ export function restoreTaskHubSessionState(
   return {
     view: settings.lastSessionState?.view ?? settings.defaultView,
     filters: cloneTaskFilters(settings.lastSessionState?.taskViewFilters ?? settings.taskViewFilters),
+    selectedExternalListFilterId: settings.lastSessionState?.selectedExternalListFilterId,
     calendarMode: settings.lastSessionState?.calendarMode ?? "month",
     calendarFocusDate: parseTaskHubSessionDate(settings.lastSessionState?.calendarFocusDate) ?? getNow(),
     visibleSourceIds: new Set(settings.lastSessionState?.visibleSourceIds?.length ? settings.lastSessionState.visibleSourceIds : ["vault"]),
@@ -1671,6 +1939,7 @@ export function restoreTaskHubSessionState(
 export function createTaskHubSessionSnapshot(input: {
   view: DashboardView;
   filters: TaskFilterState;
+  selectedExternalListFilterId?: string;
   calendarMode: CalendarViewMode;
   calendarFocusDate: Date;
   visibleSourceIds: ReadonlySet<string>;
@@ -1679,6 +1948,7 @@ export function createTaskHubSessionSnapshot(input: {
   return {
     view: input.view,
     taskViewFilters: cloneTaskFilters(input.filters),
+    ...(input.selectedExternalListFilterId ? { selectedExternalListFilterId: input.selectedExternalListFilterId } : {}),
     calendarMode: input.calendarMode,
     calendarFocusDate: input.calendarFocusDate.toISOString(),
     visibleSourceIds: [...input.visibleSourceIds],
@@ -1690,4 +1960,26 @@ function parseTaskHubSessionDate(value: string | undefined): Date | undefined {
   if (!value) return undefined;
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? undefined : parsed;
+}
+
+function externalTaskListFilterEntryId(
+  source: ExternalTaskListFilterEntry["source"],
+  externalListId: string
+): string {
+  return source === "apple-reminders"
+    ? `apple-reminders:list:${externalListId}`
+    : `dida:project:${externalListId}`;
+}
+
+function countExternalListTasks(
+  tasks: readonly TaskItem[],
+  source: ExternalTaskListFilterEntry["source"],
+  externalListId: string,
+  includeCompleted: boolean
+): number {
+  return tasks.filter((task) => {
+    if (task.source !== source || task.externalListId !== externalListId) return false;
+    if (includeCompleted) return true;
+    return !task.completed;
+  }).length;
 }

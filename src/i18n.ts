@@ -148,6 +148,11 @@ export type TranslationKey =
   | "eventCreationTitle"
   | "eventUpdated"
   | "events"
+  | "externalLists"
+  | "externalListVisibilityTitle"
+  | "externalListVisibilityDesc"
+  | "externalListVisibilityEmpty"
+  | "externalListVisibilityNoVisible"
   | "externalTaskReadOnly"
   | "externalSourceOpenUnavailable"
   | "externalCalendars"
@@ -980,6 +985,11 @@ const TRANSLATIONS: Record<"en" | "zh", Record<TranslationKey, string>> &
     eventCreationTitle: "Create event",
     eventUpdated: "Event updated.",
     events: "events",
+    externalLists: "External lists",
+    externalListVisibilityTitle: "Choose visible external lists",
+    externalListVisibilityDesc: "Pick which external lists appear in the filter area below.",
+    externalListVisibilityEmpty: "No external lists are available right now.",
+    externalListVisibilityNoVisible: "All external lists are hidden. Click the title above to choose which ones to show.",
     externalTaskReadOnly: "External items are read-only unless the matching Apple writeback option is enabled.",
     externalSourceOpenUnavailable: "Task Hub could not open this external source.",
     externalCalendars: "External calendars",
@@ -1396,6 +1406,11 @@ const TRANSLATIONS: Record<"en" | "zh", Record<TranslationKey, string>> &
     eventCreationTitle: "创建事件",
     eventUpdated: "事件已更新。",
     events: "个事件",
+    externalLists: "外部列表",
+    externalListVisibilityTitle: "选择默认显示的外部列表",
+    externalListVisibilityDesc: "勾选需要在下方筛选区域显示的外部列表。",
+    externalListVisibilityEmpty: "当前还没有可用的外部列表。",
+    externalListVisibilityNoVisible: "当前外部列表都被隐藏了。点击上方标题可重新选择要显示的列表。",
     externalTaskReadOnly: "外部项目默认只读；Apple 提醒事项和 Apple 日历的部分写入能力需要在设置中显式开启。",
     externalSourceOpenUnavailable: "Task Hub 无法打开这个外部来源。",
     externalCalendars: "外部日历",

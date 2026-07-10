@@ -60,18 +60,28 @@ export type TaskHubSmartList = {
   id: string;
   name: string;
   color?: string;
-  filters: TaskViewFilterSettings;
   taskStableIds: string[];
   taskIds: string[];
+  filters?: TaskViewFilterSettings;
   excludedTaskStableIds?: string[];
   excludedTaskIds?: string[];
   createdAt: string;
   updatedAt: string;
 };
 
+export type ExternalTaskListFilterEntry = {
+  id: string;
+  externalListId: string;
+  source: Extract<TaskSource, "apple-reminders" | "dida">;
+  name: string;
+  color: string;
+  itemCount: number;
+};
+
 export type TaskHubLastSessionState = {
   view: DefaultView;
   taskViewFilters: TaskViewFilterSettings;
+  selectedExternalListFilterId?: string;
   calendarMode: "day" | "week" | "month";
   calendarFocusDate?: string;
   visibleSourceIds: string[];
@@ -284,6 +294,7 @@ export type TaskHubSettings = {
   taskNoteManualOrder: TaskNoteManualOrder;
   taskNotePinned: TaskNotePinned;
   smartLists: TaskHubSmartList[];
+  hiddenExternalTaskListFilterIds: string[];
   vaultTaskStableState: Record<string, PersistedVaultTaskStableRecord[]>;
   externalTaskLookbackDays: number;
   externalTaskLookaheadDays: number;

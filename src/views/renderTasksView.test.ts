@@ -51,7 +51,7 @@ jest.mock("obsidian", () => ({
 }), { virtual: true });
 
 import { renderTasksView } from "./renderTasksView";
-import type { TaskHubSmartList, TaskItem } from "../types";
+import type { ExternalTaskListFilterEntry, TaskHubSmartList, TaskItem } from "../types";
 
 const mockMenus: Array<{
   items: Array<{ title: string; icon: string | null; disabled?: boolean; click?: (event?: Partial<FakeEvent>) => void }>;
@@ -646,6 +646,110 @@ describe("renderTasksView", () => {
     );
 
     expect(collect(container).find((element) => element.classes.has("task-hub-smart-list-item-count"))?.text).toBe("7");
+  });
+
+  it("renders external list filters and toggles the selected external list preference", () => {
+    const container = new FakeElement();
+    const onToggleExternalListFilter = jest.fn();
+    const onConfigureExternalLists = jest.fn();
+    const externalListEntry: ExternalTaskListFilterEntry = {
+      id: "apple-reminders:list:groceries",
+      externalListId: "groceries",
+      source: "apple-reminders",
+      name: "Groceries",
+      color: "#f59e0b",
+      itemCount: 12
+    };
+
+    renderTasksView(
+      container as unknown as HTMLElement,
+      [baseTask],
+      [baseTask],
+      { status: "open", tags: [], sourceQuery: "", textQuery: "" },
+      handlers(),
+      new Date("2026-05-08T12:00:00Z"),
+      (key) => key,
+      {
+        allowAppleReminderWriteback: false,
+        showExternalListCard: true,
+        externalListEntries: [externalListEntry],
+        activeExternalListFilterId: "apple-reminders:list:groceries",
+        onToggleExternalListFilter,
+        onConfigureExternalLists
+      }
+    );
+
+    const titleButton = collect(container).find((element) => element.classes.has("task-hub-smart-list-title-button"));
+    const sidebar = collect(container).find((element) => element.classes.has("task-hub-task-filter-sidebar"));
+    const item = collect(container).find((element) => element.classes.has("task-hub-external-list-item"));
+    const button = collect(container).find((element) => element.classes.has("task-hub-external-list-apply"));
+    const name = collect(container).find((element) => element.classes.has("task-hub-external-list-name"));
+    const count = collect(container).find((element) => element.classes.has("task-hub-external-list-count"));
+    const sourceLogo = collect(container).find((element) => element.classes.has("task-hub-external-list-source"));
+
+    expect(sidebar).toBeDefined();
+    expect(item?.classes.has("is-active")).toBe(true);
+    expect(item?.style.setProperty).toHaveBeenCalledWith("--task-hub-external-list-color", "#f59e0b");
+    expect(name?.text).toBe("Groceries");
+    expect(count?.text).toBe("12");
+    expect(sourceLogo?.classes.has("is-apple")).toBe(true);
+
+    titleButton?.click();
+    expect(onConfigureExternalLists).toHaveBeenCalled();
+    button?.click();
+    expect(onToggleExternalListFilter).toHaveBeenCalledWith(externalListEntry);
+  });
+
+  it("restores the external list scroll position after rendering", () => {
+    const container = new FakeElement();
+    const externalListEntry: ExternalTaskListFilterEntry = {
+      id: "apple-reminders:list:groceries",
+      externalListId: "groceries",
+      source: "apple-reminders",
+      name: "Groceries",
+      color: "#f59e0b",
+      itemCount: 12
+    };
+
+    renderTasksView(
+      container as unknown as HTMLElement,
+      [baseTask],
+      [baseTask],
+      { status: "open", tags: [], sourceQuery: "", textQuery: "" },
+      handlers(),
+      new Date("2026-05-08T12:00:00Z"),
+      (key) => key,
+      {
+        allowAppleReminderWriteback: false,
+        showExternalListCard: true,
+        externalListEntries: [externalListEntry],
+        externalListScrollTop: 92
+      }
+    );
+
+    expect(collect(container).find((element) => element.classes.has("task-hub-external-list-items"))?.scrollTop).toBe(92);
+  });
+
+  it("keeps the external list card visible when all entries are hidden", () => {
+    const container = new FakeElement();
+
+    renderTasksView(
+      container as unknown as HTMLElement,
+      [baseTask],
+      [baseTask],
+      { status: "open", tags: [], sourceQuery: "", textQuery: "" },
+      handlers(),
+      new Date("2026-05-08T12:00:00Z"),
+      (key) => key,
+      {
+        allowAppleReminderWriteback: false,
+        showExternalListCard: true,
+        externalListEntries: []
+      }
+    );
+
+    expect(collect(container).find((element) => element.classes.has("task-hub-external-list-card"))).toBeDefined();
+    expect(findElementByText(container, "externalListVisibilityNoVisible")).toBeDefined();
   });
 
   it("drops selected tasks onto a smart list", () => {

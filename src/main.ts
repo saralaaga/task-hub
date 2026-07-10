@@ -12,6 +12,7 @@ import { DIDA_INBOX_PROJECT_NAME, didaProjectsFromRecords, didaSource, didaTaskT
 import { extractDidaTitleTags } from "./dida/didaTags";
 import { createTranslator } from "./i18n";
 import { registerTaskHubIcon, TASK_HUB_ICON_ID } from "./icons";
+import { applySmartListToTasks } from "./filtering/smartLists";
 import {
   canCreateAppleRemindersCapability,
   canCreateDidaTasksCapability,
@@ -98,7 +99,18 @@ import {
   serializeCreationTarget,
   TaskHubSettingTab
 } from "./settings";
-import type { AppleCalendarInfo, CalendarCreationKind, CalendarCreationTarget, CalendarEvent, CalendarItemEditDraft, CalendarSourceStatus, LocalAppleSyncStatus, TaskHubSettings, TaskItem, TaskSendTarget } from "./types";
+import type {
+  AppleCalendarInfo,
+  CalendarCreationKind,
+  CalendarCreationTarget,
+  CalendarEvent,
+  CalendarItemEditDraft,
+  CalendarSourceStatus,
+  LocalAppleSyncStatus,
+  TaskHubSettings,
+  TaskItem,
+  TaskSendTarget
+} from "./types";
 import { TaskHubView } from "./views/TaskHubView";
 import { createTaskHubNoteComposer, type TaskHubNoteComposer } from "./views/noteComposer";
 import { populateRecurrenceSelect } from "./views/recurrenceControls";

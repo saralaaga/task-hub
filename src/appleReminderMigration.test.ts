@@ -2,8 +2,9 @@ import TaskHubPlugin from "./main";
 import { MarkdownView } from "obsidian";
 import { DEFAULT_SETTINGS } from "./settings";
 import { createDatedNoteContent } from "./datedNotes";
+import { applySmartListToTasks } from "./filtering/smartLists";
 import { buildTaskNoteKey, createTaskNoteContent, parseTaskNoteFrontmatter } from "./taskNotes";
-import type { TaskItem } from "./types";
+import type { TaskHubSmartList, TaskItem } from "./types";
 
 const notices: string[] = [];
 const savedData: unknown[] = [];
@@ -525,6 +526,68 @@ describe("Apple Reminders migration", () => {
     const parsed = parseTaskNoteFrontmatter(writes[0].content);
     expect(parsed?.related).toEqual(["task:apple-reminders:reminder-created-1"]);
     expect(parsed?.history).toContain(oldKey);
+  });
+
+  it("does not add replacement Apple Reminders to static smart lists", async () => {
+    const file = { path: "Inbox.md", extension: "md", stat: { ctime: 1, mtime: 2, size: 3 } };
+    const plugin = new TaskHubPlugin({} as never, {} as never);
+    const sourceTask = task({
+      text: "Research generator",
+      rawLine: "- [ ] Research generator #p/副业/编程 📅 2026-05-20",
+      tags: ["#p/副业/编程"]
+    });
+    const smartList: TaskHubSmartList = {
+      id: "smart_ship",
+      name: "出海",
+      taskStableIds: [],
+      taskIds: [sourceTask.id],
+      createdAt: "2026-07-10T00:00:00.000Z",
+      updatedAt: "2026-07-10T00:00:00.000Z"
+    };
+    plugin.app = {
+      vault: {
+        adapter: {},
+        getFileByPath: jest.fn(() => file),
+        read: jest.fn(async () => "- [ ] Research generator #p/副业/编程 📅 2026-05-20"),
+        process: jest.fn(async (_file, update) => update("Next")),
+        cachedRead: jest.fn(async () => "")
+      },
+      workspace: {
+        getLeavesOfType: jest.fn(() => [])
+      }
+    } as never;
+    plugin.settings = {
+      ...DEFAULT_SETTINGS,
+      smartLists: [smartList],
+      localApple: {
+        ...DEFAULT_SETTINGS.localApple,
+        enabled: true,
+        remindersEnabled: true,
+        remindersCreateEnabled: true,
+        remindersCreateTagsEnabled: true
+      }
+    };
+    plugin.taskIndex = {
+      reindexFile: jest.fn(async () => undefined)
+    } as never;
+    plugin.syncLocalApple = jest.fn(async () => undefined) as never;
+
+    await plugin.sendTaskToAppleReminders(sourceTask);
+
+    expect(plugin.settings.smartLists[0]).toMatchObject({
+      id: "smart_ship",
+      taskStableIds: [],
+      taskIds: [sourceTask.id]
+    });
+    expect(applySmartListToTasks([
+      appleReminderTask({
+        id: "apple-reminders:reminder-created-1",
+        stableId: "apple-reminders:reminder-created-1",
+        externalId: "reminder-created-1",
+        text: "Research generator",
+        tags: ["#p/副业/编程"]
+      })
+    ], plugin.settings.smartLists[0], new Date("2026-05-20T12:00:00.000Z"))).toEqual([]);
   });
 
   it("deletes a task note instead of saving an empty body", async () => {

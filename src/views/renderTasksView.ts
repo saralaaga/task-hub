@@ -10,7 +10,16 @@ import { taskNoteOrderItemKey } from "../taskNoteOrdering";
 import { parseTaskSendTarget, preferredTaskSendTarget, taskSendTargetOptions } from "../taskSendTargets";
 import { applyTaskListManualOrder, taskListDateKey, type TaskListDropPosition } from "../taskListOrdering";
 import { taskPlannedDateKey, taskScheduledStartMinutes } from "../taskDates";
-import type { AppleReminderList, CalendarItemEditDraft, DidaProject, TaskHubSmartList, TaskItem, TaskListManualOrder, TaskSendTarget } from "../types";
+import type {
+  AppleReminderList,
+  CalendarItemEditDraft,
+  DidaProject,
+  ExternalTaskListFilterEntry,
+  TaskHubSmartList,
+  TaskItem,
+  TaskListManualOrder,
+  TaskSendTarget
+} from "../types";
 import { addSourceIndicatorMenuItem, deleteLabelForTaskBulkAction, sourceIndicatorLabelForTask } from "./contextMenuLabels";
 import { renderTaskNoteBody, taskNotePreviewBody, taskNotePreviewTitle, type TaskNoteMarkdownRenderer } from "./renderTaskNoteBody";
 import { renderTaskFilterPanel, type SourceFilterOption, type TaskFilterControlHandlers } from "./renderShell";
@@ -70,6 +79,8 @@ export type TaskRenderOptions = {
   taskSendDefaultTarget?: TaskSendTarget;
   bindTagInputSuggest?: (input: TaskHubTagInputElement) => void;
   taskListScrollTop?: number;
+  smartListScrollTop?: number;
+  externalListScrollTop?: number;
   exitingTaskIds?: ReadonlySet<string>;
   taskNotesEnabled?: boolean;
   allowThinoNoteEdit?: boolean;
@@ -87,8 +98,13 @@ export type TaskRenderOptions = {
   filterHandlers?: TaskFilterControlHandlers;
   smartLists?: TaskHubSmartList[];
   activeSmartListId?: string;
+  externalListEntries?: ExternalTaskListFilterEntry[];
+  showExternalListCard?: boolean;
+  activeExternalListFilterId?: string;
   onSaveSmartList?: (name: string) => void;
   onApplySmartList?: (smartList: TaskHubSmartList) => void;
+  onToggleExternalListFilter?: (entry: ExternalTaskListFilterEntry) => void;
+  onConfigureExternalLists?: () => void;
   onAddTasksToSmartList?: (smartList: TaskHubSmartList, tasks: TaskItem[]) => void;
   onRemoveTasksFromActiveSmartList?: (tasks: TaskItem[]) => void;
   onDeleteSmartList?: (smartList: TaskHubSmartList) => void;
@@ -140,7 +156,8 @@ export function renderTasksView(
     hasActiveConditionFilters(filters.conditions) ||
     Boolean(filters.sourceQuery) ||
     Boolean(filters.textQuery) ||
-    Boolean(options.activeSmartListId);
+    Boolean(options.activeSmartListId) ||
+    Boolean(options.activeExternalListFilterId);
 
   if (tasks.length === 0 && !hasActiveFilter) {
     previousTaskProgressByContainer.set(container, new Map());
@@ -156,7 +173,9 @@ export function renderTasksView(
   const progressByTaskId = options.showSubtaskProgressBars === false ? new Map<string, TaskProgressInfo>() : allProgressByTaskId;
   let selectedTask = sortedTasks.find((task) => task.id === options.selectedTaskId) ?? sortedTasks.find((task) => !task.completed) ?? sortedTasks[0];
   const selectedTaskIds = normalizedSelectedTaskIds(options, selectedTask);
-  const hasSidebar = Boolean(options.filterHandlers || options.smartLists?.length || options.onSaveSmartList);
+  const hasSidebar = Boolean(
+    options.filterHandlers || options.smartLists?.length || options.onSaveSmartList || options.showExternalListCard
+  );
   const workbench = container.createDiv({ cls: `task-hub-task-workbench ${hasSidebar ? "has-filter-sidebar" : ""}` });
   if (hasSidebar) {
     renderTaskSidebar(workbench, filters, options, t);
@@ -319,25 +338,70 @@ function renderTaskSidebar(
   }
 
   const list = smartLists.createDiv({ cls: "task-hub-smart-list-items" });
+  list.scrollTop = options.smartListScrollTop ?? 0;
   const items = options.smartLists ?? [];
   if (items.length === 0) {
     list.createDiv({ cls: "task-hub-smart-list-empty", text: t("noSmartLists") });
+  } else {
+    for (const smartList of items) {
+      const item = list.createDiv({
+        cls: `task-hub-smart-list-item ${options.activeSmartListId === smartList.id ? "is-active" : ""}`
+      });
+      setCssProps(item, { "--task-hub-smart-list-color": smartList.color ?? "var(--interactive-accent)" });
+      renderSmartListItemContent(item, smartList, options);
+      bindSmartListDropTarget(item, smartList, options, t);
+      item.addEventListener("contextmenu", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        renderSmartListContextMenu(item, event, smartList, options, t);
+      });
+    }
+  }
+
+  if (!options.showExternalListCard) return;
+
+  const externalLists = sidebar.createDiv({ cls: "task-hub-external-list-card" });
+  const externalHeader = externalLists.createDiv({ cls: "task-hub-smart-list-header" });
+  const externalTitle = externalHeader.createEl("button", {
+    cls: "task-hub-smart-list-title-button",
+    text: t("externalLists"),
+    attr: {
+      type: "button",
+      "aria-label": t("externalListVisibilityTitle"),
+      title: t("externalListVisibilityTitle")
+    }
+  });
+  externalTitle.addEventListener("click", () => options.onConfigureExternalLists?.());
+  const externalList = externalLists.createDiv({ cls: "task-hub-external-list-items" });
+  externalList.scrollTop = options.externalListScrollTop ?? 0;
+  const externalListEntries = options.externalListEntries ?? [];
+
+  if (externalListEntries.length === 0) {
+    externalList.createDiv({ cls: "task-hub-external-list-empty", text: t("externalListVisibilityNoVisible") });
     return;
   }
 
-  for (const smartList of items) {
-    const item = list.createDiv({
-      cls: `task-hub-smart-list-item ${options.activeSmartListId === smartList.id ? "is-active" : ""}`
+  for (const entry of externalListEntries) {
+    const item = externalList.createDiv({
+      cls: `task-hub-external-list-item ${options.activeExternalListFilterId === entry.id ? "is-active" : ""}`
     });
-    setCssProps(item, { "--task-hub-smart-list-color": smartList.color ?? "var(--interactive-accent)" });
-    renderSmartListItemContent(item, smartList, options);
-    bindSmartListDropTarget(item, smartList, options, t);
-    item.addEventListener("contextmenu", (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      renderSmartListContextMenu(item, event, smartList, options, t);
+    setCssProps(item, { "--task-hub-external-list-color": entry.color });
+    const button = item.createEl("button", {
+      cls: "task-hub-external-list-apply",
+      attr: {
+        "aria-pressed": options.activeExternalListFilterId === entry.id ? "true" : "false",
+        title: entry.name
+      }
     });
+    button.createSpan({ cls: "task-hub-external-list-name", text: entry.name });
+    button.createSpan({ cls: "task-hub-external-list-count", text: String(entry.itemCount) });
+    renderSourceLogo(button, "task-hub-external-list-source", externalListSourceLogoKind(entry));
+    button.addEventListener("click", () => options.onToggleExternalListFilter?.(entry));
   }
+}
+
+function externalListSourceLogoKind(entry: ExternalTaskListFilterEntry): "apple" | "dida" {
+  return entry.source === "apple-reminders" ? "apple" : "dida";
 }
 
 function renderSmartListItemContent(item: HTMLElement, smartList: TaskHubSmartList, options: TaskRenderOptions): void {
