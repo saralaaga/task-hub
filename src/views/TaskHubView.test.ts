@@ -1365,6 +1365,139 @@ describe("TaskHubView external list filters", () => {
   });
 });
 
+describe("TaskHubView external list drag actions", () => {
+  function externalListEntry(overrides: Partial<ExternalTaskListFilterEntry> = {}): ExternalTaskListFilterEntry {
+    return {
+      id: "apple-reminders:list:groceries",
+      externalListId: "groceries",
+      source: "apple-reminders",
+      name: "Groceries",
+      color: "#f59e0b",
+      itemCount: 1,
+      ...overrides
+    };
+  }
+
+  function pluginForExternalListActions() {
+    return {
+      settings: {
+        defaultView: "tasks",
+        language: "en",
+        taskViewFilters: fallbackFilters(),
+        lastSessionState: undefined
+      },
+      sendTaskToAppleReminders: jest.fn(async () => undefined),
+      sendTaskToDida: jest.fn(async () => undefined),
+      moveAppleReminderToList: jest.fn(async () => undefined),
+      moveDidaTaskToProject: jest.fn(async () => undefined)
+    };
+  }
+
+  it("sends vault tasks into the selected Apple Reminders list", async () => {
+    const plugin = pluginForExternalListActions();
+    const view = new TaskHubView({} as never, plugin as never);
+    const draggedTask = task({ id: "vault-1", source: "vault", externalId: undefined, externalListId: undefined });
+
+    await (view as unknown as {
+      addTasksToExternalList(entry: ExternalTaskListFilterEntry, tasks: TaskItem[]): Promise<void>;
+    }).addTasksToExternalList(externalListEntry(), [draggedTask]);
+
+    expect(plugin.sendTaskToAppleReminders).toHaveBeenCalledWith(draggedTask, {
+      type: "apple-reminders",
+      listId: "groceries"
+    });
+  });
+
+  it("sends vault tasks into the selected Dida project", async () => {
+    const plugin = pluginForExternalListActions();
+    const view = new TaskHubView({} as never, plugin as never);
+    const draggedTask = task({ id: "vault-1", source: "vault", externalId: undefined, externalListId: undefined });
+    const entry = externalListEntry({
+      id: "dida:project:work",
+      externalListId: "work",
+      source: "dida",
+      name: "Work",
+      color: "#3b82f6"
+    });
+
+    await (view as unknown as {
+      addTasksToExternalList(entry: ExternalTaskListFilterEntry, tasks: TaskItem[]): Promise<void>;
+    }).addTasksToExternalList(entry, [draggedTask]);
+
+    expect(plugin.sendTaskToDida).toHaveBeenCalledWith(draggedTask, {
+      type: "dida",
+      projectId: "work"
+    });
+  });
+
+  it("moves Apple Reminders tasks into another Apple list", async () => {
+    const plugin = pluginForExternalListActions();
+    const view = new TaskHubView({} as never, plugin as never);
+    const draggedTask = task({
+      id: "apple-1",
+      source: "apple-reminders",
+      externalId: "apple-1",
+      externalListId: "inbox"
+    });
+
+    await (view as unknown as {
+      addTasksToExternalList(entry: ExternalTaskListFilterEntry, tasks: TaskItem[]): Promise<void>;
+    }).addTasksToExternalList(externalListEntry(), [draggedTask]);
+
+    expect(plugin.moveAppleReminderToList).toHaveBeenCalledWith(draggedTask, "groceries");
+  });
+
+  it("moves Dida tasks into another Dida project", async () => {
+    const plugin = pluginForExternalListActions();
+    const view = new TaskHubView({} as never, plugin as never);
+    const draggedTask = task({
+      id: "dida-1",
+      source: "dida",
+      externalId: "dida-1",
+      externalListId: "inbox"
+    });
+    const entry = externalListEntry({
+      id: "dida:project:work",
+      externalListId: "work",
+      source: "dida",
+      name: "Work",
+      color: "#3b82f6"
+    });
+
+    await (view as unknown as {
+      addTasksToExternalList(entry: ExternalTaskListFilterEntry, tasks: TaskItem[]): Promise<void>;
+    }).addTasksToExternalList(entry, [draggedTask]);
+
+    expect(plugin.moveDidaTaskToProject).toHaveBeenCalledWith(draggedTask, "work");
+  });
+
+  it("skips cross-provider drops and same-list no-ops", async () => {
+    const plugin = pluginForExternalListActions();
+    const view = new TaskHubView({} as never, plugin as never);
+    const sameAppleListTask = task({
+      id: "apple-1",
+      source: "apple-reminders",
+      externalId: "apple-1",
+      externalListId: "groceries"
+    });
+    const crossProviderTask = task({
+      id: "dida-1",
+      source: "dida",
+      externalId: "dida-1",
+      externalListId: "inbox"
+    });
+
+    await (view as unknown as {
+      addTasksToExternalList(entry: ExternalTaskListFilterEntry, tasks: TaskItem[]): Promise<void>;
+    }).addTasksToExternalList(externalListEntry(), [sameAppleListTask, crossProviderTask]);
+
+    expect(plugin.sendTaskToAppleReminders).not.toHaveBeenCalled();
+    expect(plugin.sendTaskToDida).not.toHaveBeenCalled();
+    expect(plugin.moveAppleReminderToList).not.toHaveBeenCalled();
+    expect(plugin.moveDidaTaskToProject).not.toHaveBeenCalled();
+  });
+});
+
 describe("buildTaskViewTransitionKey", () => {
   it("changes only when task filtering or the active smart list changes", () => {
     const base = baseFilters();

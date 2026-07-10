@@ -1078,13 +1078,16 @@ body .task-hub-view .task-hub-sidebar .task-hub-smart-list-item button.task-hub-
   align-items: center;
   background: color-mix(in srgb, var(--task-hub-external-list-color, var(--interactive-accent)) 7%, transparent);
   border-radius: 6px;
+  box-shadow: 0 0 0 1px transparent;
   min-height: 32px;
   min-width: 0;
   overflow: hidden;
   padding-left: 2px;
+  transform: translateY(0);
   transition:
-    background-color 300ms ease,
-    box-shadow 300ms ease;
+    background-color 140ms ease,
+    box-shadow 140ms ease,
+    transform 140ms ease;
 }
 
 .task-hub-external-list-item:hover {
@@ -1094,6 +1097,27 @@ body .task-hub-view .task-hub-sidebar .task-hub-smart-list-item button.task-hub-
 .task-hub-external-list-item.is-active {
   background: color-mix(in srgb, var(--task-hub-external-list-color, var(--interactive-accent)) 28%, transparent);
   box-shadow: inset 3px 0 0 var(--task-hub-external-list-color, var(--interactive-accent));
+}
+
+.task-hub-external-list-item.is-drop-target {
+  background: color-mix(in srgb, var(--task-hub-external-list-color, var(--interactive-accent)) 18%, transparent);
+  box-shadow:
+    inset 3px 0 0 var(--task-hub-external-list-color, var(--interactive-accent)),
+    0 0 0 1.5px color-mix(in srgb, var(--task-hub-external-list-color, var(--interactive-accent)) 82%, transparent);
+  transform: translateY(-1px) scale(1.01);
+}
+
+.task-hub-external-list-item.is-active.is-drop-target {
+  background: color-mix(in srgb, var(--task-hub-external-list-color, var(--interactive-accent)) 32%, transparent);
+}
+
+.task-hub-external-list-item.is-drop-target .task-hub-external-list-count,
+.task-hub-external-list-item.is-drop-target .task-hub-external-list-source {
+  color: var(--task-hub-external-list-color, var(--text-normal));
+}
+
+.task-hub-external-list-item.is-drop-success {
+  animation: task-hub-external-list-drop-success 320ms ease;
 }
 
 button.task-hub-external-list-apply,
@@ -1165,6 +1189,30 @@ body .task-hub-view .task-hub-sidebar .task-hub-external-list-item button.task-h
   font-size: var(--font-ui-smaller);
   line-height: 1;
   text-align: right;
+}
+
+@keyframes task-hub-external-list-drop-success {
+  0% {
+    background: color-mix(in srgb, var(--task-hub-external-list-color, var(--interactive-accent)) 18%, transparent);
+    box-shadow:
+      inset 3px 0 0 var(--task-hub-external-list-color, var(--interactive-accent)),
+      0 0 0 1.5px color-mix(in srgb, var(--task-hub-external-list-color, var(--interactive-accent)) 82%, transparent);
+    transform: translateY(-1px) scale(1.01);
+  }
+
+  45% {
+    background: color-mix(in srgb, var(--task-hub-external-list-color, var(--interactive-accent)) 28%, transparent);
+    box-shadow:
+      inset 3px 0 0 var(--task-hub-external-list-color, var(--interactive-accent)),
+      0 0 0 2px color-mix(in srgb, var(--task-hub-external-list-color, var(--interactive-accent)) 95%, transparent);
+    transform: translateY(-1px) scale(1.012);
+  }
+
+  100% {
+    background: color-mix(in srgb, var(--task-hub-external-list-color, var(--interactive-accent)) 7%, transparent);
+    box-shadow: 0 0 0 1px transparent;
+    transform: translateY(0) scale(1);
+  }
 }
 
 .task-hub-external-list-visibility-modal {
@@ -5736,35 +5784,15 @@ input.task-hub-tag-editor-input:focus {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  position: relative;
 }
 
 .task-hub-dated-note-detail-card.is-active {
   border-color: color-mix(in srgb, var(--interactive-accent) 34%, var(--background-modifier-border));
 }
 
-.task-hub-dated-note-detail-header {
-  border-bottom: 1px solid var(--background-modifier-border);
-  display: grid;
-  gap: 8px;
-  grid-template-columns: minmax(0, 1fr) auto;
-  padding: 14px;
-}
-
-.task-hub-dated-note-meta {
-  color: var(--text-muted);
-  display: flex;
-  flex-wrap: wrap;
-  font-size: var(--font-ui-smaller);
-  gap: 8px;
-}
-
-.task-hub-dated-note-detail-header .task-hub-tag-row {
-  grid-column: 1 / -1;
-}
-
 .task-hub-dated-note-menu-button {
   align-items: center;
-  align-self: start;
   background: transparent;
   border: 0;
   border-radius: 6px;
@@ -5775,9 +5803,12 @@ input.task-hub-tag-editor-input:focus {
   font-size: var(--font-ui-medium);
   height: 28px;
   justify-content: center;
-  margin: -4px -4px 0 0;
+  position: absolute;
+  right: 14px;
+  top: 14px;
   padding: 0;
   width: 28px;
+  z-index: 1;
 }
 
 .task-hub-dated-note-menu-button:hover,
@@ -5788,7 +5819,7 @@ input.task-hub-tag-editor-input:focus {
 
 .task-hub-dated-note-body {
   line-height: 1.42;
-  padding: 16px 18px;
+  padding: 18px 56px 12px 18px;
 }
 
 .task-hub-dated-note-body > *:first-child {
@@ -5815,6 +5846,20 @@ input.task-hub-tag-editor-input:focus {
 
 .task-hub-dated-note-body .task-list-item-checkbox {
   margin-inline-end: 8px;
+}
+
+.task-hub-dated-note-detail-footer {
+  align-items: end;
+  border-top: 1px solid var(--background-modifier-border);
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  min-width: 0;
+  padding: 12px 18px 14px;
+}
+
+.task-hub-dated-note-detail-footer .task-hub-tag-row {
+  min-width: 0;
 }
 
 .task-hub-dated-note-list {

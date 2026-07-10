@@ -75,7 +75,7 @@ function datedNoteHandlers(overrides: Partial<Parameters<typeof renderDatedNotes
 }
 
 describe("renderDatedNotesView", () => {
-  it("keeps the note detail header focused on metadata and tags", () => {
+  it("renders detail cards with the note body first and footer metadata", () => {
     const container = new FakeElement();
     const note: DatedNote = {
       path: "Notes/2026-07-07 0930 - Morning.md",
@@ -94,17 +94,21 @@ describe("renderDatedNotesView", () => {
       datedNoteHandlers()
     );
 
-    const detailHeader = childWithClass(container, "task-hub-dated-note-detail-header");
-    const detailHeaderChildren = collect(detailHeader);
+    const detailCard = childWithClass(container, "task-hub-dated-note-detail-card");
+    const detailCardChildren = collect(detailCard);
 
-    expect(detailHeaderChildren.some((child) => child.type === "h3")).toBe(false);
-    expect(detailHeaderChildren.some((child) => child.classes.has("task-hub-dated-note-path"))).toBe(false);
-    expect(detailHeaderChildren.map((child) => child.text)).not.toContain(note.title);
-    expect(detailHeaderChildren.map((child) => child.text)).not.toContain(note.path);
-    expect(detailHeaderChildren.filter((child) => child.classes.has("task-hub-task-tag")).map((child) => child.text)).toEqual([
+    expect(detailCard.children[0]?.classes.has("task-hub-dated-note-body")).toBe(true);
+    expect(detailCard.children[1]?.classes.has("task-hub-dated-note-detail-footer")).toBe(true);
+    expect(detailCardChildren.some((child) => child.type === "h3")).toBe(false);
+    expect(detailCardChildren.some((child) => child.classes.has("task-hub-dated-note-path"))).toBe(false);
+    expect(detailCardChildren.map((child) => child.text)).not.toContain(note.title);
+    expect(detailCardChildren.map((child) => child.text)).not.toContain(note.path);
+    expect(detailCardChildren.map((child) => child.text)).not.toContain("taskhub-type: note");
+    expect(detailCardChildren.filter((child) => child.classes.has("task-hub-task-tag")).map((child) => child.text)).toEqual([
       "#work",
       "#daily"
     ]);
+    expect(childWithClass(detailCard, "task-hub-dated-note-time").text).toBe("09:30");
   });
 
   it("renders note list cards as body previews with the time in the footer", () => {

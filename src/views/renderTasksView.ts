@@ -106,6 +106,7 @@ export type TaskRenderOptions = {
   onToggleExternalListFilter?: (entry: ExternalTaskListFilterEntry) => void;
   onConfigureExternalLists?: () => void;
   onAddTasksToSmartList?: (smartList: TaskHubSmartList, tasks: TaskItem[]) => void;
+  onAddTasksToExternalList?: (entry: ExternalTaskListFilterEntry, tasks: TaskItem[]) => void;
   onRemoveTasksFromActiveSmartList?: (tasks: TaskItem[]) => void;
   onDeleteSmartList?: (smartList: TaskHubSmartList) => void;
   onRenameSmartList?: (smartList: TaskHubSmartList, name: string) => void;
@@ -133,6 +134,7 @@ let activeDraggedTaskListItemIds: string[] = [];
 let activeDraggedTaskListRows = new Set<HTMLElement>();
 let activeTaskListTasksById = new Map<string, TaskItem>();
 let activeDraggableTaskListItemIds = new Set<string>();
+const externalListDropSuccessTimers = new WeakMap<HTMLElement, number>();
 const previousTaskProgressByContainer = new WeakMap<HTMLElement, Map<string, number>>();
 
 export function renderTasksView(
@@ -183,10 +185,11 @@ export function renderTasksView(
   const list = workbench.createDiv({
     cls: `task-hub-task-list-pane ${options.animateTaskListTransition ? "task-hub-task-list-pane-transition" : ""}`
   });
-  const draggableTaskIds = new Set(sortedTasks.filter((task) => canDragTaskRowInList(task, options, handlers)).map((task) => task.id));
+  const draggableTaskIds = new Set(sortedTasks.filter((task) => canStartTaskListDrag(task, options, handlers)).map((task) => task.id));
+  const reschedulableTaskIds = new Set(sortedTasks.filter((task) => canDragTaskRowInList(task, options, handlers)).map((task) => task.id));
   activeTaskListTasksById = new Map(sortedTasks.map((task) => [task.id, task]));
   activeDraggableTaskListItemIds = new Set(draggableTaskIds);
-  const showListDragTargets = draggableTaskIds.size > 0 && Boolean(handlers.onTaskReschedule);
+  const showListDragTargets = reschedulableTaskIds.size > 0 && Boolean(handlers.onTaskReschedule);
 
   if (sortedTasks.length === 0) {
     previousTaskProgressByContainer.set(container, new Map());
@@ -256,7 +259,7 @@ export function renderTasksView(
     if (shouldRenderEmptyDropTarget) {
       cards.addClass("is-empty-drop-zone");
     }
-    bindTaskListBucketDropTarget(section, bucket, sortedTasks, draggableTaskIds, handlers, now);
+    bindTaskListBucketDropTarget(section, bucket, sortedTasks, reschedulableTaskIds, handlers, now);
 
     for (const task of bucketTasks) {
       renderTaskTree(
@@ -397,6 +400,7 @@ function renderTaskSidebar(
     button.createSpan({ cls: "task-hub-external-list-count", text: String(entry.itemCount) });
     renderSourceLogo(button, "task-hub-external-list-source", externalListSourceLogoKind(entry));
     button.addEventListener("click", () => options.onToggleExternalListFilter?.(entry));
+    bindExternalListDropTarget(item, entry, options);
   }
 }
 
@@ -440,6 +444,48 @@ function bindSmartListDropTarget(
     options.onAddTasksToSmartList?.(smartList, tasks);
     showSmartListDragNotice(t, "smartListDragInNotice", smartList.name, tasks.length);
   });
+}
+
+function bindExternalListDropTarget(
+  item: HTMLElement,
+  entry: ExternalTaskListFilterEntry,
+  options: TaskRenderOptions
+): void {
+  if (!options.onAddTasksToExternalList) return;
+  item.addEventListener("dragover", (event) => {
+    const tasks = droppableTasksForExternalList(activeTaskListTasksFromDragEvent(event), entry, options);
+    if (tasks.length === 0) return;
+    event.preventDefault();
+    if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+    item.addClass("is-drop-target");
+  });
+  item.addEventListener("dragleave", () => {
+    item.removeClass("is-drop-target");
+  });
+  item.addEventListener("drop", (event) => {
+    const tasks = droppableTasksForExternalList(activeTaskListTasksFromDragEvent(event), entry, options);
+    clearActiveTaskListDrag();
+    item.removeClass("is-drop-target");
+    if (tasks.length === 0) return;
+    event.preventDefault();
+    flashExternalListDropSuccess(item);
+    options.onAddTasksToExternalList?.(entry, tasks);
+  });
+}
+
+function flashExternalListDropSuccess(item: HTMLElement): void {
+  const previousTimer = externalListDropSuccessTimers.get(item);
+  if (previousTimer !== undefined) {
+    item.win.clearTimeout(previousTimer);
+  }
+  item.removeClass("is-drop-success");
+  void item.offsetWidth;
+  item.addClass("is-drop-success");
+  const timer = item.win.setTimeout(() => {
+    item.removeClass("is-drop-success");
+    externalListDropSuccessTimers.delete(item);
+  }, 320);
+  externalListDropSuccessTimers.set(item, timer);
 }
 
 function bindActiveSmartListRemoveDropTarget(button: HTMLElement, options: TaskRenderOptions, t: Translator): void {
@@ -987,7 +1033,7 @@ function bindTaskRowDrag(
   rowsByTaskId: ReadonlyMap<string, HTMLElement> | undefined,
   t: Translator
 ): void {
-  if (!canDragTaskRowInList(task, options, handlers)) return;
+  if (!canStartTaskListDrag(task, options, handlers)) return;
   row.draggable = true;
   row.setAttr("draggable", "true");
   row.setAttr("aria-grabbed", "false");
@@ -1212,6 +1258,73 @@ function canDragTaskRowInList(
     return Boolean(options.allowDidaWriteback && options.allowDidaDragReschedule && task.externalId && task.externalListId);
   }
   return false;
+}
+
+function canStartTaskListDrag(
+  task: TaskItem,
+  options: TaskRenderOptions,
+  handlers: { onTaskReschedule?: TaskRowHandlers["onTaskReschedule"]; onTaskReorder?: TaskRowHandlers["onTaskReorder"] }
+): boolean {
+  return canDragTaskRowInList(task, options, handlers) || canDragTaskRowToExternalList(task, options);
+}
+
+function canDragTaskRowToExternalList(task: TaskItem, options: TaskRenderOptions): boolean {
+  if (!options.onAddTasksToExternalList || !options.externalListEntries || options.externalListEntries.length === 0) {
+    return false;
+  }
+  if (task.source === "vault") {
+    return options.externalListEntries.some((entry) => externalListAllowsVaultTask(entry, options));
+  }
+  if (task.source === "apple-reminders") {
+    return Boolean(
+      options.allowAppleReminderWriteback
+        && task.externalId
+        && options.externalListEntries.some((entry) => entry.source === "apple-reminders" && entry.externalListId !== task.externalListId)
+    );
+  }
+  if (task.source === "dida") {
+    return Boolean(
+      options.allowDidaWriteback
+        && task.externalId
+        && task.externalListId
+        && options.externalListEntries.some((entry) => entry.source === "dida" && entry.externalListId !== task.externalListId)
+    );
+  }
+  return false;
+}
+
+function droppableTasksForExternalList(
+  tasks: TaskItem[],
+  entry: ExternalTaskListFilterEntry,
+  options: TaskRenderOptions
+): TaskItem[] {
+  return tasks.filter((task) => canDropTaskOnExternalList(task, entry, options));
+}
+
+function canDropTaskOnExternalList(
+  task: TaskItem,
+  entry: ExternalTaskListFilterEntry,
+  options: TaskRenderOptions
+): boolean {
+  if (task.source === "vault") {
+    return externalListAllowsVaultTask(entry, options);
+  }
+  if (task.source !== entry.source || task.externalListId === entry.externalListId) {
+    return false;
+  }
+  if (task.source === "apple-reminders") {
+    return Boolean(options.allowAppleReminderWriteback && task.externalId);
+  }
+  if (task.source === "dida") {
+    return Boolean(options.allowDidaWriteback && task.externalId && task.externalListId);
+  }
+  return false;
+}
+
+function externalListAllowsVaultTask(entry: ExternalTaskListFilterEntry, options: TaskRenderOptions): boolean {
+  return entry.source === "apple-reminders"
+    ? Boolean(options.allowAppleReminderCreate)
+    : Boolean(options.allowDidaCreate);
 }
 
 function canReorderTaskRow(

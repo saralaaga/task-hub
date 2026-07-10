@@ -69,22 +69,6 @@ function renderDatedNoteDetail(
 ): void {
   for (const note of notes) {
     const card = container.createDiv({ cls: `task-hub-dated-note-detail-card ${note.path === selected.path ? "is-active" : ""}` });
-    const header = card.createDiv({ cls: "task-hub-dated-note-detail-header" });
-    const meta = header.createDiv({ cls: "task-hub-dated-note-meta" });
-    meta.createSpan({ text: note.date });
-    if (note.createdAt) meta.createSpan({ text: timeLabel(note.createdAt) });
-    meta.createSpan({ text: "taskhub-type: note" });
-    const menu = header.createEl("button", { cls: "task-hub-dated-note-menu-button", text: "⋯" });
-    menu.addEventListener("click", (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      handlers.onOpenNoteActions(note, event);
-    });
-    if (note.tags.length > 0) {
-      const tags = header.createDiv({ cls: "task-hub-tag-row" });
-      for (const tag of note.tags) tags.createSpan({ cls: "task-hub-task-tag", text: tag });
-    }
-
     const body = card.createDiv({ cls: "task-hub-dated-note-body" });
     if (note.body.trim()) {
       if (options.renderNoteMarkdown) {
@@ -95,6 +79,20 @@ function renderDatedNoteDetail(
     } else {
       body.createDiv({ cls: "task-hub-empty", text: state.t("noDatedNotes") });
     }
+
+    const footer = card.createDiv({ cls: "task-hub-dated-note-detail-footer" });
+    if (note.tags.length > 0) {
+      const tags = footer.createDiv({ cls: "task-hub-tag-row" });
+      for (const tag of note.tags) tags.createSpan({ cls: "task-hub-task-tag", text: tag });
+    }
+    if (note.createdAt) footer.createSpan({ cls: "task-hub-dated-note-time", text: timeLabel(note.createdAt) });
+
+    const menu = card.createEl("button", { cls: "task-hub-dated-note-menu-button", text: "⋯" });
+    menu.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      handlers.onOpenNoteActions(note, event);
+    });
   }
 }
 

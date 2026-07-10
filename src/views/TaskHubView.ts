@@ -391,6 +391,7 @@ export class TaskHubView extends ItemView {
           onToggleExternalListFilter: (entry) => this.toggleExternalListFilter(entry),
           onConfigureExternalLists: () => this.openExternalListVisibilityModal(allExternalTaskListEntries),
           onAddTasksToSmartList: (smartList, tasks) => this.addTasksToSmartList(smartList, tasks, allTasks),
+          onAddTasksToExternalList: (entry, tasks) => void this.addTasksToExternalList(entry, tasks),
           onRemoveTasksFromActiveSmartList: (tasks) => this.removeTasksFromActiveSmartList(tasks),
           onDeleteSmartList: (smartList) => this.deleteSmartList(smartList),
           onRenameSmartList: (smartList, name) => this.renameSmartList(smartList, name),
@@ -806,6 +807,30 @@ export class TaskHubView extends ItemView {
     void this.plugin.saveSettings().then(() => {
       this.render({ preserveTaskListScroll: true, preserveContentScroll: true });
     });
+  }
+
+  private async addTasksToExternalList(entry: ExternalTaskListFilterEntry, tasks: TaskItem[]): Promise<void> {
+    if (tasks.length === 0) return;
+    for (const task of tasks) {
+      if (task.source === "vault") {
+        if (entry.source === "apple-reminders") {
+          await this.plugin.sendTaskToAppleReminders(task, { type: "apple-reminders", listId: entry.externalListId });
+        } else {
+          await this.plugin.sendTaskToDida(task, { type: "dida", projectId: entry.externalListId });
+        }
+        continue;
+      }
+      if (task.source !== entry.source || task.externalListId === entry.externalListId) {
+        continue;
+      }
+      if (task.source === "apple-reminders") {
+        await this.plugin.moveAppleReminderToList(task, entry.externalListId);
+        continue;
+      }
+      if (task.source === "dida") {
+        await this.plugin.moveDidaTaskToProject(task, entry.externalListId);
+      }
+    }
   }
 
   private removeTasksFromActiveSmartList(tasks: TaskItem[]): void {

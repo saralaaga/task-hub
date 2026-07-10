@@ -60,7 +60,8 @@ const mockMenus: Array<{
 }> = [];
 const fakeWindow = {
   matchMedia: undefined as ((query: string) => MediaQueryList) | undefined,
-  setTimeout: (callback: () => void, delay?: number) => globalThis.setTimeout(callback, delay)
+  setTimeout: (callback: () => void, delay?: number) => globalThis.setTimeout(callback, delay),
+  clearTimeout: (handle: ReturnType<typeof setTimeout>) => globalThis.clearTimeout(handle)
 };
 
 class FakeDocumentFragment {
@@ -728,6 +729,124 @@ describe("renderTasksView", () => {
     );
 
     expect(collect(container).find((element) => element.classes.has("task-hub-external-list-items"))?.scrollTop).toBe(92);
+  });
+
+  it("drops selected tasks onto an external list", () => {
+    const container = new FakeElement();
+    const onAddTasksToExternalList = jest.fn();
+    const firstTask: TaskItem = {
+      ...baseTask,
+      id: "first",
+      stableId: "vault:th_first",
+      source: "vault",
+      externalId: undefined,
+      externalSourceName: undefined,
+      filePath: "Project.md",
+      rawLine: "- [ ] First 📅 2026-05-08",
+      text: "First",
+      dueDate: "2026-05-08"
+    };
+    const secondTask: TaskItem = {
+      ...firstTask,
+      id: "second",
+      stableId: "vault:th_second",
+      rawLine: "- [ ] Second 📅 2026-05-09",
+      text: "Second",
+      dueDate: "2026-05-09"
+    };
+    const entry: ExternalTaskListFilterEntry = {
+      id: "apple-reminders:list:groceries",
+      externalListId: "groceries",
+      source: "apple-reminders",
+      name: "Groceries",
+      color: "#f59e0b",
+      itemCount: 12
+    };
+
+    renderTasksView(
+      container as unknown as HTMLElement,
+      [firstTask, secondTask],
+      [firstTask, secondTask],
+      { status: "open", tags: [], sourceQuery: "", textQuery: "" },
+      handlers(),
+      new Date("2026-05-08T12:00:00Z"),
+      (key) => key,
+      {
+        allowAppleReminderWriteback: false,
+        allowAppleReminderCreate: true,
+        showExternalListCard: true,
+        externalListEntries: [entry],
+        onAddTasksToExternalList,
+        selectedTaskIds: new Set(["first", "second"])
+      }
+    );
+
+    const row = taskRowByTitle(container, "First");
+    const item = collect(container).find((element) => element.classes.has("task-hub-external-list-item"));
+    const dataTransfer = fakeDataTransfer();
+
+    row?.dispatch("dragstart", { dataTransfer });
+    const dragover = item?.dispatch("dragover", { dataTransfer });
+    item?.dispatch("drop", { dataTransfer });
+
+    expect(row?.draggable).toBe(true);
+    expect(dragover?.preventDefault).toHaveBeenCalled();
+    expect(item?.classes.has("is-drop-target")).toBe(false);
+    expect(item?.classes.has("is-drop-success")).toBe(true);
+    expect(onAddTasksToExternalList).toHaveBeenCalledWith(entry, [firstTask, secondTask]);
+  });
+
+  it("allows Dida tasks to drag into external lists even when date drag reschedule is disabled", () => {
+    const container = new FakeElement();
+    const onAddTasksToExternalList = jest.fn();
+    const task: TaskItem = {
+      ...baseTask,
+      id: "dida-task",
+      stableId: "dida:1",
+      source: "dida",
+      externalId: "dida-1",
+      externalListId: "inbox",
+      externalSourceName: "Dida",
+      filePath: "Dida/Inbox",
+      rawLine: "",
+      text: "Inbox task"
+    };
+    const entry: ExternalTaskListFilterEntry = {
+      id: "dida:project:work",
+      externalListId: "work",
+      source: "dida",
+      name: "Work",
+      color: "#3b82f6",
+      itemCount: 3
+    };
+
+    renderTasksView(
+      container as unknown as HTMLElement,
+      [task],
+      [task],
+      { status: "open", tags: [], sourceQuery: "", textQuery: "" },
+      handlers(),
+      new Date("2026-05-08T12:00:00Z"),
+      (key) => key,
+      {
+        allowAppleReminderWriteback: false,
+        allowDidaWriteback: true,
+        allowDidaDragReschedule: false,
+        showExternalListCard: true,
+        externalListEntries: [entry],
+        onAddTasksToExternalList
+      }
+    );
+
+    const row = taskRowByTitle(container, "Inbox task");
+    const item = collect(container).find((element) => element.classes.has("task-hub-external-list-item"));
+    const dataTransfer = fakeDataTransfer();
+
+    row?.dispatch("dragstart", { dataTransfer });
+    item?.dispatch("drop", { dataTransfer });
+
+    expect(row?.draggable).toBe(true);
+    expect(onAddTasksToExternalList).toHaveBeenCalledWith(entry, [task]);
   });
 
   it("keeps the external list card visible when all entries are hidden", () => {
