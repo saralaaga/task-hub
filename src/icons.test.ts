@@ -10,6 +10,6 @@ describe("registerTaskHubIcon", () => {
     registerTaskHubIcon();
 
     expect(addIcon).toHaveBeenCalledWith(TASK_HUB_ICON_ID, expect.stringContaining("<svg"));
-    expect(addIcon).toHaveBeenCalledWith(TASK_HUB_ICON_ID, expect.stringContaining("M15.25 15.75 17.25 17.75 20 14.25"));
+    expect(addIcon).toHaveBeenCalledWith(TASK_HUB_ICON_ID, expect.stringContaining("M14.05 15.3 16.55 17.8 20.1 14.25"));
   });
 });

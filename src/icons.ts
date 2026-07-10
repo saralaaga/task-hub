@@ -4,10 +4,12 @@ export const TASK_HUB_ICON_ID = "task-hub";
 
 const TASK_HUB_ICON_SVG = `
 <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-  <path d="M7 4.75h10a2.25 2.25 0 0 1 2.25 2.25v10a2.25 2.25 0 0 1-2.25 2.25H7A2.25 2.25 0 0 1 4.75 17V7A2.25 2.25 0 0 1 7 4.75Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>
-  <path d="M8 8.25h.01M8 12h.01M8 15.75h.01" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
-  <path d="M10.75 8.25h5.25M10.75 12h4.4M10.75 15.75h3" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
-  <path d="M15.25 15.75 17.25 17.75 20 14.25" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+  <g transform="translate(12 12) scale(1.28 1.24) translate(-12 -12)">
+    <path d="M7.45 7.95h.01M7.45 11.95h.01" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round"/>
+    <path d="M10.15 7.95h6.2M10.15 11.95h5.35" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+    <path d="M8.85 16.35h3.85" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+    <path d="M14.05 15.3 16.55 17.8 20.1 14.25" fill="none" stroke="currentColor" stroke-width="2.15" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
 </svg>
 `;
 
