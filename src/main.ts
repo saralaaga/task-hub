@@ -3169,6 +3169,7 @@ class TaskNoteModal extends Modal {
       parent: editorHost,
       value: this.noteBody,
       placeholder: createTranslator(this.plugin.settings.language)("notes"),
+      tagSuggestions: () => collectObsidianTags(this.plugin.app, this.plugin.getTasks()),
       onChange: (value) => {
         this.noteBody = value;
       },
@@ -3271,6 +3272,7 @@ class DatedNoteEditModal extends Modal {
       value: this.body,
       placeholder: t("noteCreationPlaceholder"),
       extensions: createDatedNoteComposerExtensions(this.plugin.app),
+      tagSuggestions: () => collectObsidianTags(this.plugin.app, this.plugin.getTasks()),
       onChange: (value) => {
         this.body = value;
       },
@@ -3327,6 +3329,27 @@ function isImeComposingEnterEvent(event: KeyboardEvent): boolean {
 
 const CHECKBOX_LINE_PREFIX = /^(\s*)([-*]\s+\[[ xX]\]\s*)/u;
 
+export function checkboxContinuation(lineText: string): { type: "continue"; insert: string } | { type: "exit"; replacement: string } | undefined {
+  const match = lineText.match(CHECKBOX_LINE_PREFIX);
+  if (!match) return undefined;
+  const remainder = lineText.slice(match[0].length);
+  if (remainder.trim().length === 0) {
+    return { type: "exit", replacement: match[1] };
+  }
+  return {
+    type: "continue",
+    insert: `\n${match[1]}${match[2].replace(/\[[ xX]\]/u, "[ ]")}`
+  };
+}
+
+export function shouldStripEmptyCheckboxLine(lineText: string, cursorInLine: number): boolean {
+  const match = lineText.match(CHECKBOX_LINE_PREFIX);
+  if (!match) return false;
+  const remainder = lineText.slice(match[0].length);
+  if (remainder.trim().length > 0) return false;
+  return cursorInLine <= match[0].length;
+}
+
 type EasyTypingRuleResult = {
   matchRange?: { from: number; to: number };
   newText?: string;
@@ -3349,6 +3372,7 @@ function createDatedNoteComposerExtensions(app: unknown): Extension[] {
       keydown: (event, view) => {
         if (event.isComposing) return false;
         if (event.key === "Enter") return continueCheckboxLine(view, event);
+        if (event.key === "Backspace") return deleteEmptyCheckboxLinePrefix(view, event);
         if (event.key === "Tab") return indentComposerLine(view, event.shiftKey, event);
         return false;
       }
@@ -3425,16 +3449,43 @@ function continueCheckboxLine(view: EditorView, event: KeyboardEvent): boolean {
   const selection = view.state.selection.main;
   if (selection.from !== selection.to) return false;
   const line = view.state.doc.lineAt(selection.from);
+  const next = checkboxContinuation(line.text);
+  if (!next) return false;
+
+  event.preventDefault();
+  if (next.type === "exit") {
+    const anchor = line.from + next.replacement.length;
+    view.dispatch({
+      changes: { from: line.from, to: line.to, insert: next.replacement },
+      selection: { anchor },
+      userEvent: "input.type"
+    });
+    return true;
+  }
+  const position = selection.from + next.insert.length;
+  view.dispatch({
+    changes: { from: selection.from, insert: next.insert },
+    selection: { anchor: position },
+    userEvent: "input.type"
+  });
+  return true;
+}
+
+function deleteEmptyCheckboxLinePrefix(view: EditorView, event: KeyboardEvent): boolean {
+  const selection = view.state.selection.main;
+  if (selection.from !== selection.to) return false;
+  const line = view.state.doc.lineAt(selection.from);
+  const cursorInLine = selection.from - line.from;
+  if (!shouldStripEmptyCheckboxLine(line.text, cursorInLine)) return false;
   const match = line.text.match(CHECKBOX_LINE_PREFIX);
   if (!match) return false;
 
   event.preventDefault();
-  const continuation = `\n${match[1]}${match[2].replace(/\[[ xX]\]/u, "[ ]")}`;
-  const position = selection.from + continuation.length;
+  const replacement = match[1];
   view.dispatch({
-    changes: { from: selection.from, insert: continuation },
-    selection: { anchor: position },
-    userEvent: "input.type"
+    changes: { from: line.from, to: line.to, insert: replacement },
+    selection: { anchor: line.from + replacement.length },
+    userEvent: "delete.backward"
   });
   return true;
 }
@@ -3562,6 +3613,7 @@ class CreateTaskModal extends Modal {
         placeholder: t("noteCreationPlaceholder"),
         className: "task-hub-create-note-body-input",
         extensions: createDatedNoteComposerExtensions(this.plugin.app),
+        tagSuggestions: () => collectObsidianTags(this.plugin.app, this.plugin.getTasks()),
         onChange: (value) => {
           this.taskText = value;
         },

@@ -78,13 +78,19 @@ export function collectObsidianTags(app: App, tasks: TaskItem[]): string[] {
 
 export function tagTokenAtCursor(value: string, cursor: number): { text: string; start: number; end: number } | undefined {
   const safeCursor = Math.max(0, Math.min(cursor, value.length));
-  const prefix = value.slice(0, safeCursor);
-  const match = prefix.match(/(^|\s)(#[^\s#]*)$/u);
-  if (!match?.[2]) return undefined;
-  const start = prefix.length - match[2].length;
-  const suffix = value.slice(safeCursor);
-  const endOffset = suffix.match(/^[^\s#]*/u)?.[0].length ?? 0;
-  return { text: match[2], start, end: safeCursor + endOffset };
+  let bodyStart = safeCursor;
+  while (bodyStart > 0 && isTagBodyCharacter(value.charAt(bodyStart - 1))) {
+    bodyStart -= 1;
+  }
+  const hashIndex = bodyStart - 1;
+  if (hashIndex < 0 || value.charAt(hashIndex) !== "#") return undefined;
+  const boundaryCharacter = hashIndex > 0 ? value.charAt(hashIndex - 1) : undefined;
+  if (!isTagBoundaryCharacter(boundaryCharacter)) return undefined;
+  let end = safeCursor;
+  while (end < value.length && isTagBodyCharacter(value.charAt(end))) {
+    end += 1;
+  }
+  return { text: value.slice(hashIndex, end), start: hashIndex, end };
 }
 
 export function replaceTagToken(value: string, cursor: number, replacement: string): { value: string; cursor: number } {
@@ -97,6 +103,16 @@ export function replaceTagToken(value: string, cursor: number, replacement: stri
   }
   const nextValue = `${value.slice(0, token.start)}${tag}${value.slice(token.end)}`;
   return { value: nextValue, cursor: token.start + tag.length };
+}
+
+export function suggestTagsAtCursor(value: string, cursor: number, tags: string[]): string[] {
+  const token = tagTokenAtCursor(value, cursor);
+  if (!token) return [];
+  const needle = normalizeTag(token.text).toLocaleLowerCase();
+  return uniqueSortedTags(tags)
+    .filter((tag) => isTagSuggestionMatch(tag, needle))
+    .filter((tag) => normalizeTag(tag) !== normalizeTag(token.text))
+    .slice(0, 20);
 }
 
 function tagTokenFromQuery(query: string): { text: string; start: number; end: number } | undefined {
@@ -122,6 +138,14 @@ function isTagSuggestionMatch(tag: string, needle: string): boolean {
   const normalized = normalizeTag(tag).toLocaleLowerCase();
   if (normalized.startsWith(needle)) return true;
   return normalized.split("/").some((part) => part.startsWith(needle));
+}
+
+function isTagBodyCharacter(character: string | undefined): boolean {
+  return character !== undefined && /[\p{L}\p{N}_/-]/u.test(character);
+}
+
+function isTagBoundaryCharacter(character: string | undefined): boolean {
+  return !character || !/[0-9A-Za-z_/-]/u.test(character);
 }
 
 function isTextareaElement(inputEl: TaskHubTagInputElement): inputEl is HTMLTextAreaElement {

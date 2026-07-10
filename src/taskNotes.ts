@@ -88,7 +88,7 @@ const MANAGED_KEYS = new Set([
   "taskhub-created",
   "taskhub-updated"
 ]);
-const NOTE_TAG = /(^|\s)(#[\p{L}\p{N}_/-]+)/gu;
+const NOTE_TAG = /(^|[^0-9A-Za-z_/-])(#[\p{L}\p{N}_/-]+)/gu;
 
 export function buildTaskNoteKey(task: TaskItem): string {
   if (task.source !== "vault" && task.externalId) {

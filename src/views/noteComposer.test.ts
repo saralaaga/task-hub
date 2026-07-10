@@ -1,3 +1,9 @@
+jest.mock("obsidian", () => ({
+  AbstractInputSuggest: class {},
+  getAllTags: jest.fn(() => []),
+  parseFrontMatterTags: jest.fn(() => [])
+}), { virtual: true });
+
 import { collectNoteComposerTokens, noteComposerThemeSpec } from "./noteComposer";
 
 describe("collectNoteComposerTokens", () => {
@@ -13,6 +19,12 @@ describe("collectNoteComposerTokens", () => {
   it("does not treat hash characters in the middle of words as tags", () => {
     expect(collectNoteComposerTokens("abc#not-tag #tag")).toEqual([
       { type: "tag", from: 12, to: 16, text: "#tag" }
+    ]);
+  });
+
+  it("finds inline Chinese tags without requiring a preceding space", () => {
+    expect(collectNoteComposerTokens("今天#项目复盘 明天继续")).toEqual([
+      { type: "tag", from: 2, to: 7, text: "#项目复盘" }
     ]);
   });
 });

@@ -105,4 +105,16 @@ describe("parseTasksFromMarkdown", () => {
       recurrence: "RRULE:FREQ=WEEKLY"
     });
   });
+
+  it("extracts inline Chinese tags without requiring a preceding space", () => {
+    const tasks = parseTasksFromMarkdown({
+      filePath: "Inbox.md",
+      content: "- [ ] 今天#项目复盘"
+    });
+
+    expect(tasks[0]).toMatchObject({
+      text: "今天",
+      tags: ["#项目复盘"]
+    });
+  });
 });

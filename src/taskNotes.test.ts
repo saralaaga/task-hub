@@ -148,6 +148,21 @@ describe("task note frontmatter", () => {
     expect(parseTaskNoteFrontmatter(content)?.tags).toEqual(["#比赛", "#client/acme"]);
   });
 
+  it("extracts inline Chinese tags from the note body without requiring a preceding space", () => {
+    const content = [
+      "---",
+      "taskhub-note: true",
+      'taskhub-note-id: "thn_1"',
+      "taskhub-related:",
+      '  - "task:vault:Inbox.md:0:new"',
+      "---",
+      "",
+      "今天#项目复盘"
+    ].join("\n");
+
+    expect(parseTaskNoteFrontmatter(content)?.tags).toEqual(["#项目复盘"]);
+  });
+
   it("replaces only the note body while preserving frontmatter", () => {
     const content = createTaskNoteContent({
       noteId: "thn_1",

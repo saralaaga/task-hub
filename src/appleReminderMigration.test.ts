@@ -1,4 +1,4 @@
-import TaskHubPlugin from "./main";
+import TaskHubPlugin, { checkboxContinuation, shouldStripEmptyCheckboxLine } from "./main";
 import { MarkdownView } from "obsidian";
 import { DEFAULT_SETTINGS } from "./settings";
 import { createDatedNoteContent } from "./datedNotes";
@@ -59,6 +59,7 @@ type MockNoteComposer = {
     placeholder?: string;
     className?: string;
     extensions?: unknown[];
+    tagSuggestions?: () => string[];
     onChange?: (value: string) => void;
     onSubmit?: () => void;
   };
@@ -1751,6 +1752,47 @@ describe("Apple Reminders migration", () => {
 
     expect(mockNoteComposers).toHaveLength(1);
     expect(mockNoteComposers[0].options.extensions?.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("passes native Obsidian tag suggestions into the dated note composer", () => {
+    const plugin = new TaskHubPlugin({} as never, {} as never);
+    plugin.app = {
+      workspace: {
+        getLeavesOfType: jest.fn(() => [])
+      },
+      vault: { getMarkdownFiles: jest.fn(() => []) },
+      metadataCache: { getFileCache: jest.fn(() => ({})) }
+    } as never;
+    plugin.settings = {
+      ...DEFAULT_SETTINGS,
+      datedNotes: {
+        ...DEFAULT_SETTINGS.datedNotes,
+        enabled: true
+      }
+    };
+    plugin.createDatedNote = jest.fn() as never;
+    (globalThis as unknown as { window: { setTimeout: typeof setTimeout } }).window = { setTimeout };
+
+    plugin.openCreateTaskModal("2026-05-20", {
+      allowDatedNote: true,
+      initialKind: "note"
+    });
+
+    expect(mockNoteComposers).toHaveLength(1);
+    expect(typeof mockNoteComposers[0].options.tagSuggestions).toBe("function");
+  });
+
+  it("matches Obsidian list behavior by exiting empty checkbox lines and stripping markers on Backspace", () => {
+    expect(checkboxContinuation("- [x] ship Task Hub")).toEqual({
+      type: "continue",
+      insert: "\n- [ ] "
+    });
+    expect(checkboxContinuation("  - [ ] ")).toEqual({
+      type: "exit",
+      replacement: "  "
+    });
+    expect(shouldStripEmptyCheckboxLine("- [ ] ", 6)).toBe(true);
+    expect(shouldStripEmptyCheckboxLine("- [ ] task", 10)).toBe(false);
   });
 
   it("edits a dated note with the Task Hub CodeMirror composer and preserves metadata", async () => {

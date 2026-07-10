@@ -8,6 +8,7 @@ import {
   WidgetType,
   placeholder
 } from "@codemirror/view";
+import { replaceTagToken, suggestTagsAtCursor } from "./tagInputSuggest";
 
 export type NoteComposerToken =
   | { type: "checkbox"; from: number; to: number; checked: boolean }
@@ -27,6 +28,7 @@ export type TaskHubNoteComposerOptions = {
   placeholder?: string;
   className?: string;
   extensions?: Extension[];
+  tagSuggestions?: () => string[];
   onChange?: (value: string) => void;
   onSubmit?: () => void;
 };
@@ -34,7 +36,7 @@ export type TaskHubNoteComposerOptions = {
 type NoteComposerThemeSpec = Parameters<typeof EditorView.theme>[0];
 
 const TASK_MARKER = /^(\s*[-*]\s+\[([ xX])\]\s*)/u;
-const NOTE_TAG = /(^|\s)(#[\p{L}\p{N}_/-]+)/gu;
+const NOTE_TAG = /(^|[^0-9A-Za-z_/-])(#[\p{L}\p{N}_/-]+)/gu;
 const NOTE_COMPOSER_MIN_HEIGHT = "100px";
 
 export function noteComposerThemeSpec(): NoteComposerThemeSpec {
@@ -124,6 +126,7 @@ export function createTaskHubNoteComposer(options: TaskHubNoteComposerOptions): 
       doc: options.value ?? "",
       extensions: [
         noteComposerDecorations(),
+        ...(options.tagSuggestions ? [noteComposerTagSuggest(options.tagSuggestions)] : []),
         ...(options.extensions ?? []),
         updateListener,
         submitKeyHandler,
@@ -145,6 +148,197 @@ export function createTaskHubNoteComposer(options: TaskHubNoteComposerOptions): 
       view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: value } });
     }
   };
+}
+
+type NoteComposerTagSuggestState = {
+  cursor: number;
+  options: string[];
+  selectedIndex: number;
+};
+
+function noteComposerTagSuggest(getTags: () => string[]): Extension {
+  return ViewPlugin.fromClass(class {
+    private popup: HTMLDivElement | undefined;
+    private active: NoteComposerTagSuggestState | undefined;
+    private scheduledRenderFrame: number | undefined;
+    private renderRetryCount = 0;
+    private readonly keydownHandler = (event: KeyboardEvent) => {
+      if (event.isComposing || !this.active) return;
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        this.selectOffset(1);
+        return;
+      }
+      if (event.key === "ArrowUp") {
+        event.preventDefault();
+        this.selectOffset(-1);
+        return;
+      }
+      if (event.key === "Escape") {
+        event.preventDefault();
+        this.close();
+        return;
+      }
+      if ((event.key === "Enter" || event.key === "Tab") && this.active.options.length > 0) {
+        event.preventDefault();
+        this.applySuggestion(this.active.options[this.active.selectedIndex]);
+      }
+    };
+    private readonly focusHandler = () => {
+      this.sync();
+    };
+    private readonly blurHandler = () => {
+      this.scheduleRender();
+    };
+
+    constructor(private readonly view: EditorView) {
+      this.view.dom.addEventListener("keydown", this.keydownHandler);
+      this.view.dom.addEventListener("focusin", this.focusHandler);
+      this.view.dom.addEventListener("focusout", this.blurHandler);
+      this.sync();
+    }
+
+    update(update: ViewUpdate): void {
+      if (update.docChanged || update.selectionSet || update.focusChanged || update.viewportChanged) {
+        this.sync();
+      }
+    }
+
+    destroy(): void {
+      this.view.dom.removeEventListener("keydown", this.keydownHandler);
+      this.view.dom.removeEventListener("focusin", this.focusHandler);
+      this.view.dom.removeEventListener("focusout", this.blurHandler);
+      this.cancelScheduledRender();
+      this.close();
+    }
+
+    private sync(): void {
+      if (!this.isEditorFocused()) {
+        this.close();
+        return;
+      }
+      const selection = this.view.state.selection.main;
+      if (selection.from !== selection.to) {
+        this.close();
+        return;
+      }
+      const cursor = selection.from;
+      const options = suggestTagsAtCursor(this.view.state.doc.toString(), cursor, getTags());
+      if (options.length === 0) {
+        this.close();
+        return;
+      }
+      const previousValue = this.active ? this.active.options[this.active.selectedIndex] : undefined;
+      const selectedIndex = previousValue ? Math.max(0, options.indexOf(previousValue)) : 0;
+      this.active = { cursor, options, selectedIndex };
+      this.renderRetryCount = 0;
+      this.scheduleRender();
+    }
+
+    private ensurePopup(): HTMLDivElement {
+      if (this.popup) return this.popup;
+      const popup = this.view.dom.ownerDocument.createElement("div");
+      popup.className = "task-hub-note-composer-suggest";
+      popup.addEventListener("mousedown", (event) => event.preventDefault());
+      this.popup = popup;
+      return popup;
+    }
+
+    private render(): void {
+      if (!this.active) {
+        this.close();
+        return;
+      }
+      if (!this.isEditorFocused()) {
+        this.close();
+        return;
+      }
+      const coords = this.view.coordsAtPos(this.active.cursor);
+      if (!coords) {
+        if (this.renderRetryCount < 2) {
+          this.renderRetryCount += 1;
+          this.scheduleRender();
+          return;
+        }
+        this.close();
+        return;
+      }
+      this.renderRetryCount = 0;
+      const popup = this.ensurePopup();
+      popup.replaceChildren();
+      for (const [index, option] of this.active.options.entries()) {
+        const item = this.view.dom.ownerDocument.createElement("div");
+        item.className = `task-hub-note-composer-suggest-item ${index === this.active.selectedIndex ? "is-selected" : ""}`;
+        item.textContent = option;
+        item.addEventListener("mousedown", (event) => {
+          event.preventDefault();
+          this.applySuggestion(option);
+        });
+        popup.appendChild(item);
+      }
+      if (!popup.isConnected) {
+        this.view.dom.ownerDocument.body.appendChild(popup);
+      }
+      popup.style.position = "fixed";
+      popup.style.left = `${coords.left}px`;
+      popup.style.top = `${coords.bottom + 6}px`;
+    }
+
+    private selectOffset(offset: number): void {
+      if (!this.active) return;
+      const length = this.active.options.length;
+      this.active = {
+        ...this.active,
+        selectedIndex: (this.active.selectedIndex + offset + length) % length
+      };
+      this.render();
+    }
+
+    private applySuggestion(option: string): void {
+      const next = replaceTagToken(this.view.state.doc.toString(), this.active?.cursor ?? this.view.state.selection.main.from, option);
+      this.view.dispatch({
+        changes: { from: 0, to: this.view.state.doc.length, insert: next.value },
+        selection: { anchor: next.cursor },
+        userEvent: "input.complete"
+      });
+      this.view.focus();
+      this.sync();
+    }
+
+    private isEditorFocused(): boolean {
+      const activeElement = this.view.dom.ownerDocument.activeElement;
+      return this.view.hasFocus || Boolean(activeElement && this.view.dom.contains(activeElement));
+    }
+
+    private scheduleRender(): void {
+      this.cancelScheduledRender();
+      const win = this.view.dom.ownerDocument.defaultView;
+      if (!win) {
+        this.render();
+        return;
+      }
+      this.scheduledRenderFrame = win.requestAnimationFrame(() => {
+        this.scheduledRenderFrame = undefined;
+        this.render();
+      });
+    }
+
+    private cancelScheduledRender(): void {
+      const win = this.view.dom.ownerDocument.defaultView;
+      if (win && this.scheduledRenderFrame !== undefined) {
+        win.cancelAnimationFrame(this.scheduledRenderFrame);
+      }
+      this.scheduledRenderFrame = undefined;
+    }
+
+    private close(): void {
+      this.cancelScheduledRender();
+      this.renderRetryCount = 0;
+      this.active = undefined;
+      this.popup?.remove();
+      this.popup = undefined;
+    }
+  });
 }
 
 function noteComposerDecorations() {

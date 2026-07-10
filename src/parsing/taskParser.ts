@@ -7,7 +7,7 @@ type ParseInput = {
 };
 
 const TASK_LINE = /^(\s*)- \[([ xX])\]\s+(.*)$/;
-const TAG = /(^|\s)(#[\p{L}\p{N}_/-]+)/gu;
+const TAG = /(^|[^0-9A-Za-z_/-])(#[\p{L}\p{N}_/-]+)/gu;
 const EMOJI_START = /(?:^|\s)🛫\s*(\d{4}-\d{2}-\d{2})(?=\s|$)/u;
 const EMOJI_SCHEDULED = /(?:^|\s)⏳\s*(\d{4}-\d{2}-\d{2})(?=\s|$)/u;
 const EMOJI_DUE = /(?:^|\s)📅\s*(\d{4}-\d{2}-\d{2})(?=\s|$)/u;
@@ -132,7 +132,7 @@ function cleanTaskText(text: string): string {
     .replace(BARE_DUE, " ")
     .replace(EMOJI_TIME, " ")
     .replace(RECURRENCE, " ")
-    .replace(TAG, " ")
+    .replace(TAG, "$1 ")
     .replace(/\s+/g, " ");
 }
 

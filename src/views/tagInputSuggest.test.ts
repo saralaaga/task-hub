@@ -14,7 +14,7 @@ jest.mock("obsidian", () => ({
   parseFrontMatterTags: jest.fn(() => ["frontmatter"])
 }), { virtual: true });
 
-import { collectObsidianTags, replaceTagToken, tagTokenAtCursor, TaskHubTagInputSuggest } from "./tagInputSuggest";
+import { collectObsidianTags, replaceTagToken, suggestTagsAtCursor, tagTokenAtCursor, TaskHubTagInputSuggest } from "./tagInputSuggest";
 import type { TaskItem } from "../types";
 
 class FakeEvent {
@@ -36,6 +36,14 @@ beforeAll(() => {
 describe("tagInputSuggest", () => {
   it("finds the hash tag token at the cursor", () => {
     expect(tagTokenAtCursor("Call #比 today", 7)).toEqual({ text: "#比", start: 5, end: 7 });
+  });
+
+  it("finds an inline Chinese tag token without requiring a preceding space", () => {
+    expect(tagTokenAtCursor("今天#项目复盘", "今天#项目".length)).toEqual({
+      text: "#项目复盘",
+      start: 2,
+      end: 7
+    });
   });
 
   it("replaces the current tag token while preserving surrounding text", () => {
@@ -93,6 +101,20 @@ describe("tagInputSuggest", () => {
     const suggest = new TaskHubTagInputSuggest({} as never, input, () => ["#work", "#p/论文/选题"]);
 
     expect(suggest.getSuggestions("")).toEqual(["#p/论文/选题", "#work"]);
+  });
+
+  it("returns matching tags for a CodeMirror-style cursor query", () => {
+    expect(suggestTagsAtCursor("记录一下 #编", 7, ["#编程", "#编程/taskhub", "#生活"])).toEqual([
+      "#编程",
+      "#编程/taskhub"
+    ]);
+  });
+
+  it("returns matching tags for inline Chinese text before the hash marker", () => {
+    expect(suggestTagsAtCursor("今天#项", "今天#项".length, ["#项目", "#项目/复盘", "#生活"])).toEqual([
+      "#项目",
+      "#项目/复盘"
+    ]);
   });
 
   it("writes the selected suggestion back to the input and dispatches input", () => {
