@@ -1177,8 +1177,8 @@ function renderCalendarDaySidebar(
         cls: "task-hub-calendar-day-detail task-hub-calendar-detail-surface task-hub-calendar-day-event-detail"
       });
       if (selectedItem.color) setCssProps(detailSurface, { "--task-hub-item-color": selectedItem.color });
-      renderCalendarDetailHeader(detailSurface, selectedItem, handlers, state, { dismissible: false });
-      renderEventDetailsPopover(detailSurface, selectedItem, selectedItem.event, handlers, state, () => undefined);
+      const header = renderCalendarDetailHeader(detailSurface, selectedItem, handlers, state, { dismissible: false });
+      renderEventDetailsPopover(detailSurface, header, selectedItem, selectedItem.event, handlers, state, () => undefined);
     }
   }
 
@@ -1568,9 +1568,9 @@ function renderCalendarDetailsPopover(anchor: HTMLElement, item: CalendarItem, h
     return;
   }
   const header = renderCalendarDetailHeader(popover, item, handlers, state, { dismissible: true, onClose: closePopover });
-  bindDetailsPopoverDrag(popover, header, ownerDocument);
+  bindDetailsPopoverDrag(popover, header.header, ownerDocument);
   if (item.event) {
-    renderEventDetailsPopover(popover, item, item.event, handlers, state, closePopover);
+    renderEventDetailsPopover(popover, header, item, item.event, handlers, state, closePopover);
   }
 }
 
@@ -1580,19 +1580,20 @@ function renderCalendarDetailHeader(
   handlers: CalendarViewHandlers,
   state: CalendarViewState,
   options: { dismissible: boolean; onClose?: () => void }
-): HTMLElement {
+) : { header: HTMLElement; controls: HTMLElement } {
   const header = container.createDiv({ cls: "task-hub-calendar-detail-header" });
   if (!options.dismissible) header.addClass("is-static");
   const title = header.createDiv({ cls: "task-hub-calendar-detail-title" });
   title.addClass(item.task ? "is-task" : "is-event");
   title.createSpan({ cls: "task-hub-calendar-detail-title-text", text: state.t(item.task ? "taskDetails" : "calendarDetails") });
   renderDetailSourceLogo(title, item);
+  const controls = header.createDiv({ cls: "task-hub-calendar-detail-header-controls" });
   if (options.dismissible) {
     const close = header.createEl("button", { cls: "task-hub-icon-button", text: "×" });
     close.setAttr("aria-label", state.t("cancel"));
     close.addEventListener("click", () => options.onClose?.());
   }
-  return header;
+  return { header, controls };
 }
 
 function clearActiveCalendarDetails(preserveSelection = false): void {
@@ -1743,6 +1744,7 @@ function renderTaskDetailsPopover(
 
 function renderEventDetailsPopover(
   popover: HTMLElement,
+  header: { header: HTMLElement; controls: HTMLElement },
   item: CalendarItem,
   event: CalendarEvent,
   handlers: CalendarViewHandlers,
@@ -1754,7 +1756,7 @@ function renderEventDetailsPopover(
   const form = popover.createDiv({ cls: "task-hub-calendar-detail-form" });
   const title = detailInput(form, state.t("eventCreationPlaceholder"), event.title);
   const date = detailInput(form, state.t("date"), dateFromDateTime(event.start), "date", detailIcon("calendar"));
-  const allDayCheckbox = detailCheckbox(form, state.t("allDay"));
+  const allDayCheckbox = renderCalendarDetailHeaderCheckbox(header, state.t("allDay"));
   allDayCheckbox.checked = event.allDay;
   const startField = detailInputField(form, state.t("startTime"), event.allDay ? "" : timeFromDateTime(event.start), "time", detailIcon("clock"));
   const endField = detailInputField(form, state.t("endTime"), event.allDay ? "" : timeFromDateTime(event.end), "time", detailIcon("clock"));
@@ -1844,6 +1846,17 @@ function renderEventDetailsPopover(
     popover.createDiv({ cls: "task-hub-detail-note", text: state.t("readOnly") });
   }
   renderCalendarNotes(popover, state.getEventNotes?.(event) ?? [], handlers, state);
+}
+
+function renderCalendarDetailHeaderCheckbox(
+  header: { header: HTMLElement; controls: HTMLElement },
+  label: string
+): HTMLInputElement {
+  header.header.addClass("has-header-controls");
+  const control = header.controls.createEl("label", { cls: "task-hub-calendar-detail-header-check" });
+  const checkbox = control.createEl("input", { cls: "task-hub-calendar-detail-header-check-input", type: "checkbox" });
+  control.createSpan({ cls: "task-hub-calendar-detail-header-check-label", text: label });
+  return checkbox;
 }
 
 function renderCalendarDetailExtraToggle(container: HTMLElement, state: CalendarViewState): { toggle: HTMLInputElement; extra: HTMLElement } {
@@ -2073,15 +2086,6 @@ function detailInputField(
     input.addEventListener("focus", () => openNativeDatePicker(input));
   }
   return { field: row.row, input };
-}
-
-function detailCheckbox(container: HTMLElement, label: string): HTMLInputElement {
-  let checkbox: HTMLInputElement | undefined;
-  detailRow(container, label, (icon) => {
-    checkbox = icon.createEl("input", { cls: "task-hub-calendar-detail-check", type: "checkbox" });
-  });
-  if (!checkbox) throw new Error("Detail checkbox failed to render.");
-  return checkbox;
 }
 
 function openNativeDatePicker(input: HTMLInputElement): void {

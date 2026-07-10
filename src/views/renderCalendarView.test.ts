@@ -2893,7 +2893,7 @@ describe("renderCalendarView", () => {
     const save = collect(popover as FakeElement).find((element) => element.text === "save");
     const titleInput = collect(popover as FakeElement).find((element) => element.type === "text");
     const deleteButton = collect(popover as FakeElement).find((element) => element.text === "delete");
-    const allDayCheckbox = collect(popover as FakeElement).find((element) => element.classes.has("task-hub-calendar-detail-check"));
+    const allDayCheckbox = collect(popover as FakeElement).find((element) => element.classes.has("task-hub-calendar-detail-header-check-input"));
     const detailRows = collect(popover as FakeElement).filter((element) => element.classes.has("task-hub-calendar-detail-row"));
     const hiddenTimeRows = detailRows.filter((element) => element.classes.has("is-hidden"));
     expect(popover).toBeDefined();
@@ -2948,8 +2948,15 @@ describe("renderCalendarView", () => {
       .map((row) => collect(row).find((element) => element.classes.has("task-hub-detail-label"))?.text)
       .filter(Boolean);
 
-    expect(labels).toEqual(expect.arrayContaining(["date", "allDay", "startTime", "endTime"]));
-    expect(collect(detailSurface as FakeElement).some((element) => element.classes.has("task-hub-calendar-detail-check"))).toBe(true);
+    const header = collect(detailSurface as FakeElement).find((element) => element.classes.has("task-hub-calendar-detail-header"));
+    expect(header).toBeDefined();
+    const headerAllDayToggle = collect(header as FakeElement).find((element) => element.classes.has("task-hub-calendar-detail-header-check"));
+
+    expect(labels).toEqual(expect.arrayContaining(["date", "startTime", "endTime"]));
+    expect(labels).not.toContain("allDay");
+    expect(headerAllDayToggle).toBeDefined();
+    expect(collect(headerAllDayToggle as FakeElement).some((element) => element.type === "checkbox")).toBe(true);
+    expect(collect(headerAllDayToggle as FakeElement).some((element) => element.text === "allDay")).toBe(true);
     expect(detailRows.filter((row) => collect(row).some((element) => element.type === "time"))).toHaveLength(2);
   });
 
