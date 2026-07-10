@@ -6,7 +6,6 @@ import { formatLunarDayLabel, formatLunarMonthTitle } from "../calendar/lunarCal
 import type { TranslationKey, Translator } from "../i18n";
 import { normalizeReminderAlertMinutes, populateReminderAlertSelect, type ReminderAlertMinutes } from "../reminderAlerts";
 import type { TaskNote } from "../taskNotes";
-import { parseTaskSendTarget, preferredTaskSendTarget, taskSendTargetOptions } from "../taskSendTargets";
 import { taskPlannedDateKey } from "../taskDates";
 import type { AppleCalendarInfo, AppleReminderList, CalendarEvent, CalendarItemEditDraft, CalendarSource, CalendarSourceStatus, CalendarTimeScale, DidaProject, TaskItem, TaskSendTarget, WeekStart } from "../types";
 import { canDeleteAppleCalendarEventCapability, canDeleteAppleReminderCapability } from "../integrationCapabilities";
@@ -1341,15 +1340,27 @@ function miniMonthTooltip(date: Date, stats: MiniMonthDayStats | undefined, t: T
   ].join("\n");
 }
 
-function calendarTaskRowHandlers(handlers: CalendarViewHandlers): TaskRowHandlers {
+function calendarTaskRowHandlers(handlers: CalendarViewHandlers, afterSend?: () => void): TaskRowHandlers {
   return {
     onComplete: handlers.onTaskComplete,
     onJump: handlers.onTaskJump,
     onTaskReschedule: (task, target) => handlers.onTaskReschedule(task, target),
-    onSendToAppleReminders: (task) => handlers.onTaskSendToAppleReminders?.(task),
-    onSendToDida: handlers.onTaskSendToDida,
-    onSendToTarget: handlers.onTaskSendToTarget,
-    onSendToAppleCalendar: handlers.onTaskSendToAppleCalendar,
+    onSendToAppleReminders: (task) => {
+      handlers.onTaskSendToAppleReminders?.(task);
+      afterSend?.();
+    },
+    onSendToDida: (task) => {
+      handlers.onTaskSendToDida?.(task);
+      afterSend?.();
+    },
+    onSendToTarget: (task, target) => {
+      handlers.onTaskSendToTarget?.(task, target);
+      afterSend?.();
+    },
+    onSendToAppleCalendar: (task) => {
+      handlers.onTaskSendToAppleCalendar?.(task);
+      afterSend?.();
+    },
     onSelect: (task) => handlers.onTaskSelect(task),
     onTagSelect: () => undefined,
     onSourceSelect: () => undefined,
@@ -1551,13 +1562,13 @@ function renderCalendarDetailsPopover(anchor: HTMLElement, item: CalendarItem, h
   ownerDocument.addEventListener("click", closePopover);
   ownerDocument.addEventListener("keydown", closeOnEscape);
 
-  const header = renderCalendarDetailHeader(popover, item, handlers, state, { dismissible: true, onClose: closePopover });
-  bindDetailsPopoverDrag(popover, header, ownerDocument);
-
   if (item.task) {
-    renderTaskDetailsPopover(popover, item, item.task, handlers, state, closePopover);
+    const header = renderTaskDetailsPopover(popover, item.task, handlers, state, closePopover);
+    bindDetailsPopoverDrag(popover, header, ownerDocument);
     return;
   }
+  const header = renderCalendarDetailHeader(popover, item, handlers, state, { dismissible: true, onClose: closePopover });
+  bindDetailsPopoverDrag(popover, header, ownerDocument);
   if (item.event) {
     renderEventDetailsPopover(popover, item, item.event, handlers, state, closePopover);
   }
@@ -1704,163 +1715,30 @@ function bindDetailsPopoverDrag(popover: HTMLElement, handle: HTMLElement, owner
 
 function renderTaskDetailsPopover(
   popover: HTMLElement,
-  item: CalendarItem,
   task: TaskItem,
   handlers: CalendarViewHandlers,
   state: CalendarViewState,
   closePopover: () => void
-): void {
-  const editable = task.source === "vault" || (task.source === "apple-reminders" && state.allowAppleReminderWriteback) || (task.source === "dida" && state.allowDidaWriteback);
-  const canEdit = (task.source === "apple-reminders" || task.source === "dida") && editable && Boolean(handlers.onTaskUpdate);
-  const form = popover.createDiv({ cls: "task-hub-calendar-detail-form" });
-  const title = detailAutoGrowTextarea(form, state.t("taskCreationBody"), task.text, "task-hub-calendar-detail-title-input");
-  state.bindTagInputSuggest?.(title);
-  const date = detailInput(form, state.t("date"), taskPlannedDateKey(task) ?? "", "date");
-  const time = detailInput(form, state.t("startTime"), timeFromTask(task), "time");
-  const alertEditor = task.source === "apple-reminders" ? reminderAlertEditor(form, time, task.alertMinutesBefore, state.t) : undefined;
-  let tags: HTMLInputElement | undefined;
-  if (task.source === "vault") {
-    tags = detailInput(form, state.t("tags"), task.tags.join(" "));
-    state.bindTagInputSuggest?.(tags);
-  }
-  const detailExtra = renderCalendarDetailExtraToggle(form, state);
-  const recurrence = canEdit
-    ? createRecurrenceSelect(detailExtra.extra, state.t("recurrence"), task.recurrence, state.t)
-    : undefined;
-  if (!canEdit) {
-    renderReadonlyDetailRow(detailExtra.extra, state.t("recurrence"), recurrenceLabel(task.recurrence, state.t));
-  }
-  let notes: HTMLTextAreaElement | undefined;
-  if (task.source === "apple-reminders" || task.source === "dida") {
-    notes = canEdit
-      ? detailTextarea(detailExtra.extra, state.t("notes"), task.contextPreview ?? "")
-      : undefined;
-    if (!canEdit) {
-      renderReadonlyDetailRow(detailExtra.extra, state.t("notes"), task.contextPreview ?? "");
-    }
-  }
-  for (const field of [title, date, time, tags, alertEditor?.select]) {
-    if (field) field.disabled = !canEdit;
-  }
-  if (canEdit) {
-    let dirty = false;
-    let lastCommittedSignature = "";
-    const buildDraft = (): Extract<CalendarItemEditDraft, { kind: "task" }> => {
-      const detailsEnabled = detailExtra.toggle.checked;
-      return {
-        kind: "task",
-        title: title.value,
-        date: date.value,
-        startTime: time.value || undefined,
-        tags: tags ? tags.value.split(/\s+/).filter(Boolean) : undefined,
-        alertMinutesBefore: alertEditor?.getAlertMinutesBefore() ?? null,
-        ...(detailsEnabled && notes ? { notes: notes.value } : {}),
-        ...(detailsEnabled && recurrence ? { recurrence: recurrenceValueFromSelect(recurrence) ?? null } : {})
-      };
-    };
-    const markDirty = () => {
-      dirty = true;
-      popover.addClass("is-auto-save-dirty");
-    };
-    const commit = () => {
-      const draft = buildDraft();
-      const signature = JSON.stringify(draft);
-      if (!dirty || signature === lastCommittedSignature) {
-        dirty = false;
-        popover.removeClass("is-auto-save-dirty");
-        return;
-      }
-      dirty = false;
-      lastCommittedSignature = signature;
-      popover.removeClass("is-auto-save-dirty");
-      handlers.onTaskUpdate?.(task, draft);
-    };
-    lastCommittedSignature = JSON.stringify(buildDraft());
-    const editableFields = [title, date, time, tags, recurrence, notes, detailExtra.toggle, alertEditor?.select].filter(isHTMLElement);
-    for (const field of editableFields) {
-      if (!field) continue;
-      field.addEventListener("input", markDirty);
-      field.addEventListener("change", markDirty);
-      bindDetailCommitKeys(field, commit);
-    }
-  }
-  const sendTargetOptions = task.source === "vault" ? taskSendOptionsForCalendar(state) : [];
-  if (sendTargetOptions.length > 0) {
-    const actions = popover.createDiv({ cls: "task-hub-calendar-detail-actions" });
-    if (sendTargetOptions.length > 0) {
-      renderCalendarTaskSendControl(actions, task, sendTargetOptions, handlers, state, closePopover);
-    }
-  }
-  if (!editable) {
-    popover.createDiv({ cls: "task-hub-detail-note", text: state.t("externalTaskReadOnly") });
-  }
-  renderCalendarNotes(popover, state.getTaskNotes?.(task) ?? [], handlers, state);
-}
+): HTMLElement {
+  popover.addClass("is-task-detail-reused");
+  const host = popover.createDiv({ cls: "task-hub-calendar-task-detail-host" });
+  renderTaskDetails(
+    host,
+    task,
+    undefined,
+    calendarTaskRowHandlers(handlers, closePopover),
+    calendarTaskRenderOptions(state),
+    state.t
+  );
 
-function renderCalendarTaskSendControl(
-  actions: HTMLElement,
-  task: TaskItem,
-  options: ReturnType<typeof taskSendOptionsForCalendar>,
-  handlers: CalendarViewHandlers,
-  state: CalendarViewState,
-  closePopover: () => void
-): void {
-  const control = actions.createDiv({ cls: "task-hub-send-control" });
-  control.createDiv({ cls: "task-hub-detail-icon-cell" });
-  const labelCell = control.createDiv({ cls: "task-hub-detail-label task-hub-send-label-cell" });
-  const pickerCell = control.createDiv({ cls: "task-hub-detail-control task-hub-send-picker-cell" });
-  const selected = preferredTaskSendTarget(options, state.taskSendDefaultTarget) ?? options[0];
-  const send = labelCell.createEl("button", { cls: "mod-cta", text: state.t("sendTo") });
-  const picker = renderCalendarTaskSendTargetPicker(pickerCell, options, selected.value, state);
-  send.addEventListener("click", () => {
-    const target = parseTaskSendTarget(picker.getValue());
-    if (handlers.onTaskSendToTarget) {
-      handlers.onTaskSendToTarget(task, target);
-    } else if (target.type === "dida") {
-      handlers.onTaskSendToDida?.(task);
-    } else {
-      handlers.onTaskSendToAppleReminders?.(task);
-    }
-    closePopover();
-  });
-}
-
-function renderCalendarTaskSendTargetPicker(
-  container: HTMLElement,
-  options: ReturnType<typeof taskSendOptionsForCalendar>,
-  selectedValue: string,
-  state: CalendarViewState
-): { getValue: () => string } {
-  let currentValue = selectedValue;
-  const current = options.find((option) => option.value === currentValue) ?? options[0];
-  currentValue = current.value;
-  const select = container.createEl("select", { cls: "task-hub-send-target-select" });
-  select.setAttr("aria-label", state.t("sendToTarget"));
-  for (const option of options) {
-    select.createEl("option", {
-      value: option.value,
-      text: option.label
-    });
-  }
-  select.value = currentValue;
-  select.addEventListener("change", () => {
-    currentValue = select.value;
-  });
-  return { getValue: () => currentValue };
-}
-
-function taskSendOptionsForCalendar(state: CalendarViewState) {
-  return taskSendTargetOptions({
-    allowAppleReminderCreate: state.allowAppleReminderCreate,
-    allowDidaCreate: state.allowDidaCreate,
-    appleReminderLists: state.appleReminderLists,
-    didaProjects: state.didaProjects
-  }, {
-    appleReminders: state.t("localAppleReminders"),
-    appleRemindersInbox: state.t("localAppleRemindersDefaultListInbox"),
-    dida: state.t("dida"),
-    didaInbox: state.t("didaDefaultProjectInbox")
-  });
+  const header = host.querySelector(".task-hub-detail-header") as HTMLElement | null;
+  if (!header) return host;
+  header.addClass("task-hub-calendar-detail-header");
+  header.addClass("task-hub-calendar-task-detail-header");
+  const close = header.createEl("button", { cls: "task-hub-icon-button", text: "×" });
+  close.setAttr("aria-label", state.t("cancel"));
+  close.addEventListener("click", () => closePopover());
+  return header;
 }
 
 function renderEventDetailsPopover(
@@ -1875,11 +1753,11 @@ function renderEventDetailsPopover(
   const canEdit = editable && Boolean(handlers.onEventUpdate);
   const form = popover.createDiv({ cls: "task-hub-calendar-detail-form" });
   const title = detailInput(form, state.t("eventCreationPlaceholder"), event.title);
-  const date = detailInput(form, state.t("date"), dateFromDateTime(event.start), "date");
+  const date = detailInput(form, state.t("date"), dateFromDateTime(event.start), "date", detailIcon("calendar"));
   const allDayCheckbox = detailCheckbox(form, state.t("allDay"));
   allDayCheckbox.checked = event.allDay;
-  const startField = detailInputField(form, state.t("startTime"), event.allDay ? "" : timeFromDateTime(event.start), "time");
-  const endField = detailInputField(form, state.t("endTime"), event.allDay ? "" : timeFromDateTime(event.end), "time");
+  const startField = detailInputField(form, state.t("startTime"), event.allDay ? "" : timeFromDateTime(event.start), "time", detailIcon("clock"));
+  const endField = detailInputField(form, state.t("endTime"), event.allDay ? "" : timeFromDateTime(event.end), "time", detailIcon("clock"));
   const start = startField.input;
   const end = endField.input;
   const updateTimedFieldVisibility = () => {
@@ -1980,6 +1858,12 @@ function renderCalendarDetailExtraToggle(container: HTMLElement, state: Calendar
     toggleDetailExtra(extra, renderedToggle.checked);
   });
   return { toggle: renderedToggle, extra };
+}
+
+function detailIcon(iconName: string): (icon: HTMLElement) => void {
+  return (icon) => {
+    setIcon(icon, iconName);
+  };
 }
 
 function isHTMLElement(value: HTMLElement | undefined): value is HTMLElement {
@@ -2175,8 +2059,14 @@ function detailInputField(
   type = "text",
   renderIcon?: (icon: HTMLElement) => void
 ): { field: HTMLElement; input: HTMLInputElement } {
-  const row = detailRow(container, label, renderIcon);
-  const input = row.control.createEl("input", { type });
+  const row = detailRow(container, label);
+  const field = renderIcon ? row.control.createDiv({ cls: "task-hub-detail-input-with-icon" }) : row.control;
+  if (renderIcon) {
+    row.row.addClass("has-control-icon");
+    const icon = field.createDiv({ cls: "task-hub-detail-input-icon" });
+    renderIcon(icon);
+  }
+  const input = field.createEl("input", { type });
   input.value = value ?? "";
   if (type === "date") {
     input.addEventListener("click", () => openNativeDatePicker(input));

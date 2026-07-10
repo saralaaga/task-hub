@@ -440,6 +440,11 @@ describe("Task Hub styles", () => {
 
   it("aligns native date and time picker icons at the start of detail inputs", () => {
     const styles = readFileSync(path.join(__dirname, "styles.css"), "utf8");
+    const inputWithIconRule = styles.match(/\.task-hub-detail-input-with-icon\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const inputIconRule = styles.match(/\.task-hub-detail-input-icon\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const inputWithIconInputRule = styles.match(/\.task-hub-detail-input-with-icon\s*>\s*input\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const calendarInputWithIconInputRule = styles.match(/\.task-hub-calendar-detail-row \.task-hub-detail-control \.task-hub-detail-input-with-icon\s*>\s*input\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const inputWithIconPickerRule = styles.match(/\.task-hub-detail-input-with-icon\s*>\s*input\[type="date"\]::-webkit-calendar-picker-indicator,\s*\.task-hub-detail-input-with-icon\s*>\s*input\[type="time"\]::-webkit-calendar-picker-indicator\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const dateTimeInputRule = styles.match(/\.task-hub-detail-control input\[type="date"\],\s*\.task-hub-detail-control input\[type="time"\]\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const pickerIndicatorRule = styles.match(/\.task-hub-detail-control input\[type="date"\]::-webkit-calendar-picker-indicator,\s*\.task-hub-detail-control input\[type="time"\]::-webkit-calendar-picker-indicator\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const calendarRowInputMatch = /\.task-hub-calendar-detail-row\s+\.task-hub-detail-control\s+input,\s*\.task-hub-calendar-detail-row\s+\.task-hub-detail-control\s+select,\s*\.task-hub-calendar-detail-row\s+\.task-hub-detail-control\s+textarea\s*\{[^}]*padding:\s*6px 9px[^}]*\}/.exec(styles);
@@ -448,6 +453,14 @@ describe("Task Hub styles", () => {
     const calendarRowDateInputRule = calendarRowDateInputMatch?.groups?.body ?? "";
     const calendarRowTimeInputRule = calendarRowTimeInputMatch?.groups?.body ?? "";
 
+    expect(inputWithIconRule).toContain("position: relative");
+    expect(inputWithIconRule).toContain("width: 100%");
+    expect(inputIconRule).toContain("left: 12px");
+    expect(inputIconRule).toContain("position: absolute");
+    expect(inputIconRule).toContain("pointer-events: none");
+    expect(inputWithIconInputRule).toContain("padding-left: 58px");
+    expect(calendarInputWithIconInputRule).toContain("padding-left: 58px");
+    expect(inputWithIconPickerRule).toContain("opacity: 0");
     expect(dateTimeInputRule).toContain("position: relative");
     expect(styles).toContain('.task-hub-detail-control input[type="date"] {\n  padding-left: calc(36px + 4ch);\n}');
     expect(styles).toContain('.task-hub-detail-control input[type="time"] {\n  padding-left: 36px;\n}');
@@ -457,8 +470,8 @@ describe("Task Hub styles", () => {
     expect(pickerIndicatorRule).toContain("position: absolute");
     expect(calendarRowDateInputMatch?.index ?? -1).toBeGreaterThan(calendarRowInputMatch?.index ?? -1);
     expect(calendarRowTimeInputMatch?.index ?? -1).toBeGreaterThan(calendarRowInputMatch?.index ?? -1);
-    expect(calendarRowDateInputRule).toContain("padding-left: calc(36px + 4ch)");
-    expect(calendarRowTimeInputRule).toContain("padding-left: 42px");
+    expect(calendarRowDateInputRule).toContain("padding-left: 9px");
+    expect(calendarRowTimeInputRule).toContain("padding-left: 9px");
   });
 
   it("aligns calendar detail date/all-day with the start/end time columns", () => {
@@ -487,7 +500,7 @@ describe("Task Hub styles", () => {
     expect(popoverKeyframes).toContain("transform: translateY(10px) scale(0.96)");
     expect(reducedMotionRule).toContain(".task-hub-calendar-detail-popover");
     expect(detailRowRule).toContain("grid-template-columns: minmax(0, 1fr) minmax(0, 3fr)");
-    expect(detailIconRowRule).toContain("grid-template-columns: 36px minmax(0, 1fr) minmax(0, 3fr)");
+    expect(detailIconRowRule).toContain("grid-template-columns: minmax(0, 1fr) minmax(0, 3fr)");
     expect(detailControlCheckboxRule).toContain("height: 18px");
     expect(detailControlCheckboxRule).toContain("min-height: 18px");
     expect(detailControlCheckboxRule).toContain("width: 18px");
@@ -778,7 +791,7 @@ describe("Task Hub styles", () => {
     const reducedMotionRule = styles.match(/@media \(prefers-reduced-motion: reduce\)\s*\{(?<body>[\s\S]+?)\n\}/)?.groups?.body ?? "";
 
     expect(detailRowRule).toContain("grid-template-columns: minmax(0, 1fr) minmax(0, 3fr)");
-    expect(detailIconRowRule).toContain("grid-template-columns: 36px minmax(0, 1fr) minmax(0, 3fr)");
+    expect(detailIconRowRule).toContain("grid-template-columns: minmax(0, 1fr) minmax(0, 3fr)");
     expect(detailHeaderRule).toContain("grid-template-columns: minmax(0, 1fr) minmax(0, 3fr)");
     expect(detailHeaderLogoRule).toContain("justify-content: flex-start");
     expect(detailHeaderLogoRule).toContain("min-height: 32px");
@@ -798,7 +811,7 @@ describe("Task Hub styles", () => {
     expect(toggleRule).toContain("-webkit-appearance: none");
     expect(toggleRule).toContain("background-image: none");
     expect(toggleRule).toContain("border-radius: 999px");
-    expect(toggleRule).toContain("width: 40px");
+    expect(toggleRule).toContain("width: 46px");
     expect(reducedMotionRule).toContain(".task-hub-detail-extra.is-expanding");
   });
 
@@ -858,6 +871,7 @@ describe("Task Hub styles", () => {
     const eventTitleRule = styles.match(/\.task-hub-calendar-day-event-detail \.task-hub-calendar-detail-title\.is-event\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const weekdayRule = styles.match(/\.task-hub-calendar-mini-month-weekdays > span\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const miniGridRule = styles.match(/\.task-hub-calendar-mini-month-weekdays,\s*\.task-hub-calendar-mini-month-grid\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const miniMonthRule = styles.match(/\.task-hub-calendar-mini-month\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const miniMonthTitleRule = styles.match(/\.task-hub-calendar-mini-month-title\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const dayButtonRule = styles.match(/\.task-hub-calendar-mini-month-grid > \.task-hub-calendar-mini-month-day\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const todayRule = styles.match(/\.task-hub-calendar-mini-month-grid > \.task-hub-calendar-mini-month-day\.is-today::after\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
@@ -884,13 +898,17 @@ describe("Task Hub styles", () => {
     expect(taskDetailRule).toContain("--task-hub-detail-label-width: 60px");
     expect(taskDetailRule).toContain("grid-template-columns: minmax(0, 1fr)");
     expect(taskDetailRowRule).toContain("grid-template-columns: minmax(0, var(--task-hub-detail-label-width, 60px)) minmax(0, 1fr)");
-    expect(taskDetailIconRowRule).toContain("grid-template-columns: 28px minmax(0, var(--task-hub-detail-label-width, 60px)) minmax(0, 1fr)");
+    expect(taskDetailIconRowRule).toContain("grid-template-columns: minmax(0, var(--task-hub-detail-label-width, 60px)) minmax(0, 1fr)");
     expect(taskSendControlRule).toContain("grid-template-columns: max-content minmax(0, 1fr)");
     expect(eventDetailRule).toContain("--task-hub-detail-label-width: 60px");
     expect(eventDetailRule).toContain("grid-template-columns: minmax(0, 1fr)");
     expect(eventDetailRowRule).toContain("grid-template-columns: minmax(0, var(--task-hub-detail-label-width, 60px)) minmax(0, 1fr)");
-    expect(eventDetailIconRowRule).toContain("grid-template-columns: 28px minmax(0, var(--task-hub-detail-label-width, 60px)) minmax(0, 1fr)");
+    expect(eventDetailIconRowRule).toContain("grid-template-columns: minmax(0, var(--task-hub-detail-label-width, 60px)) minmax(0, 1fr)");
     expect(eventTitleRule).toContain("grid-template-columns: 28px minmax(0, max-content) 28px minmax(0, 1fr)");
+    expect(miniMonthRule).toContain("border: 1px solid var(--background-modifier-border)");
+    expect(miniMonthRule).toContain("border-radius: 10px");
+    expect(miniMonthRule).toContain("box-sizing: border-box");
+    expect(miniMonthRule).toContain("padding: 10px 12px 12px");
     expect(weekdayRule).toContain("white-space: nowrap");
     expect(miniMonthTitleRule).toContain("font-weight: 500");
     expect(miniGridRule).toContain("grid-template-columns: repeat(7, minmax(0, 1fr))");
@@ -1057,6 +1075,52 @@ describe("Task Hub styles", () => {
     expect(sendTargetRule).toContain("height: 38px");
     expect(sendTargetRule).toContain("min-height: 38px");
     expect(styles).not.toContain(".task-hub-detail-save");
+  });
+
+  it("keeps calendar detail popover switches and send controls on fixed tracks", () => {
+    const styles = readFileSync(path.join(__dirname, "styles.css"), "utf8");
+    const switchRule = styles.match(/\.task-hub-detail-control input\.task-hub-detail-extra-toggle\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const switchThumbRule = styles.match(/\.task-hub-detail-control input\.task-hub-detail-extra-toggle::before\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const switchCheckedRule = styles.match(/\.task-hub-detail-control input\.task-hub-detail-extra-toggle:checked::before\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const calendarSwitchRule = styles.match(/\.task-hub-calendar-detail-row \.task-hub-detail-control input\.task-hub-detail-extra-toggle\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const sendControlRule = styles.match(/\.task-hub-send-control\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const sendLabelRule = styles.match(/\.task-hub-send-label-cell\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const pickerCellRule = styles.match(/\.task-hub-send-picker-cell\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+
+    expect(switchRule).toContain("flex: 0 0 46px");
+    expect(switchRule).toContain("height: 24px");
+    expect(switchRule).toContain("max-width: 46px");
+    expect(switchRule).toContain("min-width: 46px");
+    expect(switchRule).toContain("width: 46px");
+    expect(switchThumbRule).toContain("height: 16px");
+    expect(switchThumbRule).toContain("left: 4px");
+    expect(switchThumbRule).toContain("top: 4px");
+    expect(switchThumbRule).toContain("width: 16px");
+    expect(switchCheckedRule).toContain("transform: translateX(22px)");
+    expect(calendarSwitchRule).toContain("height: 24px");
+    expect(calendarSwitchRule).toContain("min-height: 24px");
+    expect(calendarSwitchRule).toContain("width: 46px");
+    expect(sendControlRule).toContain("grid-template-columns: max-content minmax(0, 1fr)");
+    expect(sendControlRule).toContain("justify-content: start");
+    expect(sendLabelRule).toContain("align-items: stretch");
+    expect(pickerCellRule).toContain("min-width: 0");
+    expect(styles).not.toContain(".task-hub-calendar-detail-popover .task-hub-calendar-send-control");
+  });
+
+  it("keeps reused calendar task popovers on list detail layout tracks", () => {
+    const styles = readFileSync(path.join(__dirname, "styles.css"), "utf8");
+    const hostRule = styles.match(/\.task-hub-calendar-task-detail-host\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const reusedDetailsRule = styles.match(/\.task-hub-calendar-detail-popover\.is-task-detail-reused \.task-hub-task-details\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const reusedHeaderRule = styles.match(/\.task-hub-calendar-detail-popover\.is-task-detail-reused \.task-hub-calendar-task-detail-header\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const reusedCloseRule = styles.match(/\.task-hub-calendar-detail-popover\.is-task-detail-reused \.task-hub-calendar-task-detail-header > \.task-hub-icon-button\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+
+    expect(hostRule).toContain("min-width: 0");
+    expect(hostRule).toContain("width: 100%");
+    expect(reusedDetailsRule).toContain("max-height: none");
+    expect(reusedDetailsRule).toContain("overflow: visible");
+    expect(reusedDetailsRule).toContain("width: auto");
+    expect(reusedHeaderRule).toContain("grid-template-columns: minmax(0, 1fr) minmax(0, 3fr) 32px");
+    expect(reusedCloseRule).toContain("grid-column: 3");
   });
 
   it("animates completed task rows out when hidden by the open-task filter", () => {

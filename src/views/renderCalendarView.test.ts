@@ -43,7 +43,7 @@ jest.mock("obsidian", () => ({
 }), { virtual: true });
 
 import { renderCalendarView } from "./renderCalendarView";
-import { setTooltip as mockSetTooltip } from "obsidian";
+import { setIcon as mockSetIcon, setTooltip as mockSetTooltip } from "obsidian";
 import type { CalendarEvent, CalendarSource, TaskItem } from "../types";
 
 const mockMenus: Array<{ items: Array<{ title: string; icon: string; disabled?: boolean; click?: () => void }>; shownAt: unknown }> = [];
@@ -118,6 +118,7 @@ class FakeElement {
   scrollHeight = 0;
   scrollLeft = 0;
   scrollTop = 0;
+  showPicker = jest.fn();
   attributes = new Map<string, string>();
   classes = new Set<string>();
   style = new Proxy({
@@ -473,6 +474,7 @@ function localTimeValue(date: Date): string {
 describe("renderCalendarView", () => {
   beforeEach(() => {
     mockMenus.length = 0;
+    (mockSetIcon as jest.Mock).mockClear();
     (mockSetTooltip as jest.Mock).mockClear();
     fakeDocument.clear();
     currentTestRoot = undefined;
@@ -2058,7 +2060,7 @@ describe("renderCalendarView", () => {
     expect(onDateCreateTask).not.toHaveBeenCalled();
   });
 
-  it("opens a read-only popover for existing calendar tasks without save or delete buttons", () => {
+  it("opens an auto-saving popover for existing vault calendar tasks without save or delete buttons", () => {
     const container = new FakeElement();
     const onDateCreateTask = jest.fn();
     const onTaskSelect = jest.fn();
@@ -2103,15 +2105,20 @@ describe("renderCalendarView", () => {
     expect(item?.classes.has("is-selected")).toBe(true);
     expect(onTaskSelect).not.toHaveBeenCalled();
     expect(onDateCreateTask).not.toHaveBeenCalled();
-    const titleInput = collect(popover as FakeElement).find((element) => element.type === "text");
+    const dateInput = collect(popover as FakeElement).find((element) => element.type === "date");
     const save = collect(popover as FakeElement).find((element) => element.text === "save");
     const deleteButton = collect(popover as FakeElement).find((element) => element.text === "delete");
-    const logo = collect(popover as FakeElement).find((element) => element.classes.has("task-hub-calendar-detail-logo"));
+    const logo = collect(popover as FakeElement).find((element) => element.classes.has("task-hub-detail-source-logo"));
     expect(save).toBeUndefined();
     expect(deleteButton).toBeUndefined();
-    expect(titleInput?.disabled).toBe(true);
+    expect(dateInput?.disabled).toBe(false);
     expect(logo?.classes.has("is-obsidian")).toBe(true);
-    expect(onTaskUpdate).not.toHaveBeenCalled();
+    dateInput!.value = "2026-05-09";
+    dateInput!.dispatch("input");
+    dateInput!.dispatch("blur");
+    expect(onTaskUpdate).toHaveBeenCalledWith(task, expect.objectContaining({
+      date: "2026-05-09"
+    }));
     expect(onTaskDelete).not.toHaveBeenCalled();
   });
 
@@ -2160,7 +2167,7 @@ describe("renderCalendarView", () => {
 
     collect(container).find((element) => element.classes.has("task-hub-calendar-item"))?.click();
     const popover = collect(fakeDocument.body).find((element) => element.classes.has("task-hub-calendar-detail-popover"));
-    const logo = collect(popover as FakeElement).find((element) => element.classes.has("task-hub-calendar-detail-logo"));
+    const logo = collect(popover as FakeElement).find((element) => element.classes.has("task-hub-detail-source-logo"));
     expect(logo?.classes.has("is-dida")).toBe(true);
   });
 
@@ -2214,10 +2221,9 @@ describe("renderCalendarView", () => {
     collect(container).find((element) => element.classes.has("task-hub-calendar-item"))?.click();
     const popover = collect(fakeDocument.body).find((element) => element.classes.has("task-hub-calendar-detail-popover"));
     const toggle = collect(popover as FakeElement).find((element) => element.classes.has("task-hub-detail-extra-toggle"));
+    const extra = collect(popover as FakeElement).find((element) => element.classes.has("task-hub-detail-extra"));
     const recurrenceSelect = collect(popover as FakeElement).find((element) => element.classes.has("task-hub-recurrence-select"));
-    const notesInput = collect(popover as FakeElement).find((element) =>
-      element.type === "textarea" && !element.classes.has("task-hub-calendar-detail-title-input")
-    );
+    const notesInput = collect(extra as FakeElement).find((element) => element.type === "textarea");
 
     expect(recurrenceSelect?.value).toBe("RRULE:FREQ=WEEKLY");
     toggle!.checked = true;
@@ -2226,7 +2232,7 @@ describe("renderCalendarView", () => {
     recurrenceSelect!.dispatch("change");
     notesInput!.value = "Updated Dida notes";
     notesInput!.dispatch("input");
-    notesInput!.dispatch("keydown", { key: "Enter" });
+    notesInput!.dispatch("blur");
 
     expect(onTaskUpdate).toHaveBeenCalledWith(didaTask, expect.objectContaining({
       recurrence: "RRULE:FREQ=DAILY",
@@ -2371,12 +2377,12 @@ describe("renderCalendarView", () => {
 
     collect(container).find((element) => element.classes.has("task-hub-calendar-item"))?.click();
     const popover = collect(fakeDocument.body).find((element) => element.classes.has("task-hub-calendar-detail-popover"));
-    const header = collect(popover as FakeElement).find((element) => element.classes.has("task-hub-calendar-detail-header"));
-    const headerTitle = collect(header as FakeElement).find((element) => element.classes.has("task-hub-calendar-detail-title"));
-    const headerTitleText = collect(headerTitle as FakeElement).find((element) => element.text === "taskDetails");
-    const headerComplete = collect(headerTitle as FakeElement).find((element) => element.classes.has("task-hub-detail-complete-checkbox"));
-    const headerLogo = collect(headerTitle as FakeElement).find((element) => element.classes.has("task-hub-calendar-detail-logo"));
-    const extra = collect(popover as FakeElement).find((element) => element.classes.has("task-hub-calendar-detail-extra"));
+    const details = collect(popover as FakeElement).find((element) => element.classes.has("task-hub-task-details"));
+    const header = collect(popover as FakeElement).find((element) => element.classes.has("task-hub-calendar-task-detail-header"));
+    const headerTitleText = collect(header as FakeElement).find((element) => element.text === "taskDetails");
+    const headerComplete = collect(header as FakeElement).find((element) => element.classes.has("task-hub-detail-complete-checkbox"));
+    const headerLogo = collect(header as FakeElement).find((element) => element.classes.has("task-hub-detail-source-logo"));
+    const extra = collect(popover as FakeElement).find((element) => element.classes.has("task-hub-detail-extra"));
     const toggle = collect(popover as FakeElement).find((element) => element.classes.has("task-hub-detail-extra-toggle"));
     const bodyLabel = collect(popover as FakeElement).find((element) => element.classes.has("task-hub-detail-label") && element.text === "taskCreationBody");
     const bodyRow = bodyLabel?.parent;
@@ -2388,15 +2394,16 @@ describe("renderCalendarView", () => {
     const save = collect(popover as FakeElement).find((element) => element.text === "save");
     const deleteButton = collect(popover as FakeElement).find((element) => element.text === "delete");
 
-    expect(header?.classes.has("has-calendar-select")).toBe(false);
+    expect(details).toBeDefined();
+    expect(popover?.classes.has("is-task-detail-reused")).toBe(true);
     expect(headerTitleText).toBeDefined();
-    expect(headerTitle?.children.map((child) => child.text || (child.classes.has("task-hub-calendar-detail-logo") ? "logo" : ""))).toEqual(["taskDetails", "logo"]);
+    expect(headerLogo?.classes.has("is-apple")).toBe(true);
     expect(headerComplete).toBeUndefined();
     expect(collect(bodyRow as FakeElement).some((element) => element.classes.has("task-hub-detail-complete-checkbox"))).toBe(false);
     expect(toggle?.parent?.classes.has("task-hub-detail-control")).toBe(true);
     expect(toggle?.attributes.get("role")).toBe("switch");
-    expect(editDetailsRow?.classes.has("task-hub-calendar-detail-toggle")).toBe(true);
-    expect(formListRow).toBeUndefined();
+    expect(editDetailsRow?.classes.has("task-hub-detail-toggle-row")).toBe(true);
+    expect(formListRow?.parent?.classes.has("task-hub-detail-row")).toBe(true);
     expect(save).toBeUndefined();
     expect(extra?.classes.has("is-hidden")).toBe(true);
     expect(notesInput?.value).toBe("Original notes");
@@ -2408,7 +2415,7 @@ describe("renderCalendarView", () => {
     recurrenceSelect!.dispatch("change");
     notesInput!.value = "Updated notes";
     notesInput!.dispatch("input");
-    notesInput!.dispatch("keydown", { key: "Enter" });
+    notesInput!.dispatch("blur");
     expect(onTaskUpdate).toHaveBeenCalledWith(reminderTask, expect.objectContaining({
       notes: "Updated notes",
       recurrence: "RRULE:FREQ=MONTHLY"
@@ -2468,7 +2475,7 @@ describe("renderCalendarView", () => {
     expect(alertSelect?.disabled).toBe(false);
     alertSelect!.value = "30";
     alertSelect!.dispatch("change");
-    alertSelect!.dispatch("keydown", { key: "Enter" });
+    alertSelect!.dispatch("blur");
     expect(onTaskUpdate).toHaveBeenCalledWith(reminderTask, expect.objectContaining({
       startTime: "09:30",
       alertMinutesBefore: 30
@@ -2527,14 +2534,14 @@ describe("renderCalendarView", () => {
     alertSelect!.value = "0";
     alertSelect!.dispatch("change");
     expect(time?.value).toBe("09:00");
-    alertSelect!.dispatch("keydown", { key: "Enter" });
+    alertSelect!.dispatch("blur");
     expect(onTaskUpdate).toHaveBeenCalledWith(reminderTask, expect.objectContaining({
       startTime: "09:00",
       alertMinutesBefore: 0
     }));
   });
 
-  it("does not save calendar task time edits while moving within the time input", () => {
+  it("saves calendar task time edits with the reused detail blur behavior", () => {
     const container = new FakeElement();
     const onTaskUpdate = jest.fn();
     const reminderTask = {
@@ -2582,7 +2589,9 @@ describe("renderCalendarView", () => {
     time!.dispatch("change");
     time!.dispatch("blur");
 
-    expect(onTaskUpdate).not.toHaveBeenCalled();
+    expect(onTaskUpdate).toHaveBeenCalledWith(reminderTask, expect.objectContaining({
+      startTime: "09:45"
+    }));
   });
 
   it("does not save calendar task detail edits when tabbing or clicking outside the popover", () => {
@@ -2636,7 +2645,7 @@ describe("renderCalendarView", () => {
     expect(onTaskUpdate).not.toHaveBeenCalled();
   });
 
-  it("saves calendar task date and time edits with Enter without closing the popover", () => {
+  it("saves calendar task date edits with the reused detail blur behavior", () => {
     const container = new FakeElement();
     const onTaskUpdate = jest.fn();
     const reminderTask = {
@@ -2683,9 +2692,8 @@ describe("renderCalendarView", () => {
 
     date!.value = "2026-05-09";
     date!.dispatch("input");
-    const dateEnter = date!.dispatch("keydown", { key: "Enter" });
+    date!.dispatch("blur");
 
-    expect(dateEnter.preventDefault).toHaveBeenCalled();
     expect(time?.focused).toBe(false);
     expect(onTaskUpdate).toHaveBeenCalledWith(reminderTask, expect.objectContaining({
       date: "2026-05-09"
@@ -2693,7 +2701,7 @@ describe("renderCalendarView", () => {
     expect(collect(fakeDocument.body).find((element) => element.classes.has("task-hub-calendar-detail-popover"))).toBeDefined();
   });
 
-  it("saves calendar task title edits when pressing Enter in the body field", () => {
+  it("saves calendar task title edits with the reused detail blur behavior", () => {
     const container = new FakeElement();
     const onTaskUpdate = jest.fn();
     const reminderTask = {
@@ -2735,21 +2743,20 @@ describe("renderCalendarView", () => {
     const popover = collect(fakeDocument.body).find((element) => element.classes.has("task-hub-calendar-detail-popover"));
     const title = collect(popover as FakeElement).find((element) =>
       element.type === "textarea" &&
-      element.classes.has("task-hub-calendar-detail-title-input") &&
+      element.classes.has("task-hub-detail-title-input") &&
       element.classes.has("task-hub-auto-grow-textarea")
     );
 
     title!.value = "Updated body";
     title!.dispatch("input");
-    const enter = title!.dispatch("keydown", { key: "Enter" });
+    title!.dispatch("blur");
 
-    expect(enter.preventDefault).toHaveBeenCalled();
     expect(onTaskUpdate).toHaveBeenCalledWith(reminderTask, expect.objectContaining({
       title: "Updated body"
     }));
   });
 
-  it("does not save calendar task title edits when Enter is confirming IME composition", () => {
+  it("does not save calendar task title edits before the reused detail blur commit", () => {
     const container = new FakeElement();
     const onTaskUpdate = jest.fn();
     const reminderTask = {
@@ -2791,13 +2798,12 @@ describe("renderCalendarView", () => {
     const popover = collect(fakeDocument.body).find((element) => element.classes.has("task-hub-calendar-detail-popover"));
     const title = collect(popover as FakeElement).find((element) =>
       element.type === "textarea" &&
-      element.classes.has("task-hub-calendar-detail-title-input") &&
+      element.classes.has("task-hub-detail-title-input") &&
       element.classes.has("task-hub-auto-grow-textarea")
     );
 
     title!.value = "task";
     title!.dispatch("input");
-    title!.dispatch("keydown", { key: "Enter", isComposing: true });
 
     expect(onTaskUpdate).not.toHaveBeenCalled();
   });
@@ -2839,7 +2845,7 @@ describe("renderCalendarView", () => {
 
     collect(container).find((element) => element.classes.has("task-hub-calendar-item"))?.click();
     const popover = collect(fakeDocument.body).find((element) => element.classes.has("task-hub-calendar-detail-popover"));
-    const body = collect(popover as FakeElement).find((element) => element.classes.has("task-hub-calendar-detail-title-input"));
+    const body = collect(popover as FakeElement).find((element) => element.classes.has("task-hub-detail-title-input"));
 
     expect(body?.type).toBe("textarea");
     expect(body?.classes.has("task-hub-auto-grow-textarea")).toBe(true);
@@ -6650,6 +6656,90 @@ describe("renderCalendarView", () => {
     sendButton?.click();
 
     expect(onTaskSendToTarget).toHaveBeenCalledWith(task, { type: "dida", projectId: "dida-project" });
+  });
+
+  it("reuses list task detail controls in calendar task popovers", () => {
+    const container = new FakeElement();
+    const onTaskUpdate = jest.fn();
+
+    renderCalendarView(
+      container as unknown as HTMLElement,
+      {
+        mode: "month",
+        focusDate: new Date("2026-05-08T12:00:00Z"),
+        weekStart: "monday",
+        visibleSourceIds: new Set(["vault"]),
+        includeCompletedTasks: false,
+        allowAppleReminderWriteback: false,
+        allowAppleReminderCreate: true,
+        allowDidaCreate: true,
+        allowTaskCreation: false,
+        sources: [],
+        t: (key) => key
+      },
+      [{ ...task, tags: ["#home", "#errand"] }],
+      [],
+      {
+        onLayerToggle: jest.fn(),
+        onModeChange: jest.fn(),
+        onMove: jest.fn(),
+        onDateCreateTask: jest.fn(),
+        onTaskComplete: jest.fn(),
+        onTaskJump: jest.fn(),
+        onTaskSelect: jest.fn(),
+        onTaskReschedule: jest.fn(),
+        onTaskUpdate,
+        onTaskSendToTarget: jest.fn(),
+        onToday: jest.fn()
+      }
+    );
+
+    collect(container).find((element) => element.classes.has("task-hub-calendar-item"))?.click();
+    const popover = collect(fakeDocument.body).find((element) => element.classes.has("task-hub-calendar-detail-popover"));
+    const detailSurface = collect(popover as FakeElement).find((element) => element.classes.has("task-hub-task-details"));
+    const detailRows = collect(popover as FakeElement).filter((element) => element.classes.has("task-hub-detail-row"));
+    const dateRow = detailRows.find((row) => row.children.some((child) => child.text === "date"));
+    const timeRow = detailRows.find((row) => row.children.some((child) => child.text === "startTime"));
+    const dateControl = dateRow?.children.find((child) => child.classes.has("task-hub-detail-control"));
+    const timeControl = timeRow?.children.find((child) => child.classes.has("task-hub-detail-control"));
+    const dateIcon = dateControl ? collect(dateControl).find((element) => element.classes.has("task-hub-detail-input-icon")) : undefined;
+    const timeIcon = timeControl ? collect(timeControl).find((element) => element.classes.has("task-hub-detail-input-icon")) : undefined;
+    const dateInput = dateControl ? collect(dateControl).find((element) => element.type === "date") : undefined;
+    const timeInput = timeControl ? collect(timeControl).find((element) => element.type === "time") : undefined;
+    const sendControl = collect(popover as FakeElement).find((element) => element.classes.has("task-hub-send-control"));
+    const legacySendControl = collect(popover as FakeElement).find((element) => element.classes.has("task-hub-calendar-send-control"));
+    const tagEditor = collect(popover as FakeElement).find((element) => element.classes.has("task-hub-tag-editor"));
+    const tagChips = collect(tagEditor as FakeElement).filter((element) => element.classes.has("task-hub-tag-editor-chip"));
+    const toggle = collect(popover as FakeElement).find((element) => element.classes.has("task-hub-detail-extra-toggle"));
+
+    expect(popover?.classes.has("is-task-detail-reused")).toBe(true);
+    expect(detailSurface).toBeDefined();
+    expect(dateRow?.classes.has("has-icon")).toBe(false);
+    expect(dateRow?.classes.has("has-control-icon")).toBe(false);
+    expect(dateRow?.classes.has("task-hub-calendar-detail-row")).toBe(false);
+    expect(dateRow?.children[0].classes.has("task-hub-detail-label")).toBe(true);
+    expect(dateRow?.children[1].classes.has("task-hub-detail-control")).toBe(true);
+    expect(timeRow?.classes.has("has-icon")).toBe(false);
+    expect(timeRow?.classes.has("has-control-icon")).toBe(false);
+    expect(timeRow?.classes.has("task-hub-calendar-detail-row")).toBe(false);
+    expect(timeRow?.children[0].classes.has("task-hub-detail-label")).toBe(true);
+    expect(timeRow?.children[1].classes.has("task-hub-detail-control")).toBe(true);
+    expect(dateIcon).toBeUndefined();
+    expect(timeIcon).toBeUndefined();
+    expect(dateInput?.disabled).toBe(false);
+    expect(timeInput?.disabled).toBe(false);
+    dateInput?.click();
+    expect(dateInput?.showPicker).toHaveBeenCalled();
+    expect(legacySendControl).toBeUndefined();
+    expect(sendControl?.children.map((child) => [...child.classes].sort())).toEqual([
+      ["task-hub-detail-label", "task-hub-send-label-cell"],
+      ["task-hub-detail-control", "task-hub-send-picker-cell"]
+    ]);
+    expect(sendControl?.classes.has("task-hub-calendar-detail-row")).toBe(false);
+    expect(sendControl?.classes.has("task-hub-detail-row")).toBe(true);
+    expect(tagChips.map((chip) => chip.text)).toEqual(["#home", "#errand"]);
+    expect(tagChips.every((chip) => chip.classes.has("task-hub-task-tag"))).toBe(true);
+    expect(toggle?.attributes.get("role")).toBe("switch");
   });
 
   it("uses command or control clicks to build a task-only bulk menu in calendar views", () => {

@@ -1207,7 +1207,25 @@ body .task-hub-view .task-hub-sidebar .task-hub-smart-list-item button.task-hub-
 }
 
 .task-hub-detail-row.has-icon {
-  grid-template-columns: 36px minmax(0, 1fr) minmax(0, 3fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 3fr);
+}
+
+.task-hub-detail-row.has-icon .task-hub-detail-icon-cell {
+  grid-column: 1;
+  grid-row: 1;
+  justify-self: start;
+  width: 36px;
+}
+
+.task-hub-detail-row.has-icon .task-hub-detail-label {
+  grid-column: 1;
+  grid-row: 1;
+  padding-left: 46px;
+}
+
+.task-hub-detail-row.has-icon .task-hub-detail-control {
+  grid-column: 2;
+  grid-row: 1;
 }
 
 .task-hub-detail-header.task-hub-detail-row {
@@ -3019,17 +3037,21 @@ button.task-hub-task-note-pin.is-active:focus-visible {
   background-image: none;
   border: 0;
   border-radius: 999px;
+  box-sizing: border-box;
   box-shadow: inset 0 0 0 1px var(--background-modifier-border-hover);
   color: transparent;
   cursor: pointer;
-  height: 22px;
-  min-height: 22px;
+  flex: 0 0 46px;
+  height: 24px;
+  max-width: 46px;
+  min-height: 24px;
+  min-width: 46px;
   padding: 0;
   position: relative;
   transition:
     background-color 140ms ease,
     box-shadow 140ms ease;
-  width: 40px;
+  width: 46px;
 }
 
 .task-hub-detail-control input.task-hub-detail-extra-toggle::before {
@@ -3037,12 +3059,12 @@ button.task-hub-task-note-pin.is-active:focus-visible {
   border-radius: 999px;
   box-shadow: 0 1px 3px rgb(0 0 0 / 24%);
   content: "";
-  height: 18px;
-  left: 2px;
+  height: 16px;
+  left: 4px;
   position: absolute;
-  top: 2px;
+  top: 4px;
   transition: transform 140ms ease;
-  width: 18px;
+  width: 16px;
 }
 
 .task-hub-detail-control input.task-hub-detail-extra-toggle:checked {
@@ -3052,7 +3074,7 @@ button.task-hub-task-note-pin.is-active:focus-visible {
 }
 
 .task-hub-detail-control input.task-hub-detail-extra-toggle:checked::before {
-  transform: translateX(18px);
+  transform: translateX(22px);
 }
 
 .task-hub-detail-control input.task-hub-detail-extra-toggle::after,
@@ -3155,6 +3177,7 @@ input.task-hub-tag-editor-input:focus {
   gap: 10px;
   grid-column: 1 / -1;
   grid-template-columns: max-content minmax(0, 1fr);
+  justify-content: start;
   max-width: 100%;
   position: relative;
 }
@@ -3638,7 +3661,7 @@ input.task-hub-tag-editor-input:focus {
 }
 
 .task-hub-calendar-day-task-detail .task-hub-detail-row.has-icon {
-  grid-template-columns: 28px minmax(0, var(--task-hub-detail-label-width, 60px)) minmax(0, 1fr);
+  grid-template-columns: minmax(0, var(--task-hub-detail-label-width, 60px)) minmax(0, 1fr);
 }
 
 .task-hub-calendar-day-task-detail .task-hub-detail-header.task-hub-detail-title-header {
@@ -3699,7 +3722,7 @@ input.task-hub-tag-editor-input:focus {
 
 .task-hub-calendar-day-event-detail .task-hub-detail-row.has-icon,
 .task-hub-calendar-day-event-detail .task-hub-calendar-detail-row.has-icon {
-  grid-template-columns: 28px minmax(0, var(--task-hub-detail-label-width, 60px)) minmax(0, 1fr);
+  grid-template-columns: minmax(0, var(--task-hub-detail-label-width, 60px)) minmax(0, 1fr);
 }
 
 .task-hub-calendar-day-event-detail .task-hub-calendar-detail-title.is-event {
@@ -3729,9 +3752,12 @@ input.task-hub-tag-editor-input:focus {
 }
 
 .task-hub-calendar-mini-month {
+  background: color-mix(in srgb, var(--background-primary) 88%, var(--background-secondary));
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 10px;
+  box-sizing: border-box;
   gap: 8px;
-  padding-top: 6px;
-  padding-bottom: 8px;
+  padding: 10px 12px 12px;
 }
 
 .task-hub-calendar-mini-month-title {
@@ -5000,6 +5026,30 @@ input.task-hub-tag-editor-input:focus {
   background: var(--background-modifier-hover);
 }
 
+.task-hub-calendar-task-detail-host {
+  min-width: 0;
+  width: 100%;
+}
+
+.task-hub-calendar-detail-popover.is-task-detail-reused .task-hub-task-details {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  max-height: none;
+  overflow: visible;
+  padding: 0;
+  width: auto;
+}
+
+.task-hub-calendar-detail-popover.is-task-detail-reused .task-hub-calendar-task-detail-header {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 3fr) 32px;
+}
+
+.task-hub-calendar-detail-popover.is-task-detail-reused .task-hub-calendar-task-detail-header > .task-hub-icon-button {
+  grid-column: 3;
+  grid-row: 1;
+}
+
 .task-hub-calendar-detail-logo {
   align-items: center;
   background: color-mix(in srgb, var(--task-hub-item-color, var(--interactive-accent)) 14%, transparent);
@@ -5132,12 +5182,64 @@ input.task-hub-tag-editor-input:focus {
   padding: 6px 9px;
 }
 
+.task-hub-calendar-detail-row .task-hub-detail-control input.task-hub-detail-extra-toggle {
+  flex: 0 0 46px;
+  height: 24px;
+  max-width: 46px;
+  min-height: 24px;
+  min-width: 46px;
+  padding: 0;
+  width: 46px;
+}
+
 .task-hub-calendar-detail-row .task-hub-detail-control input[type="date"] {
-  padding-left: calc(36px + 4ch);
+  padding-left: 9px;
 }
 
 .task-hub-calendar-detail-row .task-hub-detail-control input[type="time"] {
-  padding-left: 42px;
+  padding-left: 9px;
+}
+
+.task-hub-detail-input-with-icon {
+  min-width: 0;
+  position: relative;
+  width: 100%;
+}
+
+.task-hub-detail-input-icon {
+  align-items: center;
+  color: var(--text-muted);
+  display: flex;
+  height: 100%;
+  justify-content: center;
+  left: 12px;
+  pointer-events: none;
+  position: absolute;
+  top: 0;
+  width: 28px;
+  z-index: 1;
+}
+
+.task-hub-detail-input-icon svg {
+  height: 18px;
+  width: 18px;
+}
+
+.task-hub-detail-input-with-icon > input {
+  padding-left: 58px;
+}
+
+.task-hub-calendar-detail-row .task-hub-detail-control .task-hub-detail-input-with-icon > input {
+  padding-left: 58px;
+}
+
+.task-hub-detail-input-with-icon > input[type="date"]::-webkit-datetime-edit {
+  padding-left: 0;
+}
+
+.task-hub-detail-input-with-icon > input[type="date"]::-webkit-calendar-picker-indicator,
+.task-hub-detail-input-with-icon > input[type="time"]::-webkit-calendar-picker-indicator {
+  opacity: 0;
 }
 
 .task-hub-calendar-detail-row .task-hub-detail-control textarea {
