@@ -464,6 +464,7 @@ describe("TaskHubSettingTab", () => {
         ...DEFAULT_SETTINGS.taskNotes,
         enabled: true,
         thinoIntegrationEnabled: true,
+        addThinoIdToTaskHubNotes: true,
         defaultMode: "thino-multi-file"
       }
     });
@@ -478,10 +479,11 @@ describe("TaskHubSettingTab", () => {
     expect(tab.containerEl.querySelector(".task-hub-task-notes-config")).not.toBeNull();
     expect(tab.containerEl.querySelector(".task-hub-task-notes-primary")).not.toBeNull();
     expect(tab.containerEl.querySelector(".task-hub-task-notes-section")).not.toBeNull();
-    expect(tab.containerEl.querySelector(".task-hub-task-notes-primary")?.querySelectorAll(".setting-item")).toHaveLength(7);
+    expect(tab.containerEl.querySelector(".task-hub-task-notes-primary")?.querySelectorAll(".setting-item")).toHaveLength(8);
     expect(tab.containerEl.querySelector(".task-hub-settings-compact-grid")).toBeNull();
     expect(tab.containerEl.querySelector(".task-hub-task-ignored-paths-grid")).not.toBeNull();
     expect(tab.containerEl.textContent).toContain("Task Hub notes folder");
+    expect(tab.containerEl.textContent).toContain("Also add Thino metadata to Task Hub notes");
     expect(tab.containerEl.textContent).toContain("Thino notes folder");
     expect(tab.containerEl.textContent).not.toContain("Show note metadata in editor");
   });
@@ -566,6 +568,7 @@ describe("normalizeTaskHubSettings", () => {
       notesFolder: "Task Hub Notes",
       defaultMode: "task-hub",
       thinoIntegrationEnabled: false,
+      addThinoIdToTaskHubNotes: false,
       thinoFolder: "Thino",
       openNoteAfterCreate: true,
       showCountsInTaskList: true,

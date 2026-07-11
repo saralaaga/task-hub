@@ -97,17 +97,14 @@ describe("renderDatedNotesView", () => {
     const detailCard = childWithClass(container, "task-hub-dated-note-detail-card");
     const detailCardChildren = collect(detailCard);
 
-    expect(detailCard.children[0]?.classes.has("task-hub-dated-note-body")).toBe(true);
-    expect(detailCard.children[1]?.classes.has("task-hub-dated-note-detail-footer")).toBe(true);
+    expect(detailCard.children[0]?.classes.has("task-hub-dated-note-detail-main")).toBe(true);
+    expect(detailCardChildren.some((child) => child.classes.has("task-hub-dated-note-detail-footer"))).toBe(false);
+    expect(detailCardChildren.some((child) => child.classes.has("task-hub-task-tag"))).toBe(false);
     expect(detailCardChildren.some((child) => child.type === "h3")).toBe(false);
     expect(detailCardChildren.some((child) => child.classes.has("task-hub-dated-note-path"))).toBe(false);
     expect(detailCardChildren.map((child) => child.text)).not.toContain(note.title);
     expect(detailCardChildren.map((child) => child.text)).not.toContain(note.path);
     expect(detailCardChildren.map((child) => child.text)).not.toContain("taskhub-type: note");
-    expect(detailCardChildren.filter((child) => child.classes.has("task-hub-task-tag")).map((child) => child.text)).toEqual([
-      "#work",
-      "#daily"
-    ]);
     expect(childWithClass(detailCard, "task-hub-dated-note-time").text).toBe("09:30");
   });
 
@@ -137,7 +134,45 @@ describe("renderDatedNotesView", () => {
     expect(cardChildren.map((child) => child.text)).not.toContain(note.title);
     expect(childWithClass(card, "task-hub-dated-note-preview-text").text).toBe("Body preview content #work");
     expect(childWithClass(card, "task-hub-dated-note-card-footer").classes.has("task-hub-dated-note-card-footer")).toBe(true);
+    expect(cardChildren.some((child) => child.classes.has("task-hub-task-tag"))).toBe(false);
     expect(childWithClass(card, "task-hub-dated-note-time").text).toBe("09:30");
+  });
+
+  it("renders started, planned, and completed day stats in the day header", () => {
+    const container = new FakeElement();
+    const note: DatedNote = {
+      path: "Notes/2026-07-07 0930 - Morning.md",
+      date: "2026-07-07",
+      title: "Morning note",
+      body: "A compact note body",
+      bodyStartLine: 7,
+      tags: [],
+      createdAt: "2026-07-07T09:30:00"
+    };
+
+    renderDatedNotesView(
+      container as unknown as HTMLElement,
+      [note],
+      {
+        query: "",
+        selectedPath: note.path,
+        t: (key) => key,
+        dayStatsByDate: {
+          "2026-07-07": {
+            startedCount: 1,
+            scheduledCount: 3,
+            completedCount: 2
+          }
+        }
+      },
+      datedNoteHandlers()
+    );
+
+    const header = childWithClass(container, "task-hub-dated-note-day-header");
+    const headerChildren = collect(header);
+
+    expect(childWithClass(header, "task-hub-dated-note-day-stats").classes.has("task-hub-dated-note-day-stats")).toBe(true);
+    expect(headerChildren.map((child) => child.text)).toEqual(expect.arrayContaining(["🛫 1", "⏳ 3", "✅ 2"]));
   });
 
   it("renders task list note cards as structured checkbox previews", () => {

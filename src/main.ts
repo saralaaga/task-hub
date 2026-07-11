@@ -3026,7 +3026,8 @@ export default class TaskHubPlugin extends Plugin {
         relatedKey,
         title,
         createdAt: now.toISOString(),
-        mode
+        mode,
+        addThinoIdToTaskHubNotes: mode === "task-hub" && this.settings.taskNotes.addThinoIdToTaskHubNotes
       })
     );
     await this.taskNoteIndex.reindexFile(this.toIndexableFile(file));

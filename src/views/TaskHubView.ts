@@ -9,14 +9,14 @@ import type TaskHubPlugin from "../main";
 import type { ExternalTaskListFilterEntry, TaskHubLastSessionState, TaskHubSettings, TaskHubSmartList, TaskItem } from "../types";
 import { parseTasksFromMarkdown } from "../parsing/taskParser";
 import { type CalendarViewMode } from "../calendar/calendarModel";
-import { taskPlannedDateKey } from "../taskDates";
+import { taskCompletedDateKey, taskPlannedDateKey, taskStartDateKey } from "../taskDates";
 import { renderCalendarView, type AgendaScrollPosition, type CalendarModeTransitionDirection } from "./renderCalendarView";
 import { renderShell, type DashboardView } from "./renderShell";
 import { syncVisibleSources } from "./sourceVisibility";
 import { renderSourceLogo } from "./sourceLogos";
 import { renderTagsView } from "./renderTagsView";
 import { renderTasksView } from "./renderTasksView";
-import { renderDatedNotesView } from "./renderDatedNotesView";
+import { renderDatedNotesView, type DatedNoteDayStats } from "./renderDatedNotesView";
 import { decorateRenderedTaskNoteTags, renderPlainTaskNoteBody } from "./renderTaskNoteBody";
 import { bindTaskHubTagInputSuggest, collectObsidianTags, type TaskHubTagInputElement } from "./tagInputSuggest";
 import type { DatedNote } from "../datedNotes";
@@ -225,14 +225,17 @@ export class TaskHubView extends ItemView {
     this.lastRenderedDashboardView = renderedDashboardView;
 
     if (this.view === "notes") {
+      const datedNotes = this.plugin.getDatedNotes();
+      const datedNoteDayStats = buildDatedNoteDayStats(baseTasks, datedNotes.map((note) => note.date));
       renderDatedNotesView(
         main,
-        this.plugin.getDatedNotes(),
+        datedNotes,
         {
           selectedPath: this.selectedDatedNotePath,
           query: this.datedNoteQuery,
           t,
-          animateDetailTransition: this.pendingDatedNoteDetailTransition
+          animateDetailTransition: this.pendingDatedNoteDetailTransition,
+          dayStatsByDate: datedNoteDayStats
         },
         {
           onSelectNote: (note) => {
@@ -1930,6 +1933,34 @@ function smartListReferencesEqual(
 
 function uniqueStrings(values: readonly string[]): string[] {
   return Array.from(new Set(values.filter((value) => value.length > 0)));
+}
+
+export function buildDatedNoteDayStats(tasks: readonly TaskItem[], noteDates: readonly string[] = []): Record<string, DatedNoteDayStats> {
+  const statsByDate: Record<string, DatedNoteDayStats> = {};
+  for (const date of noteDates) {
+    statsByDate[date] = { startedCount: 0, scheduledCount: 0, completedCount: 0 };
+  }
+
+  const ensure = (date: string): DatedNoteDayStats => {
+    const existing = statsByDate[date];
+    if (existing) return existing;
+    const created = { startedCount: 0, scheduledCount: 0, completedCount: 0 };
+    statsByDate[date] = created;
+    return created;
+  };
+
+  for (const task of tasks) {
+    const startedDate = taskStartDateKey(task);
+    if (startedDate) ensure(startedDate).startedCount += 1;
+
+    const plannedDate = taskPlannedDateKey(task);
+    if (plannedDate) ensure(plannedDate).scheduledCount += 1;
+
+    const completedDate = taskCompletedDateKey(task);
+    if (completedDate) ensure(completedDate).completedCount += 1;
+  }
+
+  return statsByDate;
 }
 
 function arraysEqual<T>(left: readonly T[], right: readonly T[]): boolean {

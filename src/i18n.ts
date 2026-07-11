@@ -405,6 +405,8 @@ export type TranslationKey =
   | "taskNotesSection"
   | "taskNotesShowCounts"
   | "taskNotesShowCountsDesc"
+  | "taskNotesAddThinoId"
+  | "taskNotesAddThinoIdDesc"
   | "taskNotesThino"
   | "taskNotesThinoDesc"
   | "taskNotesThinoFolder"
@@ -567,8 +569,10 @@ const JA_SETTINGS_TRANSLATIONS: Partial<Record<TranslationKey, string>> = {
   taskNotesSection: "タスクノート",
   taskNotesShowCounts: "ノート数を表示",
   taskNotesShowCountsDesc: "ノートがある場合、タスクリスト行にノート数を表示します。",
-  taskNotesThino: "Thino multi-file ノートのみ作成",
-  taskNotesThinoDesc: "新規ノートに Thino multi-file frontmatter を使います。Thino single-file、Canvas、日記ストレージは生成しません。",
+  taskNotesAddThinoId: "Task Hub ノートにも Thino メタデータを追加",
+  taskNotesAddThinoIdDesc: "デフォルトモードが Task Hub のままでも、Thino multi-file が見つけられるように id / createdAt / updatedAt を書き込みます。",
+  taskNotesThino: "Thino 互換オプションを有効化",
+  taskNotesThinoDesc: "Thino multi-file 互換の作成オプションを表示します。single-file、Canvas、日記ストレージは生成しません。",
   taskNotesThinoFolder: "Thino ノートフォルダー",
   taskNotesThinoFolderDesc: "Thino multi-file ストレージで使うフォルダー。",
   taskNoteEditSource: "ソースファイルで編集",
@@ -710,8 +714,10 @@ const FR_SETTINGS_TRANSLATIONS: Partial<Record<TranslationKey, string>> = {
   taskNotesSection: "Notes de tâche",
   taskNotesShowCounts: "Afficher le nombre de notes",
   taskNotesShowCountsDesc: "Affiche le nombre de notes sur les lignes de tâches lorsqu'il existe des notes.",
-  taskNotesThino: "Créer uniquement des notes Thino multi-fichier",
-  taskNotesThinoDesc: "Utilise le frontmatter Thino multi-fichier pour les nouvelles notes. Les stockages Thino single-file, Canvas et journal ne sont pas générés.",
+  taskNotesAddThinoId: "Ajouter aussi les métadonnées Thino aux notes Task Hub",
+  taskNotesAddThinoIdDesc: "Même en mode Task Hub, écrit id / createdAt / updatedAt pour que Thino multi-fichier puisse indexer la note.",
+  taskNotesThino: "Activer les options de compatibilité Thino",
+  taskNotesThinoDesc: "Affiche les options de création compatibles avec Thino multi-fichier. Les stockages single-file, Canvas et journal ne sont pas générés.",
   taskNotesThinoFolder: "Dossier des notes Thino",
   taskNotesThinoFolderDesc: "Dossier utilisé par le stockage multi-fichier Thino.",
   taskNotePin: "Épingler la note",
@@ -852,8 +858,10 @@ const KO_SETTINGS_TRANSLATIONS: Partial<Record<TranslationKey, string>> = {
   taskNotesSection: "작업 노트",
   taskNotesShowCounts: "노트 수 표시",
   taskNotesShowCountsDesc: "노트가 있는 경우 작업 목록 행에 노트 수를 표시합니다.",
-  taskNotesThino: "Thino multi-file 노트만 생성",
-  taskNotesThinoDesc: "새 노트에 Thino multi-file frontmatter를 사용합니다. Thino single-file, Canvas, diary 저장소는 생성하지 않습니다.",
+  taskNotesAddThinoId: "Task Hub 노트에도 Thino 메타데이터 추가",
+  taskNotesAddThinoIdDesc: "기본 모드가 Task Hub여도 Thino multi-file이 찾을 수 있도록 id / createdAt / updatedAt을 기록합니다.",
+  taskNotesThino: "Thino 호환 옵션 사용",
+  taskNotesThinoDesc: "Thino multi-file 호환 생성 옵션을 표시합니다. single-file, Canvas, diary 저장소는 생성하지 않습니다.",
   taskNotesThinoFolder: "Thino 노트 폴더",
   taskNotesThinoFolderDesc: "Thino multi-file 저장소에서 사용하는 폴더입니다.",
   taskNotePin: "노트 고정",
@@ -1255,8 +1263,12 @@ const TRANSLATIONS: Record<"en" | "zh", Record<TranslationKey, string>> &
     taskNotesSection: "Task notes",
     taskNotesShowCounts: "Show note counts",
     taskNotesShowCountsDesc: "Show note counts on task list rows when notes exist.",
-    taskNotesThino: "Create Thino multi-file notes only",
-    taskNotesThinoDesc: "Use Thino multi-file frontmatter for newly created notes. Thino single-file, Canvas, and diary storage are not generated.",
+    taskNotesAddThinoId: "Also add Thino metadata to Task Hub notes",
+    taskNotesAddThinoIdDesc:
+      "When the default mode stays Task Hub, also write Thino id, createdAt, and updatedAt frontmatter so Thino multi-file can index the note.",
+    taskNotesThino: "Enable Thino compatibility options",
+    taskNotesThinoDesc:
+      "Show Thino multi-file compatible creation options. Thino single-file, Canvas, and diary storage are not generated.",
     taskNotesThinoFolder: "Thino notes folder",
     taskNotesThinoFolderDesc: "Folder used by Thino multi-file storage.",
     taskNoteEditSource: "Edit source file",
@@ -1670,8 +1682,11 @@ const TRANSLATIONS: Record<"en" | "zh", Record<TranslationKey, string>> &
     taskNotesSection: "任务笔记",
     taskNotesShowCounts: "显示笔记数",
     taskNotesShowCountsDesc: "任务有关联笔记时，在任务列表行显示数量。",
-    taskNotesThino: "仅创建 Thino multi-file 笔记",
-    taskNotesThinoDesc: "为新笔记写入 Thino multi-file frontmatter；不生成 Thino single-file、Canvas 或日记存储内容。",
+    taskNotesAddThinoId: "同时给 Task Hub 笔记写入 Thino 元数据",
+    taskNotesAddThinoIdDesc:
+      "当默认模式仍是 Task Hub 时，也写入 Thino 的 id、createdAt、updatedAt frontmatter，让 Thino multi-file 可以检索到这篇笔记。",
+    taskNotesThino: "启用 Thino 兼容选项",
+    taskNotesThinoDesc: "显示 Thino multi-file 兼容的创建选项；不生成 Thino single-file、Canvas 或日记存储内容。",
     taskNotesThinoFolder: "Thino 笔记文件夹",
     taskNotesThinoFolderDesc: "Thino multi-file 存储使用的文件夹。",
     taskNoteEditSource: "在源文件编辑",

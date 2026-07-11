@@ -3036,8 +3036,7 @@ button.task-hub-task-note-pin.is-active:focus-visible {
 .task-hub-task-row .task-hub-task-tag,
 .task-hub-tag-editor .task-hub-task-tag,
 .task-hub-dated-note-detail-header .task-hub-task-tag,
-.task-hub-dated-note-body .task-hub-task-tag,
-.task-hub-dated-note-card-tags .task-hub-task-tag {
+.task-hub-dated-note-body .task-hub-task-tag {
   max-width: min(18ch, 100%);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -3047,8 +3046,7 @@ button.task-hub-task-note-pin.is-active:focus-visible {
 .task-hub-task-list-flow .task-hub-task-row .task-hub-task-tag,
 .task-hub-tag-editor .task-hub-task-tag,
 .task-hub-dated-note-detail-header .task-hub-task-tag,
-.task-hub-dated-note-body .task-hub-task-tag,
-.task-hub-dated-note-card-tags .task-hub-task-tag {
+.task-hub-dated-note-body .task-hub-task-tag {
   box-shadow:
     0 3px 8px color-mix(in srgb, var(--task-hub-source-color, var(--interactive-accent)) 28%, transparent),
     0 1px 2px rgb(0 0 0 / 16%);
@@ -5811,14 +5809,19 @@ input.task-hub-tag-editor-input:focus {
   background: var(--background-primary);
   border: 1px solid var(--background-modifier-border);
   border-radius: 8px;
-  display: flex;
-  flex-direction: column;
+  display: block;
   overflow: hidden;
-  position: relative;
 }
 
 .task-hub-dated-note-detail-card.is-active {
   border-color: color-mix(in srgb, var(--interactive-accent) 34%, var(--background-modifier-border));
+}
+
+.task-hub-dated-note-detail-main {
+  align-items: stretch;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  min-width: 0;
 }
 
 .task-hub-dated-note-menu-button {
@@ -5833,12 +5836,9 @@ input.task-hub-tag-editor-input:focus {
   font-size: var(--font-ui-medium);
   height: 28px;
   justify-content: center;
-  position: absolute;
-  right: 14px;
-  top: 14px;
+  margin-left: auto;
   padding: 0;
   width: 28px;
-  z-index: 1;
 }
 
 .task-hub-dated-note-menu-button:hover,
@@ -5849,7 +5849,8 @@ input.task-hub-tag-editor-input:focus {
 
 .task-hub-dated-note-body {
   line-height: 1.42;
-  padding: 18px 56px 12px 18px;
+  min-width: 0;
+  padding: 18px;
 }
 
 .task-hub-dated-note-body > *:first-child {
@@ -5878,18 +5879,15 @@ input.task-hub-tag-editor-input:focus {
   margin-inline-end: 8px;
 }
 
-.task-hub-dated-note-detail-footer {
-  align-items: end;
-  border-top: 1px solid var(--background-modifier-border);
-  display: grid;
-  gap: 8px;
-  grid-template-columns: minmax(0, 1fr) auto;
-  min-width: 0;
-  padding: 12px 18px 14px;
-}
-
-.task-hub-dated-note-detail-footer .task-hub-tag-row {
-  min-width: 0;
+.task-hub-dated-note-detail-side {
+  align-items: flex-end;
+  color: var(--text-muted);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  justify-content: space-between;
+  min-width: 72px;
+  padding: 14px 18px 14px 8px;
 }
 
 .task-hub-dated-note-list {
@@ -5905,7 +5903,7 @@ input.task-hub-tag-editor-input:focus {
 }
 
 .task-hub-dated-note-day-header {
-  align-items: baseline;
+  align-items: center;
   display: flex;
   gap: 8px;
   justify-content: space-between;
@@ -5917,8 +5915,31 @@ input.task-hub-tag-editor-input:focus {
   font-weight: 700;
 }
 
+.task-hub-dated-note-day-stats {
+  align-items: center;
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
+  min-width: 0;
+}
+
+.task-hub-dated-note-day-stat {
+  background: color-mix(in srgb, var(--background-secondary) 82%, transparent);
+  border: 1px solid color-mix(in srgb, var(--background-modifier-border) 88%, transparent);
+  border-radius: 999px;
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+  padding: 2px 8px;
+  white-space: nowrap;
+}
+
 .task-hub-dated-note-day-count {
   color: var(--text-faint);
+  flex: 0 0 auto;
   font-size: var(--font-ui-smaller);
 }
 
@@ -6031,19 +6052,12 @@ button.task-hub-dated-note-card.is-active {
 .task-hub-dated-note-card-footer {
   align-items: end;
   display: grid;
-  gap: 8px;
-  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0;
+  grid-template-columns: auto;
   justify-self: stretch;
   min-width: 0;
-  text-align: left;
+  text-align: right;
   width: 100%;
-}
-
-.task-hub-dated-note-card-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
-  min-width: 0;
 }
 
 @media (max-width: 720px) {

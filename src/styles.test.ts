@@ -314,7 +314,7 @@ describe("Task Hub styles", () => {
     const bulkDragRule = styles.match(/\.task-hub-task-row\.is-bulk-dragging\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const subtaskListRule = styles.match(/\.task-hub-task-list-flow\s+\.task-hub-subtask-list\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const textRule = styles.match(/\.task-hub-task-list-flow\s+\.task-hub-task-text\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
-    const tagRule = styles.match(/\.task-hub-task-list-flow\s+\.task-hub-task-row\s+\.task-hub-task-tag,\s*\.task-hub-tag-editor\s+\.task-hub-task-tag,\s*\.task-hub-dated-note-detail-header\s+\.task-hub-task-tag,\s*\.task-hub-dated-note-body\s+\.task-hub-task-tag,\s*\.task-hub-dated-note-card-tags\s+\.task-hub-task-tag\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const tagRule = styles.match(/\.task-hub-task-list-flow\s+\.task-hub-task-row\s+\.task-hub-task-tag,\s*\.task-hub-tag-editor\s+\.task-hub-task-tag,\s*\.task-hub-dated-note-detail-header\s+\.task-hub-task-tag,\s*\.task-hub-dated-note-body\s+\.task-hub-task-tag\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
 
     expect(flowRule).toContain("gap: 0");
     expect(rowRule).toContain("background: transparent");
@@ -679,7 +679,12 @@ describe("Task Hub styles", () => {
     const detailRule = styles.match(/\.task-hub-dated-note-detail\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const transitionRule = styles.match(/\.task-hub-dated-note-detail\.is-note-transition\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const detailCardRule = styles.match(/\.task-hub-dated-note-detail-card\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const detailMainRule = styles.match(/\.task-hub-dated-note-detail-main\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const detailBodyRule = styles.match(/\.task-hub-dated-note-body\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const detailSideRule = styles.match(/\.task-hub-dated-note-detail-side\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const dayHeaderRule = styles.match(/\.task-hub-dated-note-day-header\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const dayStatsRule = styles.match(/\.task-hub-dated-note-day-stats\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const dayStatRule = styles.match(/\.task-hub-dated-note-day-stat\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const cardRule = styles.match(/button\.task-hub-dated-note-card\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const excerptRule = styles.match(/\.task-hub-dated-note-excerpt\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const previewTextRule = styles.match(/\.task-hub-dated-note-preview-text\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
@@ -687,8 +692,7 @@ describe("Task Hub styles", () => {
     const previewTaskTextRule = styles.match(/\.task-hub-dated-note-preview-task-text\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const footerRule = styles.match(/\.task-hub-dated-note-card-footer\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const timeRule = styles.match(/\.task-hub-dated-note-time\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
-    const tagsRule = styles.match(/\.task-hub-dated-note-card-tags\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
-    const datedNoteChipRule = styles.match(/\.task-hub-task-list-flow\s+\.task-hub-task-row\s+\.task-hub-task-tag,\s*\.task-hub-tag-editor\s+\.task-hub-task-tag,\s*\.task-hub-dated-note-detail-header\s+\.task-hub-task-tag,\s*\.task-hub-dated-note-body\s+\.task-hub-task-tag,\s*\.task-hub-dated-note-card-tags\s+\.task-hub-task-tag\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const datedNoteChipRule = styles.match(/\.task-hub-task-list-flow\s+\.task-hub-task-row\s+\.task-hub-task-tag,\s*\.task-hub-tag-editor\s+\.task-hub-task-tag,\s*\.task-hub-dated-note-detail-header\s+\.task-hub-task-tag,\s*\.task-hub-dated-note-body\s+\.task-hub-task-tag\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const bodyBlockRule = styles.match(/\.task-hub-dated-note-body p,\s*\.task-hub-dated-note-body ul,\s*\.task-hub-dated-note-body ol\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const listItemRule = styles.match(/\.task-hub-dated-note-body li\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
 
@@ -698,8 +702,19 @@ describe("Task Hub styles", () => {
     expect(detailRule).toContain("overflow: auto");
     expect(transitionRule).toContain("animation: task-hub-dated-note-detail-enter 140ms");
     expect(detailCardRule).not.toContain("min-height:");
+    expect(detailCardRule).not.toContain("position: relative");
+    expect(detailMainRule).toContain("grid-template-columns: minmax(0, 1fr) auto");
     expect(detailBodyRule).not.toContain("min-height:");
     expect(detailBodyRule).not.toContain("flex: 1");
+    expect(detailBodyRule).toContain("padding: 18px");
+    expect(detailSideRule).toContain("justify-content: space-between");
+    expect(detailSideRule).toContain("align-items: flex-end");
+    expect(detailSideRule).not.toContain("border-top:");
+    expect(dayHeaderRule).toContain("align-items: center");
+    expect(dayStatsRule).toContain("justify-content: center");
+    expect(dayStatsRule).toContain("flex-wrap: wrap");
+    expect(dayStatRule).toContain("border-radius: 999px");
+    expect(dayStatRule).toContain("font-variant-numeric: tabular-nums");
     expect(cardRule).toContain("height: auto");
     expect(cardRule).toContain("justify-content: stretch");
     expect(cardRule).toContain("min-height: 0");
@@ -717,11 +732,11 @@ describe("Task Hub styles", () => {
     expect(previewTaskRule).toContain("width: 100%");
     expect(previewTaskTextRule).toContain("text-align: left");
     expect(footerRule).toContain("align-items: end");
-    expect(footerRule).toContain("grid-template-columns: minmax(0, 1fr) auto");
+    expect(footerRule).toContain("grid-template-columns: auto");
     expect(footerRule).toContain("justify-self: stretch");
+    expect(footerRule).toContain("text-align: right");
     expect(footerRule).toContain("width: 100%");
     expect(timeRule).toContain("justify-self: end");
-    expect(tagsRule).toContain("flex-wrap: wrap");
     expect(datedNoteChipRule).toContain("color: white");
     expect(datedNoteChipRule).toContain("font-size: var(--font-ui-small)");
     expect(datedNoteChipRule).toContain("font-weight: 400");
@@ -749,7 +764,7 @@ describe("Task Hub styles", () => {
   it("renders task list chips with white lightweight text and lifted shadows", () => {
     const styles = readFileSync(path.join(__dirname, "styles.css"), "utf8");
     const taskListChipRule = styles.match(/\.task-hub-task-row\s+\.task-hub-task-tag\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
-    const sharedChipRule = styles.match(/\.task-hub-task-list-flow\s+\.task-hub-task-row\s+\.task-hub-task-tag,\s*\.task-hub-tag-editor\s+\.task-hub-task-tag,\s*\.task-hub-dated-note-detail-header\s+\.task-hub-task-tag,\s*\.task-hub-dated-note-body\s+\.task-hub-task-tag,\s*\.task-hub-dated-note-card-tags\s+\.task-hub-task-tag\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const sharedChipRule = styles.match(/\.task-hub-task-list-flow\s+\.task-hub-task-row\s+\.task-hub-task-tag,\s*\.task-hub-tag-editor\s+\.task-hub-task-tag,\s*\.task-hub-dated-note-detail-header\s+\.task-hub-task-tag,\s*\.task-hub-dated-note-body\s+\.task-hub-task-tag\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
 
     expect(taskListChipRule).toContain("color: white");
     expect(taskListChipRule).toContain("font-weight: 400");
@@ -766,7 +781,7 @@ describe("Task Hub styles", () => {
     const placeholderRule = styles.match(/\.task-hub-tag-editor-placeholder\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const inputRule = styles.match(/input\.task-hub-tag-editor-input\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const chipRule = styles.match(/\.task-hub-tag-editor-chip\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
-    const sharedChipRule = styles.match(/\.task-hub-task-list-flow\s+\.task-hub-task-row\s+\.task-hub-task-tag,\s*\.task-hub-tag-editor\s+\.task-hub-task-tag,\s*\.task-hub-dated-note-detail-header\s+\.task-hub-task-tag,\s*\.task-hub-dated-note-body\s+\.task-hub-task-tag,\s*\.task-hub-dated-note-card-tags\s+\.task-hub-task-tag\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const sharedChipRule = styles.match(/\.task-hub-task-list-flow\s+\.task-hub-task-row\s+\.task-hub-task-tag,\s*\.task-hub-tag-editor\s+\.task-hub-task-tag,\s*\.task-hub-dated-note-detail-header\s+\.task-hub-task-tag,\s*\.task-hub-dated-note-body\s+\.task-hub-task-tag\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const taskTagRule = styles.match(/\.task-hub-task-tag\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const detailTitleInputRule = styles.match(/\.task-hub-detail-control\s+textarea\.task-hub-detail-title-input\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
 

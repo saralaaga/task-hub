@@ -7,6 +7,7 @@ export type TaskNoteSettings = {
   notesFolder: string;
   defaultMode: TaskNoteMode;
   thinoIntegrationEnabled: boolean;
+  addThinoIdToTaskHubNotes: boolean;
   thinoFolder: string;
   openNoteAfterCreate: boolean;
   showCountsInTaskList: boolean;
@@ -107,10 +108,12 @@ export function createTaskNoteContent(input: {
   title: string;
   createdAt: string;
   mode?: TaskNoteMode;
+  addThinoIdToTaskHubNotes?: boolean;
 }): string {
+  const includeThinoMetadata = input.mode === "thino-multi-file" || input.addThinoIdToTaskHubNotes;
   const frontmatter = [
     "---",
-    ...(input.mode === "thino-multi-file"
+    ...(includeThinoMetadata
       ? [`id: "${thinoIdFromIso(input.createdAt)}"`, `createdAt: ${input.createdAt}`, `updatedAt: ${input.createdAt}`]
       : []),
     "taskhub-note: true",

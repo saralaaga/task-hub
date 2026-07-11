@@ -1,5 +1,6 @@
 import {
   TaskHubView,
+  buildDatedNoteDayStats,
   buildTaskViewTransitionKey,
   buildSavedSmartList,
   createTaskHubSessionSnapshot,
@@ -58,6 +59,26 @@ describe("collectUnscheduledTasks", () => {
 
     expect(collectUnscheduledTasks(tasks, baseFilters(), NOW, () => true).map((item) => item.id)).toEqual(["open"]);
     expect(collectUnscheduledTasks(tasks, { ...baseFilters(), status: "all" }, NOW, () => true).map((item) => item.id)).toEqual(["open", "done"]);
+  });
+});
+
+describe("buildDatedNoteDayStats", () => {
+  it("aggregates started, planned, and completed counts while seeding note dates with zeros", () => {
+    expect(
+      buildDatedNoteDayStats(
+        [
+          task({ id: "started-and-planned", startDate: "2026-07-10", scheduledDate: "2026-07-10" }),
+          task({ id: "legacy-planned", dueDate: "2026-07-10" }),
+          task({ id: "completed", completed: true, completedDate: "2026-07-10" }),
+          task({ id: "future-start", startDate: "2026-07-11" })
+        ],
+        ["2026-07-10", "2026-07-12"]
+      )
+    ).toEqual({
+      "2026-07-10": { startedCount: 1, scheduledCount: 2, completedCount: 1 },
+      "2026-07-11": { startedCount: 1, scheduledCount: 1, completedCount: 0 },
+      "2026-07-12": { startedCount: 0, scheduledCount: 0, completedCount: 0 }
+    });
   });
 });
 
@@ -1661,6 +1682,9 @@ function task(overrides: Partial<TaskItem>): TaskItem {
     completed: overrides.completed ?? false,
     tags: overrides.tags ?? [],
     dueDate: overrides.dueDate,
+    scheduledDate: overrides.scheduledDate,
+    startDate: overrides.startDate,
+    completedDate: overrides.completedDate,
     source: overrides.source ?? "vault",
     externalId: overrides.externalId,
     externalListId: overrides.externalListId

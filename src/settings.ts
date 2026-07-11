@@ -39,6 +39,7 @@ export const DEFAULT_SETTINGS: TaskHubSettings = {
     notesFolder: "Task Hub Notes",
     defaultMode: "task-hub",
     thinoIntegrationEnabled: false,
+    addThinoIdToTaskHubNotes: false,
     thinoFolder: "Thino",
     openNoteAfterCreate: true,
     showCountsInTaskList: true,
@@ -472,6 +473,8 @@ function normalizeTaskNotesSettings(loaded: Partial<TaskHubSettings["taskNotes"]
     ...rest,
     defaultMode: loaded?.defaultMode === "thino-multi-file" ? "thino-multi-file" : DEFAULT_SETTINGS.taskNotes.defaultMode,
     notesFolder: loaded?.notesFolder ?? DEFAULT_SETTINGS.taskNotes.notesFolder,
+    addThinoIdToTaskHubNotes:
+      loaded?.addThinoIdToTaskHubNotes ?? DEFAULT_SETTINGS.taskNotes.addThinoIdToTaskHubNotes,
     thinoFolder: loaded?.thinoFolder ?? DEFAULT_SETTINGS.taskNotes.thinoFolder,
     linkedNoteSubtasksEnabled: loaded?.linkedNoteSubtasksEnabled ?? DEFAULT_SETTINGS.taskNotes.linkedNoteSubtasksEnabled
   };
@@ -782,10 +785,25 @@ export class TaskHubSettingTab extends PluginSettingTab {
             if (!value && this.plugin.settings.taskNotes.defaultMode === "thino-multi-file") {
               this.plugin.settings.taskNotes.defaultMode = "task-hub";
             }
+            if (!value) {
+              this.plugin.settings.taskNotes.addThinoIdToTaskHubNotes = false;
+            }
             await this.plugin.saveSettings();
             this.display({ preserveScroll: true });
           });
         });
+
+      if (this.plugin.settings.taskNotes.thinoIntegrationEnabled) {
+        new Setting(taskNotesGrid)
+          .setName(t("taskNotesAddThinoId"))
+          .setDesc(t("taskNotesAddThinoIdDesc"))
+          .addToggle((toggle) => {
+            toggle.setValue(this.plugin.settings.taskNotes.addThinoIdToTaskHubNotes).onChange(async (value) => {
+              this.plugin.settings.taskNotes.addThinoIdToTaskHubNotes = value;
+              await this.plugin.saveSettings();
+            });
+          });
+      }
 
       new Setting(taskNotesGrid)
         .setName(t("taskNotesDefaultMode"))

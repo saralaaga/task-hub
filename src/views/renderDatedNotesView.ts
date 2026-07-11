@@ -1,11 +1,18 @@
 import type { DatedNote } from "../datedNotes";
 import type { Translator } from "../i18n";
 
+export type DatedNoteDayStats = {
+  startedCount: number;
+  scheduledCount: number;
+  completedCount: number;
+};
+
 export type DatedNotesViewState = {
   selectedPath?: string;
   query: string;
   t: Translator;
   animateDetailTransition?: boolean;
+  dayStatsByDate?: Readonly<Record<string, DatedNoteDayStats>>;
 };
 
 export type DatedNotesViewHandlers = {
@@ -69,7 +76,10 @@ function renderDatedNoteDetail(
 ): void {
   for (const note of notes) {
     const card = container.createDiv({ cls: `task-hub-dated-note-detail-card ${note.path === selected.path ? "is-active" : ""}` });
-    const body = card.createDiv({ cls: "task-hub-dated-note-body" });
+    const main = card.createDiv({ cls: "task-hub-dated-note-detail-main" });
+    const body = main.createDiv({ cls: "task-hub-dated-note-body" });
+    const side = main.createDiv({ cls: "task-hub-dated-note-detail-side" });
+    const menu = side.createEl("button", { cls: "task-hub-dated-note-menu-button", text: "⋯" });
     if (note.body.trim()) {
       if (options.renderNoteMarkdown) {
         options.renderNoteMarkdown(body, note.body, note.path);
@@ -80,14 +90,7 @@ function renderDatedNoteDetail(
       body.createDiv({ cls: "task-hub-empty", text: state.t("noDatedNotes") });
     }
 
-    const footer = card.createDiv({ cls: "task-hub-dated-note-detail-footer" });
-    if (note.tags.length > 0) {
-      const tags = footer.createDiv({ cls: "task-hub-tag-row" });
-      for (const tag of note.tags) tags.createSpan({ cls: "task-hub-task-tag", text: tag });
-    }
-    if (note.createdAt) footer.createSpan({ cls: "task-hub-dated-note-time", text: timeLabel(note.createdAt) });
-
-    const menu = card.createEl("button", { cls: "task-hub-dated-note-menu-button", text: "⋯" });
+    if (note.createdAt) side.createSpan({ cls: "task-hub-dated-note-time", text: timeLabel(note.createdAt) });
     menu.addEventListener("click", (event) => {
       event.preventDefault();
       event.stopPropagation();
@@ -107,6 +110,7 @@ function renderDatedNoteList(
     const section = container.createDiv({ cls: "task-hub-dated-note-day" });
     const header = section.createDiv({ cls: "task-hub-dated-note-day-header" });
     header.createSpan({ cls: "task-hub-dated-note-day-title", text: dayTitle(group.date, state.t) });
+    if (state.dayStatsByDate) renderDatedNoteDayStats(header, state.dayStatsByDate[group.date]);
     header.createSpan({ cls: "task-hub-dated-note-day-count", text: `${group.notes.length} ${state.t("notes")}` });
     for (const note of group.notes) {
       const card = section.createEl("button", {
@@ -114,10 +118,6 @@ function renderDatedNoteList(
       });
       renderDatedNoteCardPreview(card, note);
       const footer = card.createSpan({ cls: "task-hub-dated-note-card-footer" });
-      if (note.tags.length > 0) {
-        const tags = footer.createSpan({ cls: "task-hub-dated-note-card-tags" });
-        for (const tag of note.tags) tags.createSpan({ cls: "task-hub-task-tag", text: tag });
-      }
       if (note.createdAt) footer.createSpan({ cls: "task-hub-dated-note-time", text: timeLabel(note.createdAt) });
       card.addEventListener("click", () => handlers.onSelectNote(note));
     }
@@ -182,6 +182,14 @@ function groupNotesByDate(notes: DatedNote[]): Array<{ date: string; notes: Date
     groups.set(note.date, [...(groups.get(note.date) ?? []), note]);
   }
   return Array.from(groups.entries()).map(([date, groupNotes]) => ({ date, notes: groupNotes }));
+}
+
+function renderDatedNoteDayStats(container: HTMLElement, stats: DatedNoteDayStats | undefined): void {
+  const values = stats ?? { startedCount: 0, scheduledCount: 0, completedCount: 0 };
+  const list = container.createSpan({ cls: "task-hub-dated-note-day-stats" });
+  list.createSpan({ cls: "task-hub-dated-note-day-stat is-started", text: `🛫 ${values.startedCount}` });
+  list.createSpan({ cls: "task-hub-dated-note-day-stat is-scheduled", text: `⏳ ${values.scheduledCount}` });
+  list.createSpan({ cls: "task-hub-dated-note-day-stat is-completed", text: `✅ ${values.completedCount}` });
 }
 
 function dayTitle(date: string, t: Translator): string {
