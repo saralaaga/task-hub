@@ -35,9 +35,7 @@ import {
   TaskNoteIndex,
   buildCalendarEventNoteKey,
   buildTaskNoteKey,
-  createTaskNoteContent,
   normalizeTaskNoteFolder,
-  replaceTaskNoteBody,
   taskNoteFileName,
   transferTaskNoteRelationship,
   type TaskNote
@@ -45,13 +43,20 @@ import {
 import {
   DatedNoteIndex,
   applyDatedNoteTitleTemplate,
-  createDatedNoteContent,
   datedNoteFileName,
   datedNoteTitleFromBody,
   normalizeDatedNoteFolder,
-  replaceDatedNoteBody,
   type DatedNote
 } from "./datedNotes";
+import {
+  HubNoteIndex,
+  createHubNoteId,
+  createHubNoteContent,
+  replaceHubNoteBody,
+  type HubNote,
+  type HubNoteIndexableFile,
+  type TimelineHubNote
+} from "./hubNotes";
 import {
   cleanupTaskNotePinnedEntry,
   cleanupTaskNoteManualOrderEntry,
@@ -247,6 +252,7 @@ export default class TaskHubPlugin extends Plugin {
   taskIndex: TaskIndex = this.createTaskIndex();
   taskNoteIndex: TaskNoteIndex = this.createTaskNoteIndex();
   datedNoteIndex: DatedNoteIndex = this.createDatedNoteIndex();
+  hubNoteIndex: HubNoteIndex = this.createHubNoteIndex();
   localAppleTasks: TaskItem[] = [];
   localAppleEvents: CalendarEvent[] = [];
   localAppleStatus: LocalAppleSyncStatus = { state: "never" };
@@ -401,6 +407,7 @@ export default class TaskHubPlugin extends Plugin {
     this.taskIndex = this.createTaskIndex();
     this.taskNoteIndex = this.createTaskNoteIndex();
     this.datedNoteIndex = this.createDatedNoteIndex();
+    this.hubNoteIndex = this.createHubNoteIndex();
     registerTaskHubIcon();
 
     this.registerView(TASK_HUB_VIEW_TYPE, (leaf: WorkspaceLeaf) => new TaskHubView(leaf, this));
@@ -541,6 +548,7 @@ export default class TaskHubPlugin extends Plugin {
     await this.taskIndex.scanFiles(files);
     await this.taskNoteIndex.scanFiles(files);
     await this.datedNoteIndex.scanFiles(files);
+    await this.hubNoteIndex.scanFiles(files);
     await this.syncExternalTasks({ silent: true });
     this.cleanupTaskListManualOrderState();
     await this.persistTaskIndexStateIfNeeded();
@@ -1991,8 +1999,32 @@ export default class TaskHubPlugin extends Plugin {
     }
   }
 
-  getTaskNotes(task: TaskItem) {
-    return this.settings.taskNotes.enabled ? this.taskNoteIndex.getNotesForKey(buildTaskNoteKey(task)) : [];
+  notesViewEnabled(): boolean {
+    return this.settings.datedNotes.enabled || this.settings.taskNotes.enabled;
+  }
+
+  getHubNotes(): HubNote[] {
+    return this.notesViewEnabled() ? this.hubNoteIndex.getNotes() : [];
+  }
+
+  getTimelineHubNotes(): TimelineHubNote[] {
+    return this.notesViewEnabled() ? this.hubNoteIndex.getTimelineNotes() : [];
+  }
+
+  getHubNote(path: string): HubNote | undefined {
+    return this.hubNoteIndex.getNote(path);
+  }
+
+  getHubNotesForTask(task: TaskItem): HubNote[] {
+    return this.hubNoteIndex.getNotesForKey(buildTaskNoteKey(task));
+  }
+
+  getHubNotesForEvent(event: CalendarEvent): HubNote[] {
+    return this.hubNoteIndex.getNotesForKey(buildCalendarEventNoteKey(event));
+  }
+
+  getTaskNotes(task: TaskItem): TaskNote[] {
+    return this.settings.taskNotes.enabled ? this.getHubNotesForTask(task).map(hubNoteToTaskNote) : [];
   }
 
   getOrderedTaskNotes(task: TaskItem): TaskNote[] {
@@ -2068,8 +2100,8 @@ export default class TaskHubPlugin extends Plugin {
     await this.saveSettings();
   }
 
-  getEventNotes(event: CalendarEvent) {
-    return this.settings.taskNotes.enabled ? this.taskNoteIndex.getNotesForKey(buildCalendarEventNoteKey(event)) : [];
+  getEventNotes(event: CalendarEvent): TaskNote[] {
+    return this.settings.taskNotes.enabled ? this.getHubNotesForEvent(event).map(hubNoteToTaskNote) : [];
   }
 
   private clearLastTaskUndoAction(): void {
@@ -2238,6 +2270,11 @@ export default class TaskHubPlugin extends Plugin {
       new Notice(`${t("fileNotFound")}: ${path}`);
       return;
     }
+    const hubNote = this.getHubNote(path);
+    if (hubNote?.date) {
+      await this.openDatedNoteEditor(path);
+      return;
+    }
     new TaskNoteModal(this, file, "edit").open();
   }
 
@@ -2254,7 +2291,7 @@ export default class TaskHubPlugin extends Plugin {
   }
 
   getDatedNotes(): DatedNote[] {
-    return this.settings.datedNotes.enabled ? this.datedNoteIndex.getNotes() : [];
+    return this.notesViewEnabled() ? this.datedNoteIndex.getNotes() : [];
   }
 
   async openDatedNoteSource(path: string): Promise<void> {
@@ -2276,27 +2313,28 @@ export default class TaskHubPlugin extends Plugin {
       new Notice(`${t("fileNotFound")}: ${path}`);
       return;
     }
-    const note = this.datedNoteIndex.getNotes().find((candidate) => candidate.path === path);
+    const note = this.getHubNote(path) ?? this.datedNoteIndex.getNotes().find((candidate) => candidate.path === path);
     new DatedNoteEditModal(this, file, note?.body ?? "").open();
   }
 
   async createDatedNote(dateKey: string, body?: string): Promise<DatedNote | undefined> {
     const t = createTranslator(this.settings.language);
-    if (!this.settings.datedNotes.enabled) {
+    if (!this.notesViewEnabled()) {
       new Notice(t("datedNotesDisabled"));
       return undefined;
     }
     const now = new Date();
     const noteBody = (body ?? "").trim();
     const noteTitle = datedNoteTitleFromBody(noteBody) ?? applyDatedNoteTitleTemplate(this.settings.datedNotes.defaultTitleTemplate, dateKey);
-    const folder = normalizeDatedNoteFolder(this.settings.datedNotes.folder, DEFAULT_SETTINGS.datedNotes.folder);
+    const folder = preferredUnifiedNoteFolder(this.settings, "dated");
     const path = await this.uniqueTaskNotePath(`${folder}/${datedNoteFileName(noteTitle, dateKey, now)}`);
     await this.ensureParentFolders(path);
-    const noteId = `note_${now.toISOString().replace(/[-:TZ.]/g, "").slice(0, 14)}_${Math.random().toString(36).slice(2, 6)}`;
+    const noteId = createHubNoteId(now);
     const file = await this.app.vault.create(
       path,
-      createDatedNoteContent({
+      createHubNoteContent({
         noteId,
+        kind: "manual",
         date: dateKey,
         title: noteTitle,
         createdAt: now.toISOString(),
@@ -2304,25 +2342,30 @@ export default class TaskHubPlugin extends Plugin {
       })
     );
     await this.datedNoteIndex.reindexFile(this.toIndexableFile(file));
+    await this.hubNoteIndex.reindexFile(this.toIndexableFile(file));
     const createdNote = this.datedNoteIndex.getNotes().find((note) => note.path === file.path);
     this.refreshOpenViews();
     new Notice(t("datedNoteCreated"));
+    if (createdNote && this.settings.datedNotes.openAfterCreate) {
+      await this.openDatedNoteEditor(createdNote.path);
+    }
     return createdNote;
   }
 
   async saveDatedNoteBody(file: TFile, body: string): Promise<{ ok: true } | { ok: false; message: string }> {
     const t = createTranslator(this.settings.language);
     const update = {
-      result: { status: "conflict", message: t("taskUpdateFailed") } as ReturnType<typeof replaceDatedNoteBody>
+      result: { status: "conflict", message: t("taskUpdateFailed") } as ReturnType<typeof replaceHubNoteBody>
     };
     await this.app.vault.process(file, (content) => {
-      update.result = replaceDatedNoteBody(content, body, new Date().toISOString());
+      update.result = replaceHubNoteBody(content, body, new Date().toISOString());
       return update.result.status === "updated" ? update.result.content : content;
     });
     if (update.result.status !== "updated") {
       return { ok: false, message: update.result.message };
     }
     await this.datedNoteIndex.reindexFile(this.toIndexableFile(file));
+    await this.hubNoteIndex.reindexFile(this.toIndexableFile(file));
     this.refreshOpenViews();
     return { ok: true };
   }
@@ -2336,6 +2379,7 @@ export default class TaskHubPlugin extends Plugin {
     }
     await this.app.fileManager.trashFile(file);
     this.datedNoteIndex.removeFile(path);
+    this.hubNoteIndex.removeFile(path);
     this.refreshOpenViews();
     new Notice(t("datedNoteDeleted"));
   }
@@ -2349,16 +2393,17 @@ export default class TaskHubPlugin extends Plugin {
     }
     await this.app.fileManager.trashFile(file);
     this.taskNoteIndex.removeFile(path);
+    this.hubNoteIndex.removeFile(path);
     this.refreshOpenViews();
     new Notice(t("taskNoteDeleted"));
   }
 
   async createTaskNoteForTask(task: TaskItem): Promise<void> {
-    await this.createTaskNote(buildTaskNoteKey(task), task.text);
+    await this.createTaskNote(buildTaskNoteKey(task), task.text, relatedTimelineDateForTask(task));
   }
 
   async createTaskNoteForEvent(event: CalendarEvent): Promise<void> {
-    await this.createTaskNote(buildCalendarEventNoteKey(event), event.title);
+    await this.createTaskNote(buildCalendarEventNoteKey(event), event.title, event.start.slice(0, 10));
   }
 
   async saveTaskNoteBody(file: TFile, body: string): Promise<{ ok: true; deleted?: boolean } | { ok: false; message: string }> {
@@ -2368,16 +2413,17 @@ export default class TaskHubPlugin extends Plugin {
       return { ok: true, deleted: true };
     }
     const update = {
-      result: { status: "conflict", message: t("taskUpdateFailed") } as ReturnType<typeof replaceTaskNoteBody>
+      result: { status: "conflict", message: t("taskUpdateFailed") } as ReturnType<typeof replaceHubNoteBody>
     };
     await this.app.vault.process(file, (content) => {
-      update.result = replaceTaskNoteBody(content, body);
+      update.result = replaceHubNoteBody(content, body, new Date().toISOString());
       return update.result.status === "updated" ? update.result.content : content;
     });
     if (update.result.status !== "updated") {
       return { ok: false, message: update.result.message };
     }
     await this.taskNoteIndex.reindexFile(this.toIndexableFile(file));
+    await this.hubNoteIndex.reindexFile(this.toIndexableFile(file));
     this.refreshOpenViews();
     return { ok: true };
   }
@@ -2933,6 +2979,17 @@ export default class TaskHubPlugin extends Plugin {
     });
   }
 
+  private createHubNoteIndex(): HubNoteIndex {
+    return new HubNoteIndex({
+      ignoredPaths: this.settings.ignoredPaths,
+      readFile: (file) => {
+        const vaultFile = this.app.vault.getFileByPath(file.path);
+        if (!vaultFile) throw new Error(`File not found: ${file.path}`);
+        return this.app.vault.cachedRead(vaultFile);
+      }
+    });
+  }
+
   private async transferTaskNotesToAppleReminder(
     task: TaskItem,
     reminderId: string
@@ -2962,6 +3019,7 @@ export default class TaskHubPlugin extends Plugin {
         return { ok: false, message: transfer.result.message };
       }
       await this.taskNoteIndex.reindexFile(this.toIndexableFile(noteFile));
+      await this.hubNoteIndex.reindexFile(this.toIndexableFile(noteFile));
     }
     return { ok: true };
   }
@@ -2997,11 +3055,12 @@ export default class TaskHubPlugin extends Plugin {
         return { ok: false, message: transfer.result.message };
       }
       await this.taskNoteIndex.reindexFile(this.toIndexableFile(noteFile));
+      await this.hubNoteIndex.reindexFile(this.toIndexableFile(noteFile));
     }
     return { ok: true };
   }
 
-  private async createTaskNote(relatedKey: string, title: string): Promise<void> {
+  private async createTaskNote(relatedKey: string, title: string, date?: string): Promise<void> {
     const t = createTranslator(this.settings.language);
     if (!this.settings.taskNotes.enabled) {
       new Notice(t("taskNotesDisabled"));
@@ -3012,25 +3071,28 @@ export default class TaskHubPlugin extends Plugin {
       this.settings.taskNotes.thinoIntegrationEnabled && this.settings.taskNotes.defaultMode === "thino-multi-file"
         ? "thino-multi-file"
         : "task-hub";
-    const folder = normalizeTaskNoteFolder(
-      mode === "thino-multi-file" ? this.settings.taskNotes.thinoFolder : this.settings.taskNotes.notesFolder,
-      mode === "thino-multi-file" ? DEFAULT_SETTINGS.taskNotes.thinoFolder : DEFAULT_SETTINGS.taskNotes.notesFolder
-    );
+    const folder =
+      mode === "thino-multi-file"
+        ? normalizeTaskNoteFolder(this.settings.taskNotes.thinoFolder, DEFAULT_SETTINGS.taskNotes.thinoFolder)
+        : preferredUnifiedNoteFolder(this.settings, "task");
     const path = await this.uniqueTaskNotePath(`${folder}/${taskNoteFileName(title, now, mode)}`);
     await this.ensureParentFolders(path);
-    const noteId = `thn_${now.toISOString().replace(/[-:TZ.]/g, "").slice(0, 14)}_${Math.random().toString(36).slice(2, 6)}`;
+    const noteId = createHubNoteId(now);
     const file = await this.app.vault.create(
       path,
-      createTaskNoteContent({
+      createHubNoteContent({
         noteId,
-        relatedKey,
+        kind: "task-related",
         title,
         createdAt: now.toISOString(),
+        date,
+        relatedKeys: [relatedKey],
         mode,
         addThinoIdToTaskHubNotes: mode === "task-hub" && this.settings.taskNotes.addThinoIdToTaskHubNotes
       })
     );
     await this.taskNoteIndex.reindexFile(this.toIndexableFile(file));
+    await this.hubNoteIndex.reindexFile(this.toIndexableFile(file));
     this.refreshOpenViews();
     if (this.settings.taskNotes.openNoteAfterCreate) {
       new TaskNoteModal(this, file, "create").open();
@@ -3042,6 +3104,7 @@ export default class TaskHubPlugin extends Plugin {
   async deleteTaskNoteFile(file: TFile): Promise<void> {
     await this.app.fileManager.trashFile(file);
     this.taskNoteIndex.removeFile(file.path);
+    this.hubNoteIndex.removeFile(file.path);
     this.refreshOpenViews();
   }
 
@@ -3073,6 +3136,7 @@ export default class TaskHubPlugin extends Plugin {
         this.taskIndex.removeFile(file.path);
         this.taskNoteIndex.removeFile(file.path);
         this.datedNoteIndex.removeFile(file.path);
+        this.hubNoteIndex.removeFile(file.path);
         this.cleanupTaskListManualOrderState();
         void this.persistTaskIndexStateIfNeeded().then(() => this.refreshOpenViews());
       })
@@ -3083,6 +3147,7 @@ export default class TaskHubPlugin extends Plugin {
         this.taskIndex.removeFile(oldPath);
         this.taskNoteIndex.removeFile(oldPath);
         this.datedNoteIndex.removeFile(oldPath);
+        this.hubNoteIndex.removeFile(oldPath);
         this.cleanupTaskListManualOrderState();
         if (file instanceof TFile) void this.reindexVaultFile(file);
         else void this.persistTaskIndexStateIfNeeded().then(() => this.refreshOpenViews());
@@ -3095,6 +3160,7 @@ export default class TaskHubPlugin extends Plugin {
     await this.taskIndex.reindexFile(indexableFile);
     await this.taskNoteIndex.reindexFile(indexableFile);
     await this.datedNoteIndex.reindexFile(indexableFile);
+    await this.hubNoteIndex.reindexFile(indexableFile);
     this.cleanupTaskListManualOrderState();
     await this.persistTaskIndexStateIfNeeded();
     this.refreshOpenViews();
@@ -3900,7 +3966,7 @@ class CreateTaskModal extends Modal {
   }
 
   private canCreateDatedNote(): boolean {
-    return this.options.allowDatedNote === true && this.plugin.settings.datedNotes.enabled;
+    return this.options.allowDatedNote === true && this.plugin.notesViewEnabled();
   }
 
   private initialCreationKind(): CreateItemKind {
@@ -3929,6 +3995,43 @@ class CreateTaskModal extends Modal {
             durationMinutes: this.eventDurationMinutes
           };
   }
+}
+
+function hubNoteToTaskNote(note: HubNote): TaskNote {
+  return {
+    path: note.path,
+    noteId: note.noteId,
+    related: [...note.related],
+    history: [...note.history],
+    title: note.title,
+    body: note.body,
+    bodyStartLine: note.bodyStartLine,
+    tags: [...note.tags],
+    createdAt: note.createdAt,
+    updatedAt: note.updatedAt
+  };
+}
+
+function relatedTimelineDateForTask(task: TaskItem): string | undefined {
+  return taskStartDateKey(task) ?? taskPlannedDateKey(task) ?? task.dueDate;
+}
+
+function preferredUnifiedNoteFolder(settings: TaskHubSettings, prefer: "dated" | "task"): string {
+  const datedCustom =
+    settings.datedNotes.folder.trim().length > 0 && settings.datedNotes.folder !== DEFAULT_SETTINGS.datedNotes.folder;
+  const taskCustom =
+    settings.taskNotes.notesFolder.trim().length > 0 && settings.taskNotes.notesFolder !== DEFAULT_SETTINGS.taskNotes.notesFolder;
+
+  if (prefer === "task" && taskCustom) {
+    return normalizeTaskNoteFolder(settings.taskNotes.notesFolder, DEFAULT_SETTINGS.taskNotes.notesFolder);
+  }
+  if (datedCustom) {
+    return normalizeDatedNoteFolder(settings.datedNotes.folder, DEFAULT_SETTINGS.datedNotes.folder);
+  }
+  if (taskCustom) {
+    return normalizeTaskNoteFolder(settings.taskNotes.notesFolder, DEFAULT_SETTINGS.taskNotes.notesFolder);
+  }
+  return normalizeDatedNoteFolder(settings.datedNotes.folder, DEFAULT_SETTINGS.datedNotes.folder);
 }
 
 class RiskySourceDeletionModal extends Modal {

@@ -16,21 +16,30 @@ import { syncVisibleSources } from "./sourceVisibility";
 import { renderSourceLogo } from "./sourceLogos";
 import { renderTagsView } from "./renderTagsView";
 import { renderTasksView } from "./renderTasksView";
-import { renderDatedNotesView, type DatedNoteDayStats } from "./renderDatedNotesView";
+import {
+  buildDatedNotesViewModel,
+  renderDatedNotesView,
+  type DatedNoteDayStats
+} from "./renderDatedNotesView";
 import { decorateRenderedTaskNoteTags, renderPlainTaskNoteBody } from "./renderTaskNoteBody";
 import { bindTaskHubTagInputSuggest, collectObsidianTags, type TaskHubTagInputElement } from "./tagInputSuggest";
-import type { DatedNote } from "../datedNotes";
+import { buildTaskNoteKey } from "../taskNotes";
+import type { TimelineHubNote } from "../hubNotes";
 
 type TaskHubRenderOptions = {
   preserveTaskListScroll?: boolean;
   preserveContentScroll?: boolean;
   preserveCalendarAgendaScroll?: boolean;
+  preserveDatedNotePaneScrolls?: boolean;
 };
 
 type ViewportRestoreHandle = {
   kind: "animationFrame" | "timeout";
   id: number;
 };
+
+const DATED_NOTE_DETAIL_WINDOW_STEP = 2;
+const DATED_NOTE_LIST_PAGE_STEP = 10;
 
 export class TaskHubView extends ItemView {
   private view: DashboardView;
@@ -61,12 +70,18 @@ export class TaskHubView extends ItemView {
   private selectedExternalListFilterId: string | undefined;
   private selectedDatedNotePath: string | undefined;
   private datedNoteQuery = "";
-  private pendingDatedNoteDetailScroll = false;
+  private datedNoteDetailStartIndex: number | undefined;
+  private datedNoteDetailEndIndex: number | undefined;
+  private datedNoteListVisibleCount: number | undefined;
+  private datedNoteDetailScrollTop = 0;
+  private datedNoteListScrollTop = 0;
+  private pendingDatedNoteFocusDate: string | undefined;
   private pendingDatedNoteDetailTransition = false;
   private lastRenderedDashboardView: DashboardView | undefined;
   private lastTaskViewTransitionKey: string | undefined;
   private pendingExpandedTaskScrollId: string | undefined;
   private pendingExpandedTaskScrollTimers: number[] = [];
+  private pendingDatedNoteFocusTimers: number[] = [];
   private pendingViewportRestoreHandles: ViewportRestoreHandle[] = [];
   private readonly undoShortcutHandler = (event: KeyboardEvent) => {
     if (!shouldHandleTaskHubUndoShortcut(event)) return;
@@ -112,8 +127,15 @@ export class TaskHubView extends ItemView {
   onClose(): Promise<void> {
     this.containerEl.removeEventListener("keydown", this.undoShortcutHandler);
     this.clearPendingViewportRestores();
+    this.clearPendingDatedNoteFocusTimers();
     this.syncSessionStateToSettings();
     return this.plugin.saveData(this.plugin.settings);
+  }
+
+  private notesViewEnabled(): boolean {
+    return typeof this.plugin.notesViewEnabled === "function"
+      ? this.plugin.notesViewEnabled()
+      : Boolean(this.plugin.settings.datedNotes?.enabled || this.plugin.settings.taskNotes?.enabled);
   }
 
   render(options: TaskHubRenderOptions = {}): void {
@@ -123,12 +145,13 @@ export class TaskHubView extends ItemView {
       this.captureContentScroll();
       this.captureCalendarAgendaScroll();
       this.captureCalendarDaySidebarScroll();
+      this.captureDatedNotePaneScrolls();
     }
     const container = this.containerEl.children[1] as HTMLElement;
     const baseTasks = this.plugin.getTasks();
     const allTasks = this.withLinkedNoteSubtasks(baseTasks);
     const now = new Date();
-    if (this.view === "notes" && !this.plugin.settings.datedNotes.enabled) {
+    if (this.view === "notes" && !this.notesViewEnabled()) {
       this.view = "tasks";
     }
     const unscheduledTasks = collectUnscheduledTasks(allTasks, this.filters, now, (task) => this.canScheduleTask(task));
@@ -174,7 +197,7 @@ export class TaskHubView extends ItemView {
         unscheduledPanelOpen: this.view === "calendar" && this.unscheduledPanelOpen,
         unscheduledTaskCount: unscheduledTasks.length,
         animateViewTransition,
-        datedNotesEnabled: this.plugin.settings.datedNotes.enabled,
+        datedNotesEnabled: this.notesViewEnabled(),
         t
       },
       {
@@ -225,8 +248,12 @@ export class TaskHubView extends ItemView {
     this.lastRenderedDashboardView = renderedDashboardView;
 
     if (this.view === "notes") {
-      const datedNotes = this.plugin.getDatedNotes();
+      const datedNotes = this.plugin.getTimelineHubNotes();
+      const datedNoteModel = buildDatedNotesViewModel(datedNotes, this.datedNoteQuery, this.selectedDatedNotePath);
+      this.selectedDatedNotePath = datedNoteModel.selected?.path;
+      this.ensureDatedNoteWindowState(datedNoteModel);
       const datedNoteDayStats = buildDatedNoteDayStats(baseTasks, datedNotes.map((note) => note.date));
+      const relatedTasksByNotePath = buildRelatedTasksByNotePath(datedNotes, allTasks);
       renderDatedNotesView(
         main,
         datedNotes,
@@ -235,27 +262,35 @@ export class TaskHubView extends ItemView {
           query: this.datedNoteQuery,
           t,
           animateDetailTransition: this.pendingDatedNoteDetailTransition,
-          dayStatsByDate: datedNoteDayStats
+          dayStatsByDate: datedNoteDayStats,
+          detailStartIndex: this.datedNoteDetailStartIndex,
+          detailEndIndex: this.datedNoteDetailEndIndex,
+          listVisibleCount: this.datedNoteListVisibleCount
         },
         {
           onSelectNote: (note) => {
             if (this.selectedDatedNotePath === note.path) return;
             this.selectedDatedNotePath = note.path;
-            this.pendingDatedNoteDetailScroll = true;
+            this.resetDatedNoteWindowState();
             this.pendingDatedNoteDetailTransition = true;
+            this.pendingDatedNoteFocusDate = note.date;
             this.render({ preserveTaskListScroll: true, preserveContentScroll: true });
           },
           onOpenNoteSource: (path) => void this.plugin.openDatedNoteSource(path),
-          onOpenNoteActions: (note, event) => this.openDatedNoteActionsMenu(note, event)
+          onOpenNoteActions: (note, event) => this.openDatedNoteActionsMenu(note, event),
+          onReachDetailStart: () => this.expandDatedNoteDetailWindow("backward", datedNoteModel.detailGroups.length),
+          onReachDetailEnd: () => this.expandDatedNoteDetailWindow("forward", datedNoteModel.detailGroups.length),
+          onReachListEnd: () => this.expandDatedNoteListWindow(datedNoteModel.listGroups.length)
         },
         {
-          renderNoteMarkdown: (noteContainer, body, sourcePath) => this.renderNoteMarkdown(noteContainer, body, sourcePath)
+          renderNoteMarkdown: (noteContainer, body, sourcePath) => this.renderNoteMarkdown(noteContainer, body, sourcePath),
+          getRelatedTasks: (note) => relatedTasksByNotePath.get(note.path) ?? []
         }
       );
       this.restoreContentScroll(options);
-      if (this.pendingDatedNoteDetailScroll) {
-        scrollDatedNoteDetailToTop(main);
-        this.pendingDatedNoteDetailScroll = false;
+      if (this.pendingDatedNoteFocusDate) {
+        this.scheduleDatedNoteFocus(this.pendingDatedNoteFocusDate);
+        this.pendingDatedNoteFocusDate = undefined;
       }
       this.pendingDatedNoteDetailTransition = false;
       this.scheduleViewportRestore(options);
@@ -661,12 +696,14 @@ export class TaskHubView extends ItemView {
   private openCreateTaskFromToolbar(): void {
     const activeSmartList = this.activeSmartList();
     this.plugin.openCreateTaskModal(toLocalDateKey(new Date()), {
-      allowDatedNote: this.plugin.settings.datedNotes?.enabled === true,
-      initialKind: this.view === "notes" && this.plugin.settings.datedNotes?.enabled === true ? "note" : undefined,
+      allowDatedNote: this.notesViewEnabled(),
+      initialKind: this.view === "notes" && this.notesViewEnabled() ? "note" : undefined,
       onDatedNoteCreated: (note) => {
         this.view = "notes";
         this.selectedDatedNotePath = note.path;
+        this.resetDatedNoteWindowState();
         this.datedNoteQuery = "";
+        this.pendingDatedNoteFocusDate = note.date;
         this.persistSessionState();
         this.render({ preserveContentScroll: true });
       },
@@ -678,7 +715,7 @@ export class TaskHubView extends ItemView {
     });
   }
 
-  private openDatedNoteActionsMenu(note: DatedNote, event: MouseEvent): void {
+  private openDatedNoteActionsMenu(note: TimelineHubNote, event: MouseEvent): void {
     const t = createTranslator(this.plugin.settings.language);
     const menu = new Menu();
     menu.addItem((item) => {
@@ -712,6 +749,38 @@ export class TaskHubView extends ItemView {
         container.empty();
         renderPlainTaskNoteBody(container, body);
       });
+  }
+
+  private ensureDatedNoteWindowState(model: ReturnType<typeof buildDatedNotesViewModel>): void {
+    if (!model.selected || model.detailGroups.length === 0 || model.listGroups.length === 0) {
+      this.resetDatedNoteWindowState();
+      return;
+    }
+    const detailAnchorIndex = model.detailAnchorIndex;
+    const defaultStart = Math.max(0, detailAnchorIndex - 1);
+    const defaultEnd = Math.min(model.detailGroups.length - 1, detailAnchorIndex + 1);
+    const currentStart = this.datedNoteDetailStartIndex;
+    const currentEnd = this.datedNoteDetailEndIndex;
+    const hasValidRange =
+      currentStart !== undefined &&
+      currentEnd !== undefined &&
+      currentStart >= 0 &&
+      currentEnd < model.detailGroups.length &&
+      currentStart <= detailAnchorIndex &&
+      currentEnd >= detailAnchorIndex;
+    this.datedNoteDetailStartIndex = hasValidRange ? currentStart : defaultStart;
+    this.datedNoteDetailEndIndex = hasValidRange ? currentEnd : defaultEnd;
+    const minimumVisibleCount = Math.max(12, model.listSelectedIndex + 1);
+    this.datedNoteListVisibleCount = Math.min(
+      model.listGroups.length,
+      Math.max(minimumVisibleCount, this.datedNoteListVisibleCount ?? minimumVisibleCount)
+    );
+  }
+
+  private resetDatedNoteWindowState(): void {
+    this.datedNoteDetailStartIndex = undefined;
+    this.datedNoteDetailEndIndex = undefined;
+    this.datedNoteListVisibleCount = undefined;
   }
 
   private captureTaskListScroll(): void {
@@ -1182,6 +1251,15 @@ export class TaskHubView extends ItemView {
     this.contentScrollTop = container?.scrollTop ?? this.contentScrollTop;
   }
 
+  private captureDatedNotePaneScrolls(): void {
+    if (this.view !== "notes") return;
+    const container = this.containerEl.children[1] as HTMLElement | undefined;
+    const detail = container?.querySelector<HTMLElement>(".task-hub-dated-note-detail");
+    const list = container?.querySelector<HTMLElement>(".task-hub-dated-note-list");
+    this.datedNoteDetailScrollTop = detail?.scrollTop ?? this.datedNoteDetailScrollTop;
+    this.datedNoteListScrollTop = list?.scrollTop ?? this.datedNoteListScrollTop;
+  }
+
   private captureCalendarAgendaScroll(): void {
     if (this.view !== "calendar" || (this.calendarMode !== "day" && this.calendarMode !== "week")) return;
     const container = this.containerEl.children[1] as HTMLElement | undefined;
@@ -1210,6 +1288,54 @@ export class TaskHubView extends ItemView {
     });
   }
 
+  private restoreDatedNotePaneScrolls(): void {
+    if (this.view !== "notes") return;
+    const container = this.containerEl.children[1] as HTMLElement | undefined;
+    const detail = container?.querySelector<HTMLElement>(".task-hub-dated-note-detail");
+    const list = container?.querySelector<HTMLElement>(".task-hub-dated-note-list");
+    if (detail) detail.scrollTop = this.datedNoteDetailScrollTop;
+    if (list) list.scrollTop = this.datedNoteListScrollTop;
+  }
+
+  private expandDatedNoteDetailWindow(direction: "backward" | "forward", groupCount: number): void {
+    if (this.view !== "notes" || groupCount <= 0) return;
+    const startIndex = this.datedNoteDetailStartIndex ?? 0;
+    const endIndex = this.datedNoteDetailEndIndex ?? Math.min(groupCount - 1, startIndex);
+    if (direction === "backward") {
+      if (startIndex <= 0) return;
+      this.datedNoteDetailStartIndex = Math.max(0, startIndex - DATED_NOTE_DETAIL_WINDOW_STEP);
+    } else {
+      if (endIndex >= groupCount - 1) return;
+      this.datedNoteDetailEndIndex = Math.min(groupCount - 1, endIndex + DATED_NOTE_DETAIL_WINDOW_STEP);
+    }
+    this.render({ preserveContentScroll: true, preserveDatedNotePaneScrolls: true });
+  }
+
+  private expandDatedNoteListWindow(groupCount: number): void {
+    if (this.view !== "notes" || groupCount <= 0) return;
+    const currentCount = this.datedNoteListVisibleCount ?? Math.min(groupCount, 12);
+    if (currentCount >= groupCount) return;
+    this.datedNoteListVisibleCount = Math.min(groupCount, currentCount + DATED_NOTE_LIST_PAGE_STEP);
+    this.render({ preserveContentScroll: true, preserveDatedNotePaneScrolls: true });
+  }
+
+  private scheduleDatedNoteFocus(date: string): void {
+    this.clearPendingDatedNoteFocusTimers();
+    const contentContainer = this.containerEl.children[1] as HTMLElement | undefined;
+    const syncScroll = () => scrollDatedNoteDateIntoView(contentContainer, date);
+    syncScroll();
+    for (const delay of [80, 180, 280]) {
+      this.pendingDatedNoteFocusTimers.push(this.containerEl.win.setTimeout(syncScroll, delay));
+    }
+  }
+
+  private clearPendingDatedNoteFocusTimers(): void {
+    while (this.pendingDatedNoteFocusTimers.length > 0) {
+      const timer = this.pendingDatedNoteFocusTimers.pop();
+      if (timer !== undefined) this.containerEl?.win?.clearTimeout(timer);
+    }
+  }
+
   private restoreViewport(options: TaskHubRenderOptions): void {
     if (!shouldPreserveScroll(options)) return;
     if (options.preserveContentScroll) {
@@ -1234,6 +1360,9 @@ export class TaskHubView extends ItemView {
       }
       const sidebar = container?.querySelector<HTMLElement>(".task-hub-calendar-day-sidebar");
       if (sidebar) sidebar.scrollTop = this.calendarDaySidebarScrollTop;
+    }
+    if (options.preserveDatedNotePaneScrolls) {
+      this.restoreDatedNotePaneScrolls();
     }
   }
 
@@ -1470,6 +1599,14 @@ export function scrollDatedNoteDetailToTop(container: HTMLElement | undefined): 
   detail.scrollTop = 0;
 }
 
+export function scrollDatedNoteDateIntoView(container: HTMLElement | undefined, date: string): void {
+  const detail = container?.querySelector<HTMLElement>(".task-hub-dated-note-detail");
+  if (!detail) return;
+  const section = findDescendantByAttr(detail, "data-task-hub-note-date", date);
+  if (!section || typeof section.scrollIntoView !== "function") return;
+  section.scrollIntoView({ block: "start", behavior: "smooth" });
+}
+
 export function scrollExpandedTaskIntoView(
   container: HTMLElement | undefined,
   taskId: string,
@@ -1507,7 +1644,12 @@ export function scrollExpandedTaskIntoView(
 }
 
 function shouldPreserveScroll(options: TaskHubRenderOptions): boolean {
-  return Boolean(options.preserveTaskListScroll || options.preserveContentScroll || options.preserveCalendarAgendaScroll);
+  return Boolean(
+    options.preserveTaskListScroll ||
+      options.preserveContentScroll ||
+      options.preserveCalendarAgendaScroll ||
+      options.preserveDatedNotePaneScrolls
+  );
 }
 
 export function buildTaskViewTransitionKey(
@@ -1765,6 +1907,24 @@ function groupTasksByRawLine(tasks: TaskItem[]): Map<string, TaskItem[]> {
     grouped.set(key, [...(grouped.get(key) ?? []), task]);
   }
   return grouped;
+}
+
+function buildRelatedTasksByNotePath(notes: readonly TimelineHubNote[], tasks: readonly TaskItem[]): Map<string, TaskItem[]> {
+  const tasksByKey = new Map<string, TaskItem>();
+  for (const task of tasks) {
+    tasksByKey.set(buildTaskNoteKey(task), task);
+  }
+
+  const relatedTasksByNotePath = new Map<string, TaskItem[]>();
+  for (const note of notes) {
+    const relatedTasks = note.related
+      .map((key) => tasksByKey.get(key))
+      .filter((task): task is TaskItem => Boolean(task));
+    if (relatedTasks.length > 0) {
+      relatedTasksByNotePath.set(note.path, relatedTasks);
+    }
+  }
+  return relatedTasksByNotePath;
 }
 
 function findExistingLinkedNoteTask(

@@ -880,6 +880,59 @@ describe("Apple Reminders migration", () => {
     expect(notices).toContain("Task note created.");
   });
 
+  it("creates new task-hub task notes with unified date and relation metadata", async () => {
+    const createdFile = {
+      path: "TaskHub/Notes/2026-05-20 1030 - Pay invoice.md",
+      extension: "md",
+      stat: { ctime: 1, mtime: 2, size: 3 }
+    };
+    const plugin = new TaskHubPlugin({} as never, {} as never);
+    const create = jest.fn(async (_path, content) => {
+      return createdFile;
+    });
+    plugin.app = {
+      vault: {
+        createFolder: jest.fn(),
+        create,
+        getFileByPath: jest.fn(() => null),
+        getFolderByPath: jest.fn(() => ({ path: "TaskHub/Notes" }))
+      },
+      workspace: {
+        getLeavesOfType: jest.fn(() => [])
+      }
+    } as never;
+    plugin.settings = {
+      ...DEFAULT_SETTINGS,
+      taskNotes: {
+        ...DEFAULT_SETTINGS.taskNotes,
+        enabled: true,
+        openNoteAfterCreate: false
+      },
+      datedNotes: {
+        ...DEFAULT_SETTINGS.datedNotes,
+        folder: "TaskHub/Notes"
+      }
+    };
+    plugin.taskNoteIndex = {
+      reindexFile: jest.fn(async () => undefined),
+      removeFile: jest.fn()
+    } as never;
+    plugin.hubNoteIndex = {
+      reindexFile: jest.fn(async () => undefined),
+      removeFile: jest.fn()
+    } as never;
+
+    await plugin.createTaskNoteForTask(task());
+
+    const [, content] = create.mock.calls[0] as unknown as [string, string];
+    expect(content).toContain("taskhub-note: true");
+    expect(content).toContain('taskhub-kind: "task-related"');
+    expect(content).toContain("taskhub-type: note");
+    expect(content).toContain("taskhub-date: 2026-05-20");
+    expect(content).toContain("taskhub-related:");
+    expect(content).toContain("task:vault:Inbox.md:0:");
+  });
+
   it("preserves a timed Markdown task start time when sending it to Apple Reminders", async () => {
     const file = { path: "Inbox.md", extension: "md", stat: { ctime: 1, mtime: 2, size: 3 } };
     const plugin = new TaskHubPlugin({} as never, {} as never);
@@ -1662,8 +1715,8 @@ describe("Apple Reminders migration", () => {
     } as never;
     plugin.settings = {
       ...DEFAULT_SETTINGS,
-      datedNotes: {
-        ...DEFAULT_SETTINGS.datedNotes,
+      taskNotes: {
+        ...DEFAULT_SETTINGS.taskNotes,
         enabled: true
       }
     };

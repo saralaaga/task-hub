@@ -680,9 +680,11 @@ describe("Task Hub styles", () => {
     const transitionRule = styles.match(/\.task-hub-dated-note-detail\.is-note-transition\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const detailCardRule = styles.match(/\.task-hub-dated-note-detail-card\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const detailMainRule = styles.match(/\.task-hub-dated-note-detail-main\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const menuButtonRule = styles.match(/\.task-hub-dated-note-menu-button\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const detailBodyRule = styles.match(/\.task-hub-dated-note-body\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const detailSideRule = styles.match(/\.task-hub-dated-note-detail-side\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const dayHeaderRule = styles.match(/\.task-hub-dated-note-day-header\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const dayMetaRule = styles.match(/\.task-hub-dated-note-day-meta\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const dayStatsRule = styles.match(/\.task-hub-dated-note-day-stats\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const dayStatRule = styles.match(/\.task-hub-dated-note-day-stat\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const cardRule = styles.match(/button\.task-hub-dated-note-card\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
@@ -704,6 +706,10 @@ describe("Task Hub styles", () => {
     expect(detailCardRule).not.toContain("min-height:");
     expect(detailCardRule).not.toContain("position: relative");
     expect(detailMainRule).toContain("grid-template-columns: minmax(0, 1fr) auto");
+    expect(menuButtonRule).toContain("appearance: none");
+    expect(menuButtonRule).toContain("border-radius: 0");
+    expect(menuButtonRule).toContain("margin-top: -12px");
+    expect(menuButtonRule).toContain("width: auto");
     expect(detailBodyRule).not.toContain("min-height:");
     expect(detailBodyRule).not.toContain("flex: 1");
     expect(detailBodyRule).toContain("padding: 18px");
@@ -711,9 +717,12 @@ describe("Task Hub styles", () => {
     expect(detailSideRule).toContain("align-items: flex-end");
     expect(detailSideRule).not.toContain("border-top:");
     expect(dayHeaderRule).toContain("align-items: center");
-    expect(dayStatsRule).toContain("justify-content: center");
+    expect(dayMetaRule).toContain("justify-content: flex-end");
+    expect(dayMetaRule).toContain("margin-left: auto");
+    expect(dayStatsRule).toContain("justify-content: flex-end");
     expect(dayStatsRule).toContain("flex-wrap: wrap");
     expect(dayStatRule).toContain("border-radius: 999px");
+    expect(dayStatRule).toContain("border: 0");
     expect(dayStatRule).toContain("font-variant-numeric: tabular-nums");
     expect(cardRule).toContain("height: auto");
     expect(cardRule).toContain("justify-content: stretch");
@@ -725,6 +734,7 @@ describe("Task Hub styles", () => {
     expect(excerptRule).toContain("text-align: left");
     expect(excerptRule).toContain("width: 100%");
     expect(previewTextRule).toContain("justify-self: stretch");
+    expect(previewTextRule).toContain("-webkit-line-clamp: 3");
     expect(previewTextRule).toContain("text-align: left");
     expect(previewTextRule).toContain("width: 100%");
     expect(previewTaskRule).toContain("justify-self: stretch");

@@ -536,6 +536,10 @@ function normalizeDefaultView(value: unknown): TaskHubSettings["defaultView"] {
   return value === "calendar" || value === "tags" || value === "tasks" || value === "notes" ? value : DEFAULT_SETTINGS.defaultView;
 }
 
+function notesViewEnabled(settings: Pick<TaskHubSettings, "datedNotes" | "taskNotes">): boolean {
+  return settings.datedNotes.enabled || settings.taskNotes.enabled;
+}
+
 function normalizePersistedDate(value: unknown): string | undefined {
   if (typeof value !== "string" || value.trim().length === 0) return undefined;
   const parsed = new Date(value);
@@ -700,11 +704,11 @@ export class TaskHubSettingTab extends PluginSettingTab {
           .addOption("tasks", t("tasks"))
           .addOption("calendar", t("calendar"))
           .addOption("tags", t("tags"));
-        if (this.plugin.settings.datedNotes.enabled) {
+        if (notesViewEnabled(this.plugin.settings)) {
           dropdown.addOption("notes", t("notes"));
         }
         dropdown
-          .setValue(this.plugin.settings.defaultView === "notes" && !this.plugin.settings.datedNotes.enabled ? "tasks" : this.plugin.settings.defaultView)
+          .setValue(this.plugin.settings.defaultView === "notes" && !notesViewEnabled(this.plugin.settings) ? "tasks" : this.plugin.settings.defaultView)
           .onChange(async (value) => {
             this.plugin.settings.defaultView = value as TaskHubSettings["defaultView"];
             await this.plugin.saveSettings();
@@ -747,125 +751,6 @@ export class TaskHubSettingTab extends PluginSettingTab {
   }
 
   private displayTasksPage(containerEl: HTMLElement, t: Translator): void {
-    const taskNotesSection = containerEl.createDiv({ cls: "task-hub-settings-section task-hub-task-notes-section" });
-
-    new Setting(taskNotesSection)
-      .setName(t("taskNotesEnable"))
-      .setDesc(t("taskNotesEnableDesc"))
-      .addToggle((toggle) => {
-        toggle.setValue(this.plugin.settings.taskNotes.enabled).onChange(async (value) => {
-          this.plugin.settings.taskNotes.enabled = value;
-          await this.plugin.saveSettings();
-          this.display({ preserveScroll: true });
-        });
-      })
-      .then((setting) => {
-        setting.settingEl.addClass("task-hub-task-notes-master");
-      });
-
-    if (this.plugin.settings.taskNotes.enabled) {
-      const taskNotesConfig = taskNotesSection.createDiv({ cls: "task-hub-task-notes-config" });
-      const taskNotesGrid = taskNotesConfig.createDiv({ cls: "task-hub-settings-grid task-hub-settings-grid--joined task-hub-task-notes-primary" });
-      new Setting(taskNotesGrid)
-        .setName(t("taskNotesFolder"))
-        .setDesc(t("taskNotesFolderDesc"))
-        .addText((text) => {
-          text.setPlaceholder(DEFAULT_SETTINGS.taskNotes.notesFolder).setValue(this.plugin.settings.taskNotes.notesFolder).onChange(async (value) => {
-            this.plugin.settings.taskNotes.notesFolder = value;
-            await this.plugin.saveSettings();
-          });
-        });
-
-      new Setting(taskNotesGrid)
-        .setName(t("taskNotesThino"))
-        .setDesc(t("taskNotesThinoDesc"))
-        .addToggle((toggle) => {
-          toggle.setValue(this.plugin.settings.taskNotes.thinoIntegrationEnabled).onChange(async (value) => {
-            this.plugin.settings.taskNotes.thinoIntegrationEnabled = value;
-            if (!value && this.plugin.settings.taskNotes.defaultMode === "thino-multi-file") {
-              this.plugin.settings.taskNotes.defaultMode = "task-hub";
-            }
-            if (!value) {
-              this.plugin.settings.taskNotes.addThinoIdToTaskHubNotes = false;
-            }
-            await this.plugin.saveSettings();
-            this.display({ preserveScroll: true });
-          });
-        });
-
-      if (this.plugin.settings.taskNotes.thinoIntegrationEnabled) {
-        new Setting(taskNotesGrid)
-          .setName(t("taskNotesAddThinoId"))
-          .setDesc(t("taskNotesAddThinoIdDesc"))
-          .addToggle((toggle) => {
-            toggle.setValue(this.plugin.settings.taskNotes.addThinoIdToTaskHubNotes).onChange(async (value) => {
-              this.plugin.settings.taskNotes.addThinoIdToTaskHubNotes = value;
-              await this.plugin.saveSettings();
-            });
-          });
-      }
-
-      new Setting(taskNotesGrid)
-        .setName(t("taskNotesDefaultMode"))
-        .setDesc(t("taskNotesDefaultModeDesc"))
-        .addDropdown((dropdown) => {
-          dropdown
-            .addOption("task-hub", "Task Hub")
-            .addOption("thino-multi-file", "Thino multi-file")
-            .setValue(this.plugin.settings.taskNotes.defaultMode)
-            .onChange(async (value) => {
-              this.plugin.settings.taskNotes.defaultMode =
-                value === "thino-multi-file" && this.plugin.settings.taskNotes.thinoIntegrationEnabled
-                  ? "thino-multi-file"
-                  : "task-hub";
-              await this.plugin.saveSettings();
-            });
-        });
-
-      if (this.plugin.settings.taskNotes.thinoIntegrationEnabled) {
-        new Setting(taskNotesGrid)
-          .setName(t("taskNotesThinoFolder"))
-          .setDesc(t("taskNotesThinoFolderDesc"))
-          .addText((text) => {
-            text.setPlaceholder(DEFAULT_SETTINGS.taskNotes.thinoFolder).setValue(this.plugin.settings.taskNotes.thinoFolder).onChange(async (value) => {
-              this.plugin.settings.taskNotes.thinoFolder = value;
-              await this.plugin.saveSettings();
-            });
-          });
-      }
-
-      new Setting(taskNotesGrid)
-        .setName(t("taskNotesOpenAfterCreate"))
-        .setDesc(t("taskNotesOpenAfterCreateDesc"))
-        .addToggle((toggle) => {
-          toggle.setValue(this.plugin.settings.taskNotes.openNoteAfterCreate).onChange(async (value) => {
-            this.plugin.settings.taskNotes.openNoteAfterCreate = value;
-            await this.plugin.saveSettings();
-          });
-        });
-
-      new Setting(taskNotesGrid)
-        .setName(t("taskNotesShowCounts"))
-        .setDesc(t("taskNotesShowCountsDesc"))
-        .addToggle((toggle) => {
-          toggle.setValue(this.plugin.settings.taskNotes.showCountsInTaskList).onChange(async (value) => {
-            this.plugin.settings.taskNotes.showCountsInTaskList = value;
-            await this.plugin.saveSettings();
-          });
-        });
-
-      new Setting(taskNotesGrid)
-        .setName(t("taskNotesLinkedSubtasks"))
-        .setDesc(t("taskNotesLinkedSubtasksDesc"))
-        .addToggle((toggle) => {
-          toggle.setValue(this.plugin.settings.taskNotes.linkedNoteSubtasksEnabled).onChange(async (value) => {
-            this.plugin.settings.taskNotes.linkedNoteSubtasksEnabled = value;
-            await this.plugin.saveSettings();
-          });
-        });
-
-    }
-
     const sendTargetOptions = currentTaskSendTargetOptions(this.plugin, t);
     if (sendTargetOptions.length > 0) {
       new Setting(containerEl)
@@ -903,33 +788,150 @@ export class TaskHubSettingTab extends PluginSettingTab {
   }
 
   private displayNotesPage(containerEl: HTMLElement, t: Translator): void {
-    const section = containerEl.createDiv({ cls: "task-hub-settings-section task-hub-dated-notes-section" });
+    const section = containerEl.createDiv({ cls: "task-hub-settings-section task-hub-task-notes-section" });
+    const notesGrid = section.createDiv({ cls: "task-hub-settings-grid task-hub-settings-grid--joined task-hub-task-notes-primary" });
 
-    this.displayDatedNotesEnableToggle(section, t);
+    this.displayDatedNotesEnableToggle(notesGrid, t);
 
-    if (!this.plugin.settings.datedNotes.enabled) return;
+    new Setting(notesGrid)
+      .setName(t("taskNotesEnable"))
+      .setDesc(t("taskNotesEnableDesc"))
+      .addToggle((toggle) => {
+        toggle.setValue(this.plugin.settings.taskNotes.enabled).onChange(async (value) => {
+          this.plugin.settings.taskNotes.enabled = value;
+          if (!value && !this.plugin.settings.datedNotes.enabled && this.plugin.settings.defaultView === "notes") {
+            this.plugin.settings.defaultView = "tasks";
+          }
+          await this.plugin.saveSettings();
+          this.display({ preserveScroll: true });
+        });
+      })
+      .then((setting) => {
+        setting.settingEl.addClass("task-hub-task-notes-master");
+      });
 
-    const grid = section.createDiv({ cls: "task-hub-settings-grid task-hub-settings-grid--joined" });
-    new Setting(grid)
+    new Setting(notesGrid)
       .setName(t("datedNotesFolder"))
       .setDesc(t("datedNotesFolderDesc"))
       .addText((text) => {
-        text.setPlaceholder(DEFAULT_SETTINGS.datedNotes.folder).setValue(this.plugin.settings.datedNotes.folder).onChange(async (value) => {
-          this.plugin.settings.datedNotes.folder = value;
+        text
+          .setPlaceholder(DEFAULT_SETTINGS.datedNotes.folder)
+          .setValue(this.unifiedNotesFolderValue())
+          .onChange(async (value) => {
+            this.plugin.settings.datedNotes.folder = value;
+            this.plugin.settings.taskNotes.notesFolder = value;
+            await this.plugin.saveSettings();
+          });
+      });
+
+    new Setting(notesGrid)
+      .setName(t("datedNotesOpenAfterCreate"))
+      .setDesc(t("datedNotesOpenAfterCreateDesc"))
+      .addToggle((toggle) => {
+        toggle.setValue(this.unifiedOpenAfterCreateValue()).onChange(async (value) => {
+          this.plugin.settings.datedNotes.openAfterCreate = value;
+          this.plugin.settings.taskNotes.openNoteAfterCreate = value;
           await this.plugin.saveSettings();
         });
       });
 
-    new Setting(grid)
-      .setName(t("datedNotesDefaultTitleTemplate"))
-      .setDesc(t("datedNotesDefaultTitleTemplateDesc"))
-      .addText((text) => {
-        text.setPlaceholder(DEFAULT_SETTINGS.datedNotes.defaultTitleTemplate).setValue(this.plugin.settings.datedNotes.defaultTitleTemplate).onChange(async (value) => {
-          this.plugin.settings.datedNotes.defaultTitleTemplate = value;
-          await this.plugin.saveSettings();
+    if (this.plugin.settings.datedNotes.enabled) {
+      new Setting(notesGrid)
+        .setName(t("datedNotesDefaultTitleTemplate"))
+        .setDesc(t("datedNotesDefaultTitleTemplateDesc"))
+        .addText((text) => {
+          text
+            .setPlaceholder(DEFAULT_SETTINGS.datedNotes.defaultTitleTemplate)
+            .setValue(this.plugin.settings.datedNotes.defaultTitleTemplate)
+            .onChange(async (value) => {
+              this.plugin.settings.datedNotes.defaultTitleTemplate = value;
+              await this.plugin.saveSettings();
+            });
         });
-      });
+    }
 
+    if (this.plugin.settings.taskNotes.enabled) {
+      new Setting(notesGrid)
+        .setName(t("taskNotesThino"))
+        .setDesc(t("taskNotesThinoDesc"))
+        .addToggle((toggle) => {
+          toggle.setValue(this.plugin.settings.taskNotes.thinoIntegrationEnabled).onChange(async (value) => {
+            this.plugin.settings.taskNotes.thinoIntegrationEnabled = value;
+            if (!value && this.plugin.settings.taskNotes.defaultMode === "thino-multi-file") {
+              this.plugin.settings.taskNotes.defaultMode = "task-hub";
+            }
+            if (!value) {
+              this.plugin.settings.taskNotes.addThinoIdToTaskHubNotes = false;
+            }
+            await this.plugin.saveSettings();
+            this.display({ preserveScroll: true });
+          });
+        });
+
+      if (this.plugin.settings.taskNotes.thinoIntegrationEnabled) {
+        new Setting(notesGrid)
+          .setName(t("taskNotesAddThinoId"))
+          .setDesc(t("taskNotesAddThinoIdDesc"))
+          .addToggle((toggle) => {
+            toggle.setValue(this.plugin.settings.taskNotes.addThinoIdToTaskHubNotes).onChange(async (value) => {
+              this.plugin.settings.taskNotes.addThinoIdToTaskHubNotes = value;
+              await this.plugin.saveSettings();
+            });
+          });
+      }
+
+      new Setting(notesGrid)
+        .setName(t("taskNotesDefaultMode"))
+        .setDesc(t("taskNotesDefaultModeDesc"))
+        .addDropdown((dropdown) => {
+          dropdown
+            .addOption("task-hub", "Task Hub")
+            .addOption("thino-multi-file", "Thino multi-file")
+            .setValue(this.plugin.settings.taskNotes.defaultMode)
+            .onChange(async (value) => {
+              this.plugin.settings.taskNotes.defaultMode =
+                value === "thino-multi-file" && this.plugin.settings.taskNotes.thinoIntegrationEnabled
+                  ? "thino-multi-file"
+                  : "task-hub";
+              await this.plugin.saveSettings();
+            });
+        });
+
+      if (this.plugin.settings.taskNotes.thinoIntegrationEnabled) {
+        new Setting(notesGrid)
+          .setName(t("taskNotesThinoFolder"))
+          .setDesc(t("taskNotesThinoFolderDesc"))
+          .addText((text) => {
+            text
+              .setPlaceholder(DEFAULT_SETTINGS.taskNotes.thinoFolder)
+              .setValue(this.plugin.settings.taskNotes.thinoFolder)
+              .onChange(async (value) => {
+                this.plugin.settings.taskNotes.thinoFolder = value;
+                await this.plugin.saveSettings();
+              });
+          });
+      }
+
+      new Setting(notesGrid)
+        .setName(t("taskNotesShowCounts"))
+        .setDesc(t("taskNotesShowCountsDesc"))
+        .addToggle((toggle) => {
+          toggle.setValue(this.plugin.settings.taskNotes.showCountsInTaskList).onChange(async (value) => {
+            this.plugin.settings.taskNotes.showCountsInTaskList = value;
+            await this.plugin.saveSettings();
+          });
+        });
+
+      new Setting(notesGrid)
+        .setName(t("taskNotesLinkedSubtasks"))
+        .setDesc(t("taskNotesLinkedSubtasksDesc"))
+        .addToggle((toggle) => {
+          toggle.setValue(this.plugin.settings.taskNotes.linkedNoteSubtasksEnabled).onChange(async (value) => {
+            this.plugin.settings.taskNotes.linkedNoteSubtasksEnabled = value;
+            await this.plugin.saveSettings();
+          });
+        });
+    }
   }
 
   private displayDatedNotesEnableToggle(containerEl: HTMLElement, t: Translator): void {
@@ -939,7 +941,7 @@ export class TaskHubSettingTab extends PluginSettingTab {
       .addToggle((toggle) => {
         toggle.setValue(this.plugin.settings.datedNotes.enabled).onChange(async (value) => {
           this.plugin.settings.datedNotes.enabled = value;
-          if (!value && this.plugin.settings.defaultView === "notes") {
+          if (!value && !this.plugin.settings.taskNotes.enabled && this.plugin.settings.defaultView === "notes") {
             this.plugin.settings.defaultView = "tasks";
           }
           await this.plugin.saveSettings();
@@ -947,6 +949,24 @@ export class TaskHubSettingTab extends PluginSettingTab {
           this.plugin.refreshOpenViews();
         });
       });
+  }
+
+  private unifiedNotesFolderValue(): string {
+    const datedCustom =
+      this.plugin.settings.datedNotes.folder.trim().length > 0 &&
+      this.plugin.settings.datedNotes.folder !== DEFAULT_SETTINGS.datedNotes.folder;
+    const taskCustom =
+      this.plugin.settings.taskNotes.notesFolder.trim().length > 0 &&
+      this.plugin.settings.taskNotes.notesFolder !== DEFAULT_SETTINGS.taskNotes.notesFolder;
+    if (datedCustom) return this.plugin.settings.datedNotes.folder;
+    if (taskCustom) return this.plugin.settings.taskNotes.notesFolder;
+    return this.plugin.settings.datedNotes.folder;
+  }
+
+  private unifiedOpenAfterCreateValue(): boolean {
+    const datedValue = this.plugin.settings.datedNotes.openAfterCreate;
+    const taskValue = this.plugin.settings.taskNotes.openNoteAfterCreate;
+    return datedValue === taskValue ? datedValue : datedValue || taskValue;
   }
 
   private displayCalendarPage(containerEl: HTMLElement, t: Translator): void {

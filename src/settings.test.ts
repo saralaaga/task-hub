@@ -373,6 +373,16 @@ function createSettingTab(settings = DEFAULT_SETTINGS): TaskHubSettingTab {
   return tab;
 }
 
+function findElementsByTag(root: TestElement, tagName: string): TestElement[] {
+  const matches: TestElement[] = [];
+  const walk = (element: TestElement) => {
+    if (element.tagName === tagName) matches.push(element);
+    for (const child of element.children) walk(child);
+  };
+  walk(root);
+  return matches;
+}
+
 describe("TaskHubSettingTab", () => {
   it("opens to a focused overview page instead of rendering every integration setting", () => {
     const tab = createSettingTab({
@@ -401,6 +411,27 @@ describe("TaskHubSettingTab", () => {
       .find((setting) => setting.textContent.includes("Notes") && setting.textContent.includes("YAML dates"));
     expect(notesSetting).toBeDefined();
     expect(notesSetting?.querySelector(".checkbox-toggle")).not.toBeNull();
+  });
+
+  it("keeps the notes default view available when only related notes are enabled", () => {
+    const tab = createSettingTab({
+      ...DEFAULT_SETTINGS,
+      taskNotes: {
+        ...DEFAULT_SETTINGS.taskNotes,
+        enabled: true
+      },
+      datedNotes: {
+        ...DEFAULT_SETTINGS.datedNotes,
+        enabled: false
+      }
+    });
+
+    tab.display();
+
+    const defaultViewSelect = findElementsByTag(tab.containerEl as unknown as TestElement, "select")[1];
+    const optionTexts = defaultViewSelect?.children.map((option) => option.textContent) ?? [];
+
+    expect(optionTexts).toContain("Notes");
   });
 
   it("moves feedback into the advanced settings page", () => {
@@ -457,9 +488,13 @@ describe("TaskHubSettingTab", () => {
     expect(tab.containerEl.textContent).toContain("Edit and complete Dida tasks");
   });
 
-  it("renders Task Notes as a dedicated linear configuration section", () => {
+  it("renders unified note settings on the Notes page instead of the Tasks page", () => {
     const tab = createSettingTab({
       ...DEFAULT_SETTINGS,
+      datedNotes: {
+        ...DEFAULT_SETTINGS.datedNotes,
+        enabled: true
+      },
       taskNotes: {
         ...DEFAULT_SETTINGS.taskNotes,
         enabled: true,
@@ -470,22 +505,30 @@ describe("TaskHubSettingTab", () => {
     });
 
     tab.display();
+    const notesButton = Array.from(tab.containerEl.querySelectorAll<HTMLButtonElement>(".task-hub-settings-page"))
+      .find((button) => button.textContent === "Notes");
+    notesButton?.click();
+
+    expect(tab.containerEl.textContent).toContain("YAML dates");
+    expect(tab.containerEl.textContent).toContain("Task notes");
+    expect(tab.containerEl.querySelector(".task-hub-task-notes-master")).not.toBeNull();
+    expect(tab.containerEl.querySelector(".task-hub-task-notes-primary")).not.toBeNull();
+    expect(tab.containerEl.querySelector(".task-hub-task-notes-section")).not.toBeNull();
+    expect(tab.containerEl.querySelector(".task-hub-task-notes-primary")?.querySelectorAll(".setting-item").length).toBeGreaterThanOrEqual(8);
+    expect(tab.containerEl.querySelector(".task-hub-settings-compact-grid")).toBeNull();
+    expect(tab.containerEl.textContent).toContain("Notes folder");
+    expect(tab.containerEl.textContent).toContain("Open note after creation");
+    expect(tab.containerEl.textContent).toContain("Also add Thino metadata to Task Hub notes");
+    expect(tab.containerEl.textContent).toContain("Thino notes folder");
+    expect(tab.containerEl.textContent).not.toContain("Show note metadata in editor");
+
     const tasksButton = Array.from(tab.containerEl.querySelectorAll<HTMLButtonElement>(".task-hub-settings-page"))
       .find((button) => button.textContent === "Tasks");
     tasksButton?.click();
 
-    expect(tab.containerEl.textContent).toContain("Task notes");
-    expect(tab.containerEl.querySelector(".task-hub-task-notes-master")).not.toBeNull();
-    expect(tab.containerEl.querySelector(".task-hub-task-notes-config")).not.toBeNull();
-    expect(tab.containerEl.querySelector(".task-hub-task-notes-primary")).not.toBeNull();
-    expect(tab.containerEl.querySelector(".task-hub-task-notes-section")).not.toBeNull();
-    expect(tab.containerEl.querySelector(".task-hub-task-notes-primary")?.querySelectorAll(".setting-item")).toHaveLength(8);
-    expect(tab.containerEl.querySelector(".task-hub-settings-compact-grid")).toBeNull();
+    expect(tab.containerEl.textContent).not.toContain("Task notes");
+    expect(tab.containerEl.querySelector(".task-hub-task-notes-section")).toBeNull();
     expect(tab.containerEl.querySelector(".task-hub-task-ignored-paths-grid")).not.toBeNull();
-    expect(tab.containerEl.textContent).toContain("Task Hub notes folder");
-    expect(tab.containerEl.textContent).toContain("Also add Thino metadata to Task Hub notes");
-    expect(tab.containerEl.textContent).toContain("Thino notes folder");
-    expect(tab.containerEl.textContent).not.toContain("Show note metadata in editor");
   });
 
   it("renders Local Apple menus and child settings in line-based groups", () => {

@@ -102,6 +102,7 @@ cp src/styles.css /Users/carlos/Coding/testValut/.obsidian/plugins/task-hub/styl
 - `docs/superpowers/specs/2026-05-05-obsidian-task-hub-design.md`：需求和设计背景。
 - `docs/superpowers/specs/2026-06-26-task-identity-and-manual-order-design.zh-CN.md`：任务稳定身份、列表手动排序、外部任务源命名空间，以及 `data.json` 的脏数据恢复、失败降级和增长控制的稳定协议文档。后续如果修改 stableId、列表手动排序、任务迁移追踪或接入新的外部任务源，先读这份文档，再动实现。
 - `docs/superpowers/specs/2026-06-29-external-task-source-date-and-sync-contract.zh-CN.md`：外部任务源日期语义、source mapping、shadow metadata、同步窗口、metadata 回收与增长控制协议。后续如果修改外部任务日期模型、接入新的外部任务源、调整 Apple Reminders / Dida / TickTick 的日期映射、或修改外部任务同步窗口与本地 metadata 清理，先读这份文档，再动实现。
+- `docs/superpowers/specs/2026-07-11-hub-note-protocol.zh-CN.md`：统一笔记 frontmatter、`taskhub-kind`、统一 ID 生成规则和兼容策略。后续如果修改关联笔记、日期笔记、外部导入笔记、语音转写笔记或任何 Hub Note 的 YAML 协议，先读这份文档，再动实现。
 - `docs/superpowers/plans/2026-05-05-obsidian-task-hub-implementation.md`：第一版实现计划记录。
 
 ## 当前能力边界
@@ -139,6 +140,7 @@ cp src/styles.css /Users/carlos/Coding/testValut/.obsidian/plugins/task-hub/styl
 ## 实现约定
 
 - 保持依赖轻量。新增依赖前先确认必要性。
+- 新功能实现完同步到 test vault 供我测试。
 - 纯逻辑优先写在可测试模块里，避免塞进 Obsidian runtime 类。
 - UI 渲染继续使用小型 DOM renderer，不要临时引入 React/Vue/Svelte。
 - 任务写回必须保守：不能确认源行时，宁可报冲突，也不要改错行。
@@ -146,6 +148,7 @@ cp src/styles.css /Users/carlos/Coding/testValut/.obsidian/plugins/task-hub/styl
 - 日历外部源默认只读。失败时保留最后一次成功缓存，并展示错误状态。
 - 如果改动涉及任务稳定身份、同日期手动排序、Task Hub 内编辑后的任务追踪、或新增外部任务源，必须先阅读 `docs/superpowers/specs/2026-06-26-task-identity-and-manual-order-design.zh-CN.md`，并遵守其中的 stableId 命名空间、继承策略和 `data.json` 清理约定；不要为单个来源临时发明一套独立身份模型。
 - 如果改动涉及外部任务日期语义、Apple Reminders / Dida / TickTick 的字段映射、外部任务同步窗口、shadow metadata 持久化或回收策略，必须先阅读 `docs/superpowers/specs/2026-06-29-external-task-source-date-and-sync-contract.zh-CN.md`；不要把 `data.json` 做成外部任务全量镜像，也不要为单个 provider 临时发明一套独立日期模型。
+- 如果改动涉及关联笔记、日期笔记、外部导入笔记、语音转写笔记或任何 Hub Note 的 YAML frontmatter，必须先阅读 `docs/superpowers/specs/2026-07-11-hub-note-protocol.zh-CN.md`，并优先复用 `src/hubNotes.ts` 的统一 parser / writer / ID 生成入口；不要在局部功能里手写新的笔记协议。
 - 新增用户可见文案时同步更新 `src/i18n.ts` 的英文和中文。
 - 插件本体必须长期维护英文和中文两个语言版本；新增按钮、设置、状态、错误提示、空状态和可访问标题时，都要同步补齐 `en` 与 `zh`。
 - 面向用户的文档默认维护中英双语，尤其是 `README.md`、安装说明、发布说明和手工测试清单。
