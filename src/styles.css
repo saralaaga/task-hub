@@ -6142,22 +6142,41 @@ button.task-hub-dated-note-menu-button:focus-visible {
 }
 
 .task-hub-dated-note-day-stat {
-  background: transparent;
+  align-items: center;
   border: 0;
   border-radius: 999px;
   color: var(--text-muted);
+  display: inline-flex;
   font-size: var(--font-ui-smaller);
   font-variant-numeric: tabular-nums;
+  gap: 4px;
   line-height: 1.2;
-  padding: 0;
   white-space: nowrap;
+}
+
+.task-hub-dated-note-day-stat-icon {
+  align-items: center;
+  color: currentColor;
+  display: inline-flex;
+  flex: 0 0 auto;
+  height: 14px;
+  justify-content: center;
+  width: 14px;
+}
+
+.task-hub-dated-note-day-stat-icon svg {
+  display: block;
+  height: 14px;
+  stroke-width: 1.85;
+  width: 14px;
+}
+
+.task-hub-dated-note-day-stat-value {
+  color: inherit;
 }
 
 .task-hub-dated-note-day-count {
   color: var(--text-faint);
-  flex: 0 0 auto;
-  font-size: var(--font-ui-smaller);
-  text-align: right;
 }
 
 button.task-hub-dated-note-card {

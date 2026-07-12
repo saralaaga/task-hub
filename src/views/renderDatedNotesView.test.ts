@@ -2,6 +2,15 @@ import { buildDatedNotesViewModel, renderDatedNotesView } from "./renderDatedNot
 import type { TimelineHubNote } from "../hubNotes";
 import type { TaskItem } from "../types";
 
+jest.mock("obsidian", () => ({
+  setIcon: jest.fn((element: { setAttribute?: (name: string, value: string) => void }, icon: string) => {
+    element.setAttribute?.("data-icon", icon);
+  }),
+  setTooltip: jest.fn((element: { setAttribute?: (name: string, value: string) => void }, value: string) => {
+    element.setAttribute?.("data-tooltip", value);
+  })
+}), { virtual: true });
+
 class FakeElement {
   children: FakeElement[] = [];
   classes = new Set<string>();
@@ -259,8 +268,22 @@ describe("renderDatedNotesView", () => {
     const headerChildren = collect(header);
 
     expect(childWithClass(meta, "task-hub-dated-note-day-stats").classes.has("task-hub-dated-note-day-stats")).toBe(true);
-    expect(childWithClass(meta, "task-hub-dated-note-day-count").text).toBe("1 notes");
-    expect(headerChildren.map((child) => child.text)).toEqual(expect.arrayContaining(["🛫 1", "⏳ 3", "✅ 2"]));
+    expect(childWithClass(meta, "task-hub-dated-note-day-count").attrs.get("aria-label")).toBe("notes: 1");
+    expect(childWithClass(meta, "task-hub-dated-note-day-count").attrs.get("title")).toBe("notes: 1");
+    expect(childWithClass(meta, "task-hub-dated-note-day-count").attrs.get("data-tooltip")).toBe("notes: 1");
+    expect(collect(meta).filter((child) => child.classes.has("task-hub-dated-note-day-stat-icon")).map((child) => child.attrs.get("data-icon"))).toEqual([
+      "send",
+      "clock-3",
+      "check-check",
+      "sticky-note"
+    ]);
+    expect(collect(meta).filter((child) => child.classes.has("task-hub-dated-note-day-stat")).map((child) => child.attrs.get("data-tooltip"))).toEqual([
+      "started: 1",
+      "scheduled: 3",
+      "completed: 2",
+      "notes: 1"
+    ]);
+    expect(headerChildren.filter((child) => child.classes.has("task-hub-dated-note-day-stat-value")).map((child) => child.text)).toEqual(["1", "3", "2", "1"]);
   });
 
   it("renders task list note cards as structured checkbox previews", () => {

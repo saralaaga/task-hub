@@ -69,6 +69,8 @@ export type TranslationKey =
   | "clearFilters"
   | "cancel"
   | "completed"
+  | "started"
+  | "scheduled"
   | "context"
   | "conditionDate"
   | "conditionMatch"
@@ -915,6 +917,8 @@ const TRANSLATIONS: Record<"en" | "zh", Record<TranslationKey, string>> &
     clearFilters: "Clear",
     cancel: "Cancel",
     completed: "Completed",
+    started: "Started",
+    scheduled: "Scheduled",
     context: "Context",
     conditionDate: "Time",
     conditionMatch: "Match",
@@ -1341,6 +1345,8 @@ const TRANSLATIONS: Record<"en" | "zh", Record<TranslationKey, string>> &
     clearFilters: "清空",
     cancel: "取消",
     completed: "已完成",
+    started: "已开始",
+    scheduled: "已排期",
     context: "上下文",
     conditionDate: "时间",
     conditionMatch: "条件匹配",
@@ -1734,6 +1740,8 @@ const TRANSLATIONS: Record<"en" | "zh", Record<TranslationKey, string>> &
     cancel: "キャンセル",
     clearFilters: "クリア",
     completed: "完了",
+    started: "開始",
+    scheduled: "予定",
     context: "コンテキスト",
     day: "日",
     defaultView: "デフォルト表示",
@@ -1864,6 +1872,8 @@ const TRANSLATIONS: Record<"en" | "zh", Record<TranslationKey, string>> &
     cancel: "Annuler",
     clearFilters: "Effacer",
     completed: "Terminée",
+    started: "Commencées",
+    scheduled: "Planifiées",
     context: "Contexte",
     day: "Jour",
     defaultView: "Vue par défaut",
@@ -1994,6 +2004,8 @@ const TRANSLATIONS: Record<"en" | "zh", Record<TranslationKey, string>> &
     cancel: "취소",
     clearFilters: "지우기",
     completed: "완료됨",
+    started: "시작됨",
+    scheduled: "일정됨",
     context: "컨텍스트",
     day: "일",
     defaultView: "기본 보기",

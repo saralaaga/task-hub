@@ -1,3 +1,4 @@
+import { setIcon, setTooltip } from "obsidian";
 import type { TaskItem } from "../types";
 import { HUB_NOTE_UNDATED_DATE, type TimelineHubNote } from "../hubNotes";
 import type { Translator } from "../i18n";
@@ -231,8 +232,8 @@ function renderDatedNoteList(
 function renderDatedNoteDayHeader(container: HTMLElement, group: DatedNoteGroup, state: DatedNotesViewState): void {
   container.createSpan({ cls: "task-hub-dated-note-day-title", text: dayTitle(group.date, state.t) });
   const meta = container.createSpan({ cls: "task-hub-dated-note-day-meta" });
-  if (state.dayStatsByDate) renderDatedNoteDayStats(meta, state.dayStatsByDate[group.date]);
-  meta.createSpan({ cls: "task-hub-dated-note-day-count", text: `${group.notes.length} ${state.t("notes")}` });
+  if (state.dayStatsByDate) renderDatedNoteDayStats(meta, state.dayStatsByDate[group.date], state.t);
+  renderDatedNoteDayCount(meta, group.notes.length, state.t);
 }
 
 function bindDatedNoteDetailScroll(
@@ -493,12 +494,37 @@ function groupNotesByDate(notes: TimelineHubNote[]): DatedNoteGroup[] {
   return Array.from(groups.entries()).map(([date, groupNotes]) => ({ date, notes: groupNotes }));
 }
 
-function renderDatedNoteDayStats(container: HTMLElement, stats: DatedNoteDayStats | undefined): void {
+function renderDatedNoteDayStats(container: HTMLElement, stats: DatedNoteDayStats | undefined, t: Translator): void {
   const values = stats ?? { startedCount: 0, scheduledCount: 0, completedCount: 0 };
   const list = container.createSpan({ cls: "task-hub-dated-note-day-stats" });
-  list.createSpan({ cls: "task-hub-dated-note-day-stat is-started", text: `🛫 ${values.startedCount}` });
-  list.createSpan({ cls: "task-hub-dated-note-day-stat is-scheduled", text: `⏳ ${values.scheduledCount}` });
-  list.createSpan({ cls: "task-hub-dated-note-day-stat is-completed", text: `✅ ${values.completedCount}` });
+  renderDatedNoteMetric(list, "task-hub-dated-note-day-stat is-started", "send", values.startedCount, t("started"));
+  renderDatedNoteMetric(list, "task-hub-dated-note-day-stat is-scheduled", "clock-3", values.scheduledCount, t("scheduled"));
+  renderDatedNoteMetric(list, "task-hub-dated-note-day-stat is-completed", "check-check", values.completedCount, t("completed"));
+}
+
+function renderDatedNoteDayCount(container: HTMLElement, count: number, t: Translator): void {
+  const metric = container.createSpan({ cls: "task-hub-dated-note-day-stat task-hub-dated-note-day-count" });
+  applyDatedNoteMetricTooltip(metric, t("notes"), count);
+  renderDatedNoteMetricContents(metric, "sticky-note", count);
+}
+
+function renderDatedNoteMetric(container: HTMLElement, cls: string, iconName: string, value: number, label: string): void {
+  const metric = container.createSpan({ cls });
+  applyDatedNoteMetricTooltip(metric, label, value);
+  renderDatedNoteMetricContents(metric, iconName, value);
+}
+
+function renderDatedNoteMetricContents(container: HTMLElement, iconName: string, value: number): void {
+  const icon = container.createSpan({ cls: "task-hub-dated-note-day-stat-icon" });
+  setIcon(icon, iconName);
+  container.createSpan({ cls: "task-hub-dated-note-day-stat-value", text: String(value) });
+}
+
+function applyDatedNoteMetricTooltip(container: HTMLElement, label: string, value: number): void {
+  const tooltip = `${label}: ${value}`;
+  container.setAttribute("aria-label", tooltip);
+  container.setAttribute("title", tooltip);
+  setTooltip(container, tooltip, { placement: "top" });
 }
 
 function dayTitle(date: string, t: Translator): string {
