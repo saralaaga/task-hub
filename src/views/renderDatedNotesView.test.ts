@@ -1,11 +1,13 @@
 import { buildDatedNotesViewModel, renderDatedNotesView } from "./renderDatedNotesView";
 import type { TimelineHubNote } from "../hubNotes";
+import type { TaskItem } from "../types";
 
 class FakeElement {
   children: FakeElement[] = [];
   classes = new Set<string>();
   listeners = new Map<string, Array<(event?: any) => void>>();
   attrs = new Map<string, string>();
+  parentElement: FakeElement | null = null;
   scrollTop = 0;
   scrollHeight = 0;
   clientHeight = 0;
@@ -44,6 +46,12 @@ class FakeElement {
     this.attrs.set(name, value);
   }
 
+  get classList(): { contains: (name: string) => boolean } {
+    return {
+      contains: (name: string) => this.classes.has(name)
+    };
+  }
+
   click(): { preventDefault: jest.Mock; stopPropagation: jest.Mock } {
     const event = { preventDefault: jest.fn(), stopPropagation: jest.fn() };
     for (const listener of this.listeners.get("click") ?? []) {
@@ -61,6 +69,7 @@ class FakeElement {
   private append(options: { cls?: string; text?: string } = {}): FakeElement {
     const child = new FakeElement();
     child.text = options.text ?? "";
+    child.parentElement = this;
     for (const cls of (options.cls ?? "").split(" ").filter(Boolean)) {
       child.classes.add(cls);
     }
@@ -99,6 +108,28 @@ function makeTimelineNote(
     sourceKind: "dated-note",
     dateDerived: false,
     ...note
+  };
+}
+
+function relatedTask(overrides: Partial<TaskItem> = {}): TaskItem {
+  return {
+    id: overrides.id ?? "task-1",
+    filePath: overrides.filePath ?? "Inbox.md",
+    line: overrides.line ?? 3,
+    rawLine: overrides.rawLine ?? "- [ ] Linked task",
+    text: overrides.text ?? "Linked task",
+    completed: overrides.completed ?? false,
+    tags: overrides.tags ?? [],
+    source: overrides.source ?? "vault",
+    stableId: overrides.stableId,
+    parentId: overrides.parentId,
+    indent: overrides.indent,
+    dueDate: overrides.dueDate,
+    scheduledDate: overrides.scheduledDate,
+    startDate: overrides.startDate,
+    completedDate: overrides.completedDate,
+    externalId: overrides.externalId,
+    externalListId: overrides.externalListId
   };
 }
 
@@ -265,6 +296,224 @@ describe("renderDatedNotesView", () => {
     ]);
     expect(cardChildren.some((child) => child.text.includes("- [ ]"))).toBe(false);
     expect(taskRows[1].style.values.get("--task-hub-dated-note-preview-indent")).toBe("1");
+  });
+
+  it("renders related task previews only in the detail note pane", () => {
+    const container = new FakeElement();
+    const note = makeTimelineNote({
+      path: "Notes/2026-07-09 2213 - Linked.md",
+      date: "2026-07-09",
+      title: "Linked note",
+      body: "Body preview",
+      bodyStartLine: 7,
+      tags: [],
+      related: ["task:vault:Inbox.md:3:hash"],
+      sourceKind: "hybrid",
+      createdAt: "2026-07-09T22:13:00"
+    });
+    const task = relatedTask({ text: "Prepare meeting deck" });
+
+    renderDatedNotesView(
+      container as unknown as HTMLElement,
+      [note],
+      { query: "", selectedPath: note.path, t: (key) => key },
+      datedNoteHandlers(),
+      { getRelatedTasks: () => [task] }
+    );
+
+    const relatedPreviews = collect(container).filter((child) => child.classes.has("task-hub-dated-note-related-task"));
+    expect(relatedPreviews).toHaveLength(1);
+    expect(collect(container).filter((child) => child.classes.has("task-hub-dated-note-related-task-text")).map((child) => child.text)).toEqual([
+      "Prepare meeting deck"
+    ]);
+    expect(collect(container).some((child) => child.classes.has("task-hub-dated-note-related-task-status") && child.classes.has("task-hub-dated-note-preview-checkbox"))).toBe(true);
+    expect(collect(container).some((child) => child.classes.has("task-hub-dated-note-related-task-meta"))).toBe(false);
+    expect(childWithClass(container, "task-hub-dated-note-card").children.some((child) => child.classes.has("task-hub-dated-note-related-task"))).toBe(false);
+  });
+
+  it("completes a related task from the detail checkbox", () => {
+    const container = new FakeElement();
+    const note = makeTimelineNote({
+      path: "Notes/2026-07-09 2213 - Linked.md",
+      date: "2026-07-09",
+      title: "Linked note",
+      body: "Body preview",
+      bodyStartLine: 7,
+      tags: [],
+      related: ["task:vault:Inbox.md:3:hash"],
+      sourceKind: "hybrid",
+      createdAt: "2026-07-09T22:13:00"
+    });
+    const task = relatedTask({ text: "Prepare meeting deck" });
+    const onTaskComplete = jest.fn();
+
+    renderDatedNotesView(
+      container as unknown as HTMLElement,
+      [note],
+      { query: "", selectedPath: note.path, t: (key) => key },
+      datedNoteHandlers(),
+      { getRelatedTasks: () => [task], onTaskComplete }
+    );
+
+    const status = childWithClass(container, "task-hub-dated-note-related-task-status");
+    const event = status.click();
+
+    expect(event.preventDefault).toHaveBeenCalled();
+    expect(event.stopPropagation).toHaveBeenCalled();
+    expect(onTaskComplete).toHaveBeenCalledWith(task);
+  });
+
+  it("completes a preview task from the note list checkbox", () => {
+    const container = new FakeElement();
+    const note = makeTimelineNote({
+      path: "Notes/2026-07-09 2213 - Tasks.md",
+      date: "2026-07-09",
+      title: "测试输入任务",
+      body: "测试输入任务\n- [ ] 第一项\n- [ ] 第二项",
+      bodyStartLine: 7,
+      tags: [],
+      createdAt: "2026-07-09T22:13:00"
+    });
+    const task = relatedTask({
+      id: "note-task-1",
+      filePath: note.path,
+      line: 8,
+      rawLine: "- [ ] 第一项",
+      text: "第一项"
+    });
+    const onTaskComplete = jest.fn();
+
+    renderDatedNotesView(
+      container as unknown as HTMLElement,
+      [note],
+      { query: "", selectedPath: note.path, t: (key) => key },
+      datedNoteHandlers(),
+      {
+        getNoteTask: (_note, sourceLine, rawLine) => (sourceLine === 8 && rawLine === "- [ ] 第一项" ? task : undefined),
+        onTaskComplete
+      }
+    );
+
+    const previewCheckbox = collect(container).find(
+      (child) => child.classes.has("task-hub-dated-note-preview-checkbox") && !child.classes.has("task-hub-dated-note-related-task-status")
+    );
+    if (!previewCheckbox) throw new Error("Missing preview checkbox");
+    const event = previewCheckbox.click();
+
+    expect(event.preventDefault).toHaveBeenCalled();
+    expect(event.stopPropagation).toHaveBeenCalled();
+    expect(onTaskComplete).toHaveBeenCalledWith(task);
+  });
+
+  it("keeps the related task preview when detail Markdown rendering replaces its own host container", () => {
+    const container = new FakeElement();
+    const note = makeTimelineNote({
+      path: "Notes/2026-07-12 1319 - Detail.md",
+      date: "2026-07-12",
+      title: "Detail note",
+      body: "- [ ] 都doudod无论如何",
+      bodyStartLine: 7,
+      tags: [],
+      related: ["task:vault:Inbox.md:3:hash"],
+      sourceKind: "hybrid",
+      createdAt: "2026-07-12T13:19:00"
+    });
+    const task = relatedTask({ text: "测试那个问题试试看" });
+
+    renderDatedNotesView(
+      container as unknown as HTMLElement,
+      [note],
+      { query: "", selectedPath: note.path, t: (key) => key },
+      datedNoteHandlers(),
+      {
+        getRelatedTasks: () => [task],
+        renderNoteMarkdown: (host, body) => {
+          host.empty();
+          host.createEl("p", { text: body });
+        }
+      }
+    );
+
+    const detailBody = childWithClass(container, "task-hub-dated-note-body");
+    expect(collect(detailBody).filter((child) => child.classes.has("task-hub-dated-note-related-task-text")).map((child) => child.text)).toContain(
+      "测试那个问题试试看"
+    );
+    expect(collect(detailBody).map((child) => child.text)).toContain("- [ ] 都doudod无论如何");
+  });
+
+  it("completes a markdown-rendered body task from the detail pane checkbox", () => {
+    const container = new FakeElement();
+    const note = makeTimelineNote({
+      path: "Notes/2026-07-12 1319 - Detail.md",
+      date: "2026-07-12",
+      title: "Detail note",
+      body: "- [ ] 第一项\n- [ ] 第二项",
+      bodyStartLine: 7,
+      tags: [],
+      createdAt: "2026-07-12T13:19:00"
+    });
+    const task = relatedTask({
+      id: "note-task-1",
+      filePath: note.path,
+      line: 7,
+      rawLine: "- [ ] 第一项",
+      text: "第一项"
+    });
+    const onTaskComplete = jest.fn();
+
+    renderDatedNotesView(
+      container as unknown as HTMLElement,
+      [note],
+      { query: "", selectedPath: note.path, t: (key) => key },
+      datedNoteHandlers(),
+      {
+        getNoteTask: (_note, sourceLine, rawLine) => (sourceLine === 7 && rawLine === "- [ ] 第一项" ? task : undefined),
+        onTaskComplete,
+        renderNoteMarkdown: (host) => {
+          host.createEl("input", { cls: "task-list-item-checkbox" });
+          host.createEl("input", { cls: "task-list-item-checkbox" });
+        }
+      }
+    );
+
+    const markdown = childWithClass(container, "task-hub-dated-note-markdown");
+    const checkbox = childWithClass(markdown, "task-list-item-checkbox");
+    const event = { target: checkbox, preventDefault: jest.fn(), stopPropagation: jest.fn() };
+    markdown.dispatch("click", event);
+
+    expect(event.preventDefault).toHaveBeenCalled();
+    expect(event.stopPropagation).toHaveBeenCalled();
+    expect(onTaskComplete).toHaveBeenCalledWith(task);
+  });
+
+  it("renders a missing related task fallback when the linked task key no longer resolves", () => {
+    const container = new FakeElement();
+    const note = makeTimelineNote({
+      path: "Notes/2026-07-12 1310 - Missing.md",
+      date: "2026-07-12",
+      title: "Missing linked task",
+      body: "- [ ] Missing linked task",
+      bodyStartLine: 7,
+      tags: [],
+      related: ["task:vault:Projects/Daily.md:15:hash"],
+      sourceKind: "task-note",
+      createdAt: "2026-07-12T13:10:00"
+    });
+
+    renderDatedNotesView(
+      container as unknown as HTMLElement,
+      [note],
+      { query: "", selectedPath: note.path, t: (key) => key },
+      datedNoteHandlers()
+    );
+
+    expect(collect(container).filter((child) => child.classes.has("task-hub-dated-note-related-task"))).toHaveLength(1);
+    expect(collect(container).filter((child) => child.classes.has("task-hub-dated-note-related-task-text")).map((child) => child.text)).toContain(
+      "datedNoteRelatedTaskMissing"
+    );
+    expect(collect(container).filter((child) => child.classes.has("task-hub-dated-note-related-task-meta")).map((child) => child.text)).toContain(
+      "vaultTasks · Projects/Daily.md:15"
+    );
   });
 
   it("shows all notes from the selected day in the detail pane", () => {

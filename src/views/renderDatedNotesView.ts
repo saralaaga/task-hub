@@ -1,6 +1,7 @@
 import type { TaskItem } from "../types";
 import { HUB_NOTE_UNDATED_DATE, type TimelineHubNote } from "../hubNotes";
 import type { Translator } from "../i18n";
+import { parseTasksFromMarkdown } from "../parsing/taskParser";
 import { taskPlannedDateKey, taskStartDateKey } from "../taskDates";
 
 const DEFAULT_DATED_NOTE_DETAIL_RADIUS = 1;
@@ -51,6 +52,8 @@ export type DatedNotesViewHandlers = {
 export type DatedNotesViewOptions = {
   renderNoteMarkdown?: (container: HTMLElement, body: string, sourcePath: string) => void;
   getRelatedTasks?: (note: TimelineHubNote) => TaskItem[];
+  getNoteTask?: (note: TimelineHubNote, sourceLine: number, rawLine: string) => TaskItem | undefined;
+  onTaskComplete?: (task: TaskItem) => void;
 };
 
 export function renderDatedNotesView(
@@ -178,14 +181,17 @@ function renderDatedNoteDetail(
       const body = main.createDiv({ cls: "task-hub-dated-note-body" });
       const side = main.createDiv({ cls: "task-hub-dated-note-detail-side" });
       const menu = side.createEl("button", { cls: "task-hub-dated-note-menu-button", text: "⋯" });
-      renderRelatedTaskPreview(body, note, state.t, options.getRelatedTasks?.(note) ?? [], "detail");
+      const relatedTasks = options.getRelatedTasks?.(note) ?? [];
+      const hasRelatedTaskPreview = renderRelatedTaskPreview(body, note, state.t, relatedTasks, options.onTaskComplete);
       if (note.body.trim()) {
+        const markdown = body.createDiv({ cls: "task-hub-dated-note-markdown" });
+        bindRenderedNoteTaskCompletion(markdown, note, options);
         if (options.renderNoteMarkdown) {
-          options.renderNoteMarkdown(body, note.body, note.path);
+          options.renderNoteMarkdown(markdown, note.body, note.path);
         } else {
-          body.createEl("p", { text: note.body });
+          markdown.createEl("p", { text: note.body });
         }
-      } else {
+      } else if (!hasRelatedTaskPreview) {
         body.createDiv({ cls: "task-hub-empty", text: state.t("noDatedNotes") });
       }
 
@@ -214,8 +220,7 @@ function renderDatedNoteList(
       const card = section.createEl("button", {
         cls: `task-hub-dated-note-card ${note.path === selected.path ? "is-active" : ""}`
       });
-      renderRelatedTaskPreview(card, note, state.t, options.getRelatedTasks?.(note) ?? [], "list");
-      renderDatedNoteCardPreview(card, note);
+      renderDatedNoteCardPreview(card, note, options);
       const footer = card.createSpan({ cls: "task-hub-dated-note-card-footer" });
       if (note.createdAt) footer.createSpan({ cls: "task-hub-dated-note-time", text: timeLabel(note.createdAt) });
       card.addEventListener("click", () => handlers.onSelectNote(note));
@@ -264,41 +269,101 @@ function renderRelatedTaskPreview(
   note: TimelineHubNote,
   t: Translator,
   tasks: TaskItem[],
-  mode: "detail" | "list"
-): void {
-  if (tasks.length === 0) return;
-  const primaryTask = tasks[0];
+  onTaskComplete?: (task: TaskItem) => void
+) : boolean {
+  const previewItem = resolveRelatedTaskPreviewItem(note, tasks, t);
+  if (!previewItem) return false;
   const preview = container.createDiv({
-    cls:
-      mode === "detail"
-        ? "task-hub-dated-note-related-task task-hub-dated-note-related-task--detail"
-        : "task-hub-dated-note-related-task task-hub-dated-note-related-task--list"
+    cls: "task-hub-dated-note-related-task task-hub-dated-note-related-task--detail"
   });
-  preview.createSpan({
-    cls: primaryTask.completed
-      ? "task-hub-dated-note-related-task-status is-completed"
-      : "task-hub-dated-note-related-task-status",
-    text: primaryTask.completed ? "[x]" : "[ ]"
-  });
-  preview.createSpan({ cls: "task-hub-dated-note-related-task-text", text: primaryTask.text });
-  const metaParts = [relatedTaskSourceLabel(primaryTask, t), relatedTaskDateLabel(primaryTask)].filter(Boolean);
-  if (tasks.length > 1) metaParts.push(`+${tasks.length - 1}`);
-  if (metaParts.length > 0) {
-    preview.createSpan({ cls: "task-hub-dated-note-related-task-meta", text: metaParts.join(" · ") });
+  preview.addClass?.(previewItem.missing ? "is-missing" : "is-linked");
+  if (!previewItem.missing) {
+    const status = createNativeTaskCheckbox(
+      preview,
+      "task-hub-dated-note-related-task-status task-hub-dated-note-preview-checkbox",
+      previewItem.completed ?? false
+    );
+    const relatedTask = tasks[0];
+    if (relatedTask && !relatedTask.completed && onTaskComplete) {
+      bindTaskCompletion(status, relatedTask, onTaskComplete);
+    }
   }
-  if (mode === "detail" && note.body.trim()) {
+  preview.createSpan({ cls: "task-hub-dated-note-related-task-text", text: previewItem.text });
+  if (previewItem.showMeta && previewItem.meta) {
+    preview.createSpan({ cls: "task-hub-dated-note-related-task-meta", text: previewItem.meta });
+  }
+  if (note.body.trim()) {
     preview.addClass?.("has-body-gap");
   }
+  return true;
+}
+
+type RelatedTaskPreviewItem = {
+  text: string;
+  meta?: string;
+  completed?: boolean;
+  showMeta?: boolean;
+  missing: boolean;
+};
+
+function resolveRelatedTaskPreviewItem(note: TimelineHubNote, tasks: TaskItem[], t: Translator): RelatedTaskPreviewItem | undefined {
+  if (tasks.length > 0) {
+    const primaryTask = tasks[0];
+    const metaParts = [relatedTaskSourceLabel(primaryTask, t), relatedTaskDateLabel(primaryTask)].filter(Boolean);
+    if (tasks.length > 1) metaParts.push(`+${tasks.length - 1}`);
+    return {
+      text: primaryTask.text,
+      meta: metaParts.join(" · "),
+      completed: primaryTask.completed,
+      showMeta: false,
+      missing: false
+    };
+  }
+
+  const relatedKey = [...note.related, ...note.history].find(Boolean);
+  if (!relatedKey) return undefined;
+  return {
+    text: t("datedNoteRelatedTaskMissing"),
+    meta: relatedTaskKeyFallbackMeta(relatedKey, t),
+    showMeta: true,
+    missing: true
+  };
+}
+
+function relatedTaskKeyFallbackMeta(key: string, t: Translator): string {
+  if (key.startsWith("task:vault:")) {
+    const rest = key.slice("task:vault:".length);
+    const parts = rest.split(":");
+    if (parts.length >= 3) {
+      const line = parts.at(-2) ?? "";
+      const path = parts.slice(0, -2).join(":");
+      return line ? `${t("vaultTasks")} · ${path}:${line}` : `${t("vaultTasks")} · ${path}`;
+    }
+    return `${t("vaultTasks")} · ${rest}`;
+  }
+  if (key.startsWith("task:apple-reminders:")) {
+    return t("localAppleReminders");
+  }
+  if (key.startsWith("task:dida:")) {
+    return t("dida");
+  }
+  if (key.startsWith("event:")) {
+    const parts = key.split(":");
+    const sourceId = parts[1] ?? "event";
+    const day = parts.at(-1);
+    return day ? `${sourceId} · ${day}` : sourceId;
+  }
+  return key;
 }
 
 type DatedNotePreviewLine =
   | { type: "text"; text: string }
-  | { type: "task"; text: string; checked: boolean; indent: number };
+  | { type: "task"; text: string; checked: boolean; indent: number; rawLine: string; sourceLine: number };
 
 const DATED_NOTE_TASK_LINE = /^(\s*)[-*]\s+\[([ xX])\]\s*(.*)$/u;
 const DATED_NOTE_PREVIEW_LINE_LIMIT = 3;
 
-function renderDatedNoteCardPreview(card: HTMLElement, note: TimelineHubNote): void {
+function renderDatedNoteCardPreview(card: HTMLElement, note: TimelineHubNote, options: DatedNotesViewOptions): void {
   const lines = notePreviewLines(note);
   const preview = card.createDiv({ cls: lines.some((line) => line.type === "task") ? "task-hub-dated-note-excerpt has-task-lines" : "task-hub-dated-note-excerpt" });
   for (const line of lines) {
@@ -308,14 +373,19 @@ function renderDatedNoteCardPreview(card: HTMLElement, note: TimelineHubNote): v
     }
     const task = preview.createSpan({ cls: "task-hub-dated-note-preview-task" });
     task.style.setProperty("--task-hub-dated-note-preview-indent", String(line.indent));
-    task.createSpan({ cls: line.checked ? "task-hub-dated-note-preview-checkbox is-checked" : "task-hub-dated-note-preview-checkbox" });
+    const checkbox = createNativeTaskCheckbox(task, "task-hub-dated-note-preview-checkbox", line.checked);
     task.createSpan({ cls: "task-hub-dated-note-preview-task-text", text: line.text });
+    const linkedTask = options.getNoteTask?.(note, line.sourceLine, line.rawLine);
+    if (linkedTask && !linkedTask.completed && options.onTaskComplete) {
+      bindTaskCompletion(task, linkedTask, options.onTaskComplete);
+      bindTaskCompletion(checkbox, linkedTask, options.onTaskComplete);
+    }
   }
 }
 
 function notePreviewLines(note: TimelineHubNote): DatedNotePreviewLine[] {
   const lines: DatedNotePreviewLine[] = [];
-  for (const rawLine of note.body.split(/\r?\n/u)) {
+  for (const [index, rawLine] of note.body.split(/\r?\n/u).entries()) {
     if (lines.length >= DATED_NOTE_PREVIEW_LINE_LIMIT) break;
     const taskLine = rawLine.match(DATED_NOTE_TASK_LINE);
     if (taskLine) {
@@ -325,7 +395,9 @@ function notePreviewLines(note: TimelineHubNote): DatedNotePreviewLine[] {
         type: "task",
         checked: taskLine[2].toLowerCase() === "x",
         indent: Math.min(3, Math.floor(taskLine[1].replace(/\t/gu, "  ").length / 2)),
-        text
+        text,
+        rawLine,
+        sourceLine: note.bodyStartLine + index
       });
       continue;
     }
@@ -341,6 +413,76 @@ function normalizePreviewText(line: string): string {
     .replace(/^#+\s*/u, "")
     .replace(/\s+/gu, " ")
     .trim();
+}
+
+function bindRenderedNoteTaskCompletion(container: HTMLElement, note: TimelineHubNote, options: DatedNotesViewOptions): void {
+  if (!options.getNoteTask || !options.onTaskComplete || !note.body.trim()) return;
+  const parsedNoteTasks = parseTasksFromMarkdown({ filePath: note.path, content: note.body });
+  if (parsedNoteTasks.length === 0) return;
+  container.addEventListener("click", (event) => {
+    const checkbox = findTaskCheckboxTarget(event.target, container);
+    if (!checkbox) return;
+    const taskIndex = renderedTaskCheckboxIndex(container, checkbox);
+    if (taskIndex < 0) return;
+    const noteTask = parsedNoteTasks[taskIndex];
+    if (!noteTask) return;
+    const linkedTask = options.getNoteTask?.(note, note.bodyStartLine + noteTask.line, noteTask.rawLine);
+    if (!linkedTask || linkedTask.completed) return;
+    event.preventDefault?.();
+    event.stopPropagation?.();
+    options.onTaskComplete?.(linkedTask);
+  });
+}
+
+function createNativeTaskCheckbox(container: HTMLElement, cls: string, checked: boolean): HTMLElement {
+  const checkbox = container.createEl("input", {
+    cls: `task-list-item-checkbox ${cls}`.trim()
+  });
+  checkbox.setAttribute("type", "checkbox");
+  const checkboxElement = checkbox as HTMLInputElement;
+  checkboxElement.checked = checked;
+  return checkbox;
+}
+
+function bindTaskCompletion(element: HTMLElement, task: TaskItem, onTaskComplete: (task: TaskItem) => void): void {
+  element.addEventListener("click", (event) => {
+    event.preventDefault?.();
+    event.stopPropagation?.();
+    onTaskComplete(task);
+  });
+}
+
+function findTaskCheckboxTarget(target: EventTarget | null, root: HTMLElement): HTMLElement | undefined {
+  let current = target as (HTMLElement & { parentElement?: HTMLElement | null }) | null;
+  while (current) {
+    if (hasElementClass(current, "task-list-item-checkbox")) return current;
+    if (current === root) break;
+    current = current.parentElement ?? null;
+  }
+  return undefined;
+}
+
+function renderedTaskCheckboxIndex(root: HTMLElement, checkbox: HTMLElement): number {
+  return collectTaskCheckboxes(root).findIndex((item) => item === checkbox);
+}
+
+function collectTaskCheckboxes(root: HTMLElement): HTMLElement[] {
+  const results: HTMLElement[] = [];
+  const walk = (element: HTMLElement): void => {
+    if (hasElementClass(element, "task-list-item-checkbox")) results.push(element);
+    const children = Array.from((element.children ?? []) as unknown as ArrayLike<HTMLElement>);
+    for (const child of children) {
+      walk(child);
+    }
+  };
+  walk(root);
+  return results;
+}
+
+function hasElementClass(element: HTMLElement, className: string): boolean {
+  if ("classList" in element && element.classList?.contains(className)) return true;
+  const classContainer = element as HTMLElement & { classes?: Set<string> };
+  return classContainer.classes?.has(className) ?? false;
 }
 
 function groupNotesByDate(notes: TimelineHubNote[]): DatedNoteGroup[] {

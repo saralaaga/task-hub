@@ -135,7 +135,7 @@ export class TaskHubView extends ItemView {
   private notesViewEnabled(): boolean {
     return typeof this.plugin.notesViewEnabled === "function"
       ? this.plugin.notesViewEnabled()
-      : Boolean(this.plugin.settings.datedNotes?.enabled || this.plugin.settings.taskNotes?.enabled);
+      : Boolean(this.plugin.settings.datedNotes?.enabled);
   }
 
   render(options: TaskHubRenderOptions = {}): void {
@@ -254,6 +254,7 @@ export class TaskHubView extends ItemView {
       this.ensureDatedNoteWindowState(datedNoteModel);
       const datedNoteDayStats = buildDatedNoteDayStats(baseTasks, datedNotes.map((note) => note.date));
       const relatedTasksByNotePath = buildRelatedTasksByNotePath(datedNotes, allTasks);
+      const noteTaskResolver = createNoteTaskResolver(allTasks);
       renderDatedNotesView(
         main,
         datedNotes,
@@ -284,7 +285,9 @@ export class TaskHubView extends ItemView {
         },
         {
           renderNoteMarkdown: (noteContainer, body, sourcePath) => this.renderNoteMarkdown(noteContainer, body, sourcePath),
-          getRelatedTasks: (note) => relatedTasksByNotePath.get(note.path) ?? []
+          getRelatedTasks: (note) => relatedTasksByNotePath.get(note.path) ?? [],
+          getNoteTask: (note, sourceLine, rawLine) => noteTaskResolver(note.path, sourceLine, rawLine),
+          onTaskComplete: (task) => void this.completeTaskFromView(task)
         }
       );
       this.restoreContentScroll(options);
@@ -1895,11 +1898,18 @@ function linkedNoteSubtaskId(parentTask: TaskItem, notePath: string, noteTask: T
   return `note-subtask:${parentTask.id}:${notePath}:${noteTask.line}:${hashTaskLine(noteTask.rawLine)}`;
 }
 
+export function createNoteTaskResolver(tasks: readonly TaskItem[]): (notePath: string, line: number, rawLine: string) => TaskItem | undefined {
+  const tasksByNoteLine = new Map(tasks.map((task) => [taskLocationKey(task.filePath, task.line, task.rawLine), task]));
+  const tasksByNoteRawLine = groupTasksByRawLine(tasks);
+  return (notePath: string, line: number, rawLine: string) =>
+    resolveNoteTaskByLocation(notePath, line, rawLine, tasksByNoteLine, tasksByNoteRawLine);
+}
+
 function taskLocationKey(filePath: string, line: number, rawLine: string): string {
   return `${filePath}:${line}:${normalizeTaskRawLineForMatch(rawLine)}`;
 }
 
-function groupTasksByRawLine(tasks: TaskItem[]): Map<string, TaskItem[]> {
+function groupTasksByRawLine(tasks: readonly TaskItem[]): Map<string, TaskItem[]> {
   const grouped = new Map<string, TaskItem[]>();
   for (const task of tasks) {
     if (!task.rawLine) continue;
@@ -1909,7 +1919,7 @@ function groupTasksByRawLine(tasks: TaskItem[]): Map<string, TaskItem[]> {
   return grouped;
 }
 
-function buildRelatedTasksByNotePath(notes: readonly TimelineHubNote[], tasks: readonly TaskItem[]): Map<string, TaskItem[]> {
+export function buildRelatedTasksByNotePath(notes: readonly TimelineHubNote[], tasks: readonly TaskItem[]): Map<string, TaskItem[]> {
   const tasksByKey = new Map<string, TaskItem>();
   for (const task of tasks) {
     tasksByKey.set(buildTaskNoteKey(task), task);
@@ -1917,9 +1927,14 @@ function buildRelatedTasksByNotePath(notes: readonly TimelineHubNote[], tasks: r
 
   const relatedTasksByNotePath = new Map<string, TaskItem[]>();
   for (const note of notes) {
-    const relatedTasks = note.related
+    const seenTaskIds = new Set<string>();
+    const relatedTasks = [...note.related, ...note.history]
       .map((key) => tasksByKey.get(key))
-      .filter((task): task is TaskItem => Boolean(task));
+      .filter((task): task is TaskItem => {
+        if (!task || seenTaskIds.has(task.id)) return false;
+        seenTaskIds.add(task.id);
+        return true;
+      });
     if (relatedTasks.length > 0) {
       relatedTasksByNotePath.set(note.path, relatedTasks);
     }
@@ -1940,6 +1955,20 @@ function findExistingLinkedNoteTask(
 
   return (tasksByNoteRawLine.get(taskRawLineKey(notePath, noteTask.rawLine)) ?? [])
     .filter((task) => !usedTaskIds.has(task.id))
+    .sort((left, right) => Math.abs(left.line - line) - Math.abs(right.line - line))[0];
+}
+
+function resolveNoteTaskByLocation(
+  notePath: string,
+  line: number,
+  rawLine: string,
+  tasksByNoteLine: Map<string, TaskItem>,
+  tasksByNoteRawLine: Map<string, TaskItem[]>
+): TaskItem | undefined {
+  const exact = tasksByNoteLine.get(taskLocationKey(notePath, line, rawLine));
+  if (exact) return exact;
+
+  return (tasksByNoteRawLine.get(taskRawLineKey(notePath, rawLine)) ?? [])
     .sort((left, right) => Math.abs(left.line - line) - Math.abs(right.line - line))[0];
 }
 

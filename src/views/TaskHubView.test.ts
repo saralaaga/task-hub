@@ -1,9 +1,11 @@
 import {
   TaskHubView,
   buildDatedNoteDayStats,
+  buildRelatedTasksByNotePath,
   buildTaskViewTransitionKey,
   buildSavedSmartList,
   createTaskHubSessionSnapshot,
+  createNoteTaskResolver,
   collectCalendarUnscheduledTasks,
   clearTaskViewFilters,
   collectUnscheduledTasks,
@@ -15,7 +17,9 @@ import {
   shouldHandleTaskHubUndoShortcut,
   smartListCountsForTasks
 } from "./TaskHubView";
+import type { TimelineHubNote } from "../hubNotes";
 import type { TaskFilterState } from "../filtering/filters";
+import { buildTaskNoteKey } from "../taskNotes";
 import type { ExternalTaskListFilterEntry, TaskHubSmartList, TaskViewFilterSettings } from "../types";
 import type { TaskItem } from "../types";
 
@@ -79,6 +83,65 @@ describe("buildDatedNoteDayStats", () => {
       "2026-07-11": { startedCount: 1, scheduledCount: 1, completedCount: 0 },
       "2026-07-12": { startedCount: 0, scheduledCount: 0, completedCount: 0 }
     });
+  });
+});
+
+describe("buildRelatedTasksByNotePath", () => {
+  it("matches task-related notes from both active and historical relation keys", () => {
+    const currentTask = task({
+      id: "vault-task",
+      filePath: "Inbox.md",
+      line: 12,
+      rawLine: "- [ ] Follow up with client",
+      text: "Follow up with client"
+    });
+    const notes: TimelineHubNote[] = [
+      {
+        path: "Notes/follow-up.md",
+        noteId: "thn_20260712120000_abcd",
+        kind: "task-related",
+        title: "Follow-up note",
+        body: "Body",
+        bodyStartLine: 8,
+        tags: [],
+        createdAt: "2026-07-12T12:00:00.000Z",
+        updatedAt: "2026-07-12T12:05:00.000Z",
+        date: "2026-07-12",
+        dateDerived: false,
+        related: [],
+        history: [buildTaskNoteKey(currentTask)],
+        sourceKind: "task-note"
+      }
+    ];
+
+    const relatedTasks = buildRelatedTasksByNotePath(notes, [currentTask]);
+
+    expect(relatedTasks.get("Notes/follow-up.md")).toEqual([currentTask]);
+  });
+});
+
+describe("createNoteTaskResolver", () => {
+  it("matches note body tasks by exact line and falls back to nearby raw-line matches", () => {
+    const exactTask = task({
+      id: "exact",
+      filePath: "Notes/detail.md",
+      line: 7,
+      rawLine: "- [ ] 第一项",
+      text: "第一项"
+    });
+    const fallbackTask = task({
+      id: "fallback",
+      filePath: "Notes/detail.md",
+      line: 12,
+      rawLine: "- [ ] 第二项",
+      text: "第二项"
+    });
+
+    const resolveTask = createNoteTaskResolver([exactTask, fallbackTask]);
+
+    expect(resolveTask("Notes/detail.md", 7, "- [ ] 第一项")).toBe(exactTask);
+    expect(resolveTask("Notes/detail.md", 10, "- [ ] 第二项")).toBe(fallbackTask);
+    expect(resolveTask("Notes/detail.md", 9, "- [ ] 不存在")).toBeUndefined();
   });
 });
 
@@ -1062,6 +1125,29 @@ describe("TaskHubView smart list interactions", () => {
 
     expect((plugin.settings.lastSessionState as { view?: string } | undefined)?.view).toBe("notes");
     expect(render).toHaveBeenLastCalledWith({ preserveContentScroll: true });
+  });
+
+  it("does not offer standalone note creation when only task notes are enabled", () => {
+    const plugin = {
+      settings: {
+        defaultView: "tasks",
+        language: "en",
+        taskViewFilters: fallbackFilters(),
+        lastSessionState: undefined,
+        smartLists: [],
+        datedNotes: { enabled: false },
+        taskNotes: { enabled: true }
+      },
+      openCreateTaskModal: jest.fn(),
+      saveSettings: jest.fn(async () => undefined)
+    };
+    const view = new TaskHubView({} as never, plugin as never);
+
+    (view as unknown as { openCreateTaskFromToolbar(): void }).openCreateTaskFromToolbar();
+
+    const createOptions = plugin.openCreateTaskModal.mock.calls[0]?.[1];
+    expect(createOptions.allowDatedNote).toBe(false);
+    expect(createOptions.initialKind).toBeUndefined();
   });
 
   it("removes dropped tasks from the active smart list members", async () => {

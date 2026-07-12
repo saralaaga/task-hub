@@ -2000,7 +2000,7 @@ export default class TaskHubPlugin extends Plugin {
   }
 
   notesViewEnabled(): boolean {
-    return this.settings.datedNotes.enabled || this.settings.taskNotes.enabled;
+    return this.settings.datedNotes.enabled;
   }
 
   getHubNotes(): HubNote[] {
@@ -2338,7 +2338,9 @@ export default class TaskHubPlugin extends Plugin {
         date: dateKey,
         title: noteTitle,
         createdAt: now.toISOString(),
-        body: noteBody
+        body: noteBody,
+        addThinoIdToTaskHubNotes:
+          this.settings.taskNotes.thinoIntegrationEnabled && this.settings.taskNotes.addThinoIdToTaskHubNotes
       })
     );
     await this.datedNoteIndex.reindexFile(this.toIndexableFile(file));
@@ -3087,8 +3089,7 @@ export default class TaskHubPlugin extends Plugin {
         createdAt: now.toISOString(),
         date,
         relatedKeys: [relatedKey],
-        mode,
-        addThinoIdToTaskHubNotes: mode === "task-hub" && this.settings.taskNotes.addThinoIdToTaskHubNotes
+        mode
       })
     );
     await this.taskNoteIndex.reindexFile(this.toIndexableFile(file));

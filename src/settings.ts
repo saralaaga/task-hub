@@ -537,7 +537,7 @@ function normalizeDefaultView(value: unknown): TaskHubSettings["defaultView"] {
 }
 
 function notesViewEnabled(settings: Pick<TaskHubSettings, "datedNotes" | "taskNotes">): boolean {
-  return settings.datedNotes.enabled || settings.taskNotes.enabled;
+  return settings.datedNotes.enabled;
 }
 
 function normalizePersistedDate(value: unknown): string | undefined {
@@ -789,11 +789,57 @@ export class TaskHubSettingTab extends PluginSettingTab {
 
   private displayNotesPage(containerEl: HTMLElement, t: Translator): void {
     const section = containerEl.createDiv({ cls: "task-hub-settings-section task-hub-task-notes-section" });
-    const notesGrid = section.createDiv({ cls: "task-hub-settings-grid task-hub-settings-grid--joined task-hub-task-notes-primary" });
+    const notesFrame = section.createDiv({ cls: "task-hub-notes-columns-frame" });
+    const notesColumns = notesFrame.createDiv({ cls: "task-hub-notes-columns" });
+    const notesViewColumn = notesColumns.createDiv({ cls: "task-hub-notes-column task-hub-notes-column--view" });
+    const taskNotesColumn = notesColumns.createDiv({ cls: "task-hub-notes-column task-hub-notes-column--task" });
 
-    this.displayDatedNotesEnableToggle(notesGrid, t);
+    this.displayDatedNotesEnableToggle(notesViewColumn, t, "task-hub-notes-column-master");
 
-    new Setting(notesGrid)
+    if (this.plugin.settings.datedNotes.enabled) {
+      const notesViewGrid = notesViewColumn.createDiv({ cls: "task-hub-settings-grid task-hub-notes-column-settings" });
+
+      new Setting(notesViewGrid)
+        .setName(t("datedNotesFolder"))
+        .setDesc(t("datedNotesFolderDesc"))
+        .addText((text) => {
+          text
+            .setPlaceholder(DEFAULT_SETTINGS.datedNotes.folder)
+            .setValue(this.unifiedNotesFolderValue())
+            .onChange(async (value) => {
+              this.plugin.settings.datedNotes.folder = value;
+              this.plugin.settings.taskNotes.notesFolder = value;
+              await this.plugin.saveSettings();
+            });
+        });
+
+      new Setting(notesViewGrid)
+        .setName(t("datedNotesDefaultTitleTemplate"))
+        .setDesc(t("datedNotesDefaultTitleTemplateDesc"))
+        .addText((text) => {
+          text
+            .setPlaceholder(DEFAULT_SETTINGS.datedNotes.defaultTitleTemplate)
+            .setValue(this.plugin.settings.datedNotes.defaultTitleTemplate)
+            .onChange(async (value) => {
+              this.plugin.settings.datedNotes.defaultTitleTemplate = value;
+              await this.plugin.saveSettings();
+            });
+        });
+
+      if (this.plugin.settings.taskNotes.thinoIntegrationEnabled) {
+        new Setting(notesViewGrid)
+          .setName(t("taskNotesAddThinoId"))
+          .setDesc(t("taskNotesAddThinoIdDesc"))
+          .addToggle((toggle) => {
+            toggle.setValue(this.plugin.settings.taskNotes.addThinoIdToTaskHubNotes).onChange(async (value) => {
+              this.plugin.settings.taskNotes.addThinoIdToTaskHubNotes = value;
+              await this.plugin.saveSettings();
+            });
+          });
+      }
+    }
+
+    new Setting(taskNotesColumn)
       .setName(t("taskNotesEnable"))
       .setDesc(t("taskNotesEnableDesc"))
       .addToggle((toggle) => {
@@ -807,51 +853,24 @@ export class TaskHubSettingTab extends PluginSettingTab {
         });
       })
       .then((setting) => {
-        setting.settingEl.addClass("task-hub-task-notes-master");
+        setting.settingEl.addClass("task-hub-task-notes-master", "task-hub-notes-column-master");
       });
-
-    new Setting(notesGrid)
-      .setName(t("datedNotesFolder"))
-      .setDesc(t("datedNotesFolderDesc"))
-      .addText((text) => {
-        text
-          .setPlaceholder(DEFAULT_SETTINGS.datedNotes.folder)
-          .setValue(this.unifiedNotesFolderValue())
-          .onChange(async (value) => {
-            this.plugin.settings.datedNotes.folder = value;
-            this.plugin.settings.taskNotes.notesFolder = value;
-            await this.plugin.saveSettings();
-          });
-      });
-
-    new Setting(notesGrid)
-      .setName(t("datedNotesOpenAfterCreate"))
-      .setDesc(t("datedNotesOpenAfterCreateDesc"))
-      .addToggle((toggle) => {
-        toggle.setValue(this.unifiedOpenAfterCreateValue()).onChange(async (value) => {
-          this.plugin.settings.datedNotes.openAfterCreate = value;
-          this.plugin.settings.taskNotes.openNoteAfterCreate = value;
-          await this.plugin.saveSettings();
-        });
-      });
-
-    if (this.plugin.settings.datedNotes.enabled) {
-      new Setting(notesGrid)
-        .setName(t("datedNotesDefaultTitleTemplate"))
-        .setDesc(t("datedNotesDefaultTitleTemplateDesc"))
-        .addText((text) => {
-          text
-            .setPlaceholder(DEFAULT_SETTINGS.datedNotes.defaultTitleTemplate)
-            .setValue(this.plugin.settings.datedNotes.defaultTitleTemplate)
-            .onChange(async (value) => {
-              this.plugin.settings.datedNotes.defaultTitleTemplate = value;
-              await this.plugin.saveSettings();
-            });
-        });
-    }
 
     if (this.plugin.settings.taskNotes.enabled) {
-      new Setting(notesGrid)
+      const taskNotesGrid = taskNotesColumn.createDiv({ cls: "task-hub-settings-grid task-hub-notes-column-settings" });
+
+      new Setting(taskNotesGrid)
+        .setName(t("datedNotesOpenAfterCreate"))
+        .setDesc(t("datedNotesOpenAfterCreateDesc"))
+        .addToggle((toggle) => {
+          toggle.setValue(this.unifiedOpenAfterCreateValue()).onChange(async (value) => {
+            this.plugin.settings.datedNotes.openAfterCreate = value;
+            this.plugin.settings.taskNotes.openNoteAfterCreate = value;
+            await this.plugin.saveSettings();
+          });
+        });
+
+      new Setting(taskNotesGrid)
         .setName(t("taskNotesThino"))
         .setDesc(t("taskNotesThinoDesc"))
         .addToggle((toggle) => {
@@ -868,19 +887,7 @@ export class TaskHubSettingTab extends PluginSettingTab {
           });
         });
 
-      if (this.plugin.settings.taskNotes.thinoIntegrationEnabled) {
-        new Setting(notesGrid)
-          .setName(t("taskNotesAddThinoId"))
-          .setDesc(t("taskNotesAddThinoIdDesc"))
-          .addToggle((toggle) => {
-            toggle.setValue(this.plugin.settings.taskNotes.addThinoIdToTaskHubNotes).onChange(async (value) => {
-              this.plugin.settings.taskNotes.addThinoIdToTaskHubNotes = value;
-              await this.plugin.saveSettings();
-            });
-          });
-      }
-
-      new Setting(notesGrid)
+      new Setting(taskNotesGrid)
         .setName(t("taskNotesDefaultMode"))
         .setDesc(t("taskNotesDefaultModeDesc"))
         .addDropdown((dropdown) => {
@@ -898,7 +905,7 @@ export class TaskHubSettingTab extends PluginSettingTab {
         });
 
       if (this.plugin.settings.taskNotes.thinoIntegrationEnabled) {
-        new Setting(notesGrid)
+        new Setting(taskNotesGrid)
           .setName(t("taskNotesThinoFolder"))
           .setDesc(t("taskNotesThinoFolderDesc"))
           .addText((text) => {
@@ -912,7 +919,7 @@ export class TaskHubSettingTab extends PluginSettingTab {
           });
       }
 
-      new Setting(notesGrid)
+      new Setting(taskNotesGrid)
         .setName(t("taskNotesShowCounts"))
         .setDesc(t("taskNotesShowCountsDesc"))
         .addToggle((toggle) => {
@@ -922,7 +929,7 @@ export class TaskHubSettingTab extends PluginSettingTab {
           });
         });
 
-      new Setting(notesGrid)
+      new Setting(taskNotesGrid)
         .setName(t("taskNotesLinkedSubtasks"))
         .setDesc(t("taskNotesLinkedSubtasksDesc"))
         .addToggle((toggle) => {
@@ -934,7 +941,7 @@ export class TaskHubSettingTab extends PluginSettingTab {
     }
   }
 
-  private displayDatedNotesEnableToggle(containerEl: HTMLElement, t: Translator): void {
+  private displayDatedNotesEnableToggle(containerEl: HTMLElement, t: Translator, settingClass?: string): void {
     new Setting(containerEl)
       .setName(t("datedNotesEnable"))
       .setDesc(t("datedNotesEnableDesc"))
@@ -948,6 +955,9 @@ export class TaskHubSettingTab extends PluginSettingTab {
           this.display({ preserveScroll: true });
           this.plugin.refreshOpenViews();
         });
+      })
+      .then((setting) => {
+        if (settingClass) setting.settingEl.addClass(settingClass);
       });
   }
 
