@@ -55,6 +55,7 @@ export type DatedNotesViewOptions = {
   getRelatedTasks?: (note: TimelineHubNote) => TaskItem[];
   getNoteTask?: (note: TimelineHubNote, sourceLine: number, rawLine: string) => TaskItem | undefined;
   onTaskComplete?: (task: TaskItem) => void;
+  onNoteCheckboxToggle?: (note: TimelineHubNote, sourceLine: number, rawLine: string, checked: boolean) => void;
 };
 
 export function renderDatedNotesView(
@@ -285,7 +286,7 @@ function renderRelatedTaskPreview(
       previewItem.completed ?? false
     );
     const relatedTask = tasks[0];
-    if (relatedTask && !relatedTask.completed && onTaskComplete) {
+    if (relatedTask && onTaskComplete) {
       bindTaskCompletion(status, relatedTask, onTaskComplete);
     }
   }
@@ -377,9 +378,12 @@ function renderDatedNoteCardPreview(card: HTMLElement, note: TimelineHubNote, op
     const checkbox = createNativeTaskCheckbox(task, "task-hub-dated-note-preview-checkbox", line.checked);
     task.createSpan({ cls: "task-hub-dated-note-preview-task-text", text: line.text });
     const linkedTask = options.getNoteTask?.(note, line.sourceLine, line.rawLine);
-    if (linkedTask && !linkedTask.completed && options.onTaskComplete) {
+    if (linkedTask && options.onTaskComplete) {
       bindTaskCompletion(task, linkedTask, options.onTaskComplete);
       bindTaskCompletion(checkbox, linkedTask, options.onTaskComplete);
+    } else if (options.onNoteCheckboxToggle) {
+      bindNoteCheckboxToggle(task, note, line.sourceLine, line.rawLine, !line.checked, options.onNoteCheckboxToggle);
+      bindNoteCheckboxToggle(checkbox, note, line.sourceLine, line.rawLine, !line.checked, options.onNoteCheckboxToggle);
     }
   }
 }
@@ -417,7 +421,7 @@ function normalizePreviewText(line: string): string {
 }
 
 function bindRenderedNoteTaskCompletion(container: HTMLElement, note: TimelineHubNote, options: DatedNotesViewOptions): void {
-  if (!options.getNoteTask || !options.onTaskComplete || !note.body.trim()) return;
+  if ((!options.getNoteTask && !options.onNoteCheckboxToggle) || !note.body.trim()) return;
   const parsedNoteTasks = parseTasksFromMarkdown({ filePath: note.path, content: note.body });
   if (parsedNoteTasks.length === 0) return;
   container.addEventListener("click", (event) => {
@@ -428,10 +432,15 @@ function bindRenderedNoteTaskCompletion(container: HTMLElement, note: TimelineHu
     const noteTask = parsedNoteTasks[taskIndex];
     if (!noteTask) return;
     const linkedTask = options.getNoteTask?.(note, note.bodyStartLine + noteTask.line, noteTask.rawLine);
-    if (!linkedTask || linkedTask.completed) return;
+    const sourceLine = note.bodyStartLine + noteTask.line;
+    if (!linkedTask && !options.onNoteCheckboxToggle) return;
     event.preventDefault?.();
     event.stopPropagation?.();
-    options.onTaskComplete?.(linkedTask);
+    if (linkedTask && options.onTaskComplete) {
+      options.onTaskComplete(linkedTask);
+    } else {
+      options.onNoteCheckboxToggle?.(note, sourceLine, noteTask.rawLine, !noteTask.completed);
+    }
   });
 }
 
@@ -450,6 +459,21 @@ function bindTaskCompletion(element: HTMLElement, task: TaskItem, onTaskComplete
     event.preventDefault?.();
     event.stopPropagation?.();
     onTaskComplete(task);
+  });
+}
+
+function bindNoteCheckboxToggle(
+  element: HTMLElement,
+  note: TimelineHubNote,
+  sourceLine: number,
+  rawLine: string,
+  checked: boolean,
+  onNoteCheckboxToggle: (note: TimelineHubNote, sourceLine: number, rawLine: string, checked: boolean) => void
+): void {
+  element.addEventListener("click", (event) => {
+    event.preventDefault?.();
+    event.stopPropagation?.();
+    onNoteCheckboxToggle(note, sourceLine, rawLine, checked);
   });
 }
 

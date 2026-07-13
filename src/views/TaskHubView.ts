@@ -287,7 +287,9 @@ export class TaskHubView extends ItemView {
           renderNoteMarkdown: (noteContainer, body, sourcePath) => this.renderNoteMarkdown(noteContainer, body, sourcePath),
           getRelatedTasks: (note) => relatedTasksByNotePath.get(note.path) ?? [],
           getNoteTask: (note, sourceLine, rawLine) => noteTaskResolver(note.path, sourceLine, rawLine),
-          onTaskComplete: (task) => void this.completeTaskFromView(task)
+          onTaskComplete: (task) => void this.completeTaskFromView(task),
+          onNoteCheckboxToggle: (note, sourceLine, rawLine, checked) =>
+            void this.toggleHubNoteCheckboxFromView(note, sourceLine, rawLine, checked)
         }
       );
       this.restoreContentScroll(options);
@@ -1247,6 +1249,17 @@ export class TaskHubView extends ItemView {
         this.completingTaskIds.delete(task.id);
       }
     }
+  }
+
+  private async toggleHubNoteCheckboxFromView(
+    note: TimelineHubNote,
+    sourceLine: number,
+    rawLine: string,
+    checked: boolean
+  ): Promise<void> {
+    this.captureContentScroll();
+    this.captureDatedNotePaneScrolls();
+    await this.plugin.toggleHubNoteTaskCheckbox(note.path, sourceLine, rawLine, checked);
   }
 
   private captureContentScroll(): void {

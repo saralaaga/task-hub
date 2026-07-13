@@ -509,6 +509,79 @@ describe("renderDatedNotesView", () => {
     expect(onTaskComplete).toHaveBeenCalledWith(task);
   });
 
+  it("toggles an unindexed markdown-rendered body checkbox from the detail pane", () => {
+    const container = new FakeElement();
+    const note = makeTimelineNote({
+      path: "Notes/2026-07-12 1319 - Detail.md",
+      date: "2026-07-12",
+      title: "Detail note",
+      body: "- [ ] 第一项\n- [x] 第二项",
+      bodyStartLine: 7,
+      tags: [],
+      createdAt: "2026-07-12T13:19:00"
+    });
+    const onNoteCheckboxToggle = jest.fn();
+
+    renderDatedNotesView(
+      container as unknown as HTMLElement,
+      [note],
+      { query: "", selectedPath: note.path, t: (key) => key },
+      datedNoteHandlers(),
+      {
+        getNoteTask: () => undefined,
+        onNoteCheckboxToggle,
+        renderNoteMarkdown: (host) => {
+          host.createEl("input", { cls: "task-list-item-checkbox" });
+          host.createEl("input", { cls: "task-list-item-checkbox" });
+        }
+      }
+    );
+
+    const markdown = childWithClass(container, "task-hub-dated-note-markdown");
+    const checkbox = childWithClass(markdown, "task-list-item-checkbox");
+    const event = { target: checkbox, preventDefault: jest.fn(), stopPropagation: jest.fn() };
+    markdown.dispatch("click", event);
+
+    expect(event.preventDefault).toHaveBeenCalled();
+    expect(event.stopPropagation).toHaveBeenCalled();
+    expect(onNoteCheckboxToggle).toHaveBeenCalledWith(note, 7, "- [ ] 第一项", true);
+  });
+
+  it("toggles an unindexed preview task checkbox from the note list", () => {
+    const container = new FakeElement();
+    const note = makeTimelineNote({
+      path: "Notes/2026-07-12 1319 - Preview.md",
+      date: "2026-07-12",
+      title: "Preview note",
+      body: "- [x] 第一项",
+      bodyStartLine: 7,
+      tags: [],
+      createdAt: "2026-07-12T13:19:00"
+    });
+    const onNoteCheckboxToggle = jest.fn();
+
+    renderDatedNotesView(
+      container as unknown as HTMLElement,
+      [note],
+      { query: "", selectedPath: note.path, t: (key) => key },
+      datedNoteHandlers(),
+      {
+        getNoteTask: () => undefined,
+        onNoteCheckboxToggle
+      }
+    );
+
+    const previewCheckbox = collect(container).find(
+      (child) => child.classes.has("task-hub-dated-note-preview-checkbox") && !child.classes.has("task-hub-dated-note-related-task-status")
+    );
+    if (!previewCheckbox) throw new Error("Missing preview checkbox");
+    const event = previewCheckbox.click();
+
+    expect(event.preventDefault).toHaveBeenCalled();
+    expect(event.stopPropagation).toHaveBeenCalled();
+    expect(onNoteCheckboxToggle).toHaveBeenCalledWith(note, 7, "- [x] 第一项", false);
+  });
+
   it("renders a missing related task fallback when the linked task key no longer resolves", () => {
     const container = new FakeElement();
     const note = makeTimelineNote({

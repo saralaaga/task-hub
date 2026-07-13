@@ -7,6 +7,7 @@ import {
   parseHubNoteFrontmatter,
   replaceHubNoteBody,
   timelineDateForHubNote,
+  toggleHubNoteTaskCheckbox,
   toTimelineHubNote
 } from "./hubNotes";
 
@@ -166,6 +167,54 @@ describe("content helpers", () => {
     expect(result.content).toContain("taskhub-updated: 2026-07-11T11:45:00.000Z");
     expect(result.content).toContain('title: "Updated launch notes"');
     expect(result.content).toContain("Updated launch notes");
+  });
+
+  it("updates a checkbox line while preserving unified metadata", () => {
+    const original = createHubNoteContent({
+      noteId: "note_20260712_daily",
+      title: "Daily note",
+      createdAt: "2026-07-12T08:00:00.000Z",
+      date: "2026-07-12",
+      body: "- [ ] First task\n  - [ ] Child task"
+    });
+    const parsed = parseHubNoteFrontmatter(original);
+    if (!parsed) throw new Error("Expected note frontmatter");
+
+    const result = toggleHubNoteTaskCheckbox(original, {
+      sourceLine: parsed.bodyStartLine + 1,
+      rawLine: "  - [ ] Child task",
+      checked: true,
+      updatedAt: "2026-07-12T09:00:00.000Z"
+    });
+
+    expect(result.status).toBe("updated");
+    if (result.status !== "updated") return;
+    expect(result.content).toContain("- [ ] First task\n  - [x] Child task\n");
+    expect(result.content).toContain("taskhub-updated: 2026-07-12T09:00:00.000Z");
+  });
+
+  it("refuses to update a checkbox line when the source line changed", () => {
+    const original = createHubNoteContent({
+      noteId: "note_20260712_daily",
+      title: "Daily note",
+      createdAt: "2026-07-12T08:00:00.000Z",
+      date: "2026-07-12",
+      body: "- [ ] Different task"
+    });
+    const parsed = parseHubNoteFrontmatter(original);
+    if (!parsed) throw new Error("Expected note frontmatter");
+
+    const result = toggleHubNoteTaskCheckbox(original, {
+      sourceLine: parsed.bodyStartLine,
+      rawLine: "- [ ] Original task",
+      checked: true,
+      updatedAt: "2026-07-12T09:00:00.000Z"
+    });
+
+    expect(result).toMatchObject({
+      status: "conflict",
+      message: "Task checkbox line no longer matches the note."
+    });
   });
 });
 

@@ -183,6 +183,36 @@ export function replaceHubNoteBody(content: string, body: string, updatedAt: str
   return { status: "updated", content: `---\n${nextBlock}\n---\n${nextBody ? `${nextBody}\n` : ""}` };
 }
 
+export function toggleHubNoteTaskCheckbox(
+  content: string,
+  input: { sourceLine: number; rawLine: string; checked: boolean; updatedAt: string }
+): HubNoteUpdateResult {
+  const frontmatter = extractFrontmatter(content);
+  if (frontmatter.status === "malformed") {
+    return { status: "conflict", message: "Malformed YAML frontmatter." };
+  }
+  if (frontmatter.status !== "found") {
+    return { status: "conflict", message: "Task Hub note frontmatter is missing." };
+  }
+
+  const normalizedBody = normalizeNoteBodyWithStartLine(frontmatter.body, frontmatter.bodyStartLine);
+  const bodyLineIndex = input.sourceLine - normalizedBody.bodyStartLine;
+  const bodyLines = normalizedBody.body.split(/\r?\n/u);
+  const currentLine = bodyLines[bodyLineIndex];
+  if (bodyLineIndex < 0 || bodyLineIndex >= bodyLines.length || currentLine === undefined) {
+    return { status: "conflict", message: "Task checkbox line is outside the note body." };
+  }
+  if (normalizeTaskCheckboxLine(currentLine) !== normalizeTaskCheckboxLine(input.rawLine)) {
+    return { status: "conflict", message: "Task checkbox line no longer matches the note." };
+  }
+  const nextLine = setTaskCheckboxState(currentLine, input.checked);
+  if (!nextLine) {
+    return { status: "conflict", message: "Task checkbox line is no longer a checkbox." };
+  }
+  bodyLines[bodyLineIndex] = nextLine;
+  return replaceHubNoteBody(content, bodyLines.join("\n"), input.updatedAt);
+}
+
 export class HubNoteIndex {
   private readonly notesByPath = new Map<string, HubNote>();
   private readonly notePathsByKey = new Map<string, string[]>();
@@ -417,6 +447,16 @@ function normalizeTag(value: string): string {
 
 function normalizeHubNoteBody(body: string): string {
   return body.replace(/\s+$/u, "");
+}
+
+function normalizeTaskCheckboxLine(line: string): string {
+  return line.replace(/^(\s*[-*]\s+\[)[ xX](\]\s*)/u, "$1 $2");
+}
+
+function setTaskCheckboxState(line: string, checked: boolean): string | undefined {
+  const match = line.match(/^(\s*[-*]\s+\[)[ xX](\]\s*.*)$/u);
+  if (!match) return undefined;
+  return `${match[1]}${checked ? "x" : " "}${match[2]}`;
 }
 
 function normalizeHubNoteTitle(title: string, body: string): string {

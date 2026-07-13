@@ -53,6 +53,7 @@ import {
   createHubNoteId,
   createHubNoteContent,
   replaceHubNoteBody,
+  toggleHubNoteTaskCheckbox as toggleHubNoteTaskCheckboxInContent,
   type HubNote,
   type HubNoteIndexableFile,
   type TimelineHubNote
@@ -2364,6 +2365,42 @@ export default class TaskHubPlugin extends Plugin {
       return update.result.status === "updated" ? update.result.content : content;
     });
     if (update.result.status !== "updated") {
+      return { ok: false, message: update.result.message };
+    }
+    await this.datedNoteIndex.reindexFile(this.toIndexableFile(file));
+    await this.hubNoteIndex.reindexFile(this.toIndexableFile(file));
+    this.refreshOpenViews();
+    return { ok: true };
+  }
+
+  async toggleHubNoteTaskCheckbox(
+    path: string,
+    sourceLine: number,
+    rawLine: string,
+    checked: boolean
+  ): Promise<{ ok: true } | { ok: false; message: string }> {
+    const t = createTranslator(this.settings.language);
+    const file = this.app.vault.getFileByPath(path);
+    if (!file) {
+      const message = `${t("fileNotFound")}: ${path}`;
+      new Notice(message);
+      return { ok: false, message };
+    }
+
+    const update = {
+      result: { status: "conflict", message: t("taskUpdateFailed") } as ReturnType<typeof toggleHubNoteTaskCheckboxInContent>
+    };
+    await this.app.vault.process(file, (content) => {
+      update.result = toggleHubNoteTaskCheckboxInContent(content, {
+        sourceLine,
+        rawLine,
+        checked,
+        updatedAt: new Date().toISOString()
+      });
+      return update.result.status === "updated" ? update.result.content : content;
+    });
+    if (update.result.status !== "updated") {
+      new Notice(update.result.message);
       return { ok: false, message: update.result.message };
     }
     await this.datedNoteIndex.reindexFile(this.toIndexableFile(file));
