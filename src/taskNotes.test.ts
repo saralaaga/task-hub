@@ -87,8 +87,9 @@ describe("task note frontmatter", () => {
     });
 
     expect(content).toContain('id: "20260529103012"');
-    expect(content).toContain("createdAt: 2026-05-29T10:30:12.345Z");
-    expect(content).toContain("updatedAt: 2026-05-29T10:30:12.345Z");
+    expect(content).toMatch(/createdAt: \d{4}\/\d{2}\/\d{2} \d{2}:\d{2}:\d{2}/u);
+    expect(content).toMatch(/updatedAt: \d{4}\/\d{2}\/\d{2} \d{2}:\d{2}:\d{2}/u);
+    expect(content).not.toContain("createdAt: 2026-05-29T10:30:12.345Z");
     expect(content).toContain('taskhub-note-id: "thn_1"');
   });
 
@@ -102,8 +103,9 @@ describe("task note frontmatter", () => {
     });
 
     expect(content).toContain('id: "20260529103012"');
-    expect(content).toContain("createdAt: 2026-05-29T10:30:12.345Z");
-    expect(content).toContain("updatedAt: 2026-05-29T10:30:12.345Z");
+    expect(content).toMatch(/createdAt: \d{4}\/\d{2}\/\d{2} \d{2}:\d{2}:\d{2}/u);
+    expect(content).toMatch(/updatedAt: \d{4}\/\d{2}\/\d{2} \d{2}:\d{2}:\d{2}/u);
+    expect(content).not.toContain("createdAt: 2026-05-29T10:30:12.345Z");
     expect(content).toContain('taskhub-note-id: "thn_1"');
   });
 

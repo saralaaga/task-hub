@@ -1,3 +1,4 @@
+import { formatThinoCompatibleTimestamp, thinoIdFromIso } from "./thinoMetadata";
 import type { CalendarEvent, TaskItem } from "./types";
 
 export type TaskNoteMode = "task-hub" | "thino-multi-file";
@@ -111,10 +112,11 @@ export function createTaskNoteContent(input: {
   addThinoIdToTaskHubNotes?: boolean;
 }): string {
   const includeThinoMetadata = input.mode === "thino-multi-file" || input.addThinoIdToTaskHubNotes;
+  const thinoTimestamp = formatThinoCompatibleTimestamp(input.createdAt);
   const frontmatter = [
     "---",
     ...(includeThinoMetadata
-      ? [`id: "${thinoIdFromIso(input.createdAt)}"`, `createdAt: ${input.createdAt}`, `updatedAt: ${input.createdAt}`]
+      ? [`id: "${thinoIdFromIso(input.createdAt)}"`, `createdAt: ${thinoTimestamp}`, `updatedAt: ${thinoTimestamp}`]
       : []),
     "taskhub-note: true",
     `taskhub-note-id: "${escapeYamlString(input.noteId)}"`,
@@ -417,9 +419,6 @@ function uniqueStrings(values: string[]): string[] {
   return Array.from(new Set(values.filter(Boolean)));
 }
 
-function thinoIdFromIso(value: string): string {
-  return value.replace(/[-:TZ.]/g, "").slice(0, 14);
-}
 
 function normalizeVaultPath(path: string): string {
   return path.replace(/\\/g, "/").replace(/\/+/g, "/").replace(/^\.\//u, "").replace(/^\/+/u, "").replace(/\/$/u, "");

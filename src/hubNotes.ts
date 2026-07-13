@@ -1,3 +1,5 @@
+import { formatThinoCompatibleTimestamp, thinoIdFromIso } from "./thinoMetadata";
+
 export type HubNoteSourceKind = "task-note" | "dated-note" | "hybrid";
 export type HubNoteKind = "manual" | "task-related" | "transcript" | "imported" | (string & {});
 
@@ -136,10 +138,11 @@ export function createHubNoteContent(input: HubNoteCreateInput): string {
   const kind = resolveHubNoteKind(input.kind, { related: relatedKeys, history: historyKeys });
   const nextBody = normalizeHubNoteBody(input.body ?? "");
   const nextTitle = normalizeHubNoteTitle(input.title, nextBody);
+  const thinoTimestamp = formatThinoCompatibleTimestamp(input.createdAt);
   const frontmatter = [
     "---",
     ...(includeThinoMetadata
-      ? [`id: "${thinoIdFromIso(input.createdAt)}"`, `createdAt: ${input.createdAt}`, `updatedAt: ${input.createdAt}`]
+      ? [`id: "${thinoIdFromIso(input.createdAt)}"`, `createdAt: ${thinoTimestamp}`, `updatedAt: ${thinoTimestamp}`]
       : []),
     "taskhub-note: true",
     `taskhub-note-id: "${escapeYamlString(input.noteId)}"`,
@@ -175,9 +178,11 @@ export function replaceHubNoteBody(content: string, body: string, updatedAt: str
     Boolean(unquoteYamlString(scalars["taskhub-date"] ?? scalars.date)) ||
     unquoteYamlString(scalars["taskhub-type"] ?? scalars.taskHubType) === "note";
   const nextTitle = normalizeHubNoteTitle(firstBodyLine(nextBody) ?? unquoteYamlString(scalars.title) ?? "Untitled note", nextBody);
+  const thinoUpdatedAt = formatThinoCompatibleTimestamp(updatedAt);
   const nextBlock = updateScalarValues(frontmatter.block, {
+    ...(scalars.createdAt !== undefined ? { createdAt: formatThinoCompatibleTimestamp(scalars.createdAt) } : {}),
     ...(shouldUpdateTitle ? { title: `"${escapeYamlString(nextTitle)}"` } : {}),
-    ...(scalars.updatedAt !== undefined ? { updatedAt } : {}),
+    ...(scalars.updatedAt !== undefined ? { updatedAt: thinoUpdatedAt } : {}),
     "taskhub-updated": updatedAt
   });
   return { status: "updated", content: `---\n${nextBlock}\n---\n${nextBody ? `${nextBody}\n` : ""}` };
@@ -495,8 +500,4 @@ function isoDateKey(value: string | undefined): string | undefined {
 
 function isDateKey(value: string | undefined): value is string {
   return value !== undefined && /^\d{4}-\d{2}-\d{2}$/u.test(value);
-}
-
-function thinoIdFromIso(value: string): string {
-  return value.replace(/[-:TZ.]/g, "").slice(0, 14);
 }

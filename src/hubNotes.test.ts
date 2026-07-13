@@ -145,6 +145,20 @@ describe("content helpers", () => {
     expect(content).toContain('title: "Launch plan"');
   });
 
+  it("writes Thino metadata using Thino-compatible timestamps", () => {
+    const content = createHubNoteContent({
+      noteId: "note_20260711_thino",
+      title: "Launch plan",
+      createdAt: "2026-07-11T10:30:12.000Z",
+      addThinoIdToTaskHubNotes: true
+    });
+
+    expect(content).toContain('id: "20260711103012"');
+    expect(content).toMatch(/createdAt: \d{4}\/\d{2}\/\d{2} \d{2}:\d{2}:\d{2}/u);
+    expect(content).toMatch(/updatedAt: \d{4}\/\d{2}\/\d{2} \d{2}:\d{2}:\d{2}/u);
+    expect(content).not.toContain("createdAt: 2026-07-11T10:30:12.000Z");
+  });
+
   it("updates body text while preserving unified metadata", () => {
     const original = createHubNoteContent({
       noteId: "note_20260711_abcd",
@@ -153,7 +167,8 @@ describe("content helpers", () => {
       createdAt: "2026-07-11T10:30:12.000Z",
       date: "2026-07-11",
       relatedKeys: ["task:vault:Projects/Launch.md:42:hash"],
-      body: "Ship notes"
+      body: "Ship notes",
+      addThinoIdToTaskHubNotes: true
     });
 
     const result = replaceHubNoteBody(original, "Updated launch notes", "2026-07-11T11:45:00.000Z");
@@ -165,8 +180,36 @@ describe("content helpers", () => {
     expect(result.content).toContain("taskhub-date: 2026-07-11");
     expect(result.content).toContain("taskhub-related:");
     expect(result.content).toContain("taskhub-updated: 2026-07-11T11:45:00.000Z");
+    expect(result.content).toMatch(/updatedAt: \d{4}\/\d{2}\/\d{2} \d{2}:\d{2}:\d{2}/u);
+    expect(result.content).not.toContain("updatedAt: 2026-07-11T11:45:00.000Z");
     expect(result.content).toContain('title: "Updated launch notes"');
     expect(result.content).toContain("Updated launch notes");
+  });
+
+  it("repairs legacy ISO Thino timestamps when an existing note is updated", () => {
+    const original = `---
+id: "20260711103012"
+createdAt: 2026-07-11T10:30:12.000Z
+updatedAt: 2026-07-11T10:30:12.000Z
+taskhub-note: true
+taskhub-note-id: "note_legacy"
+title: "Legacy note"
+taskhub-created: 2026-07-11T10:30:12.000Z
+taskhub-updated: 2026-07-11T10:30:12.000Z
+tags:
+  - task-hub-note
+---
+Legacy body
+`;
+
+    const result = replaceHubNoteBody(original, "Updated legacy body", "2026-07-11T11:45:00.000Z");
+
+    expect(result.status).toBe("updated");
+    if (result.status !== "updated") return;
+    expect(result.content).toMatch(/createdAt: \d{4}\/\d{2}\/\d{2} \d{2}:\d{2}:\d{2}/u);
+    expect(result.content).toMatch(/updatedAt: \d{4}\/\d{2}\/\d{2} \d{2}:\d{2}:\d{2}/u);
+    expect(result.content).not.toContain("createdAt: 2026-07-11T10:30:12.000Z");
+    expect(result.content).not.toContain("updatedAt: 2026-07-11T11:45:00.000Z");
   });
 
   it("updates a checkbox line while preserving unified metadata", () => {
