@@ -516,11 +516,12 @@ describe("TaskHubSettingTab", () => {
     expect(tab.containerEl.querySelector(".task-hub-notes-columns-frame")).not.toBeNull();
     expect(tab.containerEl.querySelectorAll(".task-hub-notes-column")).toHaveLength(2);
     expect(tab.containerEl.querySelector(".task-hub-notes-column--view")?.querySelectorAll(".setting-item").length).toBeGreaterThanOrEqual(3);
-    expect(tab.containerEl.querySelector(".task-hub-notes-column--task")?.querySelectorAll(".setting-item").length).toBeGreaterThanOrEqual(5);
+    expect(tab.containerEl.querySelector(".task-hub-notes-column--task")?.querySelectorAll(".setting-item").length).toBeGreaterThanOrEqual(6);
     expect(tab.containerEl.querySelector(".task-hub-settings-compact-grid")).toBeNull();
-    expect(tab.containerEl.textContent).toContain("Notes folder");
+    expect(tab.containerEl.textContent).toContain("Notes view save folder");
     expect(tab.containerEl.textContent).toContain("Open note after creation");
-    expect(tab.containerEl.textContent).toContain("Add Thino metadata to Notes view notes");
+    expect(tab.containerEl.textContent).toContain("Write Thino ID metadata to Notes view notes");
+    expect(tab.containerEl.textContent).toContain("Task Hub notes folder");
     expect(tab.containerEl.textContent).toContain("Thino notes folder");
     expect(tab.containerEl.textContent).not.toContain("Show note metadata in editor");
 
@@ -554,7 +555,7 @@ describe("TaskHubSettingTab", () => {
     notesButton?.click();
 
     expect(tab.containerEl.textContent).toContain("Enable Thino compatibility for task notes");
-    expect(tab.containerEl.textContent).not.toContain("Add Thino metadata to Notes view notes");
+    expect(tab.containerEl.textContent).not.toContain("Write Thino ID metadata to Notes view notes");
   });
 
   it("collapses each notes column to its master switch when that feature is disabled", () => {
@@ -577,7 +578,7 @@ describe("TaskHubSettingTab", () => {
 
     expect(tab.containerEl.querySelector(".task-hub-notes-column--view")?.querySelectorAll(".setting-item")).toHaveLength(1);
     expect(tab.containerEl.querySelector(".task-hub-notes-column--task")?.querySelectorAll(".setting-item")).toHaveLength(1);
-    expect(tab.containerEl.textContent).not.toContain("Notes folder");
+    expect(tab.containerEl.textContent).not.toContain("Notes view save folder");
     expect(tab.containerEl.textContent).not.toContain("Open note after creation");
   });
 
@@ -773,6 +774,23 @@ describe("normalizeTaskHubSettings", () => {
         lastSeenAt: "2026-06-29T10:00:00.000Z"
       }
     });
+  });
+
+  it("migrates legacy unified notes folders into the task notes folder", () => {
+    const settings = normalizeTaskHubSettings({
+      settingsSchemaVersion: 6,
+      datedNotes: {
+        ...DEFAULT_SETTINGS.datedNotes,
+        folder: "Thino"
+      },
+      taskNotes: {
+        ...DEFAULT_SETTINGS.taskNotes,
+        notesFolder: DEFAULT_SETTINGS.taskNotes.notesFolder
+      }
+    });
+
+    expect(settings.datedNotes.folder).toBe("Thino");
+    expect(settings.taskNotes.notesFolder).toBe("Thino");
   });
 
   it("normalizes external task source tab order", () => {

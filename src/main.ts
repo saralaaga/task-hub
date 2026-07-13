@@ -2327,7 +2327,7 @@ export default class TaskHubPlugin extends Plugin {
     const now = new Date();
     const noteBody = (body ?? "").trim();
     const noteTitle = datedNoteTitleFromBody(noteBody) ?? applyDatedNoteTitleTemplate(this.settings.datedNotes.defaultTitleTemplate, dateKey);
-    const folder = preferredUnifiedNoteFolder(this.settings, "dated");
+    const folder = normalizeDatedNoteFolder(this.settings.datedNotes.folder, DEFAULT_SETTINGS.datedNotes.folder);
     const path = await this.uniqueTaskNotePath(`${folder}/${datedNoteFileName(noteTitle, dateKey, now)}`);
     await this.ensureParentFolders(path);
     const noteId = createHubNoteId(now);
@@ -3113,7 +3113,7 @@ export default class TaskHubPlugin extends Plugin {
     const folder =
       mode === "thino-multi-file"
         ? normalizeTaskNoteFolder(this.settings.taskNotes.thinoFolder, DEFAULT_SETTINGS.taskNotes.thinoFolder)
-        : preferredUnifiedNoteFolder(this.settings, "task");
+        : normalizeTaskNoteFolder(this.settings.taskNotes.notesFolder, DEFAULT_SETTINGS.taskNotes.notesFolder);
     const path = await this.uniqueTaskNotePath(`${folder}/${taskNoteFileName(title, now, mode)}`);
     await this.ensureParentFolders(path);
     const noteId = createHubNoteId(now);
@@ -4053,24 +4053,6 @@ function hubNoteToTaskNote(note: HubNote): TaskNote {
 
 function relatedTimelineDateForTask(task: TaskItem): string | undefined {
   return taskStartDateKey(task) ?? taskPlannedDateKey(task) ?? task.dueDate;
-}
-
-function preferredUnifiedNoteFolder(settings: TaskHubSettings, prefer: "dated" | "task"): string {
-  const datedCustom =
-    settings.datedNotes.folder.trim().length > 0 && settings.datedNotes.folder !== DEFAULT_SETTINGS.datedNotes.folder;
-  const taskCustom =
-    settings.taskNotes.notesFolder.trim().length > 0 && settings.taskNotes.notesFolder !== DEFAULT_SETTINGS.taskNotes.notesFolder;
-
-  if (prefer === "task" && taskCustom) {
-    return normalizeTaskNoteFolder(settings.taskNotes.notesFolder, DEFAULT_SETTINGS.taskNotes.notesFolder);
-  }
-  if (datedCustom) {
-    return normalizeDatedNoteFolder(settings.datedNotes.folder, DEFAULT_SETTINGS.datedNotes.folder);
-  }
-  if (taskCustom) {
-    return normalizeTaskNoteFolder(settings.taskNotes.notesFolder, DEFAULT_SETTINGS.taskNotes.notesFolder);
-  }
-  return normalizeDatedNoteFolder(settings.datedNotes.folder, DEFAULT_SETTINGS.datedNotes.folder);
 }
 
 class RiskySourceDeletionModal extends Modal {

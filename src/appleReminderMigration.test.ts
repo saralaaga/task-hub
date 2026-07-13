@@ -887,7 +887,7 @@ describe("Apple Reminders migration", () => {
 
   it("creates new task-hub task notes with unified date and relation metadata", async () => {
     const createdFile = {
-      path: "TaskHub/Notes/2026-05-20 1030 - Pay invoice.md",
+      path: "Task Hub Notes/2026-05-20 1030 - Pay invoice.md",
       extension: "md",
       stat: { ctime: 1, mtime: 2, size: 3 }
     };
@@ -900,7 +900,7 @@ describe("Apple Reminders migration", () => {
         createFolder: jest.fn(),
         create,
         getFileByPath: jest.fn(() => null),
-        getFolderByPath: jest.fn(() => ({ path: "TaskHub/Notes" }))
+        getFolderByPath: jest.fn(() => ({ path: "Task Hub Notes" }))
       },
       workspace: {
         getLeavesOfType: jest.fn(() => [])
@@ -911,6 +911,7 @@ describe("Apple Reminders migration", () => {
       taskNotes: {
         ...DEFAULT_SETTINGS.taskNotes,
         enabled: true,
+        notesFolder: "Task Hub Notes",
         openNoteAfterCreate: false
       },
       datedNotes: {

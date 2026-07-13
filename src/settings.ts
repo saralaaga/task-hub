@@ -7,7 +7,7 @@ import { validTimedDurationMinutes } from "./timeGranularity";
 import type { AppleCalendarInfo, CalendarCreationKind, CalendarCreationTarget, CalendarEventCreationTarget, CalendarSource, CalendarSourceStatus, CalendarTaskCreationTarget, ExternalTaskShadowMetadata, ExternalTaskSourceTab, LocalAppleSyncStatus, PersistedVaultTaskStableRecord, TaskHubLastSessionState, TaskHubSettings } from "./types";
 import { setCssProps } from "./views/domStyles";
 
-export const TASK_HUB_SETTINGS_SCHEMA_VERSION = 6;
+export const TASK_HUB_SETTINGS_SCHEMA_VERSION = 7;
 
 export const DEFAULT_SETTINGS: TaskHubSettings = {
   settingsSchemaVersion: TASK_HUB_SETTINGS_SCHEMA_VERSION,
@@ -154,7 +154,7 @@ export function normalizeTaskHubSettings(loaded: Partial<TaskHubSettings> | null
     }),
     taskCreationFilePath: loaded?.taskCreationFilePath ?? DEFAULT_SETTINGS.taskCreationFilePath,
     datedNotes,
-    taskNotes: normalizeTaskNotesSettings(loaded?.taskNotes),
+    taskNotes: normalizeTaskNotesSettings(loaded?.taskNotes, datedNotes, loadedSchemaVersion),
     taskViewFilters: normalizeTaskViewFilters(loaded?.taskViewFilters, loaded?.showCompletedByDefault),
     taskListManualOrder: normalizeTaskListManualOrder(loaded?.taskListManualOrder),
     taskNoteManualOrder: normalizeTaskNoteManualOrder(loaded?.taskNoteManualOrder),
@@ -465,14 +465,24 @@ function populateHourDropdown(selectEl: HTMLSelectElement, startHour: number, en
   }
 }
 
-function normalizeTaskNotesSettings(loaded: Partial<TaskHubSettings["taskNotes"]> | undefined): TaskHubSettings["taskNotes"] {
+function normalizeTaskNotesSettings(
+  loaded: Partial<TaskHubSettings["taskNotes"]> | undefined,
+  datedNotes: TaskHubSettings["datedNotes"],
+  loadedSchemaVersion: number
+): TaskHubSettings["taskNotes"] {
   const { showFrontmatterInNoteModal: _legacyShowFrontmatterInNoteModal, ...rest } =
     (loaded ?? {}) as Partial<TaskHubSettings["taskNotes"]> & { showFrontmatterInNoteModal?: boolean };
+  const shouldMigrateUnifiedFolder =
+    loadedSchemaVersion < TASK_HUB_SETTINGS_SCHEMA_VERSION &&
+    (loaded?.notesFolder === undefined || loaded?.notesFolder === DEFAULT_SETTINGS.taskNotes.notesFolder) &&
+    datedNotes.folder !== DEFAULT_SETTINGS.datedNotes.folder;
   return {
     ...DEFAULT_SETTINGS.taskNotes,
     ...rest,
     defaultMode: loaded?.defaultMode === "thino-multi-file" ? "thino-multi-file" : DEFAULT_SETTINGS.taskNotes.defaultMode,
-    notesFolder: loaded?.notesFolder ?? DEFAULT_SETTINGS.taskNotes.notesFolder,
+    notesFolder: shouldMigrateUnifiedFolder
+      ? datedNotes.folder
+      : loaded?.notesFolder ?? DEFAULT_SETTINGS.taskNotes.notesFolder,
     addThinoIdToTaskHubNotes:
       loaded?.addThinoIdToTaskHubNotes ?? DEFAULT_SETTINGS.taskNotes.addThinoIdToTaskHubNotes,
     thinoFolder: loaded?.thinoFolder ?? DEFAULT_SETTINGS.taskNotes.thinoFolder,
@@ -805,10 +815,9 @@ export class TaskHubSettingTab extends PluginSettingTab {
         .addText((text) => {
           text
             .setPlaceholder(DEFAULT_SETTINGS.datedNotes.folder)
-            .setValue(this.unifiedNotesFolderValue())
+            .setValue(this.plugin.settings.datedNotes.folder)
             .onChange(async (value) => {
               this.plugin.settings.datedNotes.folder = value;
-              this.plugin.settings.taskNotes.notesFolder = value;
               await this.plugin.saveSettings();
             });
         });
@@ -868,6 +877,19 @@ export class TaskHubSettingTab extends PluginSettingTab {
             this.plugin.settings.taskNotes.openNoteAfterCreate = value;
             await this.plugin.saveSettings();
           });
+        });
+
+      new Setting(taskNotesGrid)
+        .setName(t("taskNotesFolder"))
+        .setDesc(t("taskNotesFolderDesc"))
+        .addText((text) => {
+          text
+            .setPlaceholder(DEFAULT_SETTINGS.taskNotes.notesFolder)
+            .setValue(this.plugin.settings.taskNotes.notesFolder)
+            .onChange(async (value) => {
+              this.plugin.settings.taskNotes.notesFolder = value;
+              await this.plugin.saveSettings();
+            });
         });
 
       new Setting(taskNotesGrid)
@@ -959,18 +981,6 @@ export class TaskHubSettingTab extends PluginSettingTab {
       .then((setting) => {
         if (settingClass) setting.settingEl.addClass(settingClass);
       });
-  }
-
-  private unifiedNotesFolderValue(): string {
-    const datedCustom =
-      this.plugin.settings.datedNotes.folder.trim().length > 0 &&
-      this.plugin.settings.datedNotes.folder !== DEFAULT_SETTINGS.datedNotes.folder;
-    const taskCustom =
-      this.plugin.settings.taskNotes.notesFolder.trim().length > 0 &&
-      this.plugin.settings.taskNotes.notesFolder !== DEFAULT_SETTINGS.taskNotes.notesFolder;
-    if (datedCustom) return this.plugin.settings.datedNotes.folder;
-    if (taskCustom) return this.plugin.settings.taskNotes.notesFolder;
-    return this.plugin.settings.datedNotes.folder;
   }
 
   private unifiedOpenAfterCreateValue(): boolean {
