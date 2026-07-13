@@ -132,6 +132,7 @@ const SMART_LIST_COLORS: Array<{ key: "smartListColorDefault" | "smartListColorR
 let activeDraggedTaskListItemId: string | undefined;
 let activeDraggedTaskListItemIds: string[] = [];
 let activeDraggedTaskListRows = new Set<HTMLElement>();
+let activeTaskListBulkDrag = false;
 let activeTaskListTasksById = new Map<string, TaskItem>();
 let activeDraggableTaskListItemIds = new Set<string>();
 const externalListDropSuccessTimers = new WeakMap<HTMLElement, number>();
@@ -1039,6 +1040,7 @@ function bindTaskRowDrag(
   row.setAttr("aria-grabbed", "false");
   row.addEventListener("dragstart", (event) => {
     const draggedIds = taskListDragIdsForTask(task, selectedTaskIds);
+    activeTaskListBulkDrag = draggedIds.length > 1;
     activeDraggedTaskListItemId = task.id;
     activeDraggedTaskListItemIds = draggedIds;
     markActiveTaskListDragRows(draggedIds, task.id, rowsByTaskId);
@@ -1050,6 +1052,7 @@ function bindTaskRowDrag(
       event.dataTransfer.effectAllowed = "copyMove";
       event.dataTransfer.setData(TASK_LIST_DRAG_MIME, task.id);
       event.dataTransfer.setData(TASK_LIST_DRAG_IDS_MIME, JSON.stringify(draggedIds));
+      event.dataTransfer.setData("text/plain", draggedIds.join(","));
     }
   });
   row.addEventListener("dragend", () => {
@@ -1172,17 +1175,22 @@ function activeTaskListTasksFromDragEvent(event: DragEvent): TaskItem[] {
 function taskListDragIdsForTask(task: TaskItem, selectedTaskIds: ReadonlySet<string> | undefined): string[] {
   if (!selectedTaskIds?.has(task.id)) return [task.id];
   const ids = [...selectedTaskIds].filter((taskId) => activeDraggableTaskListItemIds.has(taskId));
-  return ids.length > 0 ? ids : [task.id];
+  return ids.length > 1 ? ids : [task.id];
 }
 
 function taskListDragIdsFromEvent(event: DragEvent): string[] {
-  if (activeDraggedTaskListItemIds.length > 0) return activeDraggedTaskListItemIds;
+  if (activeDraggedTaskListItemIds.length > 0) {
+    if (!activeTaskListBulkDrag) return activeDraggedTaskListItemId ? [activeDraggedTaskListItemId] : [activeDraggedTaskListItemIds[0]];
+    return activeDraggedTaskListItemIds;
+  }
   const encodedIds = event.dataTransfer?.getData(TASK_LIST_DRAG_IDS_MIME);
   if (encodedIds) {
     try {
       const parsed = JSON.parse(encodedIds) as unknown;
       if (Array.isArray(parsed)) {
-        return parsed.filter((taskId): taskId is string => typeof taskId === "string" && taskId.length > 0);
+        const ids = parsed.filter((taskId): taskId is string => typeof taskId === "string" && taskId.length > 0);
+        if (!activeTaskListBulkDrag) return ids[0] ? [ids[0]] : [];
+        return ids;
       }
     } catch {
       // Fall through to the single-task payload for older drag data.
@@ -1196,6 +1204,7 @@ function clearActiveTaskListDrag(): void {
   clearActiveTaskListDragRows();
   activeDraggedTaskListItemId = undefined;
   activeDraggedTaskListItemIds = [];
+  activeTaskListBulkDrag = false;
 }
 
 function clearActiveTaskListDragRows(): void {

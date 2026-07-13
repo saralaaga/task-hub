@@ -135,6 +135,7 @@ const TIME_SCALE_WHEEL_STEP_THRESHOLD = 2;
 const CALENDAR_ITEM_DRAG_MIME = "application/x-task-hub-calendar-item-id";
 const TASK_DRAG_MIME = "application/x-task-hub-task-id";
 let activeDraggedCalendarItemId: string | undefined;
+let activeCalendarBulkDrag = false;
 let activeDragGrabOffsetMinutes = 0;
 let activeDragGrabOffsetXPixels = 0;
 let activeDragGrabOffsetYPixels = 0;
@@ -165,6 +166,7 @@ let activeDaySidebarContext:
     }
   | undefined;
 let suppressNextTimedCreationClick = false;
+
 const WEEK_START_DAY_INDEX: Record<WeekStart, number> = {
   sunday: 0,
   monday: 1,
@@ -2505,6 +2507,7 @@ function bindCalendarItemDrag(element: HTMLElement, item: CalendarItem, state: C
     element.addClass("is-dragging");
     element.setAttr("aria-grabbed", "true");
     const selectedItems = selectedDraggableCalendarItems(item, currentVisibleCalendarItems(), state);
+    activeCalendarBulkDrag = selectedItems.length > 1;
     const usingCustomDragStack = startCalendarStackDragFeedback(element, item, selectedItems, event);
     if (event.dataTransfer) {
       event.dataTransfer.effectAllowed = "move";
@@ -2519,6 +2522,7 @@ function bindCalendarItemDrag(element: HTMLElement, item: CalendarItem, state: C
     element.removeClass("is-dragging");
     clearCalendarDragFeedback();
     activeDraggedCalendarItemId = undefined;
+    activeCalendarBulkDrag = false;
     if (activeDraggedElementReference === element) activeDraggedElementReference = undefined;
     activeDragGrabOffsetMinutes = 0;
     activeDragGrabOffsetXPixels = 0;
@@ -2734,6 +2738,10 @@ function positionCalendarDragStack(stack: HTMLElement, event: DragEvent): void {
 
 function updateCalendarDragStack(event: DragEvent): void {
   if (!activeDragStackElement) return;
+  if (!activeCalendarBulkDrag) {
+    clearCalendarDragStack();
+    return;
+  }
   positionCalendarDragStack(activeDragStackElement, event);
 }
 

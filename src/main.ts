@@ -3237,6 +3237,7 @@ class TaskNoteModal extends Modal {
       parent: editorHost,
       value: this.noteBody,
       placeholder: createTranslator(this.plugin.settings.language)("notes"),
+      extensions: createDatedNoteComposerExtensions(this.plugin.app),
       tagSuggestions: () => collectObsidianTags(this.plugin.app, this.plugin.getTasks()),
       onChange: (value) => {
         this.noteBody = value;

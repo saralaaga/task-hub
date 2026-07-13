@@ -4342,8 +4342,10 @@ describe("renderCalendarView", () => {
       .filter((element) => element.classes.has("task-hub-calendar-day"))
       .find((element) => collect(element).map((child) => child.text).includes("12"));
     const dataTransfer = new FakeDataTransfer();
+    fakeDocument.dispatch("keydown", { key: "Meta", metaKey: true });
     items[1].dispatch("dragstart", { dataTransfer });
     targetDay?.dispatch("drop", { dataTransfer });
+    fakeDocument.dispatch("keyup", { key: "Meta", metaKey: false, ctrlKey: false });
 
     expect(new Set(onTaskSelectionChange.mock.calls.at(-1)?.[1])).toEqual(new Set([firstTask.id, secondTask.id]));
     expect(onTaskReschedule).toHaveBeenCalledWith(firstTask, "2026-05-12");
@@ -4414,10 +4416,12 @@ describe("renderCalendarView", () => {
       .filter((element) => element.classes.has("task-hub-calendar-day"))
       .find((element) => collect(element).map((child) => child.text).includes("12"));
     const dataTransfer = new FakeDataTransfer();
+    fakeDocument.dispatch("keydown", { key: "Meta", metaKey: true });
     items[1].dispatch("dragstart", { dataTransfer });
     dataTransfer.hideTypes = true;
     targetDay?.dispatch("dragover", { dataTransfer });
     targetDay?.dispatch("drop", { dataTransfer });
+    fakeDocument.dispatch("keyup", { key: "Meta", metaKey: false, ctrlKey: false });
 
     expect(new Set(onTaskSelectionChange.mock.calls.at(-1)?.[1])).toEqual(new Set([firstTask.id, secondTask.id]));
     expect(onTaskReschedule).toHaveBeenCalledWith(firstTask, "2026-05-12");
@@ -5063,8 +5067,10 @@ describe("renderCalendarView", () => {
       .filter((element) => element.classes.has("task-hub-calendar-day"))
       .find((element) => collect(element).map((child) => child.text).includes("12"));
     const dataTransfer = new FakeDataTransfer();
+    fakeDocument.dispatch("keydown", { key: "Meta", metaKey: true });
     taskItem?.dispatch("dragstart", { dataTransfer });
     targetDay?.dispatch("drop", { dataTransfer });
+    fakeDocument.dispatch("keyup", { key: "Meta", metaKey: false, ctrlKey: false });
 
     expect(onTaskReschedule).toHaveBeenCalledWith(selectedTask, "2026-05-12");
     expect(onEventReschedule).toHaveBeenCalledWith(expect.objectContaining({ id: "selected-event" }), "2026-05-12");
@@ -5118,6 +5124,7 @@ describe("renderCalendarView", () => {
     eventItem!.boundingRect = { left: 20, top: 90 };
     eventItem?.dispatch("click", { metaKey: true });
     const dataTransfer = new FakeDataTransfer();
+    fakeDocument.dispatch("keydown", { key: "Meta", metaKey: true });
 
     taskItem?.dispatch("dragstart", { dataTransfer, clientX: 60, clientY: 48 });
 
@@ -5126,6 +5133,7 @@ describe("renderCalendarView", () => {
     expect(collect(stack!).filter((element) => element.classes.has("task-hub-calendar-drag-stack-card"))).toHaveLength(2);
     expect(eventItem?.classes.has("is-drag-muted")).toBe(true);
     expect(eventItem?.classes.has("is-drag-gathering")).toBe(false);
+    fakeDocument.dispatch("keyup", { key: "Meta", metaKey: false, ctrlKey: false });
   });
 
   it("moves the stack preview from target dragover events after propagation is stopped", () => {
@@ -5174,6 +5182,7 @@ describe("renderCalendarView", () => {
     const eventItem = items.find((element) => collect(element).some((child) => child.text === "Move stack event"));
     eventItem?.dispatch("click", { metaKey: true });
     const dataTransfer = new FakeDataTransfer();
+    fakeDocument.dispatch("keydown", { key: "Meta", metaKey: true });
     taskItem?.dispatch("dragstart", { dataTransfer, clientX: 40, clientY: 50 });
     const stack = collect(fakeDocument.body).find((element) => element.classes.has("task-hub-calendar-drag-stack"));
     expect(styleValue(stack!, "left")).toBe("56px");
@@ -5186,6 +5195,7 @@ describe("renderCalendarView", () => {
 
     expect(styleValue(stack!, "left")).toBe("296px");
     expect(styleValue(stack!, "top")).toBe("136px");
+    fakeDocument.dispatch("keyup", { key: "Meta", metaKey: false, ctrlKey: false });
   });
 
   it("clears the stack preview and plays a scatter hint after dropping selected calendar items", () => {
@@ -5234,6 +5244,7 @@ describe("renderCalendarView", () => {
     const eventItem = items.find((element) => collect(element).some((child) => child.text === "Scatter event"));
     eventItem?.dispatch("click", { metaKey: true });
     const dataTransfer = new FakeDataTransfer();
+    fakeDocument.dispatch("keydown", { key: "Meta", metaKey: true });
     taskItem?.dispatch("dragstart", { dataTransfer, clientX: 60, clientY: 48 });
     const targetDay = collect(container)
       .filter((element) => element.classes.has("task-hub-calendar-day"))
@@ -5245,6 +5256,7 @@ describe("renderCalendarView", () => {
     expect(collect(fakeDocument.body).some((element) => element.classes.has("task-hub-calendar-drag-stack"))).toBe(false);
     expect(collect(fakeDocument.body).some((element) => element.classes.has("task-hub-calendar-drop-scatter"))).toBe(true);
     expect(eventItem?.classes.has("is-drag-muted")).toBe(false);
+    fakeDocument.dispatch("keyup", { key: "Meta", metaKey: false, ctrlKey: false });
   });
 
   it("reschedules selected timed tasks and events by their relative timed offsets", () => {
@@ -5306,10 +5318,12 @@ describe("renderCalendarView", () => {
     column!.boundingRect = { top: 0 };
     eventItem?.dispatch("click", { metaKey: true });
     const dataTransfer = new FakeDataTransfer();
+    fakeDocument.dispatch("keydown", { key: "Meta", metaKey: true });
     taskItem!.boundingRect = { top: 168 };
     taskItem?.dispatch("pointerdown", { dataTransfer, clientY: 168 });
     taskItem?.dispatch("dragstart", { dataTransfer, clientY: 168 });
     column?.dispatch("drop", { dataTransfer, clientY: 224 });
+    fakeDocument.dispatch("keyup", { key: "Meta", metaKey: false, ctrlKey: false });
 
     expect(onTaskReschedule).toHaveBeenCalledWith(selectedTask, {
       dateKey: "2026-05-08",
@@ -5363,10 +5377,12 @@ describe("renderCalendarView", () => {
     const column = collect(container).find((element) => element.classes.has("task-hub-agenda-column"));
     column!.boundingRect = { top: 0 };
     const dataTransfer = new FakeDataTransfer();
+    fakeDocument.dispatch("keydown", { key: "Meta", metaKey: true });
     anchorItem!.boundingRect = { top: 56 };
     anchorItem?.dispatch("pointerdown", { dataTransfer, clientY: 56 });
     anchorItem?.dispatch("dragstart", { dataTransfer, clientY: 56 });
     column?.dispatch("drop", { dataTransfer, clientY: 0 });
+    fakeDocument.dispatch("keyup", { key: "Meta", metaKey: false, ctrlKey: false });
 
     expect(onTaskReschedule).toHaveBeenCalledWith(earlyTask, {
       dateKey: "2026-05-08",

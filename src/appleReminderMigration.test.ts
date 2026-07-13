@@ -686,6 +686,7 @@ describe("Apple Reminders migration", () => {
     expect(getLeaf).not.toHaveBeenCalled();
     expect(mockNoteComposers).toHaveLength(1);
     expect(mockNoteComposers[0].options.value).toBe("Existing body #tag\n- [ ] child");
+    expect(mockNoteComposers[0].options.extensions?.length).toBeGreaterThan(0);
     expect(mockNoteComposers[0].options.parent.addClass).not.toHaveBeenCalledWith(expect.stringContaining("workspace"));
     expect(mockNoteComposers[0].focus).toHaveBeenCalled();
     expect(modals.at(-1)?.modalEl.toggleClass).not.toHaveBeenCalledWith("task-hub-note-modal-hide-frontmatter", expect.any(Boolean));
@@ -813,6 +814,10 @@ describe("Apple Reminders migration", () => {
 
     await plugin.createTaskNoteForTask(task());
     await flushAsync();
+
+    expect(mockNoteComposers).toHaveLength(1);
+    expect(mockNoteComposers[0].options.extensions?.length).toBeGreaterThan(0);
+
     buttons[0].onClickHandler?.();
     await flushAsync();
 

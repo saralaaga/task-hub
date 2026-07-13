@@ -74,6 +74,7 @@ class FakeDocumentFragment {
 
 const fakeDocument = {
   body: undefined as unknown as FakeElement,
+  listeners: new Map<string, Array<(event: FakeEvent) => void>>(),
   createDocumentFragment: () => new FakeDocumentFragment(),
   createElement: () => ({
     className: "",
@@ -81,6 +82,26 @@ const fakeDocument = {
     setCssProps: jest.fn()
   }),
   createTextNode: (text: string) => ({ textContent: text }),
+  addEventListener(name: string, listener: (event: FakeEvent) => void): void {
+    this.listeners.set(name, [...(this.listeners.get(name) ?? []), listener]);
+  },
+  removeEventListener(name: string, listener: (event: FakeEvent) => void): void {
+    this.listeners.set(name, (this.listeners.get(name) ?? []).filter((candidate: (event: FakeEvent) => void) => candidate !== listener));
+  },
+  dispatch(name: string, eventOverrides: Partial<FakeEvent> = {}): FakeEvent {
+    const event = {
+      key: "",
+      metaKey: false,
+      ctrlKey: false,
+      preventDefault: jest.fn(),
+      stopPropagation: jest.fn(),
+      ...eventOverrides
+    } as FakeEvent;
+    for (const listener of this.listeners.get(name) ?? []) {
+      listener(event);
+    }
+    return event;
+  },
   querySelector(selector: string): FakeElement | null {
     return this.body?.querySelector(selector) ?? null;
   }
@@ -385,6 +406,8 @@ function fakeDataTransfer() {
   return {
     effectAllowed: "",
     dropEffect: "",
+    setDragImage() {
+    },
     setData(type: string, value: string) {
       store.set(type, value);
     },
@@ -446,6 +469,7 @@ describe("renderTasksView", () => {
   beforeEach(() => {
     mockMenus.length = 0;
     fakeDocument.body.empty();
+    fakeDocument.listeners.clear();
     const { Notice } = jest.requireMock("obsidian") as { Notice: jest.Mock };
     Notice.mockClear();
   });
@@ -785,9 +809,11 @@ describe("renderTasksView", () => {
     const item = collect(container).find((element) => element.classes.has("task-hub-external-list-item"));
     const dataTransfer = fakeDataTransfer();
 
+    fakeDocument.dispatch("keydown", { key: "Meta", metaKey: true });
     row?.dispatch("dragstart", { dataTransfer });
     const dragover = item?.dispatch("dragover", { dataTransfer });
     item?.dispatch("drop", { dataTransfer });
+    fakeDocument.dispatch("keyup", { key: "Meta", metaKey: false, ctrlKey: false });
 
     expect(row?.draggable).toBe(true);
     expect(dragover?.preventDefault).toHaveBeenCalled();
@@ -924,9 +950,11 @@ describe("renderTasksView", () => {
     const smartListItem = collect(container).find((element) => element.classes.has("task-hub-smart-list-item"));
     const dataTransfer = fakeDataTransfer();
 
+    fakeDocument.dispatch("keydown", { key: "Meta", metaKey: true });
     dragRow?.dispatch("dragstart", { dataTransfer });
     const dragover = smartListItem?.dispatch("dragover", { dataTransfer });
     smartListItem?.dispatch("drop", { dataTransfer });
+    fakeDocument.dispatch("keyup", { key: "Meta", metaKey: false, ctrlKey: false });
 
     expect(dragover?.preventDefault).toHaveBeenCalled();
     expect(onAddTasksToSmartList).toHaveBeenCalledWith(smartList, [firstTask, secondTask]);
@@ -991,10 +1019,12 @@ describe("renderTasksView", () => {
       .find((element) => textValues(element).includes("Inbox"));
     const dataTransfer = fakeDataTransfer();
 
+    fakeDocument.dispatch("keydown", { key: "Meta", metaKey: true });
     dragRow?.dispatch("dragstart", { dataTransfer });
     expect(dragRow?.classes.has("is-dragging")).toBe(true);
     expect(secondRow?.classes.has("is-bulk-dragging")).toBe(true);
     inboxItem?.dispatch("drop", { dataTransfer });
+    fakeDocument.dispatch("keyup", { key: "Meta", metaKey: false, ctrlKey: false });
 
     const { Notice } = jest.requireMock("obsidian") as { Notice: jest.Mock };
     expect(onAddTasksToSmartList).toHaveBeenCalledWith(inboxList, [firstTask, secondTask]);
@@ -1002,6 +1032,137 @@ describe("renderTasksView", () => {
     expect(Notice).toHaveBeenCalledWith("已将 2 个任务拖入「Inbox」。");
     expect(dragRow?.classes.has("is-dragging")).toBe(false);
     expect(secondRow?.classes.has("is-bulk-dragging")).toBe(false);
+  });
+
+  it("drags the full selected set without requiring command during dragstart", () => {
+    const container = new FakeElement();
+    const onAddTasksToSmartList = jest.fn();
+    const firstTask: TaskItem = {
+      ...baseTask,
+      id: "first",
+      stableId: "vault:th_first",
+      source: "vault",
+      externalId: undefined,
+      externalSourceName: undefined,
+      filePath: "Project.md",
+      rawLine: "- [ ] First 📅 2026-05-08",
+      text: "First",
+      dueDate: "2026-05-08"
+    };
+    const secondTask: TaskItem = {
+      ...firstTask,
+      id: "second",
+      stableId: "vault:th_second",
+      rawLine: "- [ ] Second 📅 2026-05-09",
+      text: "Second",
+      dueDate: "2026-05-09"
+    };
+    const focusList: TaskHubSmartList = {
+      id: "focus",
+      name: "Focus",
+      filters: { status: "open", tags: [], sourceQuery: "", textQuery: "" },
+      taskStableIds: [],
+      taskIds: [],
+      createdAt: "2026-06-30T00:00:00.000Z",
+      updatedAt: "2026-06-30T00:00:00.000Z"
+    };
+    const inboxList: TaskHubSmartList = { ...focusList, id: "inbox", name: "Inbox" };
+
+    renderTasksView(
+      container as unknown as HTMLElement,
+      [firstTask, secondTask],
+      [firstTask, secondTask],
+      { status: "open", tags: [], sourceQuery: "", textQuery: "" },
+      handlers(),
+      new Date("2026-05-08T12:00:00Z"),
+      smartListTranslator,
+      {
+        allowAppleReminderWriteback: true,
+        selectedTaskId: "first",
+        smartLists: [focusList, inboxList],
+        activeSmartListId: "focus",
+        onAddTasksToSmartList
+      }
+    );
+
+    const secondRow = taskRowByTitle(container, "Second");
+    secondRow?.dispatch("click", { metaKey: true });
+    fakeDocument.dispatch("keydown", { key: "Meta", metaKey: true });
+    fakeDocument.dispatch("keyup", { key: "Meta", metaKey: false, ctrlKey: false });
+    const dragRow = taskRowByTitle(container, "First");
+    const inboxItem = collect(container)
+      .filter((element) => element.classes.has("task-hub-smart-list-item"))
+      .find((element) => textValues(element).includes("Inbox"));
+    const dataTransfer = fakeDataTransfer();
+
+    dragRow?.dispatch("dragstart", { dataTransfer });
+    inboxItem?.dispatch("drop", { dataTransfer });
+
+    expect(secondRow?.classes.has("is-bulk-dragging")).toBe(false);
+    expect(onAddTasksToSmartList).toHaveBeenCalledWith(inboxList, [firstTask, secondTask]);
+  });
+
+  it("keeps grouped drag row states when batch dragging multiple tasks", () => {
+    const container = new FakeElement();
+    const firstTask: TaskItem = {
+      ...baseTask,
+      id: "first",
+      stableId: "vault:th_first",
+      source: "vault",
+      externalId: undefined,
+      externalSourceName: undefined,
+      filePath: "Project.md",
+      rawLine: "- [ ] First 📅 2026-05-08",
+      text: "First",
+      dueDate: "2026-05-08"
+    };
+    const secondTask: TaskItem = {
+      ...firstTask,
+      id: "second",
+      stableId: "vault:th_second",
+      rawLine: "- [ ] Second 📅 2026-05-09",
+      text: "Second",
+      dueDate: "2026-05-09"
+    };
+    const focusList: TaskHubSmartList = {
+      id: "focus",
+      name: "Focus",
+      filters: { status: "open", tags: [], sourceQuery: "", textQuery: "" },
+      taskStableIds: [],
+      taskIds: [],
+      createdAt: "2026-06-30T00:00:00.000Z",
+      updatedAt: "2026-06-30T00:00:00.000Z"
+    };
+    const inboxList: TaskHubSmartList = { ...focusList, id: "inbox", name: "Inbox" };
+
+    renderTasksView(
+      container as unknown as HTMLElement,
+      [firstTask, secondTask],
+      [firstTask, secondTask],
+      { status: "open", tags: [], sourceQuery: "", textQuery: "" },
+      handlers(),
+      new Date("2026-05-08T12:00:00Z"),
+      smartListTranslator,
+      {
+        allowAppleReminderWriteback: true,
+        selectedTaskId: "first",
+        smartLists: [focusList, inboxList],
+        activeSmartListId: "focus",
+        onAddTasksToSmartList: jest.fn()
+      }
+    );
+
+    taskRowByTitle(container, "Second")?.dispatch("click", { metaKey: true });
+    fakeDocument.dispatch("keydown", { key: "Meta", metaKey: true });
+    const dragRow = taskRowByTitle(container, "First");
+    const dataTransfer = fakeDataTransfer();
+
+    dragRow?.dispatch("dragstart", { dataTransfer, clientX: 40, clientY: 60 });
+
+    expect(dragRow?.classes.has("is-dragging")).toBe(true);
+    expect(taskRowByTitle(container, "Second")?.classes.has("is-bulk-dragging")).toBe(true);
+    expect(collect(fakeDocument.body).find((element) => element.classes.has("task-hub-task-drag-stack"))).toBeUndefined();
+    fakeDocument.dispatch("keyup", { key: "Meta", metaKey: false, ctrlKey: false });
   });
 
   it("shows a trash drop target only for the active smart list view and removes selected tasks", () => {
@@ -1065,9 +1226,11 @@ describe("renderTasksView", () => {
 
     const dragRow = taskRowByTitle(container, "First");
     const dataTransfer = fakeDataTransfer();
+    fakeDocument.dispatch("keydown", { key: "Meta", metaKey: true });
     dragRow?.dispatch("dragstart", { dataTransfer });
     const dragover = remove?.dispatch("dragover", { dataTransfer });
     remove?.dispatch("drop", { dataTransfer });
+    fakeDocument.dispatch("keyup", { key: "Meta", metaKey: false, ctrlKey: false });
 
     expect(dragover?.preventDefault).toHaveBeenCalled();
     expect(onRemoveTasksFromActiveSmartList).toHaveBeenCalledWith([firstTask, secondTask]);
@@ -3236,7 +3399,7 @@ describe("renderTasksView", () => {
     expect(viewHandlers.onTaskReschedule).toHaveBeenCalledWith(todayTask, "2026-05-10");
   });
 
-  it("reschedules command-selected tasks together when dropped onto a date bucket", () => {
+  it("reschedules selected tasks together when a selected task is dropped onto a date bucket", () => {
     const container = new FakeElement();
     const viewHandlers = handlers();
     const overdueTask: TaskItem = {

@@ -355,6 +355,7 @@ describe("Task Hub styles", () => {
     const flowRule = styles.match(/\.task-hub-task-list-flow\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const rowRule = styles.match(/\.task-hub-task-list-flow\s+\.task-hub-task-row\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const bulkDragRule = styles.match(/\.task-hub-task-row\.is-bulk-dragging\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const draggingRule = styles.match(/\.task-hub-task-row\.is-dragging\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const subtaskListRule = styles.match(/\.task-hub-task-list-flow\s+\.task-hub-subtask-list\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const textRule = styles.match(/\.task-hub-task-list-flow\s+\.task-hub-task-text\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const tagRule = styles.match(/\.task-hub-task-list-flow\s+\.task-hub-task-row\s+\.task-hub-task-tag,\s*\.task-hub-tag-editor\s+\.task-hub-task-tag,\s*\.task-hub-dated-note-detail-header\s+\.task-hub-task-tag,\s*\.task-hub-dated-note-body\s+\.task-hub-task-tag\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
@@ -365,8 +366,12 @@ describe("Task Hub styles", () => {
     expect(rowRule).toContain("border-left: 3px solid");
     expect(rowRule).toContain("border-radius: 0");
     expect(rowRule).toContain("min-height: 32px");
-    expect(bulkDragRule).toContain("opacity: 0.68");
+    expect(draggingRule).toContain("opacity: 0.24");
+    expect(draggingRule).toContain("transform: scale(0.985) translateX(3px)");
+    expect(bulkDragRule).toContain("opacity: 0.34");
     expect(bulkDragRule).toContain("box-shadow:");
+    expect(styles).not.toContain(".task-hub-task-drag-stack");
+    expect(styles).not.toContain(".is-bulk-drag-modifier-active .task-hub-task-row");
     expect(subtaskListRule).toContain("margin-left: 19px");
     expect(textRule).toContain("line-height: 1.2");
     expect(tagRule).toContain("box-shadow:");
