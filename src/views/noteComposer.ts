@@ -9,6 +9,7 @@ import {
   placeholder
 } from "@codemirror/view";
 import { replaceTagToken, suggestTagsAtCursor } from "./tagInputSuggest";
+import { setCssStyles } from "./domStyles";
 
 export type NoteComposerToken =
   | { type: "checkbox"; from: number; to: number; checked: boolean }
@@ -279,9 +280,11 @@ function noteComposerTagSuggest(getTags: () => string[]): Extension {
       if (!popup.isConnected) {
         this.view.dom.ownerDocument.body.appendChild(popup);
       }
-      popup.style.position = "fixed";
-      popup.style.left = `${coords.left}px`;
-      popup.style.top = `${coords.bottom + 6}px`;
+      setCssStyles(popup, {
+        position: "fixed",
+        left: `${coords.left}px`,
+        top: `${coords.bottom + 6}px`
+      });
     }
 
     private selectOffset(offset: number): void {
