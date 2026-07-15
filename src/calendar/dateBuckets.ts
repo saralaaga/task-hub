@@ -30,5 +30,5 @@ function isWithinNextDays(dateKey: string, now: Date, days: number): boolean {
   const end = new Date(start);
   end.setDate(start.getDate() + days);
   const candidate = new Date(`${dateKey}T00:00:00`);
-  return candidate > start && candidate <= end;
+  return candidate > start && candidate < end;
 }

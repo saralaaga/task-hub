@@ -3325,12 +3325,16 @@ describe("renderTasksView", () => {
     heading("today (0)")?.click();
     heading("tomorrow (0)")?.click();
     heading("thisWeek (0)")?.click();
+    heading("future (0)")?.click();
+    heading("noDate (0)")?.click();
     heading("overdue (1)")?.click();
 
-    expect(viewHandlers.onCreateTaskForDate).toHaveBeenCalledTimes(3);
+    expect(viewHandlers.onCreateTaskForDate).toHaveBeenCalledTimes(5);
     expect(viewHandlers.onCreateTaskForDate).toHaveBeenNthCalledWith(1, "2026-05-08");
     expect(viewHandlers.onCreateTaskForDate).toHaveBeenNthCalledWith(2, "2026-05-09");
     expect(viewHandlers.onCreateTaskForDate).toHaveBeenNthCalledWith(3, "2026-05-10");
+    expect(viewHandlers.onCreateTaskForDate).toHaveBeenNthCalledWith(4, "2026-05-15");
+    expect(viewHandlers.onCreateTaskForDate).toHaveBeenNthCalledWith(5, { kind: "unscheduled" });
   });
 
   it("hides the overdue section when it has no tasks so today is first", () => {
@@ -3397,6 +3401,80 @@ describe("renderTasksView", () => {
     thisWeekSection?.dispatch("drop", { dataTransfer });
 
     expect(viewHandlers.onTaskReschedule).toHaveBeenCalledWith(todayTask, "2026-05-10");
+  });
+
+  it("drops a task onto future by moving it to one week from today", () => {
+    const container = new FakeElement();
+    const viewHandlers = handlers();
+    const todayTask: TaskItem = {
+      ...baseTask,
+      id: "today",
+      source: "vault",
+      externalId: undefined,
+      externalSourceName: undefined,
+      filePath: "Project.md",
+      rawLine: "- [ ] Today 📅 2026-05-08",
+      text: "Today",
+      dueDate: "2026-05-08",
+      scheduledDate: undefined
+    };
+
+    renderTasksView(
+      container as unknown as HTMLElement,
+      [todayTask],
+      [todayTask],
+      { status: "open", tags: [], sourceQuery: "", textQuery: "" },
+      viewHandlers,
+      new Date("2026-05-08T12:00:00Z"),
+      (key) => key,
+      { allowAppleReminderWriteback: true }
+    );
+
+    const dragRow = taskRowByTitle(container, "Today");
+    const futureSection = collect(container).find((element) => element.classes.has("task-hub-task-section") && collect(element).some((child) => child.text === "future (0)"));
+    const dataTransfer = fakeDataTransfer();
+
+    dragRow?.dispatch("dragstart", { dataTransfer });
+    futureSection?.dispatch("drop", { dataTransfer });
+
+    expect(viewHandlers.onTaskReschedule).toHaveBeenCalledWith(todayTask, "2026-05-15");
+  });
+
+  it("drops a dated task onto no date by removing its schedule", () => {
+    const container = new FakeElement();
+    const viewHandlers = handlers();
+    const todayTask: TaskItem = {
+      ...baseTask,
+      id: "today",
+      source: "vault",
+      externalId: undefined,
+      externalSourceName: undefined,
+      filePath: "Project.md",
+      rawLine: "- [ ] Today 📅 2026-05-08 ⏰ 08:15",
+      text: "Today",
+      dueDate: "2026-05-08",
+      scheduledDate: "2026-05-08T08:15"
+    };
+
+    renderTasksView(
+      container as unknown as HTMLElement,
+      [todayTask],
+      [todayTask],
+      { status: "open", tags: [], sourceQuery: "", textQuery: "" },
+      viewHandlers,
+      new Date("2026-05-08T12:00:00Z"),
+      (key) => key,
+      { allowAppleReminderWriteback: true }
+    );
+
+    const dragRow = taskRowByTitle(container, "Today");
+    const noDateSection = collect(container).find((element) => element.classes.has("task-hub-task-section") && collect(element).some((child) => child.text === "noDate (0)"));
+    const dataTransfer = fakeDataTransfer();
+
+    dragRow?.dispatch("dragstart", { dataTransfer });
+    noDateSection?.dispatch("drop", { dataTransfer });
+
+    expect(viewHandlers.onTaskReschedule).toHaveBeenCalledWith(todayTask, { kind: "unscheduled" });
   });
 
   it("reschedules selected tasks together when a selected task is dropped onto a date bucket", () => {

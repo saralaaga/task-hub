@@ -1,6 +1,6 @@
 import { Menu, Notice, setIcon } from "obsidian";
 import { toLocalDateKey, type DateBucket } from "../calendar/dateBuckets";
-import type { CalendarDropTarget } from "../calendar/calendarDropTarget";
+import { isUnscheduledCalendarDropTarget, type CalendarDropTarget } from "../calendar/calendarDropTarget";
 import { getTaskBucket, type TaskFilterState } from "../filtering/filters";
 import type { Translator } from "../i18n";
 import { normalizeReminderAlertMinutes, populateReminderAlertSelect, type ReminderAlertMinutes } from "../reminderAlerts";
@@ -118,7 +118,7 @@ const BUCKETS = ["overdue", "today", "tomorrow", "thisWeek", "future", "noDate",
 const TASK_LIST_DRAG_MIME = "application/x-task-hub-task-list-id";
 const TASK_LIST_DRAG_IDS_MIME = "application/x-task-hub-task-list-ids";
 const TASK_NOTE_DRAG_MIME = "application/x-task-hub-task-note-id";
-const TASK_LIST_RESCHEDULE_BUCKETS = ["overdue", "today", "tomorrow", "thisWeek"] as const;
+const TASK_LIST_RESCHEDULE_BUCKETS = ["overdue", "today", "tomorrow", "thisWeek", "future", "noDate"] as const;
 const TASK_PROGRESS_ANIMATION_MS = 240;
 const SMART_LIST_COLORS: Array<{ key: "smartListColorDefault" | "smartListColorRed" | "smartListColorOrange" | "smartListColorGreen" | "smartListColorCyan" | "smartListColorBlue" | "smartListColorPurple"; value?: string }> = [
   { key: "smartListColorDefault", value: undefined },
@@ -1097,8 +1097,8 @@ function bindTaskListBucketDropTarget(
   handlers: TaskRowHandlers,
   now: Date
 ): void {
-  const targetDate = taskListDropDateForBucket(bucket, now);
-  if (!targetDate || !handlers.onTaskReschedule) return;
+  const target = taskListDropTargetForBucket(bucket, now);
+  if (!target || !handlers.onTaskReschedule) return;
 
   section.addEventListener("dragover", (event) => {
     const draggedTasks = taskListTasksFromDragEvent(event, tasks, draggableTaskIds);
@@ -1118,7 +1118,7 @@ function bindTaskListBucketDropTarget(
     if (droppableTasks.length === 0) return;
     event.preventDefault();
     for (const task of droppableTasks) {
-      handlers.onTaskReschedule?.(task, taskListDropTarget(task, targetDate));
+      handlers.onTaskReschedule?.(task, taskListDropTarget(task, target));
     }
   });
 }
@@ -1129,19 +1129,19 @@ function bindTaskListBucketCreateTarget(
   handlers: Pick<TaskRowHandlers, "onCreateTaskForDate">,
   now: Date
 ): void {
-  const targetDate = taskListCreateDateForBucket(bucket, now);
-  if (!targetDate || !handlers.onCreateTaskForDate) return;
+  const target = taskListCreateTargetForBucket(bucket, now);
+  if (!target || !handlers.onCreateTaskForDate) return;
 
   heading.addClass("is-clickable-date-bucket");
   heading.setAttr("role", "button");
   heading.setAttr("tabindex", "0");
   heading.addEventListener("click", () => {
-    handlers.onCreateTaskForDate?.(targetDate);
+    handlers.onCreateTaskForDate?.(target);
   });
   heading.addEventListener("keydown", (event) => {
     if (event.key !== "Enter" && event.key !== " ") return;
     event.preventDefault();
-    handlers.onCreateTaskForDate?.(targetDate);
+    handlers.onCreateTaskForDate?.(target);
   });
 }
 
@@ -1374,22 +1374,28 @@ function isTaskListRescheduleBucket(bucket: DateBucket): boolean {
   return TASK_LIST_RESCHEDULE_BUCKETS.includes(bucket as (typeof TASK_LIST_RESCHEDULE_BUCKETS)[number]);
 }
 
-function taskListDropDateForBucket(bucket: DateBucket, now: Date): string | undefined {
+function taskListDropTargetForBucket(bucket: DateBucket, now: Date): CalendarDropTarget | undefined {
   if (bucket === "overdue") return toLocalDateKey(addDays(now, -1));
   if (bucket === "today") return toLocalDateKey(now);
   if (bucket === "tomorrow") return toLocalDateKey(addDays(now, 1));
   if (bucket === "thisWeek") return toLocalDateKey(addDays(now, 2));
+  if (bucket === "future") return toLocalDateKey(addDays(now, 7));
+  if (bucket === "noDate") return { kind: "unscheduled" };
   return undefined;
 }
 
-function taskListCreateDateForBucket(bucket: DateBucket, now: Date): string | undefined {
+function taskListCreateTargetForBucket(bucket: DateBucket, now: Date): CalendarDropTarget | undefined {
   if (bucket === "today") return toLocalDateKey(now);
   if (bucket === "tomorrow") return toLocalDateKey(addDays(now, 1));
   if (bucket === "thisWeek") return toLocalDateKey(addDays(now, 2));
+  if (bucket === "future") return toLocalDateKey(addDays(now, 7));
+  if (bucket === "noDate") return { kind: "unscheduled" };
   return undefined;
 }
 
-function taskListDropTarget(task: TaskItem, dateKey: string): CalendarDropTarget {
+function taskListDropTarget(task: TaskItem, target: CalendarDropTarget): CalendarDropTarget {
+  if (isUnscheduledCalendarDropTarget(target)) return target;
+  const dateKey = typeof target === "string" ? target : target.dateKey;
   const startMinutes = startMinutesFromTask(task);
   return startMinutes === undefined ? dateKey : { dateKey, startMinutes };
 }

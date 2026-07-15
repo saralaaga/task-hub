@@ -1,5 +1,5 @@
 import { parseTasksFromMarkdown } from "./parsing/taskParser";
-import { appendTaskToContent, createTaskLine, normalizeTaskCreationFilePath } from "./taskCreation";
+import { appendTaskToContent, createTaskLine, createUnscheduledTaskLine, normalizeTaskCreationFilePath } from "./taskCreation";
 
 describe("task creation helpers", () => {
   it("falls back to the default task creation file path", () => {
@@ -34,6 +34,21 @@ describe("task creation helpers", () => {
 
   it("folds multiline user input into one task line", () => {
     expect(createTaskLine("Buy\nmilk\tsoon", "2026-05-08")).toBe("- [ ] Buy milk soon 🛫 2026-05-08 ⏳ 2026-05-08");
+  });
+
+  it("creates unscheduled task lines without date tokens", () => {
+    const content = appendTaskToContent("", createUnscheduledTaskLine("Buy\nmilk\tsoon #errand"));
+
+    expect(content).toBe("- [ ] Buy milk soon #errand\n");
+    expect(parseTasksFromMarkdown({ filePath: "Task Hub.md", content })).toMatchObject([
+      {
+        text: "Buy milk soon",
+        tags: ["#errand"],
+        dueDate: undefined,
+        startDate: undefined,
+        scheduledDate: undefined
+      }
+    ]);
   });
 
   it("creates timed task lines that the parser can place on the time grid", () => {

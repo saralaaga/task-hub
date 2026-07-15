@@ -18,6 +18,11 @@ export function createTaskLine(text: string, dateKey: string, startMinutes?: num
   return `- [ ] ${taskText} 🛫 ${dateKey} ⏳ ${dateKey}${timeText}${recurrenceText}`;
 }
 
+export function createUnscheduledTaskLine(text: string): string {
+  const taskText = text.replace(/\s+/g, " ").trim();
+  return `- [ ] ${taskText}`;
+}
+
 export function appendTaskToContent(content: string, taskLine: string): string {
   if (!content) return `${taskLine}\n`;
   return `${content}${content.endsWith("\n") ? "" : "\n"}${taskLine}\n`;

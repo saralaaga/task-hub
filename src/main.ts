@@ -23,7 +23,7 @@ import { parseTaskAtLine } from "./indexing/editorTask";
 import { completeTaskInContent, deleteTaskInContent, rescheduleTaskInContent, unscheduleTaskInContent, updateTaskLineInContent, type CompletionResult, type RescheduleMessages } from "./indexing/taskActions";
 import { TaskIndex } from "./indexing/taskIndex";
 import { openExternalTaskSource } from "./externalSources";
-import { appendTaskToContent, createTaskLine, normalizeTaskCreationFilePath } from "./taskCreation";
+import { appendTaskToContent, createTaskLine, createUnscheduledTaskLine, normalizeTaskCreationFilePath } from "./taskCreation";
 import { isDateKeyWithinWindow, taskPlannedDateKey, taskStartDateForRepair, taskStartDateKey, taskWindowDateKey } from "./taskDates";
 import { bindTaskHubTagInputSuggest, collectObsidianTags } from "./views/tagInputSuggest";
 import { normalizeReminderAlertMinutes, populateReminderAlertSelect, type ReminderAlertMinutes } from "./reminderAlerts";
@@ -1737,7 +1737,7 @@ export default class TaskHubPlugin extends Plugin {
     options: CreateTaskOptions = {}
   ): Promise<void> {
     const t = createTranslator(this.settings.language);
-    const timedTarget = calendarDropTargetParts(calendarTarget);
+    const timedTarget = isUnscheduledCalendarDropTarget(calendarTarget) ? undefined : calendarDropTargetParts(calendarTarget);
     const taskText = text.replace(/\s+/g, " ").trim();
     const cleanNotes = notes?.trim() || undefined;
     if (!taskText) return;
@@ -1752,27 +1752,29 @@ export default class TaskHubPlugin extends Plugin {
       const input = {
         title: reminderText.title || taskText,
         ...(cleanNotes ? { notes: cleanNotes } : {}),
-        dueDate: timedTarget.dateKey,
-        startMinutes: timedTarget.startMinutes,
-        ...(timedTarget.startMinutes !== undefined && alertMinutesBefore !== undefined ? { alertMinutesBefore } : {}),
+        dueDate: timedTarget?.dateKey,
+        startMinutes: timedTarget?.startMinutes,
+        ...(timedTarget?.startMinutes !== undefined && alertMinutesBefore !== undefined ? { alertMinutesBefore } : {}),
         listId: target.listId ?? this.settings.localApple.remindersDefaultListId,
         tags: reminderTags,
         ...(recurrence ? { recurrence } : {})
       };
       try {
         const reminderId = await this.writeAppleReminderWithAccessRetry(() => createAppleReminder(input));
-        this.rememberAppleReminderStartDate(
-          reminderId,
-          {
-            rawLine: "",
-            dueDate: timedTarget.dateKey,
-            scheduledDate: timedTarget.dateKey,
-            startDate: timedTarget.dateKey,
-            source: "apple-reminders",
-            externalId: reminderId
-          },
-          timedTarget.dateKey
-        );
+        if (timedTarget) {
+          this.rememberAppleReminderStartDate(
+            reminderId,
+            {
+              rawLine: "",
+              dueDate: timedTarget.dateKey,
+              scheduledDate: timedTarget.dateKey,
+              startDate: timedTarget.dateKey,
+              source: "apple-reminders",
+              externalId: reminderId
+            },
+            timedTarget.dateKey
+          );
+        }
         await this.syncLocalApple({ silent: true });
         const createdTask = this.localAppleTasks.find((task) => task.externalId === reminderId);
         if (createdTask) options.onTaskCreated?.(createdTask);
@@ -1796,9 +1798,9 @@ export default class TaskHubPlugin extends Plugin {
             title: didaText.title || taskText,
             projectId: target.projectId ?? this.settings.dida.defaultProjectId,
             notes: cleanNotes,
-            date: timedTarget.dateKey,
-            startDate: timedTarget.dateKey,
-            startMinutes: timedTarget.startMinutes,
+            date: timedTarget?.dateKey,
+            startDate: timedTarget?.dateKey,
+            startMinutes: timedTarget?.startMinutes,
             tags: this.settings.dida.tasksCreateTagsEnabled ? didaText.tags : [],
             reminderOffsetMinutes: this.settings.dida.defaultReminderOffsetMinutes,
             repeatFlag: recurrence ?? undefined
@@ -1816,6 +1818,10 @@ export default class TaskHubPlugin extends Plugin {
     }
 
     if (target.type === "apple-calendar") {
+      if (!timedTarget) {
+        new Notice(t("taskDateTokenMissing"));
+        return;
+      }
       if (!this.canSendTasksToAppleCalendar()) {
         new Notice(t("appleCalendarCreateDisabled"));
         return;
@@ -1850,7 +1856,9 @@ export default class TaskHubPlugin extends Plugin {
 
     const path = normalizeTaskCreationFilePath(this.settings.taskCreationFilePath);
     await this.ensureParentFolders(path);
-    const taskLine = createTaskLine(taskText, timedTarget.dateKey, timedTarget.startMinutes, recurrence);
+    const taskLine = timedTarget
+      ? createTaskLine(taskText, timedTarget.dateKey, timedTarget.startMinutes, recurrence)
+      : createUnscheduledTaskLine(taskText);
     let file = this.app.vault.getFileByPath(path);
     if (!file) {
       file = await this.app.vault.create(path, appendTaskToContent("", taskLine));
@@ -3645,9 +3653,9 @@ class CreateTaskModal extends Modal {
     this.calendarTarget = calendarTarget;
     this.creationKind = this.initialCreationKind();
     this.target = this.defaultTargetForKind(this.creationKind === "note" ? "task" : this.creationKind);
-    const targetParts = calendarDropTargetParts(calendarTarget);
-    this.eventDurationMinutes = validCalendarEventDuration(targetParts.durationMinutes ?? 60);
-    this.eventRecurrenceStart = targetParts.dateKey;
+    const targetParts = isUnscheduledCalendarDropTarget(calendarTarget) ? undefined : calendarDropTargetParts(calendarTarget);
+    this.eventDurationMinutes = validCalendarEventDuration(targetParts?.durationMinutes ?? 60);
+    this.eventRecurrenceStart = targetParts?.dateKey ?? toLocalDateKey(new Date());
   }
 
   onOpen(): void {
@@ -3898,16 +3906,21 @@ class CreateTaskModal extends Modal {
   private renderScheduleControls(t: ReturnType<typeof createTranslator>): HTMLInputElement | undefined {
     const schedule = new Setting(this.contentEl).setName(t("taskCreationTime"));
     schedule.settingEl.addClass("task-hub-create-schedule-setting");
+    const currentTarget = isUnscheduledCalendarDropTarget(this.calendarTarget)
+      ? undefined
+      : calendarDropTargetParts(this.calendarTarget);
     const datePicker = schedule.controlEl.createDiv({ cls: "task-hub-create-picker task-hub-create-date-picker" });
     const dateInput = datePicker.createEl("input", {
       cls: "task-hub-create-date-input",
       type: "date",
-      value: calendarDropTargetParts(this.calendarTarget).dateKey
+      value: currentTarget?.dateKey ?? ""
     });
     dateInput.setAttr("aria-label", t("date"));
     dateInput.addEventListener("change", () => {
       if (!dateInput.value) return;
-      this.calendarTarget = withCalendarDropTargetDate(this.calendarTarget, dateInput.value);
+      this.calendarTarget = isUnscheduledCalendarDropTarget(this.calendarTarget)
+        ? dateInput.value
+        : withCalendarDropTargetDate(this.calendarTarget, dateInput.value);
       if (this.creationKind === "event" && !this.eventRecurrenceStartTouched) {
         this.eventRecurrenceStart = dateInput.value;
       }
@@ -3923,7 +3936,7 @@ class CreateTaskModal extends Modal {
     const timeInput = timePicker.createEl("input", {
       cls: "task-hub-create-time-input",
       type: "time",
-      value: timeInputValue(calendarDropTargetParts(this.calendarTarget).startMinutes)
+      value: timeInputValue(currentTarget?.startMinutes)
     });
     timeInput.step = "300";
     timeInput.addEventListener("click", () => {
@@ -3975,6 +3988,7 @@ class CreateTaskModal extends Modal {
   }
 
   private updateStartTimeFromInput(value: string): void {
+    if (isUnscheduledCalendarDropTarget(this.calendarTarget)) return;
     const startMinutes = parseTimeInputValue(value);
     const current = calendarDropTargetParts(this.calendarTarget);
     this.calendarTarget =
@@ -4018,6 +4032,7 @@ class CreateTaskModal extends Modal {
   }
 
   private updateEventDurationTarget(): void {
+    if (isUnscheduledCalendarDropTarget(this.calendarTarget)) return;
     const current = calendarDropTargetParts(this.calendarTarget);
     this.calendarTarget =
       current.startMinutes === undefined

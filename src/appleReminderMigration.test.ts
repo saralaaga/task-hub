@@ -1514,6 +1514,43 @@ describe("Apple Reminders migration", () => {
     });
   });
 
+  it("creates an unscheduled vault task without date tokens", async () => {
+    const file = { path: "Task Hub.md", extension: "md", stat: { ctime: 1, mtime: 2, size: 3 } };
+    const create = jest.fn(async () => file);
+    const plugin = new TaskHubPlugin({} as never, {} as never);
+    plugin.app = {
+      vault: {
+        getFileByPath: jest.fn(() => null),
+        getFolderByPath: jest.fn(() => ({})),
+        createFolder: jest.fn(async () => undefined),
+        create
+      },
+      workspace: {
+        getLeavesOfType: jest.fn(() => [])
+      }
+    } as never;
+    plugin.settings = DEFAULT_SETTINGS;
+    plugin.taskIndex = {
+      reindexFile: jest.fn(async () => undefined),
+      getTasks: jest.fn(() => [
+        task({
+          filePath: "Task Hub.md",
+          rawLine: "- [ ] Someday idea #inbox",
+          text: "Someday idea",
+          tags: ["#inbox"],
+          dueDate: undefined,
+          startDate: undefined,
+          scheduledDate: undefined
+        })
+      ])
+    } as never;
+
+    await plugin.createTaskForDate({ kind: "unscheduled" }, "Someday idea #inbox", { type: "vault" });
+
+    expect(create).toHaveBeenCalledWith("Task Hub.md", "- [ ] Someday idea #inbox\n");
+    expect(notices).toContain("Task created.");
+  });
+
   it("creates recurring Apple Calendar events as separate concrete events from the task modal flow", async () => {
     const plugin = new TaskHubPlugin({} as never, {} as never);
     plugin.app = { workspace: { getLeavesOfType: jest.fn(() => []) } } as never;
@@ -1776,6 +1813,27 @@ describe("Apple Reminders migration", () => {
     expect(fields.find((element) => element.type === "textarea")).toBeDefined();
     expect(fields.filter((element) => element.type === "checkbox")).toHaveLength(defaultCheckboxCount + 1);
     expect(fields.filter((element) => element.type === "select")).toHaveLength(defaultSelectCount + 2);
+  });
+
+  it("opens the create task modal for an unscheduled target with an empty date", () => {
+    const plugin = new TaskHubPlugin({} as never, {} as never);
+    plugin.app = {
+      workspace: {
+        getLeavesOfType: jest.fn(() => [])
+      }
+    } as never;
+    plugin.settings = {
+      ...DEFAULT_SETTINGS,
+      calendarCreationDefaultKind: "task",
+      calendarTaskCreationDefaultTarget: { type: "vault" }
+    };
+    (globalThis as unknown as { window: { setTimeout: typeof setTimeout } }).window = { setTimeout };
+
+    expect(() => plugin.openCreateTaskModal({ kind: "unscheduled" })).not.toThrow();
+
+    const modal = modals.at(-1);
+    const fields = modal ? collectElements(modal.contentEl) : [];
+    expect(fields.find((element) => element.type === "date")?.value).toBe("");
   });
 
   it("does not submit create task modal when Enter is used to confirm IME composition", async () => {
