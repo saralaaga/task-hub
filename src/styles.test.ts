@@ -630,6 +630,13 @@ describe("Task Hub styles", () => {
     const noteComposerContentRule = styles.match(/\.task-hub-note-composer\s+\.cm-content\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const noteComposerOutlineRule = styles.match(/\.task-hub-note-composer\s+\.cm-content:focus,\s*\.task-hub-note-composer\s+\.cm-line\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const noteComposerCheckboxRule = styles.match(/\.task-hub-note-composer-checkbox\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const noteComposerHeadingRule = styles.match(/\.task-hub-note-composer-heading\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const noteComposerStrongRule = styles.match(/\.task-hub-note-composer-strong\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const noteComposerEmphasisRule = styles.match(/\.task-hub-note-composer-emphasis\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const noteComposerHighlightRule = styles.match(/\.task-hub-note-composer-highlight\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const noteComposerStrikeRule = styles.match(/\.task-hub-note-composer-strikethrough\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const noteComposerInlineCodeRule = styles.match(/\.task-hub-note-composer-inline-code\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const noteComposerLinkRule = styles.match(/\.task-hub-note-composer-link\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const actionSettingRule = styles.match(/\.task-hub-create-modal\s+\.setting-item\.task-hub-create-action-setting\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const actionControlRule = styles.match(/\.task-hub-create-modal\s+\.task-hub-create-action-setting\s+\.setting-item-control\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
 
@@ -668,6 +675,13 @@ describe("Task Hub styles", () => {
     expect(noteComposerContentRule).toContain("min-height: 100px");
     expect(noteComposerOutlineRule).toContain("outline: none");
     expect(noteComposerCheckboxRule).toContain("accent-color: var(--interactive-accent)");
+    expect(noteComposerHeadingRule).toContain("font-weight: 700");
+    expect(noteComposerStrongRule).toContain("font-weight: 700");
+    expect(noteComposerEmphasisRule).toContain("font-style: italic");
+    expect(noteComposerHighlightRule).toContain("background: color-mix");
+    expect(noteComposerStrikeRule).toContain("line-through");
+    expect(noteComposerInlineCodeRule).toContain("font-family: var(--font-monospace)");
+    expect(noteComposerLinkRule).toContain("text-decoration: underline");
     expect(actionSettingRule).toContain("grid-template-columns: 1fr");
     expect(actionSettingRule).toContain("justify-items: end");
     expect(actionControlRule).toContain("justify-self: end");

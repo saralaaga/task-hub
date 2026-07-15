@@ -12,6 +12,7 @@ import {
   reconcileVisibleTaskSelection,
   restoreContentScrollAfterRender,
   restoreTaskHubSessionState,
+  restoredDatedNoteDetailScrollTop,
   scrollDatedNoteDetailToTop,
   scrollExpandedTaskIntoView,
   shouldHandleTaskHubUndoShortcut,
@@ -353,6 +354,28 @@ describe("restoreContentScrollAfterRender", () => {
   });
 });
 
+describe("restoredDatedNoteDetailScrollTop", () => {
+  it("keeps a bottom-reached detail pane pinned after loading more notes below", () => {
+    expect(
+      restoredDatedNoteDetailScrollTop(
+        { scrollTop: 600, scrollHeight: 1000, clientHeight: 400 },
+        { scrollTop: 0, scrollHeight: 1400, clientHeight: 400 },
+        "forward"
+      )
+    ).toBe(1000);
+  });
+
+  it("offsets prepended note groups so the current detail content does not jump", () => {
+    expect(
+      restoredDatedNoteDetailScrollTop(
+        { scrollTop: 24, scrollHeight: 1000, clientHeight: 400 },
+        { scrollTop: 0, scrollHeight: 1260, clientHeight: 400 },
+        "backward"
+      )
+    ).toBe(284);
+  });
+});
+
 describe("TaskHubView viewport restoration", () => {
   it("reapplies preserved task, content, and agenda scroll after layout settles", () => {
     const plugin = {
@@ -432,6 +455,53 @@ describe("TaskHubView viewport restoration", () => {
     expect(agenda.scrollLeft).toBe(24);
     expect(allDaySlot.scrollTop).toBe(72);
     expect(daySidebar.scrollTop).toBe(128);
+  });
+
+  it("keeps the dated note detail pane pinned to the new bottom after end-loading", () => {
+    const plugin = {
+      settings: {
+        defaultView: "notes",
+        language: "en",
+        taskViewFilters: fallbackFilters(),
+        lastSessionState: undefined
+      },
+      getCalendarSources: jest.fn(() => [])
+    };
+    const view = new TaskHubView({} as never, plugin as never);
+    const detail = { scrollTop: 0, scrollHeight: 1400, clientHeight: 400 };
+    const list = { scrollTop: 0 };
+    const contentContainer = {
+      scrollTop: 0,
+      querySelector: jest.fn((selector: string) => {
+        if (selector === ".task-hub-dated-note-detail") return detail;
+        if (selector === ".task-hub-dated-note-list") return list;
+        return undefined;
+      })
+    };
+    Object.assign(view, {
+      view: "notes",
+      containerEl: {
+        win: {
+          requestAnimationFrame: undefined,
+          setTimeout: jest.fn(() => 1),
+          clearTimeout: jest.fn()
+        },
+        children: [{}, contentContainer]
+      },
+      datedNoteDetailScrollTop: 600,
+      datedNoteListScrollTop: 120
+    });
+
+    (view as unknown as { scheduleViewportRestore(options: unknown): void }).scheduleViewportRestore({
+      preserveDatedNotePaneScrolls: true,
+      datedNoteDetailScrollRestore: {
+        direction: "forward",
+        previous: { scrollTop: 600, scrollHeight: 1000, clientHeight: 400 }
+      }
+    });
+
+    expect(detail.scrollTop).toBe(1000);
+    expect(list.scrollTop).toBe(120);
   });
 });
 

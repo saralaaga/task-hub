@@ -519,7 +519,7 @@ describe("TaskHubSettingTab", () => {
     expect(tab.containerEl.querySelector(".task-hub-notes-column--task")?.querySelectorAll(".setting-item").length).toBeGreaterThanOrEqual(6);
     expect(tab.containerEl.querySelector(".task-hub-settings-compact-grid")).toBeNull();
     expect(tab.containerEl.textContent).toContain("Notes view save folder");
-    expect(tab.containerEl.textContent).toContain("Open note after creation");
+    expect(tab.containerEl.textContent).not.toContain("Open note after creation");
     expect(tab.containerEl.textContent).toContain("Write Thino ID metadata to Notes view notes");
     expect(tab.containerEl.textContent).toContain("Task Hub notes folder");
     expect(tab.containerEl.textContent).toContain("Thino notes folder");

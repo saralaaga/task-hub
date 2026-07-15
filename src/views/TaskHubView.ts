@@ -31,11 +31,23 @@ type TaskHubRenderOptions = {
   preserveContentScroll?: boolean;
   preserveCalendarAgendaScroll?: boolean;
   preserveDatedNotePaneScrolls?: boolean;
+  datedNoteDetailScrollRestore?: DatedNoteDetailScrollRestore;
 };
 
 type ViewportRestoreHandle = {
   kind: "animationFrame" | "timeout";
   id: number;
+};
+
+export type DatedNoteScrollSnapshot = {
+  scrollTop: number;
+  scrollHeight: number;
+  clientHeight: number;
+};
+
+type DatedNoteDetailScrollRestore = {
+  direction: "backward" | "forward";
+  previous: DatedNoteScrollSnapshot;
 };
 
 const DATED_NOTE_DETAIL_WINDOW_STEP = 2;
@@ -1304,17 +1316,26 @@ export class TaskHubView extends ItemView {
     });
   }
 
-  private restoreDatedNotePaneScrolls(): void {
+  private restoreDatedNotePaneScrolls(options: TaskHubRenderOptions): void {
     if (this.view !== "notes") return;
     const container = this.containerEl.children[1] as HTMLElement | undefined;
     const detail = container?.querySelector<HTMLElement>(".task-hub-dated-note-detail");
     const list = container?.querySelector<HTMLElement>(".task-hub-dated-note-list");
-    if (detail) detail.scrollTop = this.datedNoteDetailScrollTop;
+    if (detail) {
+      detail.scrollTop = options.datedNoteDetailScrollRestore
+        ? restoredDatedNoteDetailScrollTop(
+            options.datedNoteDetailScrollRestore.previous,
+            readDatedNoteScrollSnapshot(detail),
+            options.datedNoteDetailScrollRestore.direction
+          )
+        : this.datedNoteDetailScrollTop;
+    }
     if (list) list.scrollTop = this.datedNoteListScrollTop;
   }
 
   private expandDatedNoteDetailWindow(direction: "backward" | "forward", groupCount: number): void {
     if (this.view !== "notes" || groupCount <= 0) return;
+    const scrollRestore = this.captureDatedNoteDetailScrollRestore(direction);
     const startIndex = this.datedNoteDetailStartIndex ?? 0;
     const endIndex = this.datedNoteDetailEndIndex ?? Math.min(groupCount - 1, startIndex);
     if (direction === "backward") {
@@ -1324,7 +1345,21 @@ export class TaskHubView extends ItemView {
       if (endIndex >= groupCount - 1) return;
       this.datedNoteDetailEndIndex = Math.min(groupCount - 1, endIndex + DATED_NOTE_DETAIL_WINDOW_STEP);
     }
-    this.render({ preserveContentScroll: true, preserveDatedNotePaneScrolls: true });
+    this.render({
+      preserveContentScroll: true,
+      preserveDatedNotePaneScrolls: true,
+      datedNoteDetailScrollRestore: scrollRestore
+    });
+  }
+
+  private captureDatedNoteDetailScrollRestore(direction: "backward" | "forward"): DatedNoteDetailScrollRestore | undefined {
+    const container = this.containerEl.children[1] as HTMLElement | undefined;
+    const detail = container?.querySelector<HTMLElement>(".task-hub-dated-note-detail");
+    if (!detail) return undefined;
+    return {
+      direction,
+      previous: readDatedNoteScrollSnapshot(detail)
+    };
   }
 
   private expandDatedNoteListWindow(groupCount: number): void {
@@ -1378,7 +1413,7 @@ export class TaskHubView extends ItemView {
       if (sidebar) sidebar.scrollTop = this.calendarDaySidebarScrollTop;
     }
     if (options.preserveDatedNotePaneScrolls) {
-      this.restoreDatedNotePaneScrolls();
+      this.restoreDatedNotePaneScrolls(options);
     }
   }
 
@@ -1607,6 +1642,34 @@ export function restoreContentScrollAfterRender(
 ): void {
   if (!options.preserveScroll || !container) return;
   container.scrollTop = options.scrollTop;
+}
+
+export function restoredDatedNoteDetailScrollTop(
+  previous: DatedNoteScrollSnapshot,
+  current: DatedNoteScrollSnapshot,
+  direction: "backward" | "forward"
+): number {
+  const currentMaxTop = Math.max(0, current.scrollHeight - current.clientHeight);
+  if (direction === "backward") {
+    return clampScrollTop(
+      previous.scrollTop + Math.max(0, current.scrollHeight - previous.scrollHeight),
+      currentMaxTop
+    );
+  }
+  const previousBottomGap = Math.max(0, previous.scrollHeight - previous.scrollTop - previous.clientHeight);
+  return clampScrollTop(current.scrollHeight - current.clientHeight - previousBottomGap, currentMaxTop);
+}
+
+function readDatedNoteScrollSnapshot(element: HTMLElement): DatedNoteScrollSnapshot {
+  return {
+    scrollTop: element.scrollTop,
+    scrollHeight: element.scrollHeight,
+    clientHeight: element.clientHeight
+  };
+}
+
+function clampScrollTop(scrollTop: number, maxTop: number): number {
+  return Math.max(0, Math.min(maxTop, scrollTop));
 }
 
 export function scrollDatedNoteDetailToTop(container: HTMLElement | undefined): void {

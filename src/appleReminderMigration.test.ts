@@ -885,7 +885,7 @@ describe("Apple Reminders migration", () => {
     expect(notices).toContain("Task note created.");
   });
 
-  it("creates new task-hub task notes with unified date and relation metadata", async () => {
+  it("creates new task-hub task notes with unified relation metadata", async () => {
     const createdFile = {
       path: "Task Hub Notes/2026-05-20 1030 - Pay invoice.md",
       extension: "md",
@@ -899,8 +899,11 @@ describe("Apple Reminders migration", () => {
       vault: {
         createFolder: jest.fn(),
         create,
+        cachedRead: jest.fn(async () => ""),
         getFileByPath: jest.fn(() => null),
-        getFolderByPath: jest.fn(() => ({ path: "Task Hub Notes" }))
+        getFolderByPath: jest.fn(() => ({ path: "Task Hub Notes" })),
+        on: jest.fn(),
+        offref: jest.fn()
       },
       workspace: {
         getLeavesOfType: jest.fn(() => [])
@@ -929,14 +932,71 @@ describe("Apple Reminders migration", () => {
     } as never;
 
     await plugin.createTaskNoteForTask(task());
+    await flushAsync();
 
     const [, content] = create.mock.calls[0] as unknown as [string, string];
+    expect(mockNoteComposers).toHaveLength(1);
     expect(content).toContain("taskhub-note: true");
     expect(content).toContain('taskhub-kind: "task-related"');
-    expect(content).toContain("taskhub-type: note");
-    expect(content).toContain("taskhub-date: 2026-05-20");
+    expect(content).not.toContain("taskhub-type: note");
+    expect(content).not.toContain("taskhub-date:");
     expect(content).toContain("taskhub-related:");
     expect(content).toContain("task:vault:Inbox.md:0:");
+  });
+
+  it("writes optional Thino metadata for task notes created from the task list", async () => {
+    const createdFile = {
+      path: "MyNotes/2026-05-20 1030 - Pay invoice.md",
+      extension: "md",
+      stat: { ctime: 1, mtime: 2, size: 3 }
+    };
+    const plugin = new TaskHubPlugin({} as never, {} as never);
+    const create = jest.fn(async (_path, _content) => createdFile);
+    plugin.app = {
+      vault: {
+        createFolder: jest.fn(),
+        create,
+        cachedRead: jest.fn(async () => ""),
+        getFileByPath: jest.fn(() => null),
+        getFolderByPath: jest.fn(() => ({ path: "MyNotes" })),
+        on: jest.fn(),
+        offref: jest.fn()
+      },
+      workspace: {
+        getLeavesOfType: jest.fn(() => [])
+      }
+    } as never;
+    plugin.settings = {
+      ...DEFAULT_SETTINGS,
+      taskNotes: {
+        ...DEFAULT_SETTINGS.taskNotes,
+        enabled: true,
+        notesFolder: "MyNotes",
+        thinoIntegrationEnabled: true,
+        addThinoIdToTaskHubNotes: true,
+        openNoteAfterCreate: false
+      }
+    };
+    plugin.taskNoteIndex = {
+      reindexFile: jest.fn(async () => undefined),
+      removeFile: jest.fn()
+    } as never;
+    plugin.hubNoteIndex = {
+      reindexFile: jest.fn(async () => undefined),
+      removeFile: jest.fn()
+    } as never;
+
+    await plugin.createTaskNoteForTask(task());
+    await flushAsync();
+
+    const [, content] = create.mock.calls[0] as unknown as [string, string];
+    expect(mockNoteComposers).toHaveLength(1);
+    expect(content).toMatch(/id: "\d{14}"/u);
+    expect(content).toMatch(/createdAt: \d{4}\/\d{2}\/\d{2} \d{2}:\d{2}:\d{2}/u);
+    expect(content).toMatch(/updatedAt: \d{4}\/\d{2}\/\d{2} \d{2}:\d{2}:\d{2}/u);
+    expect(content).not.toContain("createdAt: 2026-");
+    expect(content).toContain("taskhub-created:");
+    expect(content).toContain('taskhub-kind: "task-related"');
   });
 
   it("writes optional Thino metadata for notes created from the notes view", async () => {

@@ -114,6 +114,13 @@ export function parseHubNoteFrontmatter(content: string, path = ""): Omit<HubNot
 }
 
 export function timelineDateForHubNote(note: HubNote): string | undefined {
+  if (note.kind === "task-related") {
+    const createdDate = isoDateKey(note.createdAt);
+    if (createdDate) return createdDate;
+    const updatedDate = isoDateKey(note.updatedAt);
+    if (updatedDate) return updatedDate;
+    return note.date && isDateKey(note.date) ? note.date : undefined;
+  }
   if (note.date && isDateKey(note.date)) return note.date;
   const createdDate = isoDateKey(note.createdAt);
   if (createdDate) return createdDate;
@@ -494,10 +501,20 @@ function titleFromPath(path: string): string {
 
 function isoDateKey(value: string | undefined): string | undefined {
   if (!value) return undefined;
-  const maybeDate = value.slice(0, 10);
+  const rawValue: string = value;
+  if (isDateKey(rawValue)) return rawValue;
+  const parsed = new Date(rawValue);
+  if (!Number.isNaN(parsed.getTime())) {
+    return [
+      parsed.getFullYear(),
+      String(parsed.getMonth() + 1).padStart(2, "0"),
+      String(parsed.getDate()).padStart(2, "0")
+    ].join("-");
+  }
+  const maybeDate = rawValue.slice(0, 10);
   return isDateKey(maybeDate) ? maybeDate : undefined;
 }
 
-function isDateKey(value: string | undefined): value is string {
+function isDateKey(value: string | undefined): boolean {
   return value !== undefined && /^\d{4}-\d{2}-\d{2}$/u.test(value);
 }

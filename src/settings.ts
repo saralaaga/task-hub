@@ -869,17 +869,6 @@ export class TaskHubSettingTab extends PluginSettingTab {
       const taskNotesGrid = taskNotesColumn.createDiv({ cls: "task-hub-settings-grid task-hub-notes-column-settings" });
 
       new Setting(taskNotesGrid)
-        .setName(t("datedNotesOpenAfterCreate"))
-        .setDesc(t("datedNotesOpenAfterCreateDesc"))
-        .addToggle((toggle) => {
-          toggle.setValue(this.unifiedOpenAfterCreateValue()).onChange(async (value) => {
-            this.plugin.settings.datedNotes.openAfterCreate = value;
-            this.plugin.settings.taskNotes.openNoteAfterCreate = value;
-            await this.plugin.saveSettings();
-          });
-        });
-
-      new Setting(taskNotesGrid)
         .setName(t("taskNotesFolder"))
         .setDesc(t("taskNotesFolderDesc"))
         .addText((text) => {
@@ -981,12 +970,6 @@ export class TaskHubSettingTab extends PluginSettingTab {
       .then((setting) => {
         if (settingClass) setting.settingEl.addClass(settingClass);
       });
-  }
-
-  private unifiedOpenAfterCreateValue(): boolean {
-    const datedValue = this.plugin.settings.datedNotes.openAfterCreate;
-    const taskValue = this.plugin.settings.taskNotes.openNoteAfterCreate;
-    return datedValue === taskValue ? datedValue : datedValue || taskValue;
   }
 
   private displayCalendarPage(containerEl: HTMLElement, t: Translator): void {

@@ -27,6 +27,19 @@ describe("collectNoteComposerTokens", () => {
       { type: "tag", from: 2, to: 7, text: "#项目复盘" }
     ]);
   });
+
+  it("finds basic markdown style spans for live note composer rendering", () => {
+    expect(collectNoteComposerTokens("# H1\n## H2\n**bold** *em* ==mark== ~~gone~~ `code` [link](https://example.com)")).toEqual([
+      { type: "heading", from: 0, to: 4, level: 1 },
+      { type: "heading", from: 5, to: 10, level: 2 },
+      { type: "strong", from: 11, to: 19 },
+      { type: "emphasis", from: 20, to: 24 },
+      { type: "highlight", from: 25, to: 33 },
+      { type: "strikethrough", from: 34, to: 42 },
+      { type: "inline-code", from: 43, to: 49 },
+      { type: "link", from: 50, to: 77 }
+    ]);
+  });
 });
 
 describe("noteComposerThemeSpec", () => {

@@ -268,7 +268,9 @@ describe("timeline helpers", () => {
     expect(noteId).toMatch(HUB_NOTE_ID_PATTERN);
   });
 
-  it("derives a timeline date from createdAt when no explicit note date exists", () => {
+  it("derives a local timeline date from createdAt when no explicit note date exists", () => {
+    const createdAt = localCrossDayIso();
+    const expectedDate = localDateKey(new Date(createdAt));
     const note = {
       path: "Notes/task.md",
       noteId: "task",
@@ -277,16 +279,42 @@ describe("timeline helpers", () => {
       body: "Body",
       bodyStartLine: 7,
       tags: [],
-      createdAt: "2026-07-09T21:00:00.000Z",
-      updatedAt: "2026-07-09T21:05:00.000Z",
+      createdAt,
+      updatedAt: createdAt,
       related: ["task:vault:Daily.md:4:hash"],
       history: [],
       sourceKind: "task-note" as const
     };
 
-    expect(timelineDateForHubNote(note)).toBe("2026-07-09");
+    expect(timelineDateForHubNote(note)).toBe(expectedDate);
     expect(toTimelineHubNote(note)).toMatchObject({
-      date: "2026-07-09",
+      date: expectedDate,
+      dateDerived: true
+    });
+  });
+
+  it("uses the local creation date for task-related notes with legacy task dates", () => {
+    const createdAt = localCrossDayIso();
+    const expectedDate = localDateKey(new Date(createdAt));
+    const note = {
+      path: "Thino/20260715124709.md",
+      noteId: "task",
+      kind: "task-related",
+      title: "Task note",
+      body: "Body",
+      bodyStartLine: 18,
+      tags: [],
+      createdAt,
+      updatedAt: createdAt,
+      date: "2026-07-10",
+      related: ["task:vault:Daily.md:4:hash"],
+      history: [],
+      sourceKind: "hybrid" as const
+    };
+
+    expect(timelineDateForHubNote(note)).toBe(expectedDate);
+    expect(toTimelineHubNote(note)).toMatchObject({
+      date: expectedDate,
       dateDerived: true
     });
   });
@@ -310,6 +338,21 @@ describe("timeline helpers", () => {
     });
   });
 });
+
+function localCrossDayIso(): string {
+  const offset = new Date().getTimezoneOffset();
+  const localHour = offset > 0 ? 23 : 0;
+  const localMinute = 30;
+  return new Date(2026, 6, 9, localHour, localMinute, 0).toISOString();
+}
+
+function localDateKey(date: Date): string {
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, "0"),
+    String(date.getDate()).padStart(2, "0")
+  ].join("-");
+}
 
 describe("HubNoteIndex", () => {
   it("indexes notes for both timeline and relation lookups", async () => {

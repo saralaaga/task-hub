@@ -13,7 +13,14 @@ import { setCssStyles } from "./domStyles";
 
 export type NoteComposerToken =
   | { type: "checkbox"; from: number; to: number; checked: boolean }
-  | { type: "tag"; from: number; to: number; text: string };
+  | { type: "tag"; from: number; to: number; text: string }
+  | { type: "heading"; from: number; to: number; level: number }
+  | { type: "strong"; from: number; to: number }
+  | { type: "emphasis"; from: number; to: number }
+  | { type: "highlight"; from: number; to: number }
+  | { type: "strikethrough"; from: number; to: number }
+  | { type: "inline-code"; from: number; to: number }
+  | { type: "link"; from: number; to: number };
 
 export type TaskHubNoteComposer = {
   readonly view: EditorView;
@@ -38,6 +45,19 @@ type NoteComposerThemeSpec = Parameters<typeof EditorView.theme>[0];
 
 const TASK_MARKER = /^(\s*[-*]\s+\[([ xX])\]\s*)/u;
 const NOTE_TAG = /(^|[^0-9A-Za-z_/-])(#[\p{L}\p{N}_/-]+)/gu;
+const HEADING_LINE = /^(#{1,6})\s+\S.*$/u;
+const INLINE_MARKDOWN_PATTERNS: Array<{
+  type: Extract<NoteComposerToken["type"], "strong" | "emphasis" | "highlight" | "strikethrough" | "inline-code" | "link">;
+  pattern: RegExp;
+  matchIndex?: number;
+}> = [
+  { type: "inline-code", pattern: /`[^`\n]+`/gu },
+  { type: "strong", pattern: /\*\*[^*\n]+?\*\*/gu },
+  { type: "highlight", pattern: /==[^=\n]+?==/gu },
+  { type: "strikethrough", pattern: /~~[^~\n]+?~~/gu },
+  { type: "link", pattern: /\[[^\]\n]+?\]\([^) \n]+?\)/gu },
+  { type: "emphasis", pattern: /(^|[^*])(\*[^*\n]+?\*)/gu, matchIndex: 2 }
+];
 const NOTE_COMPOSER_MIN_HEIGHT = "100px";
 
 export function noteComposerThemeSpec(): NoteComposerThemeSpec {
@@ -85,6 +105,15 @@ export function collectNoteComposerTokens(text: string): NoteComposerToken[] {
   const tokens: NoteComposerToken[] = [];
   let lineStart = 0;
   for (const line of text.split(/\n/u)) {
+    const headingMatch = line.match(HEADING_LINE);
+    if (headingMatch) {
+      tokens.push({
+        type: "heading",
+        from: lineStart,
+        to: lineStart + line.length,
+        level: headingMatch[1].length
+      });
+    }
     const taskMatch = line.match(TASK_MARKER);
     if (taskMatch) {
       tokens.push({
@@ -102,9 +131,25 @@ export function collectNoteComposerTokens(text: string): NoteComposerToken[] {
       const from = lineStart + start + prefix.length;
       tokens.push({ type: "tag", from, to: from + tag.length, text: tag });
     }
+    tokens.push(...collectInlineMarkdownTokens(line, lineStart));
     lineStart += line.length + 1;
   }
   return tokens.sort((left, right) => left.from - right.from || left.to - right.to);
+}
+
+function collectInlineMarkdownTokens(line: string, lineStart: number): NoteComposerToken[] {
+  const tokens: NoteComposerToken[] = [];
+  for (const { type, pattern, matchIndex } of INLINE_MARKDOWN_PATTERNS) {
+    pattern.lastIndex = 0;
+    for (const match of line.matchAll(pattern)) {
+      const matchedText = match[matchIndex ?? 0] ?? "";
+      const matchStart = match.index ?? 0;
+      const prefixLength = matchIndex === undefined ? 0 : (match[0]?.indexOf(matchedText) ?? 0);
+      const from = lineStart + matchStart + prefixLength;
+      tokens.push({ type, from, to: from + matchedText.length } as NoteComposerToken);
+    }
+  }
+  return tokens;
 }
 
 export function createTaskHubNoteComposer(options: TaskHubNoteComposerOptions): TaskHubNoteComposer {
@@ -376,8 +421,12 @@ function buildNoteComposerDecorations(view: EditorView): DecorationSet {
           widget: new NoteComposerCheckboxWidget(token.from, token.to, token.checked)
         })
       );
-    } else {
+    } else if (token.type === "tag") {
       builder.add(token.from, token.to, Decoration.mark({ class: "task-hub-task-tag task-hub-note-composer-tag" }));
+    } else if (token.type === "heading") {
+      builder.add(token.from, token.to, Decoration.mark({ class: `task-hub-note-composer-heading task-hub-note-composer-heading-${token.level}` }));
+    } else {
+      builder.add(token.from, token.to, Decoration.mark({ class: `task-hub-note-composer-${token.type}` }));
     }
   }
   return builder.finish();

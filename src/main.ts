@@ -2438,11 +2438,11 @@ export default class TaskHubPlugin extends Plugin {
   }
 
   async createTaskNoteForTask(task: TaskItem): Promise<void> {
-    await this.createTaskNote(buildTaskNoteKey(task), task.text, relatedTimelineDateForTask(task));
+    await this.createTaskNote(buildTaskNoteKey(task), task.text);
   }
 
   async createTaskNoteForEvent(event: CalendarEvent): Promise<void> {
-    await this.createTaskNote(buildCalendarEventNoteKey(event), event.title, event.start.slice(0, 10));
+    await this.createTaskNote(buildCalendarEventNoteKey(event), event.title);
   }
 
   async saveTaskNoteBody(file: TFile, body: string): Promise<{ ok: true; deleted?: boolean } | { ok: false; message: string }> {
@@ -3099,7 +3099,7 @@ export default class TaskHubPlugin extends Plugin {
     return { ok: true };
   }
 
-  private async createTaskNote(relatedKey: string, title: string, date?: string): Promise<void> {
+  private async createTaskNote(relatedKey: string, title: string): Promise<void> {
     const t = createTranslator(this.settings.language);
     if (!this.settings.taskNotes.enabled) {
       new Notice(t("taskNotesDisabled"));
@@ -3124,19 +3124,16 @@ export default class TaskHubPlugin extends Plugin {
         kind: "task-related",
         title,
         createdAt: now.toISOString(),
-        date,
         relatedKeys: [relatedKey],
-        mode
+        mode,
+        addThinoIdToTaskHubNotes:
+          this.settings.taskNotes.thinoIntegrationEnabled && this.settings.taskNotes.addThinoIdToTaskHubNotes
       })
     );
     await this.taskNoteIndex.reindexFile(this.toIndexableFile(file));
     await this.hubNoteIndex.reindexFile(this.toIndexableFile(file));
     this.refreshOpenViews();
-    if (this.settings.taskNotes.openNoteAfterCreate) {
-      new TaskNoteModal(this, file, "create").open();
-    } else {
-      new Notice(t("taskNoteCreated"));
-    }
+    new TaskNoteModal(this, file, "create").open();
   }
 
   async deleteTaskNoteFile(file: TFile): Promise<void> {
@@ -4049,10 +4046,6 @@ function hubNoteToTaskNote(note: HubNote): TaskNote {
     createdAt: note.createdAt,
     updatedAt: note.updatedAt
   };
-}
-
-function relatedTimelineDateForTask(task: TaskItem): string | undefined {
-  return taskStartDateKey(task) ?? taskPlannedDateKey(task) ?? task.dueDate;
 }
 
 class RiskySourceDeletionModal extends Modal {
