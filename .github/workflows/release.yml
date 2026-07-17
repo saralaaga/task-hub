@@ -70,13 +70,20 @@ jobs:
           test -s dist/manifest.json
           test -s dist/styles.css
 
-      - name: Generate artifact attestations
+      - name: Generate main.js attestation
         uses: actions/attest-build-provenance@v4
         with:
-          subject-path: |
-            dist/main.js
-            dist/manifest.json
-            dist/styles.css
+          subject-path: dist/main.js
+
+      - name: Generate manifest.json attestation
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-path: dist/manifest.json
+
+      - name: Generate styles.css attestation
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-path: dist/styles.css
 
       - name: Create GitHub release
         env:
@@ -85,21 +92,17 @@ jobs:
           if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
             gh release edit "${GITHUB_REF_NAME}" \
               --title "Task Hub ${GITHUB_REF_NAME#v}" \
-              --notes "Task Hub release ${GITHUB_REF_NAME#v}." \
-              --draft
+              --notes "Task Hub release ${GITHUB_REF_NAME#v}."
             gh release upload "${GITHUB_REF_NAME}" \
               dist/main.js \
               dist/manifest.json \
               dist/styles.css \
               --clobber
-            gh release edit "${GITHUB_REF_NAME}" --draft=false
           else
             gh release create "${GITHUB_REF_NAME}" \
               dist/main.js \
               dist/manifest.json \
               dist/styles.css \
               --title "Task Hub ${GITHUB_REF_NAME#v}" \
-              --notes "Task Hub release ${GITHUB_REF_NAME#v}." \
-              --draft
-            gh release edit "${GITHUB_REF_NAME}" --draft=false
+              --notes "Task Hub release ${GITHUB_REF_NAME#v}."
           fi
