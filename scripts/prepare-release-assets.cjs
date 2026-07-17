@@ -1,4 +1,4 @@
-const { copyFileSync, mkdirSync, readFileSync, rmSync } = require("fs");
+const { copyFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } = require("fs");
 const { join } = require("path");
 
 const root = process.cwd();
@@ -10,7 +10,8 @@ mkdirSync(dist, { recursive: true });
 
 copyFileSync(join(root, "main.js"), join(dist, "main.js"));
 copyFileSync(join(root, "manifest.json"), join(dist, "manifest.json"));
-copyFileSync(join(root, "src", "styles.css"), join(dist, "styles.css"));
+const styles = readFileSync(join(root, "src", "styles.css"), "utf8");
+writeFileSync(join(dist, "styles.css"), `/* Obsidian Task Hub ${manifest.version} */\n${styles}`);
 
 console.log(`Prepared Obsidian release assets in dist/ for Task Hub ${manifest.version}.`);
 console.log("Upload main.js, manifest.json, and styles.css to the GitHub release.");

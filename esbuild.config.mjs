@@ -5,13 +5,14 @@ import { existsSync, readFileSync } from "fs";
 import { builtinModules } from "module";
 
 const prod = process.argv[2] === "production";
+const packageJson = JSON.parse(readFileSync("package.json", "utf8"));
 const appleHelperPath = "taskhub-apple-helper";
 const appleHelperBytes = existsSync(appleHelperPath) ? readFileSync(appleHelperPath) : undefined;
 const appleHelperBase64 = appleHelperBytes ? appleHelperBytes.toString("base64") : "";
 const appleHelperSha256 = appleHelperBytes ? createHash("sha256").update(appleHelperBytes).digest("hex") : "";
 
 const context = await esbuild.context({
-  banner: { js: "/* Obsidian Task Hub */" },
+  banner: { js: `/* Obsidian Task Hub ${packageJson.version} */` },
   entryPoints: ["src/main.ts"],
   bundle: true,
   external: [

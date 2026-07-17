@@ -71,7 +71,7 @@ jobs:
           test -s dist/styles.css
 
       - name: Generate artifact attestations
-        uses: actions/attest@v4
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: |
             dist/main.js
@@ -85,17 +85,21 @@ jobs:
           if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
             gh release edit "${GITHUB_REF_NAME}" \
               --title "Task Hub ${GITHUB_REF_NAME#v}" \
-              --notes "Task Hub release ${GITHUB_REF_NAME#v}."
+              --notes "Task Hub release ${GITHUB_REF_NAME#v}." \
+              --draft
             gh release upload "${GITHUB_REF_NAME}" \
               dist/main.js \
               dist/manifest.json \
               dist/styles.css \
               --clobber
+            gh release edit "${GITHUB_REF_NAME}" --draft=false
           else
             gh release create "${GITHUB_REF_NAME}" \
               dist/main.js \
               dist/manifest.json \
               dist/styles.css \
               --title "Task Hub ${GITHUB_REF_NAME#v}" \
-              --notes "Task Hub release ${GITHUB_REF_NAME#v}."
+              --notes "Task Hub release ${GITHUB_REF_NAME#v}." \
+              --draft
+            gh release edit "${GITHUB_REF_NAME}" --draft=false
           fi
