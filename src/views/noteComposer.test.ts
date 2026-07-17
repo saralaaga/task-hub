@@ -4,7 +4,7 @@ jest.mock("obsidian", () => ({
   parseFrontMatterTags: jest.fn(() => [])
 }), { virtual: true });
 
-import { collectNoteComposerTokens, noteComposerThemeSpec } from "./noteComposer";
+import { collectNoteComposerTokens, noteComposerThemeSpec, suggestNoteComposerBlocksAtCursor } from "./noteComposer";
 
 describe("collectNoteComposerTokens", () => {
   it("finds task checkbox markers and markdown tags", () => {
@@ -39,6 +39,27 @@ describe("collectNoteComposerTokens", () => {
       { type: "inline-code", from: 43, to: 49 },
       { type: "link", from: 50, to: 77 }
     ]);
+  });
+
+  it("finds blockquote and code block lines for live note composer rendering", () => {
+    expect(collectNoteComposerTokens("> 引用\n    缩进代码\n```\n围栏代码\n```")).toEqual([
+      { type: "blockquote", from: 0, to: 4 },
+      { type: "code-block", from: 5, to: 13 },
+      { type: "code-block", from: 14, to: 17 },
+      { type: "code-block", from: 18, to: 22 },
+      { type: "code-block", from: 23, to: 26 }
+    ]);
+  });
+});
+
+describe("suggestNoteComposerBlocksAtCursor", () => {
+  it("suggests block shortcuts from slash input", () => {
+    expect(suggestNoteComposerBlocksAtCursor("/q", 2).map((item) => item.label)).toEqual(["/quote"]);
+    expect(suggestNoteComposerBlocksAtCursor("今天 /引", 5).map((item) => item.label)).toEqual(["/quote"]);
+  });
+
+  it("does not suggest block shortcuts away from the cursor trigger", () => {
+    expect(suggestNoteComposerBlocksAtCursor("正文 /quote 后续", 12)).toEqual([]);
   });
 });
 

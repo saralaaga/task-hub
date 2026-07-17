@@ -15,6 +15,8 @@ export type NoteComposerToken =
   | { type: "checkbox"; from: number; to: number; checked: boolean }
   | { type: "tag"; from: number; to: number; text: string }
   | { type: "heading"; from: number; to: number; level: number }
+  | { type: "blockquote"; from: number; to: number }
+  | { type: "code-block"; from: number; to: number }
   | { type: "strong"; from: number; to: number }
   | { type: "emphasis"; from: number; to: number }
   | { type: "highlight"; from: number; to: number }
@@ -42,10 +44,17 @@ export type TaskHubNoteComposerOptions = {
 };
 
 type NoteComposerThemeSpec = Parameters<typeof EditorView.theme>[0];
+type NoteComposerSuggestItem =
+  | { kind: "tag"; label: string; value: string }
+  | { kind: "shortcut"; label: string; detail: string; from: number; to: number; insert: string; cursorOffset: number };
 
 const TASK_MARKER = /^(\s*[-*]\s+\[([ xX])\]\s*)/u;
 const NOTE_TAG = /(^|[^0-9A-Za-z_/-])(#[\p{L}\p{N}_/-]+)/gu;
 const HEADING_LINE = /^(#{1,6})\s+\S.*$/u;
+const BLOCKQUOTE_LINE = /^\s*>\s?.*$/u;
+const CODE_FENCE_LINE = /^\s*(```|~~~)/u;
+const INDENTED_CODE_LINE = /^(?: {4}|\t)\S/u;
+const SHORTCUT_TRIGGER = /(^|\s)\/([\p{L}\p{N}_-]*)$/u;
 const INLINE_MARKDOWN_PATTERNS: Array<{
   type: Extract<NoteComposerToken["type"], "strong" | "emphasis" | "highlight" | "strikethrough" | "inline-code" | "link">;
   pattern: RegExp;
@@ -59,6 +68,20 @@ const INLINE_MARKDOWN_PATTERNS: Array<{
   { type: "emphasis", pattern: /(^|[^*])(\*[^*\n]+?\*)/gu, matchIndex: 2 }
 ];
 const NOTE_COMPOSER_MIN_HEIGHT = "100px";
+const BLOCK_SHORTCUTS: Array<{
+  label: string;
+  detail: string;
+  aliases: string[];
+  insert: string;
+  cursorOffset: number;
+}> = [
+  { label: "/quote", detail: "引用块", aliases: ["quote", "blockquote", "引用", "q"], insert: "> ", cursorOffset: 2 },
+  { label: "/code", detail: "代码块", aliases: ["code", "代码", "c"], insert: "```\n\n```", cursorOffset: 4 },
+  { label: "/todo", detail: "任务", aliases: ["todo", "task", "任务", "t"], insert: "- [ ] ", cursorOffset: 6 },
+  { label: "/h1", detail: "一级标题", aliases: ["h1", "标题1", "title"], insert: "# ", cursorOffset: 2 },
+  { label: "/h2", detail: "二级标题", aliases: ["h2", "标题2"], insert: "## ", cursorOffset: 3 },
+  { label: "/h3", detail: "三级标题", aliases: ["h3", "标题3"], insert: "### ", cursorOffset: 4 }
+];
 
 export function noteComposerThemeSpec(): NoteComposerThemeSpec {
   return {
@@ -104,7 +127,15 @@ export function noteComposerThemeSpec(): NoteComposerThemeSpec {
 export function collectNoteComposerTokens(text: string): NoteComposerToken[] {
   const tokens: NoteComposerToken[] = [];
   let lineStart = 0;
+  let inFencedCode = false;
   for (const line of text.split(/\n/u)) {
+    const isFenceLine = CODE_FENCE_LINE.test(line);
+    const isCodeLine = inFencedCode || isFenceLine || INDENTED_CODE_LINE.test(line);
+    if (isCodeLine) {
+      tokens.push({ type: "code-block", from: lineStart, to: lineStart + line.length });
+    } else if (BLOCKQUOTE_LINE.test(line) && line.trim() !== ">") {
+      tokens.push({ type: "blockquote", from: lineStart, to: lineStart + line.length });
+    }
     const headingMatch = line.match(HEADING_LINE);
     if (headingMatch) {
       tokens.push({
@@ -131,10 +162,32 @@ export function collectNoteComposerTokens(text: string): NoteComposerToken[] {
       const from = lineStart + start + prefix.length;
       tokens.push({ type: "tag", from, to: from + tag.length, text: tag });
     }
-    tokens.push(...collectInlineMarkdownTokens(line, lineStart));
+    if (!isCodeLine) tokens.push(...collectInlineMarkdownTokens(line, lineStart));
+    if (isFenceLine) inFencedCode = !inFencedCode;
     lineStart += line.length + 1;
   }
   return tokens.sort((left, right) => left.from - right.from || left.to - right.to);
+}
+
+export function suggestNoteComposerBlocksAtCursor(text: string, cursor: number): NoteComposerSuggestItem[] {
+  if (cursor < 0 || cursor > text.length) return [];
+  const lineStart = text.lastIndexOf("\n", Math.max(0, cursor - 1)) + 1;
+  const beforeCursor = text.slice(lineStart, cursor);
+  const trigger = beforeCursor.match(SHORTCUT_TRIGGER);
+  if (!trigger) return [];
+  const query = (trigger[2] ?? "").toLocaleLowerCase();
+  const triggerStart = lineStart + beforeCursor.length - query.length - 1;
+  return BLOCK_SHORTCUTS
+    .filter((item) => query.length === 0 || item.aliases.some((alias) => alias.toLocaleLowerCase().startsWith(query)))
+    .map((item) => ({
+      kind: "shortcut",
+      label: item.label,
+      detail: item.detail,
+      from: triggerStart,
+      to: cursor,
+      insert: item.insert,
+      cursorOffset: item.cursorOffset
+    }));
 }
 
 function collectInlineMarkdownTokens(line: string, lineStart: number): NoteComposerToken[] {
@@ -172,7 +225,7 @@ export function createTaskHubNoteComposer(options: TaskHubNoteComposerOptions): 
       doc: options.value ?? "",
       extensions: [
         noteComposerDecorations(),
-        ...(options.tagSuggestions ? [noteComposerTagSuggest(options.tagSuggestions)] : []),
+        noteComposerTagSuggest(() => options.tagSuggestions?.() ?? []),
         ...(options.extensions ?? []),
         updateListener,
         submitKeyHandler,
@@ -198,7 +251,7 @@ export function createTaskHubNoteComposer(options: TaskHubNoteComposerOptions): 
 
 type NoteComposerTagSuggestState = {
   cursor: number;
-  options: string[];
+  options: NoteComposerSuggestItem[];
   selectedIndex: number;
 };
 
@@ -269,13 +322,19 @@ function noteComposerTagSuggest(getTags: () => string[]): Extension {
         return;
       }
       const cursor = selection.from;
-      const options = suggestTagsAtCursor(this.view.state.doc.toString(), cursor, getTags());
+      const text = this.view.state.doc.toString();
+      const tagOptions: NoteComposerSuggestItem[] = suggestTagsAtCursor(text, cursor, getTags()).map((value) => ({
+        kind: "tag",
+        label: value,
+        value
+      }));
+      const options = [...suggestNoteComposerBlocksAtCursor(text, cursor), ...tagOptions];
       if (options.length === 0) {
         this.close();
         return;
       }
-      const previousValue = this.active ? this.active.options[this.active.selectedIndex] : undefined;
-      const selectedIndex = previousValue ? Math.max(0, options.indexOf(previousValue)) : 0;
+      const previousLabel = this.active ? this.active.options[this.active.selectedIndex]?.label : undefined;
+      const selectedIndex = previousLabel ? Math.max(0, options.findIndex((option) => option.label === previousLabel)) : 0;
       this.active = { cursor, options, selectedIndex };
       this.renderRetryCount = 0;
       this.scheduleRender();
@@ -315,7 +374,8 @@ function noteComposerTagSuggest(getTags: () => string[]): Extension {
       for (const [index, option] of this.active.options.entries()) {
         const item = this.view.dom.ownerDocument.createElement("div");
         item.className = `task-hub-note-composer-suggest-item ${index === this.active.selectedIndex ? "is-selected" : ""}`;
-        item.textContent = option;
+        item.createSpan({ cls: "task-hub-note-composer-suggest-label", text: option.label });
+        if (option.kind === "shortcut") item.createSpan({ cls: "task-hub-note-composer-suggest-detail", text: option.detail });
         item.addEventListener("mousedown", (event) => {
           event.preventDefault();
           this.applySuggestion(option);
@@ -342,13 +402,21 @@ function noteComposerTagSuggest(getTags: () => string[]): Extension {
       this.render();
     }
 
-    private applySuggestion(option: string): void {
-      const next = replaceTagToken(this.view.state.doc.toString(), this.active?.cursor ?? this.view.state.selection.main.from, option);
-      this.view.dispatch({
-        changes: { from: 0, to: this.view.state.doc.length, insert: next.value },
-        selection: { anchor: next.cursor },
-        userEvent: "input.complete"
-      });
+    private applySuggestion(option: NoteComposerSuggestItem): void {
+      if (option.kind === "tag") {
+        const next = replaceTagToken(this.view.state.doc.toString(), this.active?.cursor ?? this.view.state.selection.main.from, option.value);
+        this.view.dispatch({
+          changes: { from: 0, to: this.view.state.doc.length, insert: next.value },
+          selection: { anchor: next.cursor },
+          userEvent: "input.complete"
+        });
+      } else {
+        this.view.dispatch({
+          changes: { from: option.from, to: option.to, insert: option.insert },
+          selection: { anchor: option.from + option.cursorOffset },
+          userEvent: "input.complete"
+        });
+      }
       this.view.focus();
       this.sync();
     }
@@ -425,6 +493,8 @@ function buildNoteComposerDecorations(view: EditorView): DecorationSet {
       builder.add(token.from, token.to, Decoration.mark({ class: "task-hub-task-tag task-hub-note-composer-tag" }));
     } else if (token.type === "heading") {
       builder.add(token.from, token.to, Decoration.mark({ class: `task-hub-note-composer-heading task-hub-note-composer-heading-${token.level}` }));
+    } else if (token.type === "blockquote" || token.type === "code-block") {
+      builder.add(token.from, token.from, Decoration.line({ attributes: { class: `task-hub-note-composer-${token.type}-line` } }));
     } else {
       builder.add(token.from, token.to, Decoration.mark({ class: `task-hub-note-composer-${token.type}` }));
     }
@@ -450,11 +520,25 @@ class NoteComposerCheckboxWidget extends WidgetType {
     input.className = "task-hub-note-composer-checkbox";
     input.type = "checkbox";
     input.checked = this.checked;
+    input.tabIndex = -1;
+    input.addEventListener("mousedown", (event) => {
+      event.preventDefault();
+    });
+    input.addEventListener("focus", () => {
+      view.focus();
+    });
+    input.addEventListener("keydown", (event) => {
+      if (event.key.startsWith("Arrow")) {
+        event.preventDefault();
+        view.focus();
+      }
+    });
     input.addEventListener("click", (event) => {
       event.preventDefault();
       const currentMarker = view.state.sliceDoc(this.from, this.to);
       const nextMarker = currentMarker.replace(/\[[ xX]\]/u, this.checked ? "[ ]" : "[x]");
       view.dispatch({ changes: { from: this.from, to: this.to, insert: nextMarker } });
+      view.focus();
     });
     return input;
   }

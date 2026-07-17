@@ -10,9 +10,11 @@ export function renderTaskNoteBody(
   renderMarkdown?: TaskNoteMarkdownRenderer
 ): void {
   if (renderMarkdown) {
+    container.addClass("is-markdown-rendered");
     renderMarkdown(container, body, sourcePath);
     return;
   }
+  container.addClass("is-plain-text");
   renderPlainTaskNoteBody(container, body);
 }
 

@@ -637,6 +637,10 @@ describe("Task Hub styles", () => {
     const noteComposerStrikeRule = styles.match(/\.task-hub-note-composer-strikethrough\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const noteComposerInlineCodeRule = styles.match(/\.task-hub-note-composer-inline-code\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const noteComposerLinkRule = styles.match(/\.task-hub-note-composer-link\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const noteComposerBlockquoteRule = styles.match(/\.task-hub-note-composer-blockquote-line\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const noteComposerCodeBlockRule = styles.match(/\.task-hub-note-composer-code-block-line\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const noteComposerSuggestItemRule = styles.match(/\.task-hub-note-composer-suggest-item\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const noteComposerSuggestDetailRule = styles.match(/\.task-hub-note-composer-suggest-detail\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const actionSettingRule = styles.match(/\.task-hub-create-modal\s+\.setting-item\.task-hub-create-action-setting\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const actionControlRule = styles.match(/\.task-hub-create-modal\s+\.task-hub-create-action-setting\s+\.setting-item-control\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
 
@@ -682,6 +686,13 @@ describe("Task Hub styles", () => {
     expect(noteComposerStrikeRule).toContain("line-through");
     expect(noteComposerInlineCodeRule).toContain("font-family: var(--font-monospace)");
     expect(noteComposerLinkRule).toContain("text-decoration: underline");
+    expect(noteComposerBlockquoteRule).toContain("border-inline-start: 3px solid var(--blockquote-border-color, var(--background-modifier-border))");
+    expect(noteComposerBlockquoteRule).toContain("padding-inline-start: 10px");
+    expect(noteComposerCodeBlockRule).toContain("background: var(--code-background)");
+    expect(noteComposerCodeBlockRule).toContain("font-family: var(--font-monospace)");
+    expect(noteComposerSuggestItemRule).toContain("display: flex");
+    expect(noteComposerSuggestItemRule).toContain("justify-content: space-between");
+    expect(noteComposerSuggestDetailRule).toContain("color: var(--text-muted)");
     expect(actionSettingRule).toContain("grid-template-columns: 1fr");
     expect(actionSettingRule).toContain("justify-items: end");
     expect(actionControlRule).toContain("justify-self: end");
@@ -713,11 +724,19 @@ describe("Task Hub styles", () => {
     const noteCardRule = styles.match(/\.task-hub-task-note-card\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const pinnedCardRule = styles.match(/\.task-hub-task-note-card\.is-pinned\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const noteBodyRule = styles.match(/\.task-hub-task-note-body\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const markdownNoteBodyRule = styles.match(/\.task-hub-task-note-body\.is-markdown-rendered\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const noteTitleRule = styles.match(/\.task-hub-task-note-title\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const pinRule = styles.match(/button\.task-hub-task-note-pin\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const pinActiveRule = styles.match(/button\.task-hub-task-note-pin\.is-active\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const plainTextRule = styles.match(/\.task-hub-task-note-text\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
-    const blockRule = styles.match(/\.task-hub-task-note-card\s+\.task-hub-task-note-body p,\s*\.task-hub-task-note-card\s+\.task-hub-task-note-body ul,\s*\.task-hub-task-note-card\s+\.task-hub-task-note-body ol\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const blockRule = styles.match(/\.task-hub-task-note-card\s+\.task-hub-task-note-body p,\s*\.task-hub-task-note-card\s+\.task-hub-task-note-body ul,\s*\.task-hub-task-note-card\s+\.task-hub-task-note-body ol,\s*\.task-hub-task-note-card\s+\.task-hub-task-note-body blockquote,\s*\.task-hub-task-note-card\s+\.task-hub-task-note-body pre\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const quoteRule = styles.match(/\.task-hub-task-note-card\s+\.task-hub-task-note-body blockquote\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const preRule = Array.from(styles.matchAll(/\.task-hub-task-note-card\s+\.task-hub-task-note-body pre\s*\{(?<body>[^}]+)\}/g))
+      .map((match) => match.groups?.body ?? "")
+      .find((body) => body.includes("border-radius")) ?? "";
+    const quoteParagraphRule = styles.match(/\.task-hub-task-note-card\s+\.task-hub-task-note-body blockquote p\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const quoteCodeRule = styles.match(/\.task-hub-task-note-card\s+\.task-hub-task-note-body pre code\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const copyCodeRule = styles.match(/\.task-hub-task-note-card\s+\.task-hub-task-note-body \.copy-code-button,\s*\.task-hub-task-note-card\s+\.task-hub-task-note-body button\.copy-code-button\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const listItemRule = styles.match(/\.task-hub-task-note-card\s+\.task-hub-task-note-body li\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
 
     expect(noteCardRule).toContain("padding: 14px 16px 12px");
@@ -727,11 +746,27 @@ describe("Task Hub styles", () => {
     expect(noteBodyRule).toContain("padding: 0 0 0 2px");
     expect(noteBodyRule).toContain("margin-top: 10px");
     expect(noteBodyRule).toContain("white-space: normal");
+    expect(markdownNoteBodyRule).toContain("display: block");
+    expect(markdownNoteBodyRule).toContain("-webkit-line-clamp: initial");
+    expect(markdownNoteBodyRule).toContain("position: relative");
     expect(pinRule).toContain("right: 42px");
     expect(pinRule).toContain("border-radius: 999px");
     expect(pinActiveRule).toContain("color: var(--task-hub-source-color)");
     expect(plainTextRule).toContain("white-space: pre-wrap");
     expect(blockRule).toContain("margin-block: 0 2px");
+    expect(quoteRule).toContain("border-inline-start: 3px solid var(--blockquote-border-color, var(--background-modifier-border))");
+    expect(preRule).toContain("border-radius: 6px");
+    expect(preRule).toContain("background-color: color-mix");
+    expect(preRule).toContain("display: block");
+    expect(preRule).toContain("padding: 8px 42px 8px 10px");
+    expect(preRule).toContain("position: relative");
+    expect(preRule).toContain("white-space: pre-wrap");
+    expect(quoteParagraphRule).toContain("margin-block: 0 2px");
+    expect(quoteCodeRule).toContain("font-family: var(--font-monospace)");
+    expect(quoteCodeRule).toContain("display: block");
+    expect(copyCodeRule).toContain("display: inline-flex");
+    expect(copyCodeRule).toContain("position: absolute");
+    expect(copyCodeRule).toContain("right: 8px");
     expect(listItemRule).toContain("margin-block: 0 2px");
   });
 
@@ -757,7 +792,14 @@ describe("Task Hub styles", () => {
     const footerRule = styles.match(/\.task-hub-dated-note-card-footer\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const timeRule = styles.match(/\.task-hub-dated-note-time\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const datedNoteChipRule = styles.match(/\.task-hub-task-list-flow\s+\.task-hub-task-row\s+\.task-hub-task-tag,\s*\.task-hub-tag-editor\s+\.task-hub-task-tag,\s*\.task-hub-dated-note-detail-header\s+\.task-hub-task-tag,\s*\.task-hub-dated-note-body\s+\.task-hub-task-tag\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
-    const bodyBlockRule = styles.match(/\.task-hub-dated-note-body p,\s*\.task-hub-dated-note-body ul,\s*\.task-hub-dated-note-body ol\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const bodyBlockRule = styles.match(/\.task-hub-dated-note-body p,\s*\.task-hub-dated-note-body ul,\s*\.task-hub-dated-note-body ol,\s*\.task-hub-dated-note-markdown blockquote,\s*\.task-hub-dated-note-markdown pre\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const datedMarkdownRule = styles.match(/\.task-hub-dated-note-markdown\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const datedQuoteRule = styles.match(/\.task-hub-dated-note-markdown blockquote\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const datedPreRule = Array.from(styles.matchAll(/\.task-hub-dated-note-markdown pre\s*\{(?<body>[^}]+)\}/g))
+      .map((match) => match.groups?.body ?? "")
+      .find((body) => body.includes("background-color")) ?? "";
+    const datedPreCodeRule = styles.match(/\.task-hub-dated-note-markdown pre code\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const datedCopyCodeRule = styles.match(/\.task-hub-dated-note-markdown \.copy-code-button,\s*\.task-hub-dated-note-markdown button\.copy-code-button\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const listItemRule = styles.match(/\.task-hub-dated-note-body li\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
 
     expect(viewRule).toContain("grid-template-columns: minmax(440px, 1fr) minmax(320px, 420px)");
@@ -816,6 +858,14 @@ describe("Task Hub styles", () => {
     expect(datedNoteChipRule).toContain("padding: 1px 6px");
     expect(datedNoteChipRule).toContain("0 3px 8px color-mix(in srgb, var(--task-hub-source-color, var(--interactive-accent)) 28%, transparent)");
     expect(bodyBlockRule).toContain("margin-block: 0 8px");
+    expect(datedMarkdownRule).toContain("position: relative");
+    expect(datedQuoteRule).toContain("border-inline-start: 3px solid var(--blockquote-border-color, var(--background-modifier-border))");
+    expect(datedPreRule).toContain("background-color: color-mix");
+    expect(datedPreRule).toContain("display: block");
+    expect(datedPreRule).toContain("padding: 10px 44px 10px 12px");
+    expect(datedPreCodeRule).toContain("font-family: var(--font-monospace)");
+    expect(datedCopyCodeRule).toContain("display: inline-flex");
+    expect(datedCopyCodeRule).toContain("right: 10px");
     expect(listItemRule).toContain("margin-block: 0 4px");
   });
 

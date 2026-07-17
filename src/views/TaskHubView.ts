@@ -764,6 +764,8 @@ export class TaskHubView extends ItemView {
       .then(() => decorateRenderedTaskNoteTags(container))
       .catch(() => {
         container.empty();
+        container.removeClass("is-markdown-rendered");
+        container.addClass("is-plain-text");
         renderPlainTaskNoteBody(container, body);
       });
   }
