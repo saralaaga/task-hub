@@ -82,14 +82,26 @@ describe("parseTasksFromMarkdown", () => {
     expect(tasks[3].parentId).toBeUndefined();
   });
 
-  it("ignores non-task checkboxes and malformed dates", () => {
+  it("leaves malformed task dates undefined", () => {
     const tasks = parseTasksFromMarkdown({
       filePath: "Inbox.md",
-      content: "- [?] Maybe\n- [ ] Keep this 📅 tomorrow"
+      content: "- [ ] Keep this 📅 tomorrow"
     });
 
     expect(tasks).toHaveLength(1);
     expect(tasks[0].dueDate).toBeUndefined();
+  });
+
+  it("extracts Tasks plugin custom status task lines as open tasks", () => {
+    const tasks = parseTasksFromMarkdown({
+      filePath: "Inbox.md",
+      content: "- [/] In progress ⏳ 2026-07-20\n- [?] Waiting #next\n- [-] Cancelled"
+    });
+
+    expect(tasks.map((task) => task.text)).toEqual(["In progress", "Waiting", "Cancelled"]);
+    expect(tasks.map((task) => task.completed)).toEqual([false, false, false]);
+    expect(tasks[0].scheduledDate).toBe("2026-07-20");
+    expect(tasks[1].tags).toEqual(["#next"]);
   });
 
   it("extracts recurrence without keeping it in the rendered task text", () => {

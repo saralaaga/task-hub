@@ -386,6 +386,45 @@
   z-index: 10000;
 }
 
+.task-hub-note-composer-date-picker {
+  align-items: center;
+  border-bottom: 1px solid var(--background-modifier-border);
+  display: grid;
+  gap: 6px;
+  grid-template-columns: minmax(0, 1fr);
+  margin: -2px -1px 4px;
+  padding: 4px 2px 8px;
+}
+
+.task-hub-note-composer-date-picker-label {
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  line-height: 1.25;
+}
+
+.task-hub-note-composer-date-picker-input {
+  -webkit-appearance: none;
+  appearance: none;
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 7px;
+  box-sizing: border-box;
+  color: var(--text-normal);
+  font-family: var(--font-interface);
+  font-size: var(--font-ui-small);
+  font-variant-numeric: tabular-nums;
+  height: 32px;
+  padding: 0 8px;
+  width: 100%;
+}
+
+.task-hub-note-composer-date-picker-input:hover,
+.task-hub-note-composer-date-picker-input:focus-visible {
+  background: var(--background-modifier-hover);
+  border-color: var(--background-modifier-border-hover);
+  outline: none;
+}
+
 .task-hub-note-composer-suggest-item {
   align-items: center;
   border-radius: 7px;
@@ -6065,7 +6104,33 @@ input.task-hub-tag-editor-input:focus {
   max-height: calc(100vh - 190px);
   overflow: auto;
   padding-right: 2px;
-  scrollbar-gutter: stable;
+  scrollbar-color: color-mix(in srgb, var(--scrollbar-thumb-bg, var(--text-faint)) 72%, transparent) transparent;
+  scrollbar-width: thin;
+}
+
+.task-hub-dated-note-detail::-webkit-scrollbar,
+.task-hub-dated-note-list::-webkit-scrollbar {
+  background: transparent;
+  width: 8px;
+}
+
+.task-hub-dated-note-detail::-webkit-scrollbar-track,
+.task-hub-dated-note-list::-webkit-scrollbar-track {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+.task-hub-dated-note-detail::-webkit-scrollbar-thumb,
+.task-hub-dated-note-list::-webkit-scrollbar-thumb {
+  background-color: color-mix(in srgb, var(--scrollbar-thumb-bg, var(--text-faint)) 72%, transparent);
+  border: 0;
+  border-radius: 999px;
+}
+
+.task-hub-dated-note-detail::-webkit-scrollbar-corner,
+.task-hub-dated-note-list::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
 .task-hub-dated-note-detail.is-note-transition {
@@ -6107,6 +6172,7 @@ input.task-hub-tag-editor-input:focus {
   background: var(--background-primary);
   border: 1px solid var(--background-modifier-border);
   border-radius: 8px;
+  box-shadow: 0 8px 18px color-mix(in srgb, var(--background-modifier-box-shadow) 12%, transparent);
   display: block;
   overflow: hidden;
 }
@@ -6310,12 +6376,12 @@ button.task-hub-dated-note-menu-button:focus-visible {
 }
 
 .task-hub-dated-note-list {
-  border-left: 1px solid var(--background-modifier-border);
   max-height: calc(100vh - 190px);
   min-width: 0;
   overflow: auto;
   padding-left: 16px;
-  scrollbar-gutter: stable;
+  scrollbar-color: color-mix(in srgb, var(--scrollbar-thumb-bg, var(--text-faint)) 72%, transparent) transparent;
+  scrollbar-width: thin;
 }
 
 .task-hub-dated-note-day {
@@ -6398,10 +6464,9 @@ button.task-hub-dated-note-menu-button:focus-visible {
 
 button.task-hub-dated-note-card {
   align-items: stretch;
-  background: var(--background-primary);
-  border: 1px solid var(--background-modifier-border);
-  border-left: 3px solid color-mix(in srgb, var(--interactive-accent) 72%, var(--background-modifier-border));
-  border-radius: 8px;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
   box-shadow: none;
   cursor: pointer;
   display: grid;
@@ -6413,17 +6478,22 @@ button.task-hub-dated-note-card {
   margin: 0;
   min-height: 0;
   min-width: 0;
-  overflow: hidden;
-  padding: 10px 12px;
+  overflow: visible;
+  padding: 0;
   text-align: left;
   white-space: normal;
   width: 100%;
 }
 
 button.task-hub-dated-note-card.is-active {
+  background: transparent;
+  box-shadow: none;
+}
+
+button.task-hub-dated-note-card.is-active .task-hub-dated-note-excerpt {
   background: color-mix(in srgb, var(--interactive-accent) 10%, var(--background-primary));
   border-color: color-mix(in srgb, var(--interactive-accent) 38%, var(--background-modifier-border));
-  box-shadow: 0 8px 18px color-mix(in srgb, var(--interactive-accent) 16%, transparent);
+  border-left-color: color-mix(in srgb, var(--interactive-accent) 78%, var(--background-modifier-border));
 }
 
 .task-hub-dated-note-time {
@@ -6435,6 +6505,11 @@ button.task-hub-dated-note-card.is-active {
 }
 
 .task-hub-dated-note-excerpt {
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-left: 3px solid color-mix(in srgb, var(--interactive-accent) 72%, var(--background-modifier-border));
+  border-radius: 8px;
+  box-shadow: 0 6px 14px color-mix(in srgb, var(--background-modifier-box-shadow) 10%, transparent);
   color: var(--text-normal);
   display: grid;
   font-size: var(--font-ui-small);
@@ -6444,6 +6519,7 @@ button.task-hub-dated-note-card.is-active {
   margin: 0;
   overflow: hidden;
   justify-items: start;
+  padding: 10px 12px;
   text-align: left;
   width: 100%;
   word-break: break-word;

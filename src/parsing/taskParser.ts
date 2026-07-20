@@ -6,7 +6,7 @@ type ParseInput = {
   content: string;
 };
 
-const TASK_LINE = /^(\s*)- \[([ xX])\]\s+(.*)$/;
+const TASK_LINE = /^(\s*)[-*]\s+\[([^\]\r\n])\]\s+(.*)$/u;
 const TAG = /(^|[^0-9A-Za-z_/-])(#[\p{L}\p{N}_/-]+)/gu;
 const EMOJI_START = /(?:^|\s)🛫\s*(\d{4}-\d{2}-\d{2})(?=\s|$)/u;
 const EMOJI_SCHEDULED = /(?:^|\s)⏳\s*(\d{4}-\d{2}-\d{2})(?=\s|$)/u;
@@ -53,7 +53,7 @@ export function parseTasksFromMarkdown(input: ParseInput): TaskItem[] {
       line: index,
       rawLine: line,
       text,
-      completed: match[2].toLowerCase() === "x",
+      completed: isCompletedTaskStatus(match[2]),
       tags,
       indent,
       parentId,
@@ -72,6 +72,10 @@ export function parseTasksFromMarkdown(input: ParseInput): TaskItem[] {
   });
 
   return tasks;
+}
+
+function isCompletedTaskStatus(status: string): boolean {
+  return status.toLowerCase() === "x";
 }
 
 function indentationLevel(indent: string): number {

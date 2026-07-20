@@ -44,17 +44,34 @@ export type TaskHubNoteComposerOptions = {
 };
 
 type NoteComposerThemeSpec = Parameters<typeof EditorView.theme>[0];
+export type NoteComposerTaskDateKind = "start" | "scheduled" | "due";
+export type NoteComposerTaskDateSuggestion = {
+  kind: "task-date";
+  label: string;
+  detail: string;
+  from: number;
+  to: number;
+  insert: string;
+  cursorOffset: number;
+  dateKind: NoteComposerTaskDateKind;
+  dateKey: string;
+  pickerLabel: string;
+};
 type NoteComposerSuggestItem =
   | { kind: "tag"; label: string; value: string }
-  | { kind: "shortcut"; label: string; detail: string; from: number; to: number; insert: string; cursorOffset: number };
+  | { kind: "shortcut"; label: string; detail: string; from: number; to: number; insert: string; cursorOffset: number }
+  | NoteComposerTaskDateSuggestion;
 
-const TASK_MARKER = /^(\s*[-*]\s+\[([ xX])\]\s*)/u;
+const TASK_MARKER = /^(\s*[-*]\s+\[([^\]\r\n])\]\s*)/u;
+const TASK_DATE_EMOJI_TRIGGER = /(^|\s)(🛫|⏳|📅)\s*(\d{0,4}(?:-\d{0,2}(?:-\d{0,2})?)?)$/u;
+const TASK_DATE_TOKEN = /(?:^|\s)(🛫|⏳|📅)\s*\d{4}-\d{2}-\d{2}(?=\s|$)/gu;
 const NOTE_TAG = /(^|[^0-9A-Za-z_/-])(#[\p{L}\p{N}_/-]+)/gu;
 const HEADING_LINE = /^(#{1,6})\s+\S.*$/u;
 const BLOCKQUOTE_LINE = /^\s*>\s?.*$/u;
 const CODE_FENCE_LINE = /^\s*(```|~~~)/u;
 const INDENTED_CODE_LINE = /^(?: {4}|\t)\S/u;
 const SHORTCUT_TRIGGER = /(^|\s)\/([\p{L}\p{N}_-]*)$/u;
+const DATE_KEY = /^\d{4}-\d{2}-\d{2}$/u;
 const INLINE_MARKDOWN_PATTERNS: Array<{
   type: Extract<NoteComposerToken["type"], "strong" | "emphasis" | "highlight" | "strikethrough" | "inline-code" | "link">;
   pattern: RegExp;
@@ -81,6 +98,16 @@ const BLOCK_SHORTCUTS: Array<{
   { label: "/h1", detail: "一级标题", aliases: ["h1", "标题1", "title"], insert: "# ", cursorOffset: 2 },
   { label: "/h2", detail: "二级标题", aliases: ["h2", "标题2"], insert: "## ", cursorOffset: 3 },
   { label: "/h3", detail: "三级标题", aliases: ["h3", "标题3"], insert: "### ", cursorOffset: 4 }
+];
+const TASK_DATE_TYPES: Array<{
+  kind: NoteComposerTaskDateKind;
+  emoji: string;
+  label: string;
+  aliases: string[];
+}> = [
+  { kind: "start", emoji: "🛫", label: "开始日期", aliases: ["start", "starts", "begin", "开始", "启动"] },
+  { kind: "scheduled", emoji: "⏳", label: "计划日期", aliases: ["scheduled", "schedule", "plan", "planned", "计划", "安排"] },
+  { kind: "due", emoji: "📅", label: "截止日期", aliases: ["due", "deadline", "end", "截止", "到期"] }
 ];
 
 export function noteComposerThemeSpec(): NoteComposerThemeSpec {
@@ -151,7 +178,7 @@ export function collectNoteComposerTokens(text: string): NoteComposerToken[] {
         type: "checkbox",
         from: lineStart + (taskMatch[1] ? taskMatch[1].search(/[-*]/u) : 0),
         to: lineStart + taskMatch[1].length,
-        checked: taskMatch[2].toLowerCase() === "x"
+        checked: isCompletedTaskStatus(taskMatch[2])
       });
     }
     NOTE_TAG.lastIndex = 0;
@@ -167,6 +194,10 @@ export function collectNoteComposerTokens(text: string): NoteComposerToken[] {
     lineStart += line.length + 1;
   }
   return tokens.sort((left, right) => left.from - right.from || left.to - right.to);
+}
+
+function isCompletedTaskStatus(status: string): boolean {
+  return status.toLowerCase() === "x";
 }
 
 export function suggestNoteComposerBlocksAtCursor(text: string, cursor: number): NoteComposerSuggestItem[] {
@@ -188,6 +219,136 @@ export function suggestNoteComposerBlocksAtCursor(text: string, cursor: number):
       insert: item.insert,
       cursorOffset: item.cursorOffset
     }));
+}
+
+export function suggestNoteComposerTaskDatesAtCursor(text: string, cursor: number, now = new Date()): NoteComposerTaskDateSuggestion[] {
+  if (cursor < 0 || cursor > text.length) return [];
+  const lineStart = text.lastIndexOf("\n", Math.max(0, cursor - 1)) + 1;
+  const lineEndCandidate = text.indexOf("\n", cursor);
+  const lineEnd = lineEndCandidate === -1 ? text.length : lineEndCandidate;
+  const lineText = text.slice(lineStart, lineEnd);
+  const beforeCursor = text.slice(lineStart, cursor);
+  if (!TASK_MARKER.test(lineText)) return [];
+
+  const emojiTrigger = beforeCursor.match(TASK_DATE_EMOJI_TRIGGER);
+  if (emojiTrigger) {
+    const dateType = taskDateTypeFromEmoji(emojiTrigger[2]);
+    if (!dateType) return [];
+    const triggerStart = lineStart + (emojiTrigger.index ?? 0) + (emojiTrigger[1]?.length ?? 0);
+    return buildTaskDateSuggestions(dateType, triggerStart, cursor, emojiTrigger[3] ?? "", now);
+  }
+
+  const shortcutTrigger = beforeCursor.match(SHORTCUT_TRIGGER);
+  if (!shortcutTrigger) {
+    if (text.slice(cursor, lineEnd).trim().length > 0) return [];
+    return suggestTaskDateTypesForTaskLine(lineText, cursor, cursor, now, needsSpaceBeforeInsert(beforeCursor) ? " " : "");
+  }
+  const query = (shortcutTrigger[2] ?? "").toLocaleLowerCase();
+  if (!query) return suggestTaskDateTypesForTaskLine(lineText, cursor, cursor, now, " ");
+  const triggerStart = lineStart + beforeCursor.length - query.length - 1;
+  const shortcutOptions = TASK_DATE_TYPES
+    .filter((dateType) => dateType.aliases.some((alias) => alias.toLocaleLowerCase().startsWith(query)))
+    .map((dateType) => taskDateSuggestion(dateType, triggerStart, cursor, todayDateKey(now), dateType.label, "今天"));
+  if (shortcutOptions.length > 0) return shortcutOptions;
+  if (text.slice(cursor, lineEnd).trim().length > 0) return [];
+  return suggestTaskDateTypesForTaskLine(lineText, cursor, cursor, now, needsSpaceBeforeInsert(beforeCursor) ? " " : "");
+}
+
+export function taskDateSuggestionInsert(kind: NoteComposerTaskDateKind, dateKey: string): string {
+  const dateType = TASK_DATE_TYPES.find((candidate) => candidate.kind === kind) ?? TASK_DATE_TYPES[0];
+  return `${dateType.emoji} ${dateKey}`;
+}
+
+function buildTaskDateSuggestions(
+  dateType: (typeof TASK_DATE_TYPES)[number],
+  from: number,
+  to: number,
+  typedDate: string,
+  now: Date
+): NoteComposerTaskDateSuggestion[] {
+  const relativeDates = relativeTaskDateOptions(now);
+  const typedDateKey = DATE_KEY.test(typedDate) ? typedDate : undefined;
+  const typedSuggestion = typedDateKey && !relativeDates.some((option) => option.dateKey === typedDateKey)
+    ? [taskDateSuggestion(dateType, from, to, typedDateKey, "使用输入日期", dateType.label)]
+    : [];
+  return [
+    ...typedSuggestion,
+    ...relativeDates.map((option) => taskDateSuggestion(dateType, from, to, option.dateKey, option.label, dateType.label))
+  ];
+}
+
+function relativeTaskDateOptions(now: Date): Array<{ label: string; dateKey: string }> {
+  return [
+    { label: "今天", dateKey: addDaysDateKey(now, 0) },
+    { label: "明天", dateKey: addDaysDateKey(now, 1) },
+    { label: "一周后", dateKey: addDaysDateKey(now, 7) }
+  ];
+}
+
+function taskDateSuggestion(
+  dateType: (typeof TASK_DATE_TYPES)[number],
+  from: number,
+  to: number,
+  dateKey: string,
+  label: string,
+  detail: string,
+  insertPrefix = ""
+): NoteComposerTaskDateSuggestion {
+  const insert = `${insertPrefix}${taskDateSuggestionInsert(dateType.kind, dateKey)}`;
+  return {
+    kind: "task-date",
+    label,
+    detail: `${detail} ${dateKey}`,
+    from,
+    to,
+    insert,
+    cursorOffset: insert.length,
+    dateKind: dateType.kind,
+    dateKey,
+    pickerLabel: dateType.label
+  };
+}
+
+function suggestTaskDateTypesForTaskLine(
+  lineText: string,
+  from: number,
+  to: number,
+  now: Date,
+  insertPrefix: string
+): NoteComposerTaskDateSuggestion[] {
+  const existingKinds = taskDateKindsInLine(lineText);
+  return TASK_DATE_TYPES
+    .filter((dateType) => !existingKinds.has(dateType.kind))
+    .map((dateType) => taskDateSuggestion(dateType, from, to, todayDateKey(now), dateType.label, "今天", insertPrefix));
+}
+
+function taskDateKindsInLine(lineText: string): Set<NoteComposerTaskDateKind> {
+  const kinds = new Set<NoteComposerTaskDateKind>();
+  TASK_DATE_TOKEN.lastIndex = 0;
+  for (const match of lineText.matchAll(TASK_DATE_TOKEN)) {
+    const dateType = taskDateTypeFromEmoji(match[1] ?? "");
+    if (dateType) kinds.add(dateType.kind);
+  }
+  return kinds;
+}
+
+function needsSpaceBeforeInsert(beforeCursor: string): boolean {
+  return beforeCursor.length > 0 && !/\s$/u.test(beforeCursor);
+}
+
+function taskDateTypeFromEmoji(emoji: string): (typeof TASK_DATE_TYPES)[number] | undefined {
+  return TASK_DATE_TYPES.find((dateType) => dateType.emoji === emoji);
+}
+
+function todayDateKey(now: Date): string {
+  return addDaysDateKey(now, 0);
+}
+
+function addDaysDateKey(now: Date, days: number): string {
+  const date = new Date(now);
+  date.setHours(0, 0, 0, 0);
+  date.setDate(date.getDate() + days);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
 function collectInlineMarkdownTokens(line: string, lineStart: number): NoteComposerToken[] {
@@ -328,7 +489,8 @@ function noteComposerTagSuggest(getTags: () => string[]): Extension {
         label: value,
         value
       }));
-      const options = [...suggestNoteComposerBlocksAtCursor(text, cursor), ...tagOptions];
+      const dateOptions = suggestNoteComposerTaskDatesAtCursor(text, cursor);
+      const options = [...dateOptions, ...suggestNoteComposerBlocksAtCursor(text, cursor), ...tagOptions];
       if (options.length === 0) {
         this.close();
         return;
@@ -344,7 +506,11 @@ function noteComposerTagSuggest(getTags: () => string[]): Extension {
       if (this.popup) return this.popup;
       const popup = this.view.dom.ownerDocument.createElement("div");
       popup.className = "task-hub-note-composer-suggest";
-      popup.addEventListener("mousedown", (event) => event.preventDefault());
+      popup.addEventListener("mousedown", (event) => {
+        const target = event.target;
+        if (target && "closest" in target && typeof target.closest === "function" && target.closest("input")) return;
+        event.preventDefault();
+      });
       this.popup = popup;
       return popup;
     }
@@ -371,11 +537,18 @@ function noteComposerTagSuggest(getTags: () => string[]): Extension {
       this.renderRetryCount = 0;
       const popup = this.ensurePopup();
       popup.replaceChildren();
+      const selectedOption = this.active.options[this.active.selectedIndex];
+      const dateOption = selectedOption?.kind === "task-date"
+        ? selectedOption
+        : this.active.options.find((option): option is NoteComposerTaskDateSuggestion => option.kind === "task-date");
+      if (dateOption) {
+        popup.appendChild(this.renderDatePicker(dateOption));
+      }
       for (const [index, option] of this.active.options.entries()) {
         const item = this.view.dom.ownerDocument.createElement("div");
         item.className = `task-hub-note-composer-suggest-item ${index === this.active.selectedIndex ? "is-selected" : ""}`;
         item.createSpan({ cls: "task-hub-note-composer-suggest-label", text: option.label });
-        if (option.kind === "shortcut") item.createSpan({ cls: "task-hub-note-composer-suggest-detail", text: option.detail });
+        if (option.kind === "shortcut" || option.kind === "task-date") item.createSpan({ cls: "task-hub-note-composer-suggest-detail", text: option.detail });
         item.addEventListener("mousedown", (event) => {
           event.preventDefault();
           this.applySuggestion(option);
@@ -390,6 +563,30 @@ function noteComposerTagSuggest(getTags: () => string[]): Extension {
         left: `${coords.left}px`,
         top: `${coords.bottom + 6}px`
       });
+    }
+
+    private renderDatePicker(option: NoteComposerTaskDateSuggestion): HTMLElement {
+      const wrapper = this.view.dom.ownerDocument.createElement("label");
+      wrapper.className = "task-hub-note-composer-date-picker";
+      wrapper.createSpan({ cls: "task-hub-note-composer-date-picker-label", text: option.pickerLabel });
+      const input = wrapper.createEl("input", {
+        cls: "task-hub-note-composer-date-picker-input",
+        type: "date",
+        value: option.dateKey
+      });
+      input.addEventListener("mousedown", (event) => event.stopPropagation());
+      input.addEventListener("click", () => {
+        try {
+          input.showPicker?.();
+        } catch {
+          input.focus();
+        }
+      });
+      input.addEventListener("change", () => {
+        if (!DATE_KEY.test(input.value)) return;
+        this.applyTaskDate(option, input.value);
+      });
+      return wrapper;
     }
 
     private selectOffset(offset: number): void {
@@ -410,7 +607,7 @@ function noteComposerTagSuggest(getTags: () => string[]): Extension {
           selection: { anchor: next.cursor },
           userEvent: "input.complete"
         });
-      } else {
+      } else if (option.kind === "shortcut" || option.kind === "task-date") {
         this.view.dispatch({
           changes: { from: option.from, to: option.to, insert: option.insert },
           selection: { anchor: option.from + option.cursorOffset },
@@ -421,9 +618,20 @@ function noteComposerTagSuggest(getTags: () => string[]): Extension {
       this.sync();
     }
 
+    private applyTaskDate(option: NoteComposerTaskDateSuggestion, dateKey: string): void {
+      const insert = taskDateSuggestionInsert(option.dateKind, dateKey);
+      this.view.dispatch({
+        changes: { from: option.from, to: option.to, insert },
+        selection: { anchor: option.from + insert.length },
+        userEvent: "input.complete"
+      });
+      this.view.focus();
+      this.sync();
+    }
+
     private isEditorFocused(): boolean {
       const activeElement = this.view.dom.ownerDocument.activeElement;
-      return this.view.hasFocus || Boolean(activeElement && this.view.dom.contains(activeElement));
+      return this.view.hasFocus || Boolean(activeElement && (this.view.dom.contains(activeElement) || this.popup?.contains(activeElement)));
     }
 
     private scheduleRender(): void {
@@ -536,7 +744,7 @@ class NoteComposerCheckboxWidget extends WidgetType {
     input.addEventListener("click", (event) => {
       event.preventDefault();
       const currentMarker = view.state.sliceDoc(this.from, this.to);
-      const nextMarker = currentMarker.replace(/\[[ xX]\]/u, this.checked ? "[ ]" : "[x]");
+      const nextMarker = currentMarker.replace(/\[[^\]\r\n]\]/u, this.checked ? "[ ]" : "[x]");
       view.dispatch({ changes: { from: this.from, to: this.to, insert: nextMarker } });
       view.focus();
     });

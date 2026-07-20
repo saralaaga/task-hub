@@ -321,6 +321,71 @@ describe("renderDatedNotesView", () => {
     expect(taskRows[1].style.values.get("--task-hub-dated-note-preview-indent")).toBe("1");
   });
 
+  it("renders Tasks plugin custom status lines as unchecked task previews", () => {
+    const container = new FakeElement();
+    const note = makeTimelineNote({
+      path: "Notes/2026-07-09 2213 - Tasks.md",
+      date: "2026-07-09",
+      title: "测试 Tasks 插件状态",
+      body: "- [/] 进行中\n- [?] 等待确认\n- [-] 取消",
+      bodyStartLine: 7,
+      tags: [],
+      createdAt: "2026-07-09T22:13:00"
+    });
+
+    renderDatedNotesView(
+      container as unknown as HTMLElement,
+      [note],
+      { query: "", selectedPath: note.path, t: (key) => key },
+      datedNoteHandlers()
+    );
+
+    const taskRows = collect(container).filter((child) => child.classes.has("task-hub-dated-note-preview-task"));
+    const checkboxes = collect(container).filter((child) => child.classes.has("task-hub-dated-note-preview-checkbox"));
+
+    expect(taskRows).toHaveLength(3);
+    expect(collect(container).filter((child) => child.classes.has("task-hub-dated-note-preview-task-text")).map((child) => child.text)).toEqual([
+      "进行中",
+      "等待确认",
+      "取消"
+    ]);
+    expect(checkboxes.map((checkbox) => (checkbox as unknown as { checked?: boolean }).checked)).toEqual([false, false, false]);
+  });
+
+  it("toggles a markdown-rendered Tasks plugin custom status checkbox from the detail pane", () => {
+    const container = new FakeElement();
+    const onNoteCheckboxToggle = jest.fn();
+    const note = makeTimelineNote({
+      path: "Notes/2026-07-09 2213 - Tasks.md",
+      date: "2026-07-09",
+      title: "测试 Tasks 插件状态",
+      body: "- [/] 进行中",
+      bodyStartLine: 7,
+      tags: [],
+      createdAt: "2026-07-09T22:13:00"
+    });
+
+    renderDatedNotesView(
+      container as unknown as HTMLElement,
+      [note],
+      { query: "", selectedPath: note.path, t: (key) => key },
+      datedNoteHandlers(),
+      {
+        onNoteCheckboxToggle,
+        renderNoteMarkdown: (markdown) => {
+          const checkbox = markdown.createEl("input", { cls: "task-list-item-checkbox" });
+          (checkbox as unknown as { checked: boolean }).checked = false;
+        }
+      }
+    );
+
+    const markdown = childWithClass(container, "task-hub-dated-note-markdown");
+    const checkbox = childWithClass(markdown, "task-list-item-checkbox");
+    markdown.dispatch("click", { target: checkbox, preventDefault: jest.fn(), stopPropagation: jest.fn() });
+
+    expect(onNoteCheckboxToggle).toHaveBeenCalledWith(note, 7, "- [/] 进行中", true);
+  });
+
   it("renders related task previews only in the detail note pane", () => {
     const container = new FakeElement();
     const note = makeTimelineNote({

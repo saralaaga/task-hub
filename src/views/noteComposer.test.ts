@@ -4,7 +4,13 @@ jest.mock("obsidian", () => ({
   parseFrontMatterTags: jest.fn(() => [])
 }), { virtual: true });
 
-import { collectNoteComposerTokens, noteComposerThemeSpec, suggestNoteComposerBlocksAtCursor } from "./noteComposer";
+import {
+  collectNoteComposerTokens,
+  noteComposerThemeSpec,
+  suggestNoteComposerBlocksAtCursor,
+  suggestNoteComposerTaskDatesAtCursor,
+  taskDateSuggestionInsert
+} from "./noteComposer";
 
 describe("collectNoteComposerTokens", () => {
   it("finds task checkbox markers and markdown tags", () => {
@@ -13,6 +19,14 @@ describe("collectNoteComposerTokens", () => {
       { type: "tag", from: 14, to: 17, text: "#比赛" },
       { type: "checkbox", from: 18, to: 24, checked: true },
       { type: "tag", from: 29, to: 34, text: "#done" }
+    ]);
+  });
+
+  it("finds Tasks plugin custom checkbox statuses", () => {
+    expect(collectNoteComposerTokens("- [/] doing\n- [?] waiting\n- [-] cancelled")).toEqual([
+      { type: "checkbox", from: 0, to: 6, checked: false },
+      { type: "checkbox", from: 12, to: 18, checked: false },
+      { type: "checkbox", from: 26, to: 32, checked: false }
     ]);
   });
 
@@ -60,6 +74,69 @@ describe("suggestNoteComposerBlocksAtCursor", () => {
 
   it("does not suggest block shortcuts away from the cursor trigger", () => {
     expect(suggestNoteComposerBlocksAtCursor("正文 /quote 后续", 12)).toEqual([]);
+  });
+});
+
+describe("suggestNoteComposerTaskDatesAtCursor", () => {
+  const now = new Date("2026-07-20T12:00:00");
+
+  it("suggests the three supported task date tokens from slash aliases", () => {
+    const startText = "- [ ] 写计划 /st";
+    const scheduledText = "- [ ] 写计划 /sch";
+    const dueText = "- [ ] 写计划 /du";
+    expect(suggestNoteComposerTaskDatesAtCursor(startText, startText.length, now)).toMatchObject([
+      { kind: "task-date", dateKind: "start", insert: "🛫 2026-07-20", label: "开始日期" }
+    ]);
+    expect(suggestNoteComposerTaskDatesAtCursor(scheduledText, scheduledText.length, now)).toMatchObject([
+      { kind: "task-date", dateKind: "scheduled", insert: "⏳ 2026-07-20", label: "计划日期" }
+    ]);
+    expect(suggestNoteComposerTaskDatesAtCursor(dueText, dueText.length, now)).toMatchObject([
+      { kind: "task-date", dateKind: "due", insert: "📅 2026-07-20", label: "截止日期" }
+    ]);
+  });
+
+  it("shows relative date choices after a task date emoji", () => {
+    const text = "- [ ] 写计划 ⏳";
+    expect(suggestNoteComposerTaskDatesAtCursor(text, text.length, now)).toMatchObject([
+      { dateKind: "scheduled", label: "今天", insert: "⏳ 2026-07-20" },
+      { dateKind: "scheduled", label: "明天", insert: "⏳ 2026-07-21" },
+      { dateKind: "scheduled", label: "一周后", insert: "⏳ 2026-07-27" }
+    ]);
+  });
+
+  it("shows date type choices when the cursor is at the end of a task line", () => {
+    const text = "- [ ] 测试";
+    expect(suggestNoteComposerTaskDatesAtCursor(text, text.length, now)).toMatchObject([
+      { dateKind: "start", label: "开始日期", insert: " 🛫 2026-07-20" },
+      { dateKind: "scheduled", label: "计划日期", insert: " ⏳ 2026-07-20" },
+      { dateKind: "due", label: "截止日期", insert: " 📅 2026-07-20" }
+    ]);
+  });
+
+  it("does not repeat date types already present on the task line", () => {
+    const text = "- [ ] 测试 🛫 2026-07-20 ";
+    expect(suggestNoteComposerTaskDatesAtCursor(text, text.length, now).map((item) => item.dateKind)).toEqual(["scheduled", "due"]);
+  });
+
+  it("keeps a typed custom date as the first date choice", () => {
+    const text = "- [ ] 写计划 📅 2026-08-03";
+    expect(suggestNoteComposerTaskDatesAtCursor(text, text.length, now).slice(0, 2)).toMatchObject([
+      { dateKind: "due", label: "使用输入日期", insert: "📅 2026-08-03" },
+      { dateKind: "due", label: "今天", insert: "📅 2026-07-20" }
+    ]);
+  });
+
+  it("does not suggest task dates outside task lines", () => {
+    const text = "普通笔记 📅";
+    expect(suggestNoteComposerTaskDatesAtCursor(text, text.length, now)).toEqual([]);
+  });
+});
+
+describe("taskDateSuggestionInsert", () => {
+  it("formats the supported date kinds as Tasks-compatible emoji tokens", () => {
+    expect(taskDateSuggestionInsert("start", "2026-07-20")).toBe("🛫 2026-07-20");
+    expect(taskDateSuggestionInsert("scheduled", "2026-07-20")).toBe("⏳ 2026-07-20");
+    expect(taskDateSuggestionInsert("due", "2026-07-20")).toBe("📅 2026-07-20");
   });
 });
 

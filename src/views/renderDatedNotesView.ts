@@ -362,7 +362,7 @@ type DatedNotePreviewLine =
   | { type: "text"; text: string }
   | { type: "task"; text: string; checked: boolean; indent: number; rawLine: string; sourceLine: number };
 
-const DATED_NOTE_TASK_LINE = /^(\s*)[-*]\s+\[([ xX])\]\s*(.*)$/u;
+const DATED_NOTE_TASK_LINE = /^(\s*)[-*]\s+\[([^\]\r\n])\]\s*(.*)$/u;
 const DATED_NOTE_PREVIEW_LINE_LIMIT = 3;
 
 function renderDatedNoteCardPreview(card: HTMLElement, note: TimelineHubNote, options: DatedNotesViewOptions): void {
@@ -398,7 +398,7 @@ function notePreviewLines(note: TimelineHubNote): DatedNotePreviewLine[] {
       if (!text) continue;
       lines.push({
         type: "task",
-        checked: taskLine[2].toLowerCase() === "x",
+        checked: isCompletedTaskStatus(taskLine[2]),
         indent: Math.min(3, Math.floor(taskLine[1].replace(/\t/gu, "  ").length / 2)),
         text,
         rawLine,
@@ -411,6 +411,10 @@ function notePreviewLines(note: TimelineHubNote): DatedNotePreviewLine[] {
     if (text) lines.push({ type: "text", text });
   }
   return lines.length > 0 ? lines : [{ type: "text", text: note.path }];
+}
+
+function isCompletedTaskStatus(status: string): boolean {
+  return status.toLowerCase() === "x";
 }
 
 function normalizePreviewText(line: string): string {
