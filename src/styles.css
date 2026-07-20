@@ -6244,7 +6244,9 @@ button.task-hub-dated-note-menu-button:focus-visible {
 }
 
 .task-hub-dated-note-markdown {
+  max-height: calc(1.42em * 4);
   min-width: 0;
+  overflow: hidden;
   position: relative;
 }
 
@@ -6496,14 +6498,6 @@ button.task-hub-dated-note-card.is-active .task-hub-dated-note-excerpt {
   border-left-color: color-mix(in srgb, var(--interactive-accent) 78%, var(--background-modifier-border));
 }
 
-.task-hub-dated-note-time {
-  color: var(--text-muted);
-  flex: 0 0 auto;
-  font-size: var(--font-ui-smaller);
-  font-variant-numeric: tabular-nums;
-  justify-self: end;
-}
-
 .task-hub-dated-note-excerpt {
   background: var(--background-primary);
   border: 1px solid var(--background-modifier-border);
@@ -6528,7 +6522,7 @@ button.task-hub-dated-note-card.is-active .task-hub-dated-note-excerpt {
 .task-hub-dated-note-excerpt:not(.has-task-lines) {
   display: -webkit-box;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
+  -webkit-line-clamp: 4;
 }
 
 .task-hub-dated-note-preview-text {
@@ -6538,7 +6532,7 @@ button.task-hub-dated-note-card.is-active .task-hub-dated-note-excerpt {
   text-align: left;
   width: 100%;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
+  -webkit-line-clamp: 4;
 }
 
 .task-hub-dated-note-excerpt.has-task-lines .task-hub-dated-note-preview-text {
@@ -6569,17 +6563,6 @@ button.task-hub-dated-note-card.is-active .task-hub-dated-note-excerpt {
   text-align: left;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.task-hub-dated-note-card-footer {
-  align-items: end;
-  display: grid;
-  gap: 0;
-  grid-template-columns: auto;
-  justify-self: stretch;
-  min-width: 0;
-  text-align: right;
-  width: 100%;
 }
 
 @media (max-width: 720px) {

@@ -197,7 +197,6 @@ function renderDatedNoteDetail(
         body.createDiv({ cls: "task-hub-empty", text: state.t("noDatedNotes") });
       }
 
-      if (note.createdAt) side.createSpan({ cls: "task-hub-dated-note-time", text: timeLabel(note.createdAt) });
       menu.addEventListener("click", (event) => {
         event.preventDefault();
         event.stopPropagation();
@@ -223,8 +222,6 @@ function renderDatedNoteList(
         cls: `task-hub-dated-note-card ${note.path === selected.path ? "is-active" : ""}`
       });
       renderDatedNoteCardPreview(card, note, options);
-      const footer = card.createSpan({ cls: "task-hub-dated-note-card-footer" });
-      if (note.createdAt) footer.createSpan({ cls: "task-hub-dated-note-time", text: timeLabel(note.createdAt) });
       card.addEventListener("click", () => handlers.onSelectNote(note));
     }
   }
@@ -363,7 +360,7 @@ type DatedNotePreviewLine =
   | { type: "task"; text: string; checked: boolean; indent: number; rawLine: string; sourceLine: number };
 
 const DATED_NOTE_TASK_LINE = /^(\s*)[-*]\s+\[([^\]\r\n])\]\s*(.*)$/u;
-const DATED_NOTE_PREVIEW_LINE_LIMIT = 3;
+const DATED_NOTE_PREVIEW_LINE_LIMIT = 4;
 
 function renderDatedNoteCardPreview(card: HTMLElement, note: TimelineHubNote, options: DatedNotesViewOptions): void {
   const lines = notePreviewLines(note);
@@ -574,12 +571,6 @@ function relatedTaskSourceLabel(task: TaskItem, t: Translator): string {
 
 function relatedTaskDateLabel(task: TaskItem): string {
   return taskStartDateKey(task) ?? taskPlannedDateKey(task) ?? task.dueDate ?? "";
-}
-
-function timeLabel(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value.slice(11, 16);
-  return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
 }
 
 function toLocalDateKey(date: Date): string {

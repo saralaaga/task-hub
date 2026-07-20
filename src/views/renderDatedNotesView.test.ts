@@ -170,7 +170,7 @@ describe("renderDatedNotesView", () => {
     expect(model.listGroups.map((group) => group.date)).toEqual(["2026-07-09", "2026-07-07"]);
   });
 
-  it("renders detail cards with the note body first and footer metadata", () => {
+  it("renders detail cards with the note body and note actions only", () => {
     const container = new FakeElement();
     const note = makeTimelineNote({
       path: "Notes/2026-07-07 0930 - Morning.md",
@@ -200,10 +200,10 @@ describe("renderDatedNotesView", () => {
     expect(detailCardChildren.map((child) => child.text)).not.toContain(note.title);
     expect(detailCardChildren.map((child) => child.text)).not.toContain(note.path);
     expect(detailCardChildren.map((child) => child.text)).not.toContain("taskhub-type: note");
-    expect(childWithClass(detailCard, "task-hub-dated-note-time").text).toBe("09:30");
+    expect(detailCardChildren.some((child) => child.classes.has("task-hub-dated-note-time"))).toBe(false);
   });
 
-  it("renders note list cards as body previews with the time in the footer", () => {
+  it("renders note list cards as body previews without note times", () => {
     const container = new FakeElement();
     const note = makeTimelineNote({
       path: "Notes/2026-07-07 0930 - Morning.md",
@@ -228,9 +228,9 @@ describe("renderDatedNotesView", () => {
     expect(cardChildren.some((child) => child.classes.has("task-hub-dated-note-title"))).toBe(false);
     expect(cardChildren.map((child) => child.text)).not.toContain(note.title);
     expect(childWithClass(card, "task-hub-dated-note-preview-text").text).toBe("Body preview content #work");
-    expect(childWithClass(card, "task-hub-dated-note-card-footer").classes.has("task-hub-dated-note-card-footer")).toBe(true);
+    expect(cardChildren.some((child) => child.classes.has("task-hub-dated-note-card-footer"))).toBe(false);
     expect(cardChildren.some((child) => child.classes.has("task-hub-task-tag"))).toBe(false);
-    expect(childWithClass(card, "task-hub-dated-note-time").text).toBe("09:30");
+    expect(cardChildren.some((child) => child.classes.has("task-hub-dated-note-time"))).toBe(false);
   });
 
   it("renders started, planned, and completed day stats in the day header", () => {
@@ -312,10 +312,11 @@ describe("renderDatedNotesView", () => {
 
     expect(excerpt.classes.has("has-task-lines")).toBe(true);
     expect(childWithClass(card, "task-hub-dated-note-preview-text").text).toBe("测试输入任务");
-    expect(taskRows).toHaveLength(2);
+    expect(taskRows).toHaveLength(3);
     expect(cardChildren.filter((child) => child.classes.has("task-hub-dated-note-preview-task-text")).map((child) => child.text)).toEqual([
       "测试",
-      "测试换行"
+      "测试换行",
+      "测试子任务"
     ]);
     expect(cardChildren.some((child) => child.text.includes("- [ ]"))).toBe(false);
     expect(taskRows[1].style.values.get("--task-hub-dated-note-preview-indent")).toBe("1");
