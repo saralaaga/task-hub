@@ -6244,9 +6244,7 @@ button.task-hub-dated-note-menu-button:focus-visible {
 }
 
 .task-hub-dated-note-markdown {
-  max-height: calc(1.42em * 4);
   min-width: 0;
-  overflow: hidden;
   position: relative;
 }
 

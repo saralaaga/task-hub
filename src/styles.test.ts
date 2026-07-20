@@ -843,8 +843,8 @@ describe("Task Hub styles", () => {
     expect(detailSideRule).toContain("justify-content: space-between");
     expect(detailSideRule).toContain("align-items: flex-end");
     expect(detailSideRule).not.toContain("border-top:");
-    expect(datedMarkdownRule).toContain("max-height: calc(1.42em * 4)");
-    expect(datedMarkdownRule).toContain("overflow: hidden");
+    expect(datedMarkdownRule).not.toContain("max-height:");
+    expect(datedMarkdownRule).not.toContain("overflow: hidden");
     expect(dayHeaderRule).toContain("align-items: center");
     expect(dayMetaRule).toContain("justify-content: flex-end");
     expect(dayMetaRule).toContain("margin-left: auto");
