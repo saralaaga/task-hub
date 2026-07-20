@@ -364,7 +364,13 @@ const DATED_NOTE_PREVIEW_LINE_LIMIT = 4;
 
 function renderDatedNoteCardPreview(card: HTMLElement, note: TimelineHubNote, options: DatedNotesViewOptions): void {
   const lines = notePreviewLines(note);
-  const preview = card.createDiv({ cls: lines.some((line) => line.type === "task") ? "task-hub-dated-note-excerpt has-task-lines" : "task-hub-dated-note-excerpt" });
+  const hasTaskLines = lines.some((line) => line.type === "task");
+  const preview = card.createDiv({ cls: hasTaskLines ? "task-hub-dated-note-excerpt has-task-lines" : "task-hub-dated-note-excerpt" });
+  if (!hasTaskLines) {
+    preview.createSpan({ cls: "task-hub-dated-note-preview-text", text: notePreviewText(note) });
+    return;
+  }
+
   for (const line of lines) {
     if (line.type === "text") {
       preview.createSpan({ cls: "task-hub-dated-note-preview-text", text: line.text });
@@ -408,6 +414,15 @@ function notePreviewLines(note: TimelineHubNote): DatedNotePreviewLine[] {
     if (text) lines.push({ type: "text", text });
   }
   return lines.length > 0 ? lines : [{ type: "text", text: note.path }];
+}
+
+function notePreviewText(note: TimelineHubNote): string {
+  const text = note.body
+    .split(/\r?\n/u)
+    .map(normalizePreviewText)
+    .filter(Boolean)
+    .join("\n");
+  return text || note.path;
 }
 
 function isCompletedTaskStatus(status: string): boolean {

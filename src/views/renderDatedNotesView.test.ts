@@ -233,6 +233,46 @@ describe("renderDatedNotesView", () => {
     expect(cardChildren.some((child) => child.classes.has("task-hub-dated-note-time"))).toBe(false);
   });
 
+  it("renders multiline note previews as one visually clamped text block", () => {
+    const container = new FakeElement();
+    const note = makeTimelineNote({
+      path: "Notes/2026-07-20 1000 - Long note.md",
+      date: "2026-07-20",
+      title: "Long note",
+      body: [
+        "同行是冤家，虽然我们基本都不和同行打什么交道。",
+        "但偶尔也会通过美团、小号加微信等方式关注行业的变动。",
+        "",
+        "行业比较小，一有点风吹草动基本上大家也都能知道。",
+        "比如我们最近发现旺季的时候大家原来投在偷偷涨价。",
+        "我们没涨价，可恶。"
+      ].join("\n"),
+      bodyStartLine: 7,
+      tags: [],
+      createdAt: "2026-07-20T10:00:00"
+    });
+
+    renderDatedNotesView(
+      container as unknown as HTMLElement,
+      [note],
+      { query: "", selectedPath: note.path, t: (key) => key },
+      datedNoteHandlers()
+    );
+
+    const previewBlocks = collect(container).filter((child) => child.classes.has("task-hub-dated-note-preview-text"));
+
+    expect(previewBlocks).toHaveLength(1);
+    expect(previewBlocks[0].text).toBe(
+      [
+        "同行是冤家，虽然我们基本都不和同行打什么交道。",
+        "但偶尔也会通过美团、小号加微信等方式关注行业的变动。",
+        "行业比较小，一有点风吹草动基本上大家也都能知道。",
+        "比如我们最近发现旺季的时候大家原来投在偷偷涨价。",
+        "我们没涨价，可恶。"
+      ].join("\n")
+    );
+  });
+
   it("renders started, planned, and completed day stats in the day header", () => {
     const container = new FakeElement();
     const note = makeTimelineNote({

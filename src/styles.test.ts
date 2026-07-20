@@ -864,7 +864,12 @@ describe("Task Hub styles", () => {
     expect(activeCardRule).not.toContain("border-color:");
     expect(excerptRule).toContain("border: 1px solid var(--background-modifier-border)");
     expect(excerptRule).toContain("border-left: 3px solid");
+    expect(excerptRule).toContain("--task-hub-dated-note-preview-line-height: 1.4em");
+    expect(excerptRule).toContain("--task-hub-dated-note-preview-line-gap: 3px");
+    expect(excerptRule).toContain("--task-hub-dated-note-preview-block-padding: 20px");
+    expect(excerptRule).toContain("box-sizing: border-box");
     expect(excerptRule).toContain("box-shadow:");
+    expect(excerptRule).toContain("max-height: calc((var(--task-hub-dated-note-preview-line-height) * 4) + (var(--task-hub-dated-note-preview-line-gap) * 3) + var(--task-hub-dated-note-preview-block-padding) + 2px)");
     expect(excerptRule).toContain("padding: 10px 12px");
     expect(activeExcerptRule).toContain("border-left-color:");
     expect(excerptRule).toContain("font-weight: 400");
@@ -872,8 +877,12 @@ describe("Task Hub styles", () => {
     expect(excerptRule).toContain("text-align: left");
     expect(excerptRule).toContain("width: 100%");
     expect(previewTextRule).toContain("justify-self: stretch");
+    expect(previewTextRule).toContain("line-height: inherit");
+    expect(previewTextRule).toContain("max-height: calc((var(--task-hub-dated-note-preview-line-height) * 4) + (var(--task-hub-dated-note-preview-line-gap) * 3))");
+    expect(previewTextRule).toContain("overflow-wrap: anywhere");
     expect(previewTextRule).toContain("-webkit-line-clamp: 4");
     expect(previewTextRule).toContain("text-align: left");
+    expect(previewTextRule).toContain("white-space: pre-wrap");
     expect(previewTextRule).toContain("width: 100%");
     expect(previewTaskRule).toContain("justify-self: stretch");
     expect(previewTaskRule).toContain("text-align: left");
