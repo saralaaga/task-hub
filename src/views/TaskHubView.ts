@@ -23,7 +23,7 @@ import {
 } from "./renderDatedNotesView";
 import { decorateRenderedTaskNoteTags, renderPlainTaskNoteBody } from "./renderTaskNoteBody";
 import { bindTaskHubTagInputSuggest, collectObsidianTags, type TaskHubTagInputElement } from "./tagInputSuggest";
-import { buildTaskNoteKey } from "../taskNotes";
+import { buildTaskNoteKey, buildTaskNoteRelationKeys } from "../taskNotes";
 import type { TimelineHubNote } from "../hubNotes";
 
 type TaskHubRenderOptions = {
@@ -2000,7 +2000,9 @@ function groupTasksByRawLine(tasks: readonly TaskItem[]): Map<string, TaskItem[]
 export function buildRelatedTasksByNotePath(notes: readonly TimelineHubNote[], tasks: readonly TaskItem[]): Map<string, TaskItem[]> {
   const tasksByKey = new Map<string, TaskItem>();
   for (const task of tasks) {
-    tasksByKey.set(buildTaskNoteKey(task), task);
+    for (const key of buildTaskNoteRelationKeys(task)) {
+      tasksByKey.set(key, task);
+    }
   }
 
   const relatedTasksByNotePath = new Map<string, TaskItem[]>();

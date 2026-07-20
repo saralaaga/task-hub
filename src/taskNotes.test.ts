@@ -1,7 +1,9 @@
 import {
   TaskNoteIndex,
   buildCalendarEventNoteKey,
+  buildLegacyTaskNoteKey,
   buildTaskNoteKey,
+  buildTaskNoteRelationKeys,
   createTaskNoteContent,
   parseTaskNoteFrontmatter,
   replaceTaskNoteBody,
@@ -55,6 +57,20 @@ describe("task note relationships", () => {
     expect(buildTaskNoteKey(vaultTask)).toMatch(/^task:vault:Inbox\.md:0:[a-z0-9]+$/);
     expect(buildTaskNoteKey(appleTask)).toBe("task:apple-reminders:reminder-1");
     expect(buildTaskNoteKey(didaTask)).toBe("task:dida:task-1");
+  });
+
+  it("uses stable IDs for vault task note keys while preserving the legacy lookup key", () => {
+    const stableTask = { ...vaultTask, stableId: "vault:th_stable" };
+
+    expect(buildTaskNoteKey(stableTask)).toBe("task:vault:th_stable");
+    expect(buildLegacyTaskNoteKey(stableTask)).toMatch(/^task:vault:Inbox\.md:0:[a-z0-9]+$/);
+    expect(buildTaskNoteRelationKeys(stableTask)).toEqual(["task:vault:th_stable", buildLegacyTaskNoteKey(stableTask)]);
+  });
+
+  it("does not create legacy relationship aliases for external tasks", () => {
+    expect(buildTaskNoteRelationKeys({ ...appleTask, stableId: "apple-reminders:reminder-1" })).toEqual([
+      "task:apple-reminders:reminder-1"
+    ]);
   });
 
   it("builds event note keys with source and start date", () => {

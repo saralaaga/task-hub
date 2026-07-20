@@ -93,10 +93,25 @@ const MANAGED_KEYS = new Set([
 const NOTE_TAG = /(^|[^0-9A-Za-z_/-])(#[\p{L}\p{N}_/-]+)/gu;
 
 export function buildTaskNoteKey(task: TaskItem): string {
+  if (task.stableId && isNamespacedTaskStableId(task.stableId)) {
+    return `task:${task.stableId}`;
+  }
   if (task.source !== "vault" && task.externalId) {
     return `task:${task.source}:${task.externalId}`;
   }
-  return `task:${task.source}:${task.filePath}:${task.line}:${hashText(task.rawLine || task.id)}`;
+  return buildLegacyTaskNoteKey(task);
+}
+
+export function buildLegacyTaskNoteKey(task: TaskItem): string {
+  return `task:${task.source || "vault"}:${task.filePath}:${task.line}:${hashText(task.rawLine || task.id)}`;
+}
+
+export function buildTaskNoteRelationKeys(task: TaskItem): string[] {
+  const keys = [buildTaskNoteKey(task)];
+  if (task.source && task.source !== "vault") return keys;
+  const legacyKey = buildLegacyTaskNoteKey(task);
+  if (legacyKey !== keys[0]) keys.push(legacyKey);
+  return keys;
 }
 
 export function buildCalendarEventNoteKey(event: CalendarEvent): string {
@@ -400,6 +415,10 @@ function hashText(value: string): string {
     hash = (hash * 33) ^ value.charCodeAt(index);
   }
   return (hash >>> 0).toString(36);
+}
+
+function isNamespacedTaskStableId(stableId: string): boolean {
+  return stableId.startsWith("vault:") || stableId.startsWith("apple-reminders:") || stableId.startsWith("dida:");
 }
 
 function escapeYamlString(value: string): string {

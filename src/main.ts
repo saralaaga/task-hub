@@ -35,6 +35,7 @@ import {
   TaskNoteIndex,
   buildCalendarEventNoteKey,
   buildTaskNoteKey,
+  buildTaskNoteRelationKeys,
   normalizeTaskNoteFolder,
   taskNoteFileName,
   transferTaskNoteRelationship,
@@ -2025,7 +2026,15 @@ export default class TaskHubPlugin extends Plugin {
   }
 
   getHubNotesForTask(task: TaskItem): HubNote[] {
-    return this.hubNoteIndex.getNotesForKey(buildTaskNoteKey(task));
+    const notesByPath = new Map<string, HubNote>();
+    for (const key of buildTaskNoteRelationKeys(task)) {
+      for (const note of this.hubNoteIndex.getNotesForKey(key)) {
+        notesByPath.set(note.path, note);
+      }
+    }
+    return Array.from(notesByPath.values()).sort(
+      (left, right) => (right.createdAt ?? "").localeCompare(left.createdAt ?? "") || right.path.localeCompare(left.path)
+    );
   }
 
   getHubNotesForEvent(event: CalendarEvent): HubNote[] {
@@ -3042,13 +3051,13 @@ export default class TaskHubPlugin extends Plugin {
     reminderId: string
   ): Promise<{ ok: true } | { ok: false; message: string }> {
     if (!this.settings.taskNotes.enabled) return { ok: true };
-    const fromKey = buildTaskNoteKey(task);
+    const fromKeys = buildTaskNoteRelationKeys(task);
     const toKey = `task:apple-reminders:${reminderId}`;
-    const notes = this.taskNoteIndex.getNotesForKey(fromKey);
+    const notes = this.getCurrentTaskNotesByRelationshipKeys(fromKeys);
     if (notes.length === 0) return { ok: true };
 
     const updatedAt = new Date().toISOString();
-    for (const note of notes) {
+    for (const { note, key: fromKey } of notes) {
       const noteFile = this.app.vault.getFileByPath(note.path);
       if (!noteFile) {
         return { ok: false, message: `Task note file not found: ${note.path}` };
@@ -3076,15 +3085,15 @@ export default class TaskHubPlugin extends Plugin {
     toTask: TaskItem
   ): Promise<{ ok: true } | { ok: false; message: string }> {
     if (!this.settings.taskNotes.enabled) return { ok: true };
-    const fromKey = buildTaskNoteKey(fromTask);
     const toKey = buildTaskNoteKey(toTask);
-    if (fromKey === toKey) return { ok: true };
+    const fromKeys = buildTaskNoteRelationKeys(fromTask).filter((key) => key !== toKey);
+    if (fromKeys.length === 0) return { ok: true };
 
-    const notes = this.taskNoteIndex.getNotesForKey(fromKey);
+    const notes = this.getCurrentTaskNotesByRelationshipKeys(fromKeys);
     if (notes.length === 0) return { ok: true };
 
     const updatedAt = new Date().toISOString();
-    for (const note of notes) {
+    for (const { note, key: fromKey } of notes) {
       const noteFile = this.app.vault.getFileByPath(note.path);
       if (!noteFile) {
         return { ok: false, message: `Task note file not found: ${note.path}` };
@@ -3105,6 +3114,19 @@ export default class TaskHubPlugin extends Plugin {
       await this.hubNoteIndex.reindexFile(this.toIndexableFile(noteFile));
     }
     return { ok: true };
+  }
+
+  private getCurrentTaskNotesByRelationshipKeys(keys: string[]): Array<{ key: string; note: TaskNote }> {
+    const notesByPath = new Map<string, { key: string; note: TaskNote }>();
+    for (const key of keys) {
+      for (const note of this.taskNoteIndex.getNotesForKey(key)) {
+        const actualKey = keys.find((candidate) => note.related.includes(candidate)) ?? key;
+        if (!notesByPath.has(note.path)) {
+          notesByPath.set(note.path, { key: actualKey, note });
+        }
+      }
+    }
+    return Array.from(notesByPath.values());
   }
 
   private async createTaskNote(relatedKey: string, title: string): Promise<void> {

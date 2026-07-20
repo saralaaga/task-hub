@@ -20,7 +20,7 @@ import {
 } from "./TaskHubView";
 import type { TimelineHubNote } from "../hubNotes";
 import type { TaskFilterState } from "../filtering/filters";
-import { buildTaskNoteKey } from "../taskNotes";
+import { buildLegacyTaskNoteKey, buildTaskNoteKey } from "../taskNotes";
 import type { ExternalTaskListFilterEntry, TaskHubSmartList, TaskViewFilterSettings } from "../types";
 import type { TaskItem } from "../types";
 
@@ -117,6 +117,40 @@ describe("buildRelatedTasksByNotePath", () => {
 
     const relatedTasks = buildRelatedTasksByNotePath(notes, [currentTask]);
 
+    expect(relatedTasks.get("Notes/follow-up.md")).toEqual([currentTask]);
+  });
+
+  it("matches legacy vault relationship keys after a task has a stable ID", () => {
+    const currentTask = task({
+      id: "vault-task",
+      stableId: "vault:th_followup",
+      filePath: "Inbox.md",
+      line: 12,
+      rawLine: "- [ ] Follow up with client",
+      text: "Follow up with client"
+    });
+    const notes: TimelineHubNote[] = [
+      {
+        path: "Notes/follow-up.md",
+        noteId: "thn_20260712120000_abcd",
+        kind: "task-related",
+        title: "Follow-up note",
+        body: "Body",
+        bodyStartLine: 8,
+        tags: [],
+        createdAt: "2026-07-12T12:00:00.000Z",
+        updatedAt: "2026-07-12T12:05:00.000Z",
+        date: "2026-07-12",
+        dateDerived: false,
+        related: [buildLegacyTaskNoteKey(currentTask)],
+        history: [],
+        sourceKind: "task-note"
+      }
+    ];
+
+    const relatedTasks = buildRelatedTasksByNotePath(notes, [currentTask]);
+
+    expect(buildTaskNoteKey(currentTask)).toBe("task:vault:th_followup");
     expect(relatedTasks.get("Notes/follow-up.md")).toEqual([currentTask]);
   });
 });
