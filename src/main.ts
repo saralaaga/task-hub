@@ -2,6 +2,16 @@ import { ButtonComponent, Editor, EventRef, MarkdownView, Menu, Modal, Notice, P
 import { type Extension, Transaction } from "@codemirror/state";
 import { EditorView, type ViewUpdate } from "@codemirror/view";
 import { PLUGIN_DISPLAY_NAME, TASK_HUB_VIEW_TYPE } from "./constants";
+import { TaskHubApiV1 } from "./api/taskHubApi";
+import {
+  agentBridgeRequestPathsFromListing,
+  agentBridgeRequestsFolder,
+  agentBridgeResponsePath,
+  executeAgentBridgeRequest,
+  isAgentBridgeRequestPath,
+  parseAgentBridgeRequest,
+  type TaskHubAgentBridgeResponse
+} from "./api/agentBridge";
 import { appleCalendarEventToReminderInput, appleReminderToCalendarEventInput } from "./calendar/appleConversion";
 import { calendarDropTargetParts, isUnscheduledCalendarDropTarget, withCalendarDropTargetDate, type CalendarDropTarget } from "./calendar/calendarDropTarget";
 import { toLocalDateKey } from "./calendar/dateBuckets";
@@ -127,6 +137,11 @@ export type CreateTaskOptions = {
   onDatedNoteCreated?: (note: DatedNote) => void;
   allowDatedNote?: boolean;
   initialKind?: CalendarCreationKind | "note";
+};
+
+export type CreateTaskNoteOptions = {
+  body?: string;
+  openAfterCreate?: boolean;
 };
 
 type CreateItemKind = CalendarCreationKind | "note";
@@ -262,6 +277,8 @@ export default class TaskHubPlugin extends Plugin {
   private appleReminderWriteQueue: Promise<unknown> = Promise.resolve();
   private lastTaskUndoAction: { undo: () => Promise<boolean> } | undefined;
   private isUndoingTaskChange = false;
+  private readonly processingAgentBridgeRequestPaths = new Set<string>();
+  private agentBridgePollIntervalId: number | undefined;
 
   isLocalAppleSupported(): boolean {
     return Platform.isDesktopApp && process.platform === "darwin";
@@ -446,16 +463,19 @@ export default class TaskHubPlugin extends Plugin {
     });
 
     this.registerVaultEvents();
+    this.configureAgentBridgePolling();
     this.registerEditorMenu();
 
     if (this.settings.indexOnStartup) {
       this.app.workspace.onLayoutReady(() => {
         void this.scanVault();
         void this.syncExternalTasks();
+        void this.processPendingAgentBridgeRequests();
       });
     } else {
       this.app.workspace.onLayoutReady(() => {
         void this.syncExternalTasks();
+        void this.processPendingAgentBridgeRequests();
       });
     }
   }
@@ -472,6 +492,11 @@ export default class TaskHubPlugin extends Plugin {
     this.cleanupExternalTaskMetadataState();
     await this.saveData(this.settings);
     this.refreshOpenViews();
+  }
+
+  async refreshAgentBridge(): Promise<void> {
+    this.configureAgentBridgePolling();
+    await this.processPendingAgentBridgeRequests();
   }
 
   private cleanupTaskListManualOrderState(): boolean {
@@ -1929,6 +1954,83 @@ export default class TaskHubPlugin extends Plugin {
     }
   }
 
+  private async ensureAdapterParentFolders(path: string): Promise<void> {
+    const parts = path.split("/").slice(0, -1);
+    let current = "";
+    for (const part of parts) {
+      current = current ? `${current}/${part}` : part;
+      if (!(await this.app.vault.adapter.exists(current))) {
+        await this.app.vault.adapter.mkdir(current);
+      }
+    }
+  }
+
+  private configureAgentBridgePolling(): void {
+    if (this.agentBridgePollIntervalId !== undefined) {
+      window.clearInterval(this.agentBridgePollIntervalId);
+      this.agentBridgePollIntervalId = undefined;
+    }
+    if (!this.settings.agentBridge.enabled) return;
+    this.agentBridgePollIntervalId = window.setInterval(() => {
+      void this.processPendingAgentBridgeRequests();
+    }, 2000);
+    this.registerInterval(this.agentBridgePollIntervalId);
+  }
+
+  private async processPendingAgentBridgeRequests(): Promise<void> {
+    if (!this.settings.agentBridge.enabled) return;
+    const requestFolder = agentBridgeRequestsFolder(this.settings.agentBridge);
+    let files: string[];
+    try {
+      files = await this.listAdapterFilesRecursively(requestFolder);
+    } catch (error) {
+      console.warn("Task Hub Agent Bridge: failed to scan request folder.", error);
+      return;
+    }
+    for (const path of agentBridgeRequestPathsFromListing(this.settings.agentBridge, files)) {
+      await this.processAgentBridgeRequestPath(path);
+    }
+  }
+
+  private async listAdapterFilesRecursively(folder: string): Promise<string[]> {
+    if (!(await this.app.vault.adapter.exists(folder))) return [];
+    const listing = await this.app.vault.adapter.list(folder);
+    const childFiles = await Promise.all(listing.folders.map((childFolder) => this.listAdapterFilesRecursively(childFolder)));
+    return [...listing.files, ...childFiles.flat()];
+  }
+
+  private async processAgentBridgeRequestFile(file: TFile): Promise<void> {
+    await this.processAgentBridgeRequestPath(file.path);
+  }
+
+  private async processAgentBridgeRequestPath(path: string): Promise<void> {
+    if (!this.settings.agentBridge.enabled || !isAgentBridgeRequestPath(this.settings.agentBridge, path)) return;
+    if (this.processingAgentBridgeRequestPaths.has(path)) return;
+    this.processingAgentBridgeRequestPaths.add(path);
+    try {
+      const content = await this.app.vault.adapter.read(path);
+      const parsed = parseAgentBridgeRequest(content, requestIdFromBridgePath(path));
+      const requestId = parsed.requestId;
+      const responsePath = agentBridgeResponsePath(this.settings.agentBridge, requestId);
+      if (await this.app.vault.adapter.exists(responsePath)) return;
+      const response: TaskHubAgentBridgeResponse =
+        "ok" in parsed
+          ? parsed
+          : await executeAgentBridgeRequest(this.getTaskHubApi(), parsed);
+      await this.writeAgentBridgeResponse(responsePath, response);
+    } catch (error) {
+      console.error("Task Hub Agent Bridge: failed to process request.", { path, error });
+    } finally {
+      this.processingAgentBridgeRequestPaths.delete(path);
+    }
+  }
+
+  private async writeAgentBridgeResponse(path: string, response: TaskHubAgentBridgeResponse): Promise<void> {
+    await this.ensureAdapterParentFolders(path);
+    const content = `${JSON.stringify(response, null, 2)}\n`;
+    await this.app.vault.adapter.write(path, content);
+  }
+
   async jumpToTask(task: TaskItem): Promise<void> {
     if (task.source !== "vault") {
       const result = openExternalTaskSource(task, (url) => this.app.workspace.containerEl.win.open(url));
@@ -1981,6 +2083,10 @@ export default class TaskHubPlugin extends Plugin {
       ...(this.isLocalAppleSupported() && this.settings.localApple.enabled && this.settings.localApple.remindersEnabled ? this.localAppleTasks : []),
       ...(this.settings.dida.enabled && this.settings.dida.tasksEnabled ? this.didaTasks : [])
     ];
+  }
+
+  getTaskHubApi(): TaskHubApiV1 {
+    return new TaskHubApiV1(this);
   }
 
   canUndoLastTaskChange(): boolean {
@@ -2454,12 +2560,12 @@ export default class TaskHubPlugin extends Plugin {
     new Notice(t("taskNoteDeleted"));
   }
 
-  async createTaskNoteForTask(task: TaskItem): Promise<void> {
-    await this.createTaskNote(buildTaskNoteKey(task), task.text);
+  async createTaskNoteForTask(task: TaskItem, options: CreateTaskNoteOptions = {}): Promise<HubNote | undefined> {
+    return this.createTaskNote(buildTaskNoteKey(task), task.text, options);
   }
 
-  async createTaskNoteForEvent(event: CalendarEvent): Promise<void> {
-    await this.createTaskNote(buildCalendarEventNoteKey(event), event.title);
+  async createTaskNoteForEvent(event: CalendarEvent, options: CreateTaskNoteOptions = {}): Promise<HubNote | undefined> {
+    return this.createTaskNote(buildCalendarEventNoteKey(event), event.title, options);
   }
 
   async saveTaskNoteBody(file: TFile, body: string): Promise<{ ok: true; deleted?: boolean } | { ok: false; message: string }> {
@@ -3129,11 +3235,11 @@ export default class TaskHubPlugin extends Plugin {
     return Array.from(notesByPath.values());
   }
 
-  private async createTaskNote(relatedKey: string, title: string): Promise<void> {
+  private async createTaskNote(relatedKey: string, title: string, options: CreateTaskNoteOptions = {}): Promise<HubNote | undefined> {
     const t = createTranslator(this.settings.language);
     if (!this.settings.taskNotes.enabled) {
       new Notice(t("taskNotesDisabled"));
-      return;
+      return undefined;
     }
     const now = new Date();
     const mode =
@@ -3154,6 +3260,7 @@ export default class TaskHubPlugin extends Plugin {
         kind: "task-related",
         title,
         createdAt: now.toISOString(),
+        body: options.body,
         relatedKeys: [relatedKey],
         mode,
         addThinoIdToTaskHubNotes:
@@ -3162,8 +3269,15 @@ export default class TaskHubPlugin extends Plugin {
     );
     await this.taskNoteIndex.reindexFile(this.toIndexableFile(file));
     await this.hubNoteIndex.reindexFile(this.toIndexableFile(file));
+    const createdNote =
+      typeof (this.hubNoteIndex as unknown as { getNote?: (path: string) => HubNote | undefined }).getNote === "function"
+        ? this.hubNoteIndex.getNote(file.path)
+        : undefined;
     this.refreshOpenViews();
-    new TaskNoteModal(this, file, "create").open();
+    if (options.openAfterCreate !== false) {
+      new TaskNoteModal(this, file, "create").open();
+    }
+    return createdNote;
   }
 
   async deleteTaskNoteFile(file: TFile): Promise<void> {
@@ -3186,13 +3300,23 @@ export default class TaskHubPlugin extends Plugin {
   private registerVaultEvents(): void {
     this.registerEvent(
       this.app.vault.on("modify", (file) => {
-        if (file instanceof TFile) void this.reindexVaultFile(file);
+        if (!(file instanceof TFile)) return;
+        if (isAgentBridgeRequestPath(this.settings.agentBridge, file.path)) {
+          void this.processAgentBridgeRequestFile(file);
+          return;
+        }
+        void this.reindexVaultFile(file);
       })
     );
 
     this.registerEvent(
       this.app.vault.on("create", (file) => {
-        if (file instanceof TFile) void this.reindexVaultFile(file);
+        if (!(file instanceof TFile)) return;
+        if (isAgentBridgeRequestPath(this.settings.agentBridge, file.path)) {
+          void this.processAgentBridgeRequestFile(file);
+          return;
+        }
+        void this.reindexVaultFile(file);
       })
     );
 
@@ -4128,6 +4252,10 @@ class RiskySourceDeletionModal extends Modal {
 }
 
 type LocalAppleSettled<T> = { ok: true; value: T } | { ok: false; error: string };
+
+function requestIdFromBridgePath(path: string): string {
+  return path.split("/").pop()?.replace(/\.json$/iu, "") || "request";
+}
 
 async function settleLocalAppleSource<T>(read: () => Promise<T>): Promise<LocalAppleSettled<T>> {
   try {

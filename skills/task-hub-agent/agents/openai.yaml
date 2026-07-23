@@ -1,0 +1,4 @@
+interface:
+  display_name: "Task Hub Agent"
+  short_description: "Use Task Hub bridge tools safely"
+  default_prompt: "Use Task Hub Agent to create, read, and update Task Hub tasks and notes through the agent bridge."

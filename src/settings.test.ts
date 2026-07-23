@@ -686,7 +686,33 @@ describe("normalizeTaskHubSettings", () => {
     expect(settings.externalTaskLookbackDays).toBe(100);
     expect(settings.externalTaskLookaheadDays).toBe(100);
     expect(settings.externalTaskMetadata).toEqual({});
+    expect(settings.agentBridge).toEqual({
+      enabled: false,
+      folder: ".taskhub-agent"
+    });
     expect(settings.ignoredPaths).toEqual(["Archive/"]);
+  });
+
+  it("normalizes agent bridge settings without enabling the bridge by accident", () => {
+    expect(normalizeTaskHubSettings({
+      agentBridge: {
+        enabled: "yes" as never,
+        folder: "/./TaskHub//Agent/"
+      }
+    }).agentBridge).toEqual({
+      enabled: false,
+      folder: "TaskHub/Agent"
+    });
+
+    expect(normalizeTaskHubSettings({
+      agentBridge: {
+        enabled: true,
+        folder: ""
+      }
+    }).agentBridge).toEqual({
+      enabled: true,
+      folder: ".taskhub-agent"
+    });
   });
 
   it("normalizes smart lists with filters and stable task references", () => {

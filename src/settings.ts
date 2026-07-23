@@ -61,6 +61,10 @@ export const DEFAULT_SETTINGS: TaskHubSettings = {
   externalTaskLookbackDays: 100,
   externalTaskLookaheadDays: 100,
   externalTaskMetadata: {},
+  agentBridge: {
+    enabled: false,
+    folder: ".taskhub-agent"
+  },
   ignoredPaths: ["Templates/", "Archive/"],
   tagViewOrder: [],
   calendarSources: [],
@@ -165,6 +169,7 @@ export function normalizeTaskHubSettings(loaded: Partial<TaskHubSettings> | null
     externalTaskLookbackDays: normalizeWindowDays(loaded?.externalTaskLookbackDays, DEFAULT_SETTINGS.externalTaskLookbackDays),
     externalTaskLookaheadDays: normalizeWindowDays(loaded?.externalTaskLookaheadDays, DEFAULT_SETTINGS.externalTaskLookaheadDays),
     externalTaskMetadata: normalizeExternalTaskMetadata(loaded?.externalTaskMetadata),
+    agentBridge: normalizeAgentBridgeSettings(loaded?.agentBridge),
     externalTaskSourceOrder: normalizeExternalTaskSourceOrder(loaded?.externalTaskSourceOrder),
     localApple: {
       ...DEFAULT_SETTINGS.localApple,
@@ -204,6 +209,20 @@ export function normalizeTaskHubSettings(loaded: Partial<TaskHubSettings> | null
     appleReminderLinks: loaded?.appleReminderLinks ?? {},
     didaTaskLinks: loaded?.didaTaskLinks ?? {}
   };
+}
+
+function normalizeAgentBridgeSettings(value: unknown): TaskHubSettings["agentBridge"] {
+  if (!value || typeof value !== "object") return DEFAULT_SETTINGS.agentBridge;
+  const input = value as Partial<TaskHubSettings["agentBridge"]>;
+  return {
+    enabled: input.enabled === true,
+    folder: normalizeAgentBridgeFolder(input.folder, DEFAULT_SETTINGS.agentBridge.folder)
+  };
+}
+
+function normalizeAgentBridgeFolder(path: string | undefined, fallback: string): string {
+  const trimmed = (path ?? "").trim() || fallback;
+  return trimmed.replace(/\\/g, "/").replace(/\/+/g, "/").replace(/^\/+/u, "").replace(/^\.\//u, "").replace(/\/$/u, "");
 }
 
 function normalizeTaskListManualOrder(value: unknown): TaskHubSettings["taskListManualOrder"] {
@@ -1111,6 +1130,33 @@ export class TaskHubSettingTab extends PluginSettingTab {
           .setButtonText(t("feedbackButton"))
           .onClick(() => openTaskHubFeedback((url) => containerEl.win.open(url)));
       });
+
+    new Setting(containerEl).setName(t("agentBridge")).setDesc(t("agentBridgeDesc")).setHeading();
+    new Setting(containerEl)
+      .setName(t("agentBridgeEnable"))
+      .setDesc(t("agentBridgeEnableDesc"))
+      .addToggle((toggle) => {
+        toggle.setValue(this.plugin.settings.agentBridge.enabled).onChange(async (value) => {
+          this.plugin.settings.agentBridge.enabled = value;
+          await this.plugin.saveSettings();
+          await this.plugin.refreshAgentBridge();
+          this.display({ preserveScroll: true });
+        });
+      });
+
+    if (this.plugin.settings.agentBridge.enabled) {
+      new Setting(containerEl)
+        .setName(t("agentBridgeFolder"))
+        .setDesc(t("agentBridgeFolderDesc"))
+        .addText((text) => {
+          text.setPlaceholder(DEFAULT_SETTINGS.agentBridge.folder).setValue(this.plugin.settings.agentBridge.folder).onChange(async (value) => {
+            this.plugin.settings.agentBridge.folder = value;
+            this.plugin.settings = normalizeTaskHubSettings(this.plugin.settings);
+            await this.plugin.saveSettings();
+            await this.plugin.refreshAgentBridge();
+          });
+        });
+    }
 
     new Setting(containerEl).setName(t("externalTaskSources")).setDesc(t("externalTaskSourcesDesc")).setHeading();
     this.displayExternalTaskWindowSettings(containerEl, t);

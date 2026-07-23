@@ -37,6 +37,12 @@ export type TranslationKey =
   | "and"
   | "anyDate"
   | "applyFilters"
+  | "agentBridge"
+  | "agentBridgeDesc"
+  | "agentBridgeEnable"
+  | "agentBridgeEnableDesc"
+  | "agentBridgeFolder"
+  | "agentBridgeFolderDesc"
   | "appleReminderAlreadySent"
   | "appleCalendarCreateDisabled"
   | "appleCalendarEventCreated"
@@ -890,6 +896,12 @@ const TRANSLATIONS: Record<"en" | "zh", Record<TranslationKey, string>> &
     and: "AND",
     anyDate: "Any date",
     applyFilters: "Filter",
+    agentBridge: "Agent bridge",
+    agentBridgeDesc: "Let external agents call Task Hub through a local vault JSON queue. Keep this disabled unless you are actively testing agent integrations.",
+    agentBridgeEnable: "Enable agent bridge",
+    agentBridgeEnableDesc: "When enabled, Task Hub processes JSON requests from the bridge folder and writes JSON responses back to the vault.",
+    agentBridgeFolder: "Bridge folder",
+    agentBridgeFolderDesc: "Vault folder used for agent bridge requests and responses. Requests go in requests/, responses go in responses/.",
     appleReminderAlreadySent: "This task was already sent to Apple Reminders",
     appleCalendarCreateDisabled: "Turn on Local Apple, Apple Calendar, and task sending in Task Hub settings first.",
     appleCalendarEventCreated: "Apple Calendar event created.",
@@ -1319,6 +1331,12 @@ const TRANSLATIONS: Record<"en" | "zh", Record<TranslationKey, string>> &
     and: "且",
     anyDate: "任意日期",
     applyFilters: "筛选",
+    agentBridge: "智能体桥接",
+    agentBridgeDesc: "允许外部智能体通过 vault 内本地 JSON 队列调用 Task Hub。除非正在测试智能体集成，否则建议保持关闭。",
+    agentBridgeEnable: "启用智能体桥接",
+    agentBridgeEnableDesc: "开启后，Task Hub 会处理桥接目录里的 JSON 请求，并把 JSON 响应写回 vault。",
+    agentBridgeFolder: "桥接目录",
+    agentBridgeFolderDesc: "用于智能体桥接请求和响应的 vault 目录。请求写入 requests/，响应写入 responses/。",
     appleReminderAlreadySent: "这条任务已经发送到 Apple 提醒事项",
     appleCalendarCreateDisabled: "请先在 Task Hub 设置中开启本地 Apple、Apple 日历和发送任务到 Apple 日历。",
     appleCalendarEventCreated: "已创建 Apple 日历事件。",
@@ -1741,6 +1759,12 @@ const TRANSLATIONS: Record<"en" | "zh", Record<TranslationKey, string>> &
     and: "かつ",
     anyDate: "任意の日付",
     applyFilters: "フィルター",
+    agentBridge: "Agent bridge",
+    agentBridgeDesc: "Let external agents call Task Hub through a local vault JSON queue. Keep this disabled unless you are actively testing agent integrations.",
+    agentBridgeEnable: "Enable agent bridge",
+    agentBridgeEnableDesc: "When enabled, Task Hub processes JSON requests from the bridge folder and writes JSON responses back to the vault.",
+    agentBridgeFolder: "Bridge folder",
+    agentBridgeFolderDesc: "Vault folder used for agent bridge requests and responses. Requests go in requests/, responses go in responses/.",
     calendar: "カレンダー",
     calendarEmpty: "この期間にタスクまたはイベントはありません。",
     calendarDetails: "カレンダー詳細",
@@ -1873,6 +1897,12 @@ const TRANSLATIONS: Record<"en" | "zh", Record<TranslationKey, string>> &
     and: "et",
     anyDate: "N'importe quelle date",
     applyFilters: "Filtrer",
+    agentBridge: "Agent bridge",
+    agentBridgeDesc: "Let external agents call Task Hub through a local vault JSON queue. Keep this disabled unless you are actively testing agent integrations.",
+    agentBridgeEnable: "Enable agent bridge",
+    agentBridgeEnableDesc: "When enabled, Task Hub processes JSON requests from the bridge folder and writes JSON responses back to the vault.",
+    agentBridgeFolder: "Bridge folder",
+    agentBridgeFolderDesc: "Vault folder used for agent bridge requests and responses. Requests go in requests/, responses go in responses/.",
     calendar: "Calendrier",
     calendarEmpty: "Aucune tâche ni aucun événement dans cette période.",
     calendarDetails: "Détails du calendrier",
@@ -2005,6 +2035,12 @@ const TRANSLATIONS: Record<"en" | "zh", Record<TranslationKey, string>> &
     and: "그리고",
     anyDate: "모든 날짜",
     applyFilters: "필터",
+    agentBridge: "Agent bridge",
+    agentBridgeDesc: "Let external agents call Task Hub through a local vault JSON queue. Keep this disabled unless you are actively testing agent integrations.",
+    agentBridgeEnable: "Enable agent bridge",
+    agentBridgeEnableDesc: "When enabled, Task Hub processes JSON requests from the bridge folder and writes JSON responses back to the vault.",
+    agentBridgeFolder: "Bridge folder",
+    agentBridgeFolderDesc: "Vault folder used for agent bridge requests and responses. Requests go in requests/, responses go in responses/.",
     calendar: "캘린더",
     calendarEmpty: "현재 기간에 작업이나 이벤트가 없습니다.",
     calendarDetails: "캘린더 세부 정보",

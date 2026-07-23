@@ -268,6 +268,11 @@ export type ExternalTaskShadowMetadata = {
   lastSeenAt?: string;
 };
 
+export type TaskHubAgentBridgeSettings = {
+  enabled: boolean;
+  folder: string;
+};
+
 export type TaskHubSettings = {
   settingsSchemaVersion: number;
   language: Language;
@@ -299,6 +304,7 @@ export type TaskHubSettings = {
   externalTaskLookbackDays: number;
   externalTaskLookaheadDays: number;
   externalTaskMetadata: Record<string, ExternalTaskShadowMetadata>;
+  agentBridge: TaskHubAgentBridgeSettings;
   ignoredPaths: string[];
   tagViewOrder: string[];
   calendarSources: CalendarSource[];
