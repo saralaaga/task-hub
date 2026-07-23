@@ -57,7 +57,14 @@ export type NoteComposerTaskDateSuggestion = {
   dateKey: string;
   pickerLabel: string;
 };
+type NoteComposerDateSegmentIndex = 0 | 1 | 2;
+export type NoteComposerDateInputEditState = {
+  segmentBuffer: string;
+  segmentIndex: NoteComposerDateSegmentIndex;
+  value: string;
+};
 type NoteComposerSuggestItem =
+  | { kind: "enter"; label: string; detail: string }
   | { kind: "tag"; label: string; value: string }
   | { kind: "shortcut"; label: string; detail: string; from: number; to: number; insert: string; cursorOffset: number }
   | NoteComposerTaskDateSuggestion;
@@ -72,6 +79,7 @@ const CODE_FENCE_LINE = /^\s*(```|~~~)/u;
 const INDENTED_CODE_LINE = /^(?: {4}|\t)\S/u;
 const SHORTCUT_TRIGGER = /(^|\s)\/([\p{L}\p{N}_-]*)$/u;
 const DATE_KEY = /^\d{4}-\d{2}-\d{2}$/u;
+const DATE_PICKER_TEXT = /^\s*(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})\s*$/u;
 const INLINE_MARKDOWN_PATTERNS: Array<{
   type: Extract<NoteComposerToken["type"], "strong" | "emphasis" | "highlight" | "strikethrough" | "inline-code" | "link">;
   pattern: RegExp;
@@ -85,6 +93,12 @@ const INLINE_MARKDOWN_PATTERNS: Array<{
   { type: "emphasis", pattern: /(^|[^*])(\*[^*\n]+?\*)/gu, matchIndex: 2 }
 ];
 const NOTE_COMPOSER_MIN_HEIGHT = "100px";
+const DATE_PICKER_SELECTION_INDEX = -1;
+const NOTE_COMPOSER_ENTER_SUGGESTION: Extract<NoteComposerSuggestItem, { kind: "enter" }> = {
+  kind: "enter",
+  label: "↵",
+  detail: "换行"
+};
 const BLOCK_SHORTCUTS: Array<{
   label: string;
   detail: string;
@@ -259,6 +273,104 @@ export function taskDateSuggestionInsert(kind: NoteComposerTaskDateKind, dateKey
   return `${dateType.emoji} ${dateKey}`;
 }
 
+export function formatNoteComposerDateInput(dateKey: string): string {
+  return dateKey.replace(/-/gu, "/");
+}
+
+export function parseNoteComposerDateInput(value: string): string | undefined {
+  const match = value.match(DATE_PICKER_TEXT);
+  if (!match) return undefined;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  if (month < 1 || month > 12 || day < 1 || day > 31) return undefined;
+  const date = new Date(year, month - 1, day);
+  if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) return undefined;
+  return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+export function noteComposerDateSegmentRange(cursor: number, direction: "left" | "right" | "current" = "current"): { start: number; end: number } {
+  const ranges = [
+    { start: 0, end: 4 },
+    { start: 5, end: 7 },
+    { start: 8, end: 10 }
+  ];
+  const currentIndex = ranges.findIndex((range) => cursor <= range.end);
+  const safeIndex = currentIndex === -1 ? ranges.length - 1 : currentIndex;
+  const nextIndex = direction === "left"
+    ? Math.max(0, safeIndex - 1)
+    : direction === "right"
+      ? Math.min(ranges.length - 1, safeIndex + 1)
+      : safeIndex;
+  return ranges[nextIndex];
+}
+
+function dateInputParts(value: string): [string, string, string] {
+  const parts = value.match(/\d+/gu) ?? [];
+  return [parts[0] ?? "", parts[1] ?? "", parts[2] ?? ""];
+}
+
+function dateInputTextFromParts(parts: [string, string, string]): string {
+  return `${parts[0]}/${parts[1]}/${parts[2]}`;
+}
+
+function dateInputSegmentRange(value: string, segmentIndex: NoteComposerDateSegmentIndex): { start: number; end: number } {
+  const parts = dateInputParts(value);
+  const yearStart = 0;
+  const monthStart = parts[0].length + 1;
+  const dayStart = monthStart + parts[1].length + 1;
+  if (segmentIndex === 0) return { start: yearStart, end: yearStart + parts[0].length };
+  if (segmentIndex === 1) return { start: monthStart, end: monthStart + parts[1].length };
+  return { start: dayStart, end: dayStart + parts[2].length };
+}
+
+function dateInputSegmentIndexAtCursor(value: string, cursor: number): NoteComposerDateSegmentIndex {
+  const parts = dateInputParts(value);
+  const monthStart = parts[0].length + 1;
+  const dayStart = monthStart + parts[1].length + 1;
+  if (cursor < monthStart) return 0;
+  if (cursor < dayStart) return 1;
+  return 2;
+}
+
+function nextDateInputSegmentIndex(index: NoteComposerDateSegmentIndex, direction: "left" | "right" | "current"): NoteComposerDateSegmentIndex {
+  if (direction === "left") return Math.max(0, index - 1) as NoteComposerDateSegmentIndex;
+  if (direction === "right") return Math.min(2, index + 1) as NoteComposerDateSegmentIndex;
+  return index;
+}
+
+export function editNoteComposerDateInputSegment(
+  value: string,
+  segmentIndex: NoteComposerDateSegmentIndex,
+  segmentBuffer: string | undefined,
+  digit: string
+): NoteComposerDateInputEditState {
+  const maxLength = segmentIndex === 0 ? 4 : 2;
+  const currentBuffer = segmentBuffer ?? "";
+  const nextBuffer = currentBuffer.length >= maxLength ? digit : `${currentBuffer}${digit}`;
+  const parts = dateInputParts(value);
+  parts[segmentIndex] = nextBuffer;
+  return {
+    segmentBuffer: nextBuffer,
+    segmentIndex,
+    value: dateInputTextFromParts(parts)
+  };
+}
+
+export function moveNoteComposerDateInputSegment(
+  value: string,
+  segmentIndex: NoteComposerDateSegmentIndex,
+  direction: "left" | "right" | "current"
+): NoteComposerDateInputEditState & { range: { start: number; end: number } } {
+  const nextSegment = nextDateInputSegmentIndex(segmentIndex, direction);
+  return {
+    range: dateInputSegmentRange(value, nextSegment),
+    segmentBuffer: "",
+    segmentIndex: nextSegment,
+    value
+  };
+}
+
 function buildTaskDateSuggestions(
   dateType: (typeof TASK_DATE_TYPES)[number],
   from: number,
@@ -413,6 +525,10 @@ export function createTaskHubNoteComposer(options: TaskHubNoteComposerOptions): 
 type NoteComposerTagSuggestState = {
   cursor: number;
   options: NoteComposerSuggestItem[];
+  pickerOption?: NoteComposerTaskDateSuggestion;
+  pickerSegmentBuffer?: string;
+  pickerSegmentIndex?: NoteComposerDateSegmentIndex;
+  pickerText?: string;
   selectedIndex: number;
 };
 
@@ -424,24 +540,34 @@ function noteComposerTagSuggest(getTags: () => string[]): Extension {
     private renderRetryCount = 0;
     private readonly keydownHandler = (event: KeyboardEvent) => {
       if (event.isComposing || !this.active) return;
+      if (this.active.selectedIndex === DATE_PICKER_SELECTION_INDEX && this.handleSelectedDatePickerKey(event)) return;
       if (event.key === "ArrowDown") {
-        event.preventDefault();
+        consumeSuggestKeyEvent(event);
         this.selectOffset(1);
         return;
       }
       if (event.key === "ArrowUp") {
-        event.preventDefault();
+        consumeSuggestKeyEvent(event);
         this.selectOffset(-1);
         return;
       }
       if (event.key === "Escape") {
-        event.preventDefault();
+        consumeSuggestKeyEvent(event);
         this.close();
         return;
       }
       if ((event.key === "Enter" || event.key === "Tab") && this.active.options.length > 0) {
-        event.preventDefault();
-        this.applySuggestion(this.active.options[this.active.selectedIndex]);
+        const option = this.selectedSuggestItem();
+        if (event.key === "Enter" && option?.kind === "enter") {
+          this.close();
+          return;
+        }
+        consumeSuggestKeyEvent(event);
+        if (event.key === "Tab" && option?.kind === "enter") {
+          this.selectOffset(1);
+          return;
+        }
+        if (option) this.applySuggestion(option);
       }
     };
     private readonly focusHandler = () => {
@@ -452,7 +578,7 @@ function noteComposerTagSuggest(getTags: () => string[]): Extension {
     };
 
     constructor(private readonly view: EditorView) {
-      this.view.dom.addEventListener("keydown", this.keydownHandler);
+      this.view.dom.addEventListener("keydown", this.keydownHandler, { capture: true });
       this.view.dom.addEventListener("focusin", this.focusHandler);
       this.view.dom.addEventListener("focusout", this.blurHandler);
       this.sync();
@@ -465,7 +591,7 @@ function noteComposerTagSuggest(getTags: () => string[]): Extension {
     }
 
     destroy(): void {
-      this.view.dom.removeEventListener("keydown", this.keydownHandler);
+      this.view.dom.removeEventListener("keydown", this.keydownHandler, { capture: true });
       this.view.dom.removeEventListener("focusin", this.focusHandler);
       this.view.dom.removeEventListener("focusout", this.blurHandler);
       this.cancelScheduledRender();
@@ -490,14 +616,31 @@ function noteComposerTagSuggest(getTags: () => string[]): Extension {
         value
       }));
       const dateOptions = suggestNoteComposerTaskDatesAtCursor(text, cursor);
-      const options = [...dateOptions, ...suggestNoteComposerBlocksAtCursor(text, cursor), ...tagOptions];
+      const options: NoteComposerSuggestItem[] = [
+        ...(dateOptions.length > 0 ? [NOTE_COMPOSER_ENTER_SUGGESTION] : []),
+        ...dateOptions,
+        ...suggestNoteComposerBlocksAtCursor(text, cursor),
+        ...tagOptions
+      ];
       if (options.length === 0) {
         this.close();
         return;
       }
       const previousLabel = this.active ? this.active.options[this.active.selectedIndex]?.label : undefined;
-      const selectedIndex = previousLabel ? Math.max(0, options.findIndex((option) => option.label === previousLabel)) : 0;
-      this.active = { cursor, options, selectedIndex };
+      const previousDatePickerSelected = this.active?.selectedIndex === DATE_PICKER_SELECTION_INDEX;
+      const selectedIndex = previousDatePickerSelected && hasTaskDateOption(options)
+        ? DATE_PICKER_SELECTION_INDEX
+        : previousLabel
+          ? Math.max(0, options.findIndex((option) => option.label === previousLabel))
+          : 0;
+      const selectedOption = options[selectedIndex];
+      const previousPickerOption = this.active?.pickerOption;
+      const pickerOption = selectedOption?.kind === "task-date"
+        ? selectedOption
+        : previousPickerOption && options.some((option) => option.kind === "task-date" && option.dateKind === previousPickerOption.dateKind)
+          ? previousPickerOption
+          : options.find((option): option is NoteComposerTaskDateSuggestion => option.kind === "task-date");
+      this.active = { cursor, options, pickerOption, selectedIndex };
       this.renderRetryCount = 0;
       this.scheduleRender();
     }
@@ -540,18 +683,23 @@ function noteComposerTagSuggest(getTags: () => string[]): Extension {
       const selectedOption = this.active.options[this.active.selectedIndex];
       const dateOption = selectedOption?.kind === "task-date"
         ? selectedOption
-        : this.active.options.find((option): option is NoteComposerTaskDateSuggestion => option.kind === "task-date");
+        : this.active.pickerOption ?? this.active.options.find((option): option is NoteComposerTaskDateSuggestion => option.kind === "task-date");
       if (dateOption) {
-        popup.appendChild(this.renderDatePicker(dateOption));
+        popup.appendChild(this.renderDatePicker(dateOption, this.active.selectedIndex === DATE_PICKER_SELECTION_INDEX));
       }
       for (const [index, option] of this.active.options.entries()) {
         const item = this.view.dom.ownerDocument.createElement("div");
-        item.className = `task-hub-note-composer-suggest-item ${index === this.active.selectedIndex ? "is-selected" : ""}`;
-        item.createSpan({ cls: "task-hub-note-composer-suggest-label", text: option.label });
-        if (option.kind === "shortcut" || option.kind === "task-date") item.createSpan({ cls: "task-hub-note-composer-suggest-detail", text: option.detail });
+        item.className = `task-hub-note-composer-suggest-item ${option.kind === "enter" ? "task-hub-note-composer-suggest-enter" : ""} ${index === this.active.selectedIndex ? "is-selected" : ""}`;
+        item.createSpan({ cls: `task-hub-note-composer-suggest-label ${option.kind === "enter" ? "task-hub-note-composer-suggest-enter-icon" : ""}`, text: option.label });
+        if (option.kind === "enter" || option.kind === "shortcut" || option.kind === "task-date") item.createSpan({ cls: "task-hub-note-composer-suggest-detail", text: option.detail });
         item.addEventListener("mousedown", (event) => {
           event.preventDefault();
-          this.applySuggestion(option);
+          if (option.kind === "enter") {
+            this.close();
+            this.view.focus();
+          } else {
+            this.applySuggestion(option);
+          }
         });
         popup.appendChild(item);
       }
@@ -563,40 +711,203 @@ function noteComposerTagSuggest(getTags: () => string[]): Extension {
         left: `${coords.left}px`,
         top: `${coords.bottom + 6}px`
       });
+      if (this.active.selectedIndex === DATE_PICKER_SELECTION_INDEX) {
+        const input = popup.querySelector<HTMLInputElement>(".task-hub-note-composer-date-picker-input");
+        input?.focus({ preventScroll: true });
+        if (input) this.selectDateInputSegment(input, "current");
+      }
     }
 
-    private renderDatePicker(option: NoteComposerTaskDateSuggestion): HTMLElement {
+    private renderDatePicker(option: NoteComposerTaskDateSuggestion, selected: boolean): HTMLElement {
       const wrapper = this.view.dom.ownerDocument.createElement("label");
-      wrapper.className = "task-hub-note-composer-date-picker";
+      wrapper.className = `task-hub-note-composer-date-picker ${selected ? "is-selected" : ""}`;
       wrapper.createSpan({ cls: "task-hub-note-composer-date-picker-label", text: option.pickerLabel });
       const input = wrapper.createEl("input", {
         cls: "task-hub-note-composer-date-picker-input",
-        type: "date",
-        value: option.dateKey
+        type: "text",
+        value: this.active?.pickerText ?? formatNoteComposerDateInput(option.dateKey)
       });
+      input.inputMode = "numeric";
+      input.placeholder = "YYYY/MM/DD";
       input.addEventListener("mousedown", (event) => event.stopPropagation());
       input.addEventListener("click", () => {
-        try {
-          input.showPicker?.();
-        } catch {
-          input.focus();
-        }
+        this.activateDatePickerInput(option, wrapper);
+        this.selectDateInputSegment(input, "current");
+      });
+      input.addEventListener("focus", () => {
+        this.activateDatePickerInput(option, wrapper);
       });
       input.addEventListener("change", () => {
-        if (!DATE_KEY.test(input.value)) return;
-        this.applyTaskDate(option, input.value);
+        this.storeDatePickerText(input.value);
+        const dateKey = parseNoteComposerDateInput(input.value);
+        if (!dateKey) return;
+        this.applyTaskDate(option, dateKey);
+      });
+      input.addEventListener("input", () => {
+        this.storeDatePickerText(input.value);
+      });
+      input.addEventListener("keydown", (event) => {
+        if (event.isComposing) return;
+        if (/^\d$/u.test(event.key)) {
+          consumeSuggestKeyEvent(event);
+          this.editDateInputSegment(input, event.key);
+          return;
+        }
+        if (event.key === "Enter") {
+          consumeSuggestKeyEvent(event);
+          const dateKey = parseNoteComposerDateInput(input.value);
+          if (dateKey) this.applyTaskDate(option, dateKey);
+          return;
+        }
+        if (event.key === "Escape") {
+          consumeSuggestKeyEvent(event);
+          this.close();
+          this.view.focus();
+          return;
+        }
+        if (event.key === "ArrowDown") {
+          consumeSuggestKeyEvent(event);
+          this.setSelectedIndex(0);
+          this.view.focus();
+          return;
+        }
+        if (event.key === "ArrowUp") {
+          consumeSuggestKeyEvent(event);
+          this.setSelectedIndex((this.active?.options.length ?? 1) - 1);
+          this.view.focus();
+          return;
+        }
+        if (event.key === "ArrowLeft") {
+          consumeSuggestKeyEvent(event);
+          this.selectDateInputSegment(input, "left");
+          return;
+        }
+        if (event.key === "ArrowRight") {
+          consumeSuggestKeyEvent(event);
+          this.selectDateInputSegment(input, "right");
+        }
       });
       return wrapper;
     }
 
-    private selectOffset(offset: number): void {
+    private handleSelectedDatePickerKey(event: KeyboardEvent): boolean {
+      if (!this.active?.pickerOption) return false;
+      if (/^\d$/u.test(event.key)) {
+        consumeSuggestKeyEvent(event);
+        this.editActiveDatePickerSegment(event.key);
+        return true;
+      }
+      if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+        consumeSuggestKeyEvent(event);
+        this.selectActiveDatePickerSegment(event.key === "ArrowLeft" ? "left" : "right");
+        return true;
+      }
+      if (event.key === "Enter" || event.key === "Tab") {
+        consumeSuggestKeyEvent(event);
+        const dateKey = parseNoteComposerDateInput(this.active.pickerText ?? formatNoteComposerDateInput(this.active.pickerOption.dateKey));
+        if (dateKey) this.applyTaskDate(this.active.pickerOption, dateKey);
+        return true;
+      }
+      return false;
+    }
+
+    private activateDatePickerInput(option: NoteComposerTaskDateSuggestion, wrapper: HTMLElement): void {
+      if (this.active) {
+        this.active = {
+          ...this.active,
+          pickerOption: option,
+          pickerText: this.active.pickerText ?? formatNoteComposerDateInput(option.dateKey),
+          selectedIndex: DATE_PICKER_SELECTION_INDEX
+        };
+      }
+      wrapper.classList.add("is-selected");
+      this.popup?.querySelectorAll(".task-hub-note-composer-suggest-item.is-selected").forEach((element) => element.removeClass("is-selected"));
+    }
+
+    private editDateInputSegment(input: HTMLInputElement, digit: string): void {
+      const currentSegment = this.active?.pickerSegmentIndex ?? dateInputSegmentIndexAtCursor(input.value, input.selectionStart ?? input.value.length);
+      const currentBuffer = this.active?.pickerSegmentIndex === currentSegment ? this.active.pickerSegmentBuffer : undefined;
+      const next = editNoteComposerDateInputSegment(input.value, currentSegment, currentBuffer, digit);
+      input.value = next.value;
+      this.storeDatePickerText(next.value, next.segmentIndex, next.segmentBuffer);
+      this.selectDateInputSegment(input, "current");
+    }
+
+    private editActiveDatePickerSegment(digit: string): void {
+      if (!this.active?.pickerOption) return;
+      const value = this.active.pickerText ?? formatNoteComposerDateInput(this.active.pickerOption.dateKey);
+      const currentSegment = this.active.pickerSegmentIndex ?? 2;
+      const next = editNoteComposerDateInputSegment(value, currentSegment, this.active.pickerSegmentBuffer, digit);
+      this.storeDatePickerText(next.value, next.segmentIndex, next.segmentBuffer);
+      this.render();
+    }
+
+    private selectDateInputSegment(input: HTMLInputElement, direction: "left" | "right" | "current"): void {
+      const currentSegment = this.active?.pickerSegmentIndex ?? dateInputSegmentIndexAtCursor(input.value, input.selectionStart ?? input.value.length);
+      const next = moveNoteComposerDateInputSegment(input.value, currentSegment, direction);
+      const segmentBuffer = direction === "current" ? this.active?.pickerSegmentBuffer ?? "" : next.segmentBuffer;
+      this.storeDatePickerText(next.value, next.segmentIndex, segmentBuffer);
+      input.setSelectionRange(next.range.start, next.range.end);
+    }
+
+    private selectActiveDatePickerSegment(direction: "left" | "right" | "current"): void {
+      if (!this.active?.pickerOption) return;
+      const value = this.active.pickerText ?? formatNoteComposerDateInput(this.active.pickerOption.dateKey);
+      const currentSegment = this.active.pickerSegmentIndex ?? 2;
+      const next = moveNoteComposerDateInputSegment(value, currentSegment, direction);
+      this.storeDatePickerText(next.value, next.segmentIndex, next.segmentBuffer);
+      this.render();
+    }
+
+    private storeDatePickerText(value: string, segmentIndex = this.active?.pickerSegmentIndex, segmentBuffer = this.active?.pickerSegmentBuffer): void {
       if (!this.active) return;
-      const length = this.active.options.length;
       this.active = {
         ...this.active,
-        selectedIndex: (this.active.selectedIndex + offset + length) % length
+        pickerSegmentBuffer: segmentBuffer,
+        pickerSegmentIndex: segmentIndex,
+        pickerText: value
+      };
+    }
+
+    private selectOffset(offset: number): void {
+      if (!this.active) return;
+      const hasDatePicker = hasTaskDateOption(this.active.options);
+      const minIndex = hasDatePicker ? DATE_PICKER_SELECTION_INDEX : 0;
+      const selectableCount = this.active.options.length + (hasDatePicker ? 1 : 0);
+      const normalizedIndex = this.active.selectedIndex - minIndex;
+      const nextIndex = ((normalizedIndex + offset + selectableCount) % selectableCount) + minIndex;
+      this.setSelectedIndex(nextIndex, this.pickerOptionForIndex(nextIndex));
+    }
+
+    private setSelectedIndex(selectedIndex: number, pickerOption = this.pickerOptionForIndex(selectedIndex)): void {
+      if (!this.active) return;
+      const pickerChanged = pickerOption && pickerOption !== this.active.pickerOption;
+      this.active = {
+        ...this.active,
+        pickerOption,
+        pickerSegmentBuffer: pickerChanged ? "" : this.active.pickerSegmentBuffer,
+        pickerSegmentIndex: pickerChanged ? undefined : this.active.pickerSegmentIndex,
+        pickerText: pickerChanged ? formatNoteComposerDateInput(pickerOption.dateKey) : this.active.pickerText,
+        selectedIndex
       };
       this.render();
+    }
+
+    private selectedSuggestItem(): NoteComposerSuggestItem | undefined {
+      if (!this.active) return undefined;
+      if (this.active.selectedIndex === DATE_PICKER_SELECTION_INDEX) return this.active.pickerOption;
+      return this.active.options[this.active.selectedIndex];
+    }
+
+    private pickerOptionForIndex(selectedIndex: number): NoteComposerTaskDateSuggestion | undefined {
+      if (!this.active) return undefined;
+      const option = this.active.options[selectedIndex];
+      if (option?.kind === "task-date") return option;
+      if (selectedIndex === DATE_PICKER_SELECTION_INDEX) {
+        const previousOption = this.active.options[this.active.selectedIndex];
+        if (previousOption?.kind === "task-date") return previousOption;
+      }
+      return this.active.pickerOption ?? this.active.options.find((candidate): candidate is NoteComposerTaskDateSuggestion => candidate.kind === "task-date");
     }
 
     private applySuggestion(option: NoteComposerSuggestItem): void {
@@ -619,7 +930,8 @@ function noteComposerTagSuggest(getTags: () => string[]): Extension {
     }
 
     private applyTaskDate(option: NoteComposerTaskDateSuggestion, dateKey: string): void {
-      const insert = taskDateSuggestionInsert(option.dateKind, dateKey);
+      const insertPrefix = option.insert.match(/^\s*/u)?.[0] ?? "";
+      const insert = `${insertPrefix}${taskDateSuggestionInsert(option.dateKind, dateKey)}`;
       this.view.dispatch({
         changes: { from: option.from, to: option.to, insert },
         selection: { anchor: option.from + insert.length },
@@ -663,6 +975,16 @@ function noteComposerTagSuggest(getTags: () => string[]): Extension {
       this.popup = undefined;
     }
   });
+}
+
+function consumeSuggestKeyEvent(event: KeyboardEvent): void {
+  event.preventDefault();
+  event.stopPropagation();
+  event.stopImmediatePropagation();
+}
+
+function hasTaskDateOption(options: NoteComposerSuggestItem[]): boolean {
+  return options.some((option) => option.kind === "task-date");
 }
 
 function noteComposerDecorations() {

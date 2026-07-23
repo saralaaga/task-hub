@@ -6,7 +6,12 @@ jest.mock("obsidian", () => ({
 
 import {
   collectNoteComposerTokens,
+  editNoteComposerDateInputSegment,
+  formatNoteComposerDateInput,
+  moveNoteComposerDateInputSegment,
+  noteComposerDateSegmentRange,
   noteComposerThemeSpec,
+  parseNoteComposerDateInput,
   suggestNoteComposerBlocksAtCursor,
   suggestNoteComposerTaskDatesAtCursor,
   taskDateSuggestionInsert
@@ -137,6 +142,54 @@ describe("taskDateSuggestionInsert", () => {
     expect(taskDateSuggestionInsert("start", "2026-07-20")).toBe("🛫 2026-07-20");
     expect(taskDateSuggestionInsert("scheduled", "2026-07-20")).toBe("⏳ 2026-07-20");
     expect(taskDateSuggestionInsert("due", "2026-07-20")).toBe("📅 2026-07-20");
+  });
+});
+
+describe("note composer date picker input helpers", () => {
+  it("formats and parses editable date text", () => {
+    expect(formatNoteComposerDateInput("2026-07-27")).toBe("2026/07/27");
+    expect(parseNoteComposerDateInput("2026/7/2")).toBe("2026-07-02");
+    expect(parseNoteComposerDateInput("2026-07-27")).toBe("2026-07-27");
+  });
+
+  it("rejects invalid editable date text", () => {
+    expect(parseNoteComposerDateInput("2026/02/30")).toBeUndefined();
+    expect(parseNoteComposerDateInput("2026/13/01")).toBeUndefined();
+    expect(parseNoteComposerDateInput("tomorrow")).toBeUndefined();
+  });
+
+  it("moves between year, month, and day segments", () => {
+    expect(noteComposerDateSegmentRange(9)).toEqual({ start: 8, end: 10 });
+    expect(noteComposerDateSegmentRange(9, "left")).toEqual({ start: 5, end: 7 });
+    expect(noteComposerDateSegmentRange(6, "left")).toEqual({ start: 0, end: 4 });
+    expect(noteComposerDateSegmentRange(1, "right")).toEqual({ start: 5, end: 7 });
+    expect(noteComposerDateSegmentRange(6, "right")).toEqual({ start: 8, end: 10 });
+  });
+
+  it("edits only the selected date segment when typing digits", () => {
+    const firstDigit = editNoteComposerDateInputSegment("2026/07/20", 2, undefined, "3");
+    expect(firstDigit).toEqual({ segmentBuffer: "3", segmentIndex: 2, value: "2026/07/3" });
+
+    const secondDigit = editNoteComposerDateInputSegment(firstDigit.value, firstDigit.segmentIndex, firstDigit.segmentBuffer, "1");
+    expect(secondDigit).toEqual({ segmentBuffer: "31", segmentIndex: 2, value: "2026/07/31" });
+
+    const replacementDigit = editNoteComposerDateInputSegment(secondDigit.value, secondDigit.segmentIndex, secondDigit.segmentBuffer, "2");
+    expect(replacementDigit).toEqual({ segmentBuffer: "2", segmentIndex: 2, value: "2026/07/2" });
+  });
+
+  it("moves editable date input selection between segments and resets typed buffers", () => {
+    expect(moveNoteComposerDateInputSegment("2026/07/20", 2, "left")).toEqual({
+      range: { start: 5, end: 7 },
+      segmentBuffer: "",
+      segmentIndex: 1,
+      value: "2026/07/20"
+    });
+    expect(moveNoteComposerDateInputSegment("2026/07/20", 1, "right")).toEqual({
+      range: { start: 8, end: 10 },
+      segmentBuffer: "",
+      segmentIndex: 2,
+      value: "2026/07/20"
+    });
   });
 });
 

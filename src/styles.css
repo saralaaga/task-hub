@@ -389,11 +389,16 @@
 .task-hub-note-composer-date-picker {
   align-items: center;
   border-bottom: 1px solid var(--background-modifier-border);
+  border-radius: 7px;
   display: grid;
   gap: 6px;
   grid-template-columns: minmax(0, 1fr);
   margin: -2px -1px 4px;
   padding: 4px 2px 8px;
+}
+
+.task-hub-note-composer-date-picker.is-selected {
+  background: color-mix(in srgb, var(--interactive-accent) 12%, transparent);
 }
 
 .task-hub-note-composer-date-picker-label {
@@ -442,6 +447,18 @@
 .task-hub-note-composer-suggest-detail {
   color: var(--text-muted);
   font-size: var(--font-ui-smaller);
+}
+
+.task-hub-note-composer-suggest-enter-icon {
+  align-items: center;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  display: inline-flex;
+  font-size: var(--font-ui-medium);
+  height: 22px;
+  justify-content: center;
+  line-height: 1;
+  min-width: 28px;
 }
 
 .task-hub-note-composer-suggest-item:hover,

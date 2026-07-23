@@ -643,6 +643,7 @@ describe("Task Hub styles", () => {
     const noteComposerDatePickerInputRule = styles.match(/\.task-hub-note-composer-date-picker-input\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const noteComposerSuggestItemRule = styles.match(/\.task-hub-note-composer-suggest-item\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const noteComposerSuggestDetailRule = styles.match(/\.task-hub-note-composer-suggest-detail\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const noteComposerSuggestEnterIconRule = styles.match(/\.task-hub-note-composer-suggest-enter-icon\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const actionSettingRule = styles.match(/\.task-hub-create-modal\s+\.setting-item\.task-hub-create-action-setting\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
     const actionControlRule = styles.match(/\.task-hub-create-modal\s+\.task-hub-create-action-setting\s+\.setting-item-control\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
 
@@ -700,6 +701,8 @@ describe("Task Hub styles", () => {
     expect(noteComposerSuggestItemRule).toContain("display: flex");
     expect(noteComposerSuggestItemRule).toContain("justify-content: space-between");
     expect(noteComposerSuggestDetailRule).toContain("color: var(--text-muted)");
+    expect(noteComposerSuggestEnterIconRule).toContain("display: inline-flex");
+    expect(noteComposerSuggestEnterIconRule).toContain("min-width: 28px");
     expect(actionSettingRule).toContain("grid-template-columns: 1fr");
     expect(actionSettingRule).toContain("justify-items: end");
     expect(actionControlRule).toContain("justify-self: end");
