@@ -1399,6 +1399,59 @@ describe("renderCalendarView", () => {
     expect((row!.style as unknown as { top: string }).top).toBe("28px");
   });
 
+  it("renders agenda time labels and item time ranges with AM/PM when 12-hour time is enabled", () => {
+    const container = new FakeElement();
+    const timedEvent = {
+      ...event,
+      id: "event-12h",
+      start: "2026-05-08T13:30",
+      end: "2026-05-08T14:30",
+      allDay: false
+    };
+
+    renderCalendarView(
+      container as unknown as HTMLElement,
+      {
+        mode: "day",
+        focusDate: new Date("2026-05-08T12:00:00Z"),
+        weekStart: "monday",
+        visibleSourceIds: new Set(["apple-calendar"]),
+        includeCompletedTasks: false,
+        allowAppleReminderWriteback: false,
+        allowTaskCreation: false,
+        calendarTimeScale: "hour",
+        calendarDayStartHour: 9,
+        calendarDayEndHour: 15,
+        use12HourTime: true,
+        sources: [source],
+        t: (key) => key
+      },
+      [],
+      [timedEvent],
+      {
+        onLayerToggle: jest.fn(),
+        onModeChange: jest.fn(),
+        onMove: jest.fn(),
+        onDateCreateTask: jest.fn(),
+        onTaskComplete: jest.fn(),
+        onTaskJump: jest.fn(),
+        onTaskSelect: jest.fn(),
+        onTaskReschedule: jest.fn(),
+        onToday: jest.fn()
+      }
+    );
+
+    const labels = collect(container).filter((element) => element.classes.has("task-hub-agenda-time-label")).map((element) => element.text);
+    const item = collect(container).find((element) => element.classes.has("task-hub-calendar-timed-item"));
+    const itemTime = collect(item!).find((element) => element.classes.has("task-hub-calendar-item-time"));
+
+    expect(labels[0]).toBe("9:00 AM");
+    expect(labels).toContain("12:00 PM");
+    expect(labels).toContain("2:00 PM");
+    expect(labels.at(-1)).toBe("3:00 PM");
+    expect(itemTime?.text).toBe("1:30 PM-2:30 PM");
+  });
+
   it("renders calendar tasks with checkboxes and without task/event kind labels", () => {
     const container = new FakeElement();
 

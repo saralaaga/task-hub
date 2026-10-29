@@ -291,6 +291,7 @@ export type TaskHubSettings = {
   calendarTimeScale: CalendarTimeScale;
   calendarDayStartHour: number;
   calendarDayEndHour: number;
+  use12HourTime: boolean;
   taskCreationFilePath: string;
   datedNotes: DatedNoteSettings;
   taskNotes: TaskNoteSettings;

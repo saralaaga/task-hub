@@ -555,6 +555,7 @@ export class TaskHubView extends ItemView {
           calendarTimeScale: this.plugin.settings.calendarTimeScale,
           calendarDayStartHour: this.plugin.settings.calendarDayStartHour,
           calendarDayEndHour: this.plugin.settings.calendarDayEndHour,
+          use12HourTime: this.plugin.settings.use12HourTime,
           calendarAgendaScrollPosition: shouldPreserveScroll(options) ? this.calendarAgendaScrollPosition : undefined,
           defaultTimedTaskDurationMinutes: this.plugin.settings.localApple.calendarDefaultTimedTaskDurationMinutes,
           taskDurationOverrides: this.plugin.settings.localApple.reminderDurationOverrides,

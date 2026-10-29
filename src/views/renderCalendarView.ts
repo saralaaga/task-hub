@@ -53,6 +53,7 @@ export type CalendarViewState = {
   calendarTimeScale?: CalendarTimeScale;
   calendarDayStartHour?: number;
   calendarDayEndHour?: number;
+  use12HourTime?: boolean;
   today?: Date;
   defaultTimedTaskDurationMinutes?: number;
   taskDurationOverrides?: Record<string, number>;
@@ -463,7 +464,7 @@ function renderAgendaGrid(
 
   const timeAxis = agenda.createDiv({ cls: "task-hub-agenda-time-axis" });
   for (let hour = startHour; hour <= endHour; hour += 1) {
-    timeAxis.createDiv({ cls: "task-hub-agenda-time-label", text: formatHour(hour) });
+    timeAxis.createDiv({ cls: "task-hub-agenda-time-label", text: formatHour(hour, state.use12HourTime) });
   }
 
   const grid = agenda.createDiv({ cls: "task-hub-agenda-time-grid" });
@@ -774,7 +775,7 @@ function renderTimedCalendarItem(
       right: `calc(${100 - (100 * (layout.columnIndex + 1)) / layout.columnCount}% + 6px)`
     });
   }
-  const timeLabel = isTaskPoint || state.calendarTimeScale === "fit" ? undefined : formatTimeRange(startMinutes, endMinutes);
+  const timeLabel = isTaskPoint || state.calendarTimeScale === "fit" ? undefined : formatTimeRange(startMinutes, endMinutes, state.use12HourTime);
   renderCalendarItemContent(row, item, handlers, state, timeLabel);
   if (isTaskPoint && layout?.isOverlapRepresentative && (layout.overlapCount ?? 1) > 1) {
     row.createSpan({ cls: "task-hub-calendar-overlap-count", text: `+${(layout.overlapCount ?? 1) - 1}` });
@@ -1652,7 +1653,7 @@ function renderTimedTaskOverlapPopover(anchor: HTMLElement, items: CalendarItem[
     });
     const body = row.createDiv({ cls: "task-hub-calendar-overlap-body" });
     body.createSpan({ cls: "task-hub-calendar-overlap-title", text: item.title });
-    if (item.startMinutes !== undefined) body.createSpan({ cls: "task-hub-calendar-overlap-time", text: formatMinutes(item.startMinutes) });
+    if (item.startMinutes !== undefined) body.createSpan({ cls: "task-hub-calendar-overlap-time", text: formatMinutes(item.startMinutes, state.use12HourTime) });
     row.addEventListener("click", (event) => {
       event.stopPropagation();
       closePopover();
@@ -2508,7 +2509,7 @@ function bindCalendarItemDrag(element: HTMLElement, item: CalendarItem, state: C
     element.setAttr("aria-grabbed", "true");
     const selectedItems = selectedDraggableCalendarItems(item, currentVisibleCalendarItems(), state);
     activeCalendarBulkDrag = selectedItems.length > 1;
-    const usingCustomDragStack = startCalendarStackDragFeedback(element, item, selectedItems, event);
+    const usingCustomDragStack = startCalendarStackDragFeedback(element, item, selectedItems, event, state.use12HourTime);
     if (event.dataTransfer) {
       event.dataTransfer.effectAllowed = "move";
       event.dataTransfer.setData(CALENDAR_ITEM_DRAG_MIME, item.id);
@@ -2674,7 +2675,8 @@ function startCalendarStackDragFeedback(
   draggedElement: HTMLElement,
   draggedItem: CalendarItem,
   selectedItems: CalendarItem[],
-  event: DragEvent
+  event: DragEvent,
+  use12HourTime?: boolean
 ): boolean {
   clearCalendarDragStack();
   const items = orderedDragStackItems(draggedItem, selectedItems).slice(0, 6);
@@ -2698,7 +2700,7 @@ function startCalendarStackDragFeedback(
       "--task-hub-drag-stack-color": item.color ?? "var(--interactive-accent)"
     });
     if (item.startMinutes !== undefined && item.endMinutes !== undefined) {
-      card.createSpan({ cls: "task-hub-calendar-drag-stack-time", text: formatTimeRange(item.startMinutes, item.endMinutes) });
+      card.createSpan({ cls: "task-hub-calendar-drag-stack-time", text: formatTimeRange(item.startMinutes, item.endMinutes, use12HourTime) });
     }
     card.createSpan({ cls: "task-hub-calendar-drag-stack-title", text: item.title });
   });
@@ -3154,16 +3156,28 @@ function itemSummary(taskCount: number, eventCount: number, t: Translator): stri
   return `${eventCount} ${t("event")}`;
 }
 
-function formatHour(hour: number): string {
-  return `${String(hour).padStart(2, "0")}:00`;
+function formatHour(hour: number, use12Hour?: boolean): string {
+  if (!use12Hour) return `${String(hour).padStart(2, "0")}:00`;
+  return format12HourMinutes(hour * 60);
 }
 
-function formatTimeRange(startMinutes: number, endMinutes: number): string {
-  return `${formatMinutes(startMinutes)}-${formatMinutes(endMinutes)}`;
+function formatTimeRange(startMinutes: number, endMinutes: number, use12Hour?: boolean): string {
+  return `${formatMinutes(startMinutes, use12Hour)}-${formatMinutes(endMinutes, use12Hour)}`;
 }
 
-function formatMinutes(minutes: number): string {
+function formatMinutes(minutes: number, use12Hour?: boolean): string {
+  if (!use12Hour) {
+    const hour = Math.floor(minutes / 60);
+    const minute = minutes % 60;
+    return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+  }
+  return format12HourMinutes(minutes);
+}
+
+function format12HourMinutes(minutes: number): string {
   const hour = Math.floor(minutes / 60);
   const minute = minutes % 60;
-  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+  const period = hour % 24 < 12 ? "AM" : "PM";
+  const display = hour % 12 === 0 ? 12 : hour % 12;
+  return `${display}:${String(minute).padStart(2, "0")} ${period}`;
 }

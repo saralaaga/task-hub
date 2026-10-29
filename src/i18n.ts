@@ -440,6 +440,8 @@ export type TranslationKey =
   | "saturday"
   | "unscheduled"
   | "unscheduledTasks"
+  | "use12HourTime"
+  | "use12HourTimeDesc"
   | "vaultTasks"
   | "week"
   | "weekStartsOn"
@@ -450,6 +452,8 @@ const JA_SETTINGS_TRANSLATIONS: Partial<Record<TranslationKey, string>> = {
   appleReminderList: "Apple リマインダーリスト",
   calendarCreationDefaultKind: "デフォルトの作成タイプ",
   calendarCreationDefaultKindDesc: "カレンダーから新規作成するときに既定で選ばれるタイプ。",
+  use12HourTime: "12 時間表記（午前/午後）",
+  use12HourTimeDesc: "日・週ビューの時刻を午前/午後付きの 12 時間表記で表示します。",
   calendarDayEndHour: "日/週ビューの終了時刻",
   calendarDayEndHourDesc: "日ビューと週ビューで既定表示する最も遅い時刻。さらに遅い項目がある場合は範囲が自動で広がります。",
   calendarDayStartHour: "日/週ビューの開始時刻",
@@ -597,6 +601,8 @@ const FR_SETTINGS_TRANSLATIONS: Partial<Record<TranslationKey, string>> = {
   appleReminderList: "Liste Apple Reminders",
   calendarCreationDefaultKind: "Type de création par défaut",
   calendarCreationDefaultKindDesc: "Type sélectionné par défaut lors d'une création depuis le calendrier.",
+  use12HourTime: "Format 12 heures (AM/PM)",
+  use12HourTimeDesc: "Affiche les heures des vues jour et semaine au format 12 heures avec AM/PM.",
   calendarDayEndHour: "Heure de fin jour/semaine",
   calendarDayEndHourDesc: "Heure la plus tardive affichée par défaut dans les vues jour et semaine. Les éléments plus tardifs étendent automatiquement la plage.",
   calendarDayStartHour: "Heure de début jour/semaine",
@@ -743,6 +749,8 @@ const KO_SETTINGS_TRANSLATIONS: Partial<Record<TranslationKey, string>> = {
   appleReminderList: "Apple 미리 알림 목록",
   calendarCreationDefaultKind: "기본 생성 유형",
   calendarCreationDefaultKindDesc: "캘린더에서 새로 만들 때 기본으로 선택되는 유형입니다.",
+  use12HourTime: "12시간제 (오전/오후)",
+  use12HourTimeDesc: "일·주 보기의 시간을 오전/오후가 표시된 12시간제로 표시합니다.",
   calendarDayEndHour: "일/주 보기 종료 시간",
   calendarDayEndHourDesc: "일 보기와 주 보기에서 기본으로 표시할 가장 늦은 시간입니다. 더 늦은 항목이 있으면 범위가 자동으로 확장됩니다.",
   calendarDayStartHour: "일/주 보기 시작 시간",
@@ -931,6 +939,8 @@ const TRANSLATIONS: Record<"en" | "zh", Record<TranslationKey, string>> &
     calendarDayEndHourDesc: "Latest hour shown by default in day and week views. Later items still extend the range.",
     calendarDayStartHour: "Day/week start time",
     calendarDayStartHourDesc: "Earliest hour shown by default in day and week views. Earlier items still extend the range.",
+    use12HourTime: "Use 12-hour time (AM/PM)",
+    use12HourTimeDesc: "Show times in day and week views with a 12-hour clock and AM/PM.",
     changed: "changed",
     clearFilters: "Clear",
     cancel: "Cancel",
@@ -1366,6 +1376,8 @@ const TRANSLATIONS: Record<"en" | "zh", Record<TranslationKey, string>> &
     calendarDayEndHourDesc: "日视图和周视图默认显示到几点；更晚的项目会自动扩展范围。",
     calendarDayStartHour: "日/周视图开始时间",
     calendarDayStartHourDesc: "日视图和周视图默认从几点开始；更早的项目会自动扩展范围。",
+    use12HourTime: "使用 12 小时制（上午/下午）",
+    use12HourTimeDesc: "日视图和周视图中的时间按 12 小时制并带上午/下午显示。",
     changed: "已变化",
     clearFilters: "清空",
     cancel: "取消",

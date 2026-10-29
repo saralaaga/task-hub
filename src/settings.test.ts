@@ -656,6 +656,7 @@ describe("normalizeTaskHubSettings", () => {
     expect(settings.calendarTimeScale).toBe("hour");
     expect(settings.calendarDayStartHour).toBe(6);
     expect(settings.calendarDayEndHour).toBe(22);
+    expect(settings.use12HourTime).toBe(false);
     expect(settings.taskCreationFilePath).toBe("Task Hub.md");
     expect(settings.taskNotes).toEqual({
       enabled: false,
@@ -888,6 +889,11 @@ describe("normalizeTaskHubSettings", () => {
     expect(settings.calendarTimeScale).toBe("hour");
     expect(settings.calendarDayStartHour).toBe(6);
     expect(settings.calendarDayEndHour).toBe(22);
+    expect(settings.use12HourTime).toBe(false);
+  });
+
+  it("persists a 12-hour time preference across settings normalization", () => {
+    expect(normalizeTaskHubSettings({ use12HourTime: true }).use12HourTime).toBe(true);
   });
 
   it("persists task view filters across settings normalization", () => {

@@ -27,6 +27,7 @@ export const DEFAULT_SETTINGS: TaskHubSettings = {
   calendarTimeScale: "hour",
   calendarDayStartHour: 6,
   calendarDayEndHour: 22,
+  use12HourTime: false,
   taskCreationFilePath: "Task Hub.md",
   datedNotes: {
     enabled: false,
@@ -135,6 +136,7 @@ export function normalizeTaskHubSettings(loaded: Partial<TaskHubSettings> | null
     calendarCreationDefaultKind: loaded?.calendarCreationDefaultKind ?? DEFAULT_SETTINGS.calendarCreationDefaultKind,
     calendarTimeScale: normalizeCalendarTimeScale(loaded?.calendarTimeScale),
     ...normalizeCalendarDayHours(loaded?.calendarDayStartHour, loaded?.calendarDayEndHour),
+    use12HourTime: loaded?.use12HourTime ?? DEFAULT_SETTINGS.use12HourTime,
     showLunarCalendar: loaded?.showLunarCalendar ?? DEFAULT_SETTINGS.showLunarCalendar,
     calendarTaskCreationDefaultTarget:
       loaded?.calendarTaskCreationDefaultTarget ?? DEFAULT_SETTINGS.calendarTaskCreationDefaultTarget,
@@ -476,11 +478,17 @@ function normalizeCalendarDayHours(start: unknown, end: unknown): Pick<TaskHubSe
   };
 }
 
-function populateHourDropdown(selectEl: HTMLSelectElement, startHour: number, endHour: number): void {
+function formatHourDropdownLabel(hour: number, use12Hour: boolean): string {
+  if (!use12Hour) return `${String(hour).padStart(2, "0")}:00`;
+  const period = hour % 24 < 12 ? "AM" : "PM";
+  const display = hour % 12 === 0 ? 12 : hour % 12;
+  return `${display}:00 ${period}`;
+}
+
+function populateHourDropdown(selectEl: HTMLSelectElement, startHour: number, endHour: number, use12Hour = false): void {
   selectEl.empty();
   for (let hour = startHour; hour <= endHour; hour += 1) {
-    const label = `${String(hour).padStart(2, "0")}:00`;
-    selectEl.createEl("option", { value: String(hour), text: label });
+    selectEl.createEl("option", { value: String(hour), text: formatHourDropdownLabel(hour, use12Hour) });
   }
 }
 
@@ -1017,7 +1025,7 @@ export class TaskHubSettingTab extends PluginSettingTab {
       .setName(t("calendarDayStartHour"))
       .setDesc(t("calendarDayStartHourDesc"))
       .addDropdown((dropdown) => {
-        populateHourDropdown(dropdown.selectEl, 0, 23);
+        populateHourDropdown(dropdown.selectEl, 0, 23, this.plugin.settings.use12HourTime);
         dropdown.setValue(String(this.plugin.settings.calendarDayStartHour)).onChange(async (value) => {
           this.plugin.settings.calendarDayStartHour = Number(value);
           this.plugin.settings = normalizeTaskHubSettings(this.plugin.settings);
@@ -1030,12 +1038,24 @@ export class TaskHubSettingTab extends PluginSettingTab {
       .setName(t("calendarDayEndHour"))
       .setDesc(t("calendarDayEndHourDesc"))
       .addDropdown((dropdown) => {
-        populateHourDropdown(dropdown.selectEl, 1, 24);
+        populateHourDropdown(dropdown.selectEl, 1, 24, this.plugin.settings.use12HourTime);
         dropdown.setValue(String(this.plugin.settings.calendarDayEndHour)).onChange(async (value) => {
           this.plugin.settings.calendarDayEndHour = Number(value);
           this.plugin.settings = normalizeTaskHubSettings(this.plugin.settings);
           await this.plugin.saveSettings();
           this.display({ preserveScroll: true });
+        });
+      });
+
+    new Setting(calendarGrid)
+      .setName(t("use12HourTime"))
+      .setDesc(t("use12HourTimeDesc"))
+      .addToggle((toggle) => {
+        toggle.setValue(this.plugin.settings.use12HourTime).onChange(async (value) => {
+          this.plugin.settings.use12HourTime = value;
+          await this.plugin.saveSettings();
+          this.display({ preserveScroll: true });
+          this.plugin.refreshOpenViews();
         });
       });
 
